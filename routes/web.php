@@ -9,7 +9,7 @@ use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController };
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
-use App\Http\Controllers\Reports\{ ExpenseReportsController };
+use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController };
 
 
     Route::get('/', function () {
@@ -206,6 +206,20 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController };
 
         });
 
+
+        // Order Reports Routes
+        Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
+            Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
+            Route::get('by-customer', [OrderReportsController::class, 'byCustomer'])->name('by-customer');
+            Route::get('by-product', [OrderReportsController::class, 'byProduct'])->name('by-product');
+            Route::get('by-payment-method', [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('by-employee', [OrderReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('time-analysis', [OrderReportsController::class, 'timeAnalysis'])->name('time-analysis');
+            Route::get('returns-refunds', [OrderReportsController::class, 'returnsRefunds'])->name('returns-refunds');
+            Route::get('discount-analysis', [OrderReportsController::class, 'discountAnalysis'])->name('discount-analysis');
+            Route::get('sales-forecast', [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
+            Route::get('inventory-sales', [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
+        });
 
         
 
