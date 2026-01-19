@@ -19,4 +19,14 @@ class InventoryAdjustments extends Model
         'created_by',
         'tenant_id',
     ];
+
+    public function InventoryItems()
+    {
+        return $this->belongsTo(InventoryItems::class, 'inventory_id', 'id');
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by', 'id');
+    }
 }

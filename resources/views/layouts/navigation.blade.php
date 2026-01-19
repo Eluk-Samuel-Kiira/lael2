@@ -675,6 +675,198 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Product Reports Section -->
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
+                            <span class="menu-link">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('auth.product_reports') }}</span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                <!-- Product Summary -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.summary') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.product_summary') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Product Performance -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.performance') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.product_performance') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Inventory Valuation -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.inventory') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.inventory_valuation') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Stock Movement -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.stock-movement') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.stock_movement') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Product Margin -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.margin') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.product_margin') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- By Category -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.products.by-category') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('auth.by_category') }}</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Inventory Reports Section -->
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
+                            <span class="menu-link">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('pagination.inventory_reports') }}</span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                <!-- Inventory Summary -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.summary') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.inventory_summary') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Inventory Turnover -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.turnover') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.inventory_turnover') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Stock Aging -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.stock-aging') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.stock_aging') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Low Stock Alerts -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.low-stock-alerts') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.low_stock_alerts') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Inventory Transactions -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.transactions') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.inventory_transactions') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Inventory Adjustments -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.adjustments') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.inventory_adjustments') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- ABC Analysis -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.abc-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.abc_analysis') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Fast/Slow Moving Items -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.movement-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.movement_analysis') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Additional Reports (Optional) -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.valuation') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.inventory_valuation') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.dead-stock') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.dead_stock') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.inventory.excess-stock') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.excess_stock') }}</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                         
                     </div>
                     <!--end:Menu sub-->
