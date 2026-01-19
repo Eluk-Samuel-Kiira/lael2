@@ -9,7 +9,7 @@ use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController };
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
-use App\Http\Controllers\Reports\{ ExpenseReportsController };
+use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController };
 
 
     Route::get('/', function () {
@@ -206,6 +206,53 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController };
 
         });
 
+
+        // Order Reports Routes
+        Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
+            Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
+            Route::get('by-customer', [OrderReportsController::class, 'byCustomer'])->name('by-customer');
+            Route::get('by-product', [OrderReportsController::class, 'byProduct'])->name('by-product');
+            Route::get('by-payment-method', [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('by-employee', [OrderReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('time-analysis', [OrderReportsController::class, 'timeAnalysis'])->name('time-analysis');
+            Route::get('returns-refunds', [OrderReportsController::class, 'returnsRefunds'])->name('returns-refunds');
+            Route::get('discount-analysis', [OrderReportsController::class, 'discountAnalysis'])->name('discount-analysis');
+            Route::get('sales-forecast', [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
+            Route::get('inventory-sales', [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
+        });
+
+
+        // Product Reports Routes
+        Route::prefix('reports/products')->name('reports.products.')->group(function () {
+            Route::get('summary', [ProductsController::class, 'summary'])->name('summary');
+            Route::get('performance', [ProductsController::class, 'performance'])->name('performance');
+            Route::get('inventory', [ProductsController::class, 'inventory'])->name('inventory');
+            Route::get('stock-movement', [ProductsController::class, 'stockMovement'])->name('stock-movement');
+            Route::get('margin', [ProductsController::class, 'margin'])->name('margin');
+            Route::get('by-category', [ProductsController::class, 'byCategory'])->name('by-category');
+        });
+
+        // Inventory Reports Routes
+        Route::prefix('reports/inventory')->name('reports.inventory.')->group(function () {
+            Route::get('summary', [InventoryReportsController::class, 'summary'])->name('summary');
+            Route::get('turnover', [InventoryReportsController::class, 'turnover'])->name('turnover');
+            Route::get('stock-aging', [InventoryReportsController::class, 'stockAging'])->name('stock-aging');
+            Route::get('low-stock-alerts', [InventoryReportsController::class, 'lowStockAlerts'])->name('low-stock-alerts');
+            Route::get('transactions', [InventoryReportsController::class, 'transactions'])->name('transactions');
+            Route::get('adjustments', [InventoryReportsController::class, 'adjustments'])->name('adjustments');
+            Route::get('abc-analysis', [InventoryReportsController::class, 'abcAnalysis'])->name('abc-analysis');
+            Route::get('movement-analysis', [InventoryReportsController::class, 'movementAnalysis'])->name('movement-analysis');
+            
+            // Additional possible reports
+            Route::get('valuation', [InventoryReportsController::class, 'valuation'])->name('valuation');
+            Route::get('dead-stock', [InventoryReportsController::class, 'deadStock'])->name('dead-stock');
+            Route::get('turnover-ratio', [InventoryReportsController::class, 'turnoverRatio'])->name('turnover-ratio');
+            Route::get('stock-accuracy', [InventoryReportsController::class, 'stockAccuracy'])->name('stock-accuracy');
+            Route::get('excess-stock', [InventoryReportsController::class, 'excessStock'])->name('excess-stock');
+
+            Route::get('/movement-logs', [InventoryReportsController::class, 'getMovementLogs'])
+                ->name('movement-logs');
+        });
 
         
 

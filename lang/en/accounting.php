@@ -1351,4 +1351,10 @@ return [
     'requires_approval' => 'Requires Approval',
     'employee_id' => 'Employee ID',
     'all_audit_items' => 'All Audit Items',
+    'customers' => 'Customers',
+    'contact' => 'Contact',
+    'total_sales' => 'Total Sales',
+    'total_discount' => 'Total Discount',
+    'contact' => 'Contact',
+    'market_share' => 'Market Share',
 ];
