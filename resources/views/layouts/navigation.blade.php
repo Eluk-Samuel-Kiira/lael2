@@ -868,6 +868,118 @@
                             </div>
                         </div>
                         
+                        <!-- Purchasing Reports Section -->
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
+                            <span class="menu-link">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('pagination.purchasing_reports') }}</span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                <!-- Purchase Order Summary -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.purchase-order-summary') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.purchase_order_summary') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Supplier Performance -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.supplier-performance') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.supplier_performance') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Purchase Order Status -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.purchase-order-status') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.purchase_order_status') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Purchase Receipts -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.purchase-receipts') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.purchase_receipts') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Supplier Spend Analysis -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.supplier-spend-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.supplier_spend_analysis') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Purchase Order Items -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.purchase-order-items') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.purchase_order_items') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Payment Status -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.payment-status') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.payment_status') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Received Inventory -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.received-inventory') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.received_inventory') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Supplier Risk Assessment -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.supplier-risk-assessment') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.supplier_risk_assessment') }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Purchase Cost Analysis -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('reports.purchasing.purchase-cost-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title">{{ __('pagination.purchase_cost_analysis') }}</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
                     </div>
                     <!--end:Menu sub-->
                 </div>
