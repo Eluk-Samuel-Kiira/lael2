@@ -4,12 +4,14 @@ use App\Http\Controllers\{ ProfileController, UserController, RoleController};
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ DepartmentController, EmployeeController, EmployeePaymentController };
-use App\Http\Controllers\Catalog\ {CategoryController, InventoryItemController, ProductVariantController, InventoryAdjustmentsController, ProductController, ProductCategoryController};
+use App\Http\Controllers\Catalog\ {CategoryController, InventoryItemController, ProductVariantController, 
+    InventoryAdjustmentsController, ProductController, ProductCategoryController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController };
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
-use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController };
+use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
+    PurchasingReportsController };
 
 
     Route::get('/', function () {
@@ -207,6 +209,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         });
 
 
+
         // Order Reports Routes
         Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
             Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
@@ -254,6 +257,89 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
                 ->name('movement-logs');
         });
 
+        // Purchasing Reports Routes
+        Route::prefix('reports/purchasing')->name('reports.purchasing.')->group(function () {
+            Route::get('purchase-order-summary', [PurchasingReportsController::class, 'purchaseOrderSummary'])->name('purchase-order-summary');
+            Route::get('supplier-performance', [PurchasingReportsController::class, 'supplierPerformance'])->name('supplier-performance');
+            Route::get('purchase-order-status', [PurchasingReportsController::class, 'purchaseOrderStatus'])->name('purchase-order-status');
+            Route::get('purchase-receipts', [PurchasingReportsController::class, 'purchaseReceipts'])->name('purchase-receipts');
+            Route::get('supplier-spend-analysis', [PurchasingReportsController::class, 'supplierSpendAnalysis'])->name('supplier-spend-analysis');
+            Route::get('purchase-order-items', [PurchasingReportsController::class, 'purchaseOrderItems'])->name('purchase-order-items');
+            Route::get('payment-status', [PurchasingReportsController::class, 'paymentStatus'])->name('payment-status');
+            Route::get('received-inventory', [PurchasingReportsController::class, 'receivedInventory'])->name('received-inventory');
+            Route::get('supplier-risk-assessment', [PurchasingReportsController::class, 'supplierRiskAssessment'])->name('supplier-risk-assessment');
+            Route::get('purchase-cost-analysis', [PurchasingReportsController::class, 'purchaseCostAnalysis'])->name('purchase-cost-analysis');
+            
+            Route::get('export', [PurchasingReportsController::class, 'export'])->name('export');
+        });
+        
+        Route::get('/api/purchase-orders/{id}/details', function ($id) {
+            $tenantId = auth()->user()->tenant_id;
+            
+            $order = \App\Models\PurchaseOrder::with([
+                'supplier',
+                'location',
+                'items.productVariant.product',
+                'items' => function ($query) {
+                    $query->select([
+                        'id',
+                        'purchase_order_id',
+                        'product_variant_id',
+                        'product_name',
+                        'sku',
+                        'quantity',
+                        'unit_cost',
+                        'total_cost',
+                        'received_quantity'
+                    ]);
+                }
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->first();
+            
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Purchase order not found'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => $order
+            ]);
+        });
+
+        Route::get('/api/purchase-receipts/{id}/details', function ($id) {
+            $tenantId = auth()->user()->tenant_id;
+            
+            $receipt = \App\Models\PurchaseReceipt::with([
+                'purchaseOrder.supplier',
+                'purchaseOrder.location',
+                'receiver',
+                'items.purchaseOrderItem.productVariant.product'
+            ])
+            ->whereHas('purchaseOrder', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId);
+            })
+            ->where('id', $id)
+            ->first();
+            
+            if (!$receipt) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Purchase receipt not found'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => $receipt
+            ]);
+        });
+
+        Route::get('/api/suppliers/{id}/spend-details', [PurchasingReportsController::class, 'getSupplierSpendDetails']);
         
 
 
