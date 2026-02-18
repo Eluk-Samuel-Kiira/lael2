@@ -410,7 +410,7 @@
         .then(response => {
             // Check if response is OK
             if (!response.ok) {
-                toastr['danger']('{{ __("pagination.network_error") }}');
+                toastr['error']('{{ __("pagination.network_error") }}');
                 throw new Error('Network response was not ok');
             }
             return response.json();
