@@ -21,6 +21,19 @@ class InventoryItemsFactory extends Factory
      */
     public function definition(): array
     {
+        // Get random active records - no DB check here, that's handled in the seeder
+        $variant = ProductVariant::where('is_active', true)
+            ->inRandomOrder()
+            ->first();
+
+        $department = Department::where('isActive', 1)
+            ->inRandomOrder()
+            ->first();
+
+        $location = Location::where('is_active', 1)
+            ->inRandomOrder()
+            ->first();
+
         return [
             'quantity_on_hand' => $this->faker->randomElement([10, 22, 41, 3, 52, 45, 14, 35]),
             'quantity_allocated' => $this->faker->randomElement([10, 22, 41, 3, 52, 45, 14, 35]),
@@ -29,15 +42,11 @@ class InventoryItemsFactory extends Factory
             'preferred_stock_level' => $this->faker->randomElement([1, 2, 4, 3, 5]),
             'batch_number' => strtoupper($this->faker->unique()->bothify('BTH-####')),
             'expiry_date' => $this->faker->dateTimeBetween('-1 year', '+1 year')->format('Y-m-d'),
-            'variant_id' => ProductVariant::where('is_active', true)
-                ->inRandomOrder()
-                ->pluck('id')
-                ->random(),
-
-            'department_id' => Department::where('isActive', 1)->inRandomOrder()->value('id'),
-            'location_id' => Location::where('is_active', 1)->inRandomOrder()->value('id'),
+            'variant_id' => $variant->id,
+            'department_id' => $department->id,
+            'location_id' => $location->id,
             'tenant_id' => Tenant::inRandomOrder()->first()->id,
-            'created_by' => User::where('role_id', '1' )->where('status', 'active')->get()->random()->id,
+            'created_by' => User::where('role_id', '1')->where('status', 'active')->get()->random()->id,
         ];
     }
 }

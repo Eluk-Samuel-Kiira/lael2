@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Catalog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ Product, ProductCategory, Promotion, Tax };
+use App\Models\{ Department, Location, Product, ProductCategory, Promotion, Tax };
 use App\Models\ProductVariant;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\{ Auth, DB };

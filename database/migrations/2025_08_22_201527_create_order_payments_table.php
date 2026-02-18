@@ -21,7 +21,7 @@ return new class extends Migration
             $table->char('card_last_four', 4)->nullable();
             $table->string('card_brand', 20)->nullable();
             $table->text('notes')->nullable();
-            $table->timestampTz('processed_at')->useCurrent();
+            $table->timestampTz('processed_at')->nullable();
             $table->foreignId('processed_by')->constrained('users')->cascadeOnDelete();
 
             $table->timestampsTz();

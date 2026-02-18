@@ -275,14 +275,31 @@ class POSController extends Controller
                         'shop_type' => 'single_shop'
                     ];
                 } else {
-                    // Multi-shop: Track inventory item changes
-                    $inventory = $variant->inventory;
+                    // Multi-shop: Get the specific inventory item for this location/department
+                    $inventory = $variant->inventory()
+                        ->where('location_id', $user->location_id ?? 1)
+                        ->where('department_id', $user->department_id ?? 1)
+                        ->first();
+                    
+                    \Log::info('Inventory item found:', ['inventory' => $inventory]);
+                    
                     $inventoryData = [
                         'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
                         'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
                         'inventory_id' => $inventory ? $inventory->id : null,
+                        'location_id' => $user->location_id ?? 1,
+                        'department_id' => $user->department_id ?? 1,
                         'shop_type' => 'multi_shop'
                     ];
+
+                    // Optional: Update the inventory quantities
+                    if ($inventory) {
+                        // Decrease allocated quantity (or quantity on hand depending on your logic)
+                        $inventory->quantity_allocated -= $item['quantity'];
+                        // If you want to also reduce quantity_on_hand when order is confirmed:
+                        // $inventory->quantity_on_hand -= $item['quantity'];
+                        $inventory->save();
+                    }
                 }
 
                 // Create order item
@@ -580,12 +597,27 @@ class POSController extends Controller
     /**
      * Handle inventory updates for multi shop
      */
-    private function handleMultiShopInventory($variant, $item, $order)
+    private function handleMultiShopInventory($variant, $item, $order, $user = null)
     {
-        $inventory = $variant->inventory;
+        // Get the user if not passed
+        if (!$user) {
+            $user = Auth::user();
+        }
+
+        // Get the specific inventory item for this location/department
+        // IMPORTANT: inventory() is a relationship, not a property
+        $inventory = $variant->inventory()
+            ->where('location_id', $user->location_id ?? 1)
+            ->where('department_id', $user->department_id ?? 1)
+            ->first();
 
         if (!$inventory) {
-            \Log::warning("No inventory found for variant {$variant->id} in multi-shop mode");
+            \Log::warning("No inventory found for variant {$variant->id} in multi-shop mode", [
+                'variant_id' => $variant->id,
+                'location_id' => $user->location_id ?? 1,
+                'department_id' => $user->department_id ?? 1,
+                'order_id' => $order->id
+            ]);
             return;
         }
 
@@ -618,6 +650,16 @@ class POSController extends Controller
             'inventory_id' => $inventory->id,
             'created_by' => auth()->id(),
             'tenant_id' => $order->tenant_id,
+        ]);
+
+        \Log::info('Multi-shop inventory updated', [
+            'variant_id' => $variant->id,
+            'inventory_id' => $inventory->id,
+            'location_id' => $user->location_id ?? 1,
+            'department_id' => $user->department_id ?? 1,
+            'quantity_sold' => $item['quantity'],
+            'before' => $beforeQty,
+            'after' => $afterQty
         ]);
     }
 

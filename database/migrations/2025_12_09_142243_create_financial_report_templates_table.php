@@ -15,7 +15,7 @@ return new class extends Migration
             $table->enum('report_type', ['balance_sheet', 'profit_loss', 'cash_flow', 'trial_balance']);
             $table->string('template_name', 100);
             $table->boolean('is_default')->default(false);
-            $table->json('configuration')->default('{}');
+            $table->json('configuration')->nullable();
             $table->timestamps();
 
             // Shorter but still descriptive

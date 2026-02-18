@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Procurement;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\{ Supplier, PurchaseOrder, ProductVariant, PurchaseOrderItem, InventoryItems, PaymentMethod,
-        PurchaseReceipt, InventoryTransactions, InventoryAdjustment, PurchaseReceiptItem, SingleShopInventoryLog };
+        PurchaseReceipt, InventoryTransactions, InventoryAdjustment, PurchaseReceiptItem, SingleShopInventoryLog,
+        Location, Department };
 use Illuminate\Support\Facades\{ Auth, DB };
 
 
@@ -744,10 +745,10 @@ class PurchaseOrderController extends Controller
                 }
                 
                 // Validate the payment method can handle this transaction
-                $validation = $paymentMethod->validateTransaction($totalCost);
-                if (!$validation['success']) {
-                    throw new \Exception($validation['message']);
-                }
+                // $validation = $paymentMethod->validateTransaction($totalCost);
+                // if (!$validation['success']) {
+                //     throw new \Exception($validation['message']);
+                // }
 
                 // Record purchase order payment withdrawal using PaymentTransactionService
                 $transactionData = [

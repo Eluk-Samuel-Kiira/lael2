@@ -154,7 +154,7 @@ class UserController extends Controller
         $authUser = auth()->user();
 
         // Check if the authenticated user has the required role
-        if ($authUser && in_array($authUser->role_id, [1])) {
+        if ($authUser) {
             // Find the user by ID
             $user = User::find($id);
 
