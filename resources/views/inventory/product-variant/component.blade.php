@@ -114,9 +114,9 @@
                                     </td>
                                     <td>{{ $product->barcode }}</td>
                                     <td class="fw-bold text-warning ms-3">{{ $product->overal_quantity_at_hand }}</td>
-                                    <td class="fw-bold text-primary ms-3"> {{ displayFormatedCurrency($product->price) }} {{ currencySymbol() }}</td>
+                                    <td class="fw-bold text-primary ms-3"> {{ $product->price }}  {{ currency_code() }}</td>
                                     <td>
-                                        <div class="badge badge-light fw-bold text-success">{{ displayFormatedCurrency($product->cost_price) }} {{ currencySymbol() }}</div>
+                                        <div class="badge badge-light fw-bold text-success">{{ $product->cost_price }} {{ currency_code() }}</div>
                                     </td>
                                     <td>{{ $product->weight }}</td>
                                     <td>

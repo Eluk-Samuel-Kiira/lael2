@@ -30,10 +30,9 @@ class Employee extends Model
     protected $casts = [
         'hire_date' => 'date',
         'termination_date' => 'date',
-        'salary' => 'decimal:2',
+        // 'salary' => 'float',
         'is_active' => 'boolean',
     ];
-
 
     /**
      * Get the user associated with the employee.
@@ -42,7 +41,6 @@ class Employee extends Model
     {
         return $this->belongsTo(User::class);
     }
-
 
     /**
      * Get the tenant that owns the employee.
@@ -60,7 +58,6 @@ class Employee extends Model
         return $this->belongsTo(Department::class);
     }
 
-
     /**
      * Get the full name of the employee.
      */
@@ -69,17 +66,6 @@ class Employee extends Model
         return $this->first_name . ' ' . $this->last_name;
     }
 
-    // 👇 Accessors for monetary fields
-    public function getSalaryAttribute($value)
-    {
-        return formatCurrency($value);
-    }
-
-    // 👇 Mutators for monetary fields - Convert to USD when WRITING to database
-    public function setSalaryAttribute($value)
-    {
-        $this->attributes['salary'] = toUSD($value);
-    }
 
     
 }

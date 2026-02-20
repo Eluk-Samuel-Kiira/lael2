@@ -25,31 +25,39 @@ class JournalEntryLine extends Model
     ];
 
     protected $casts = [
-        'debit_amount' => 'decimal:2',
-        'credit_amount' => 'decimal:2',
+        // Money fields - stored as integers in DB
+        'debit_amount' => 'integer',
+        'credit_amount' => 'integer',
     ];
 
-    // 👇 ACCESSORS - Format for display
-    public function getDebitAmountAttribute($value)
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getDebitAmountAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getCreditAmountAttribute($value)
+    public function getCreditAmountAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // 👇 MUTATORS - Convert to USD when saving
-    public function setDebitAmountAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setDebitAmountAttribute($value): void
     {
-        $this->attributes['debit_amount'] = toUSD($value);
+        $this->attributes['debit_amount'] = to_base_currency($value);
     }
 
-    public function setCreditAmountAttribute($value)
+    public function setCreditAmountAttribute($value): void
     {
-        $this->attributes['credit_amount'] = toUSD($value);
+        $this->attributes['credit_amount'] = to_base_currency($value);
     }
+
+    
+
 
     // Relationships
     public function journal(): BelongsTo

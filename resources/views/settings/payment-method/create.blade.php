@@ -35,7 +35,7 @@
                             <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                 <span class="required">{{__('payments._type')}}</span>
                             </label>
-                            <select class="form-select form-select-solid" name="type" id="paymentTypeSelect" onchange="togglePaymentMethodFields()">
+                            <select class="form-select form-select-solid" name="type" id="paymentTypeSelect" onchange="togglePaymentMethodFields()" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                 <option value="">{{__('payments.select_type')}}</option>
                                 <option value="bank_account">{{__('payments.bank_account')}}</option>
                                 <option value="digital_wallet">{{__('payments.digital_wallet')}}</option>

@@ -42,8 +42,8 @@
                             <th>{{ __('pagination._variant_name') }}</th>
                             <th>{{ __('pagination._sku') }}</th>
                             <th>{{ __('pagination._barcode') }}</th>
-                            <th>{{ __('pagination._price') }}</th>
-                            <th>{{ __('pagination.cost_price') }}</th>
+                            <th>{{ __('pagination._price') }}  {{ currency_code() }}</th>
+                            <th>{{ __('pagination.cost_price') }}  {{ currency_code() }}</th>
                             <th>{{ __('pagination._weight') }}</th>
                             <th>{{ __('pagination.weight_unit') }}</th>
                             <th style="width: 40px;"></th>

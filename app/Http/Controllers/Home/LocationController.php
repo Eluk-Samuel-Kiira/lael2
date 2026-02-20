@@ -57,6 +57,7 @@ class LocationController extends Controller
             'name' => 'required|string|max:55|unique:locations,name',
             'address' => 'required|string|max:55',
             'manager_id' => 'required|exists:users,id',
+            'currency_id' => 'required|exists:currencies,id',
         ]);
 
         $user = Auth::user();
@@ -78,6 +79,7 @@ class LocationController extends Controller
             'address' => $request->address,
             'created_by' => Auth::user()->id,
             'manager_id' => $request->manager_id,
+            'currency_id' => $request->currency_id,
             'tenant_id' => $tenantId = $user->tenant_id,
         ]);
 
@@ -140,11 +142,21 @@ class LocationController extends Controller
                 'required',
                 'exists:users,id',
                 function ($attribute, $value, $fail) use ($tenantId) {
-                    $manager = User::where('id', $value)
-                                ->where('tenant_id', $tenantId)
+                    $manager = User::where('tenant_id', $tenantId)
                                 ->first();
                     if (!$manager) {
                         $fail('The selected manager is invalid.');
+                    }
+                }
+            ],
+            'currency_id' => [
+                'required',
+                'exists:currencies,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    $manager = User::where('tenant_id', $tenantId)
+                                ->first();
+                    if (!$manager) {
+                        $fail('The selected currency is invalid.');
                     }
                 }
             ],
@@ -156,7 +168,7 @@ class LocationController extends Controller
             'address' => $request->address,
             'created_by' => $user->id,
             'manager_id' => $request->manager_id,
-            // Don't update tenant_id - it should remain the same
+            'currency_id' => $request->currency_id,
         ]);
 
         return response()->json([

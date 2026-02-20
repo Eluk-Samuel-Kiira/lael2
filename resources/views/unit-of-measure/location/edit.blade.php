@@ -17,18 +17,19 @@
                     @method('PUT')
                     <div class="text-center pt-10">
                         <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-5">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('auth._name')}}</span>
                                 </label>
                                 <input type="text" value="{{ $location->name }}" class="form-control form-control-solid" name="name" />
                                 <div id="name{{ $location->id }}"></div>
                             </div>
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+
+                            <div class="d-flex flex-column mb-8 fv-row col-md-4">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('auth._manager')}}</span>
                                 </label>
-                                <select name="manager_id" class="form-select">
+                                <select name="manager_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                     <option value="">{{ __('auth._select') }}</option>
                                     @foreach ($users as $user)
                                         <option value="{{ $user->id }}" {{ $location->manager_id == $user->id ? 'selected' : '' }}>
@@ -37,6 +38,21 @@
                                     @endforeach
                                 </select>
                                 <div id="manager_id{{ $location->id }}"></div>
+                            </div>
+
+                            <div class="d-flex flex-column mb-8 fv-row col-md-3">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    <span class="required">{{__('auth._currency')}}</span>
+                                </label>
+                                <select name="currency_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                    <option value="">{{ __('auth._select') }}</option>
+                                    @foreach ($currencies as $currency)
+                                        <option value="{{ $currency->id }}" {{ $location->currency_id == $currency->id ? 'selected' : '' }}>
+                                            {{ $currency->name.' '.$currency->code }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div id="currency_id{{ $location->id }}"></div>
                             </div>
                         </div>
 

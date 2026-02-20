@@ -11,22 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('taxes', function (Blueprint $table) {
+        Schema::create('locations', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('code')->unique();
-            
-            // 👇 This field stores:
-            // - For percentage: decimal rate (e.g., 18.0000 for 18%)
-            // - For fixed: integer in smallest currency unit
-            $table->decimal('rate', 12, 4);
-            
-            $table->enum('type', ['percentage', 'fixed'])->default('percentage');
+            $table->string('name', 255);
+            $table->string('address', 255);
+            $table->boolean('is_primary')->default(true);
             $table->boolean('is_active')->default(true);
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
             $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            
+            $table->foreignId('manager_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('currency_id')->nullable()->constrained('currencies')->nullOnDelete();
             $table->timestamps();
+            
+            // Add index for faster lookups
+            $table->index(['tenant_id', 'is_active']);
+            $table->index(['tenant_id', 'is_primary']);
         });
     }
 
@@ -35,6 +34,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('taxes');
+        Schema::dropIfExists('locations');
     }
 };

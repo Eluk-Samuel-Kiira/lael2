@@ -63,16 +63,16 @@
                         <div class="row g-9 mb-8">
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination._price')}} </span>
+                                    <span class="required">{{__('pagination._price')}}  {{ currency_code() }}</span>
                                 </label>
-                                <input type="text" value="{{ $product->price }}" class="form-control form-control-solid" name="price" />
+                                <input type="number" value="{{ $product->price }}" class="form-control form-control-solid" name="price" />
                                 <div id="price{{ $product->id }}"></div>
                             </div>
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination.cost_price')}} </span>
+                                    <span class="required">{{__('pagination.cost_price')}}  {{ currency_code() }}</span>
                                 </label>
-                                <input type="text" value="{{ $product->cost_price }}" class="form-control form-control-solid" name="cost_price" />
+                                <input type="number" value="{{ $product->cost_price }}" class="form-control form-control-solid" name="cost_price" />
                                 <div id="cost_price{{ $product->id }}"></div>
                             </div>
                         </div>
@@ -82,7 +82,7 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('pagination._weight')}} </span>
                                 </label>
-                                <input type="text" value="{{ $product->weight }}" class="form-control form-control-solid" name="weight" />
+                                <input type="number" value="{{ $product->weight }}" class="form-control form-control-solid" name="weight" />
                                 <div id="weight{{ $product->id }}"></div>
                             </div>
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">

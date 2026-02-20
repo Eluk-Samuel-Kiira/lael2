@@ -10,13 +10,14 @@
                     </th>
                     <th class="min-w-125px">{{__('auth._id')}}</th>
                     <th class="min-w-125px">{{__('pagination._location')}}</th>
+                    <th class="min-w-125px">{{__('auth._currency')}}</th>
                     <th class="min-w-125px">{{__('pagination._address')}}</th>
                     <th class="min-w-125px">{{__('auth._creater')}}</th>
                     <th class="min-w-125px">{{__('auth._manager')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
                     <th class="min-w-125px">{{__('pagination._primary')}}</th>
                     <th class="min-w-125px">{{__('auth._status')}}</th>
-                    <th class="text-end min-w-100px">{{__('auth._actions')}}</th>
+                    <th class="text-end min-w-150px">{{__('auth._actions')}}</th>
                 </tr>
             </thead>
             <tbody class="text-gray-600 fw-semibold">
@@ -32,6 +33,7 @@
                                 <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $location->id }}</div>
                             </td>
                             <td>{{ $location->name }}</td>
+                            <td class="fw-bold text-primary ms-3">{{ $location->currency->code ?? 'None' }}</td>
                             <td class="fw-bold text-warning ms-3">{{ $location->address ?? 'None' }}</td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $location->locationCreater->name ?? 'None' }}</div>
@@ -55,23 +57,112 @@
                                 </select>
                             </td>
                             <td>
-                                <div class="d-flex gap-2">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <!-- View Departments Button -->
+                                    @can('view department')
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-info d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#viewDepartments{{$location->id}}"
+                                            title="{{ __('View Departments') }}">
+                                            <i class="bi bi-diagram-3 me-1 fs-5"></i> 
+                                            <span>{{ __('Departments') }}</span>
+                                            @if($location->departments->count() > 0)
+                                                <span class="badge bg-info text-white ms-2">{{ $location->departments->count() }}</span>
+                                            @endif
+                                        </button>
+                                    @endcan
+
                                     @can('edit location')
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
-                                                data-bs-target="#editLocation{{$location->id}}">
-                                                <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('Edit') }}</span>
+                                            data-bs-target="#editLocation{{$location->id}}">
+                                            <i class="bi bi-pencil-square me-1 fs-5"></i> 
+                                            <span>{{ __('Edit') }}</span>
                                         </button>
                                     @endcan
+                                    
                                     @can('delete location')
                                         <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
-                                                data-bs-target="#deleteLocationModal{{$location->id}}">
-                                                <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('Delete') }}</span>
+                                            data-bs-target="#deleteLocationModal{{$location->id}}">
+                                            <i class="bi bi-trash me-1 fs-5"></i> 
+                                            <span>{{ __('Delete') }}</span>
                                         </button>
                                     @endcan 
+                                </div>
+
+                                <!-- View Departments Modal -->
+                                <div class="modal fade" id="viewDepartments{{$location->id}}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">
+                                                    <i class="bi bi-diagram-3 me-2"></i>
+                                                    {{ __('Departments in') }} {{ $location->name }}
+                                                </h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                @if($location->departments->count() > 0)
+                                                    <div class="table-responsive">
+                                                        <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
+                                                            <thead>
+                                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom-2 border-gray-200">
+                                                                    <th class="min-w-50px">#</th>
+                                                                    <th class="min-w-150px">{{__('auth._department')}}</th>
+                                                                    <th class="min-w-120px">{{__('auth._manager')}}</th>
+                                                                    <th class="min-w-100px">{{__('auth._status')}}</th>
+                                                                    <th class="min-w-120px">{{__('auth.created_at')}}</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach($location->departments as $index => $department)
+                                                                    <tr>
+                                                                        <td>{{ $index + 1 }}</td>
+                                                                        <td class="fw-bold">{{ $department->name }}</td>
+                                                                        <td>
+                                                                            <div class="d-flex align-items-center">
+                                                                                <div class="symbol symbol-35px symbol-circle me-2">
+                                                                                    <span class="symbol-label bg-light-primary text-primary fw-bold">
+                                                                                        {{ substr($department->manager->name ?? 'NA', 0, 2) }}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span>{{ $department->manager->name ?? 'No Manager' }}</span>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td>
+                                                                            @if($department->is_active)
+                                                                                <span class="badge badge-light-success">{{ __('Active') }}</span>
+                                                                            @else
+                                                                                <span class="badge badge-light-secondary">{{ __('Inactive') }}</span>
+                                                                            @endif
+                                                                        </td>
+                                                                        <td>{{ $department->created_at->format('d M Y') }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                @else
+                                                    <div class="text-center py-10">
+                                                        <i class="bi bi-diagram-3 fs-3x text-muted mb-3"></i>
+                                                        <p class="text-muted">{{ __('auth.no_dept_for_location') }}</p>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('auth._close') }}</button>
+                                                @can('create department')
+                                                    <a href="{{ route('department.index') }}" class="btn btn-primary">
+                                                        <i class="bi bi-plus-circle me-2"></i>{{__('auth._department_new')}}
+                                                    </a>
+                                                @endcan
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Delete User Modal -->
@@ -84,6 +175,10 @@
                                             </div>
                                             <div class="modal-body">
                                                 <p>{{ __('auth.are_you_sure') }}</p>
+                                                <p class="text-danger">
+                                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                                    {{ __('This location has :count departments. Deleting it will also delete all associated departments.', ['count' => $location->departments->count()]) }}
+                                                </p>
                                                 <p>{{ __('auth.action_cannot') }}</p>
                                             </div>
                                             <div class="modal-footer">
@@ -105,7 +200,6 @@
                                     </div>
                                 </div>
                                 @include('unit-of-measure.location.edit')
-                                
                             </td>
                         </tr>
                     @endforeach
@@ -114,7 +208,3 @@
         </table>
     </div>
 </div>
-
-
-
-

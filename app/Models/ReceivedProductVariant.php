@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReceivedProductVariant extends Model
 {
@@ -28,35 +29,42 @@ class ReceivedProductVariant extends Model
 
     protected $casts = [
         'quantity_received' => 'integer',
-        'unit_cost' => 'decimal:2',
-        'total_cost' => 'decimal:2',
+        // Money fields - stored as integers in DB
+        'unit_cost' => 'integer',
+        'total_cost' => 'integer',
         'inventory_quantity_before' => 'integer',
         'inventory_quantity_after' => 'integer',
         'expiry_date' => 'date',
         'received_at' => 'datetime',
     ];
 
-    // 👇 Accessors for monetary fields
-    public function getUnitCostAttribute($value)
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getUnitCostAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTotalCostAttribute($value)
+    public function getTotalCostAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // 👇 Mutators for monetary fields
-    public function setUnitCostAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setUnitCostAttribute($value): void
     {
-        $this->attributes['unit_cost'] = toUSD($value);
+        $this->attributes['unit_cost'] = to_base_currency($value);
     }
 
-    public function setTotalCostAttribute($value)
+    public function setTotalCostAttribute($value): void
     {
-        $this->attributes['total_cost'] = toUSD($value);
+        $this->attributes['total_cost'] = to_base_currency($value);
     }
+
+
 
 
     /**

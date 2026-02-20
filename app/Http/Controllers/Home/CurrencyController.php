@@ -16,19 +16,15 @@ class CurrencyController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = current_tenant_id();
+        $tenantId = $user->tenant_id;
         
-        // Build the query - ALWAYS include currency with ID 1 (USD base currency)
-        $query = Currency::where(function($query) use ($tenantId, $user) {
-            $query->where('id', 1) // Always include base currency (USD)
-                ->orWhere('tenant_id', $tenantId); // Include tenant's currencies
-        });
+        $query = Currency::where('tenant_id', $tenantId);
         
         // If user is super_admin, also show all other currencies
         if ($user->hasRole('super_admin')) {
-            $query->orWhere(function($query) {
-                $query->where('id', '!=', 1) // Exclude base currency (already included)
-                    ->whereNotNull('tenant_id'); // Include all tenant currencies
+            $query->orWhere(function($query) use ($tenantId) {
+                $query->where('tenant_id', '!=', $tenantId)
+                    ->whereNotNull('tenant_id');
             });
         }
         
@@ -63,19 +59,28 @@ class CurrencyController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        // Check for USD or $ restrictions
-        if (strtoupper($request->code) === 'USD') {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.usd_currency_reserved'),
-            ]);
-        }
+        // Get the tenant's base currency
+        $baseCurrency = Currency::where('tenant_id', $tenantId)
+            ->where('is_base_currency', true)
+            ->first();
 
-        if ($request->symbol === '$') {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.dollar_symbol_reserved'),
-            ]);
+        // If base currency exists, check against it
+        if ($baseCurrency) {
+            // Check if trying to create currency with same code as base currency
+            if (strtoupper($request->code) === $baseCurrency->code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.base_currency_code_reserved', ['code' => $baseCurrency->code]),
+                ]);
+            }
+
+            // Check if trying to use base currency's symbol
+            if ($request->symbol === $baseCurrency->symbol) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.base_currency_symbol_reserved', ['symbol' => $baseCurrency->symbol]),
+                ]);
+            }
         }
 
         $request->validate([
@@ -94,17 +99,38 @@ class CurrencyController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            'symbol' => 'required',
-            'exchange_rate' => 'required',
+            'symbol' => 'required|string|max:10',
+            'symbol_position' => 'sometimes|in:before,after',
+            'decimal_places' => 'sometimes|integer|min:0|max:4',
+            'exchange_rate' => 'required|numeric|min:0.00000001',
+            'is_base_currency' => 'sometimes|boolean',
         ]);
 
+        // Check if trying to set as base currency when one already exists
+        if ($request->is_base_currency) {
+            $existingBase = Currency::where('tenant_id', $tenantId)
+                ->where('is_base_currency', true)
+                ->exists();
+                
+            if ($existingBase) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.base_currency_already_exists'),
+                ]);
+            }
+        }
+
         $currency = Currency::create([
-            'code' => $request->code,
+            'code' => strtoupper($request->code),
             'name' => $request->name,
             'symbol' => $request->symbol,
+            'symbol_position' => $request->symbol_position ?? 'before',
+            'decimal_places' => $request->decimal_places ?? 2,
             'exchange_rate' => $request->exchange_rate,
             'created_by' => $user->id,
-            'tenant_id' => $tenantId, // Make sure to set tenant_id
+            'tenant_id' => $tenantId,
+            'is_active' => $request->is_active ?? true,
+            'is_base_currency' => $request->is_base_currency ?? false,
         ]);
 
         return response()->json([
@@ -114,6 +140,7 @@ class CurrencyController extends Controller
             'refresh' => false,
             'message' => __('auth._created'),
             'redirect' => route('currency.index'),
+            'currency' => $currency
         ]);
     }
 
@@ -141,19 +168,36 @@ class CurrencyController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        // Check for USD or $ restrictions
-        if (strtoupper($request->code) === 'USD') {
+        // Get the tenant's base currency
+        $baseCurrency = Currency::where('tenant_id', $tenantId)
+            ->where('is_base_currency', true)
+            ->first();
+
+        // If this currency is the base currency, protect it
+        if ($currency->is_base_currency) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.usd_currency_reserved'),
+                'message' => __('auth.base_currency_cannot_be_modified'),
             ]);
         }
 
-        if ($request->symbol === '$') {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.dollar_symbol_reserved'),
-            ]);
+        // If base currency exists, check against it
+        if ($baseCurrency) {
+            // Check if trying to update currency with same code as base currency
+            if (strtoupper($request->code) === $baseCurrency->code) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.base_currency_code_reserved', ['code' => $baseCurrency->code]),
+                ]);
+            }
+
+            // Check if trying to use base currency's symbol
+            if ($request->symbol === $baseCurrency->symbol) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.base_currency_symbol_reserved', ['symbol' => $baseCurrency->symbol]),
+                ]);
+            }
         }
 
         $request->validate([
@@ -172,19 +216,13 @@ class CurrencyController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })->ignore($currency->id),
             ],
-            'symbol' => 'required',
-            'exchange_rate' => 'required',
+            'symbol' => 'required|string|max:10',
+            'symbol_position' => 'sometimes|in:before,after',
+            'decimal_places' => 'sometimes|integer|min:0|max:4',
+            'exchange_rate' => 'required|numeric|min:0.00000001',
         ]);
 
-        // Protect the global currency (ID 1) and USD code
-        if ($currency->id === 1 || $currency->code === 'USD') {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.default_currency_cannot_be_modified'),
-            ]);
-        }
-
-        // Also check if the currency belongs to the current tenant
+        // Check if the currency belongs to the current tenant
         if ($currency->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -193,9 +231,11 @@ class CurrencyController extends Controller
         }
 
         $currency->update([
-            'code' => $request->code,
+            'code' => strtoupper($request->code),
             'name' => $request->name,
             'symbol' => $request->symbol,
+            'symbol_position' => $request->symbol_position ?? $currency->symbol_position,
+            'decimal_places' => $request->decimal_places ?? $currency->decimal_places,
             'exchange_rate' => $request->exchange_rate,
             'created_by' => $user->id
         ]);
@@ -226,32 +266,24 @@ class CurrencyController extends Controller
             ]);
         }
 
-        // Detailed protection checks with specific messages
-        if ($currency->id === 1) {
+        // Get the tenant's base currency
+        $baseCurrency = Currency::where('tenant_id', $tenantId)
+            ->where('is_base_currency', true)
+            ->first();
+
+        // Protect the base currency
+        if ($baseCurrency && $currency->id === $baseCurrency->id) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.global_currency_protected'),
+                'message' => __('auth.base_currency_cannot_be_deleted'),
             ]);
         }
 
-        if ($currency->isActive === 1) {
+        // Cannot delete active currency
+        if ($currency->is_active) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.active_currency_protected'),
-            ]);
-        }
-
-        if ($currency->name === 'USD' || $currency->code === 'USD') {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.usd_currency_protected'),
-            ]);
-        }
-
-        if ($currency->is_default === true) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.default_currency_protected'),
             ]);
         }
 
@@ -274,7 +306,7 @@ class CurrencyController extends Controller
 
         // Validate the request data for status
         $validated = $request->validate([
-            'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
+            'status' => 'required|in:1,0',
         ]);
 
         $currency = Currency::find($id);
@@ -295,16 +327,21 @@ class CurrencyController extends Controller
             ]);
         }
 
-        // Protect USD currency and global currency (ID 1)
-        if ($currency->code === 'USD' || $currency->id === 1) {
+        // Get the tenant's base currency
+        $baseCurrency = Currency::where('tenant_id', $tenantId)
+            ->where('is_base_currency', true)
+            ->first();
+
+        // Cannot deactivate the base currency
+        if ($baseCurrency && $currency->id === $baseCurrency->id && $validated['status'] == 0) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.default_currency_cannot_be_modified'),
+                'message' => __('auth.base_currency_cannot_be_deactivated'),
             ]);
         }
 
         // Update the currency status
-        $currency->isActive = $validated['status'];
+        $currency->is_active = $validated['status'];
         
         if ($currency->save()) {
             $statusMessage = $validated['status'] == 1 
@@ -321,7 +358,6 @@ class CurrencyController extends Controller
             ]);
         }
 
-        // If status update failed
         return response()->json([
             'success' => false,
             'message' => __('auth.update_failed'),

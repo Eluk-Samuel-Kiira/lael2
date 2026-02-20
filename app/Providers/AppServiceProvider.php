@@ -82,13 +82,7 @@ class AppServiceProvider extends ServiceProvider
                     'sub_categories' => ProductCategory::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'uoms' => UnitOfMeasure::where('tenant_id', $tenantId)->where('isActive', 1)->get(),
                     'variants' => ProductVariant::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
-                    'currencies' => Currency::where(function($query) use ($tenantId) {
-                                        $query->where('id', 1) // Always include base currency (USD)
-                                            ->orWhere(function($q) use ($tenantId) {
-                                                $q->where('tenant_id', $tenantId)
-                                                    ->where('isActive', 1); // Tenant's active currencies
-                                            });
-                                    })->get(),
+                    'currencies' => Currency::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'locations' => Location::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'customers' => Customer::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'taxes' => Tax::where('tenant_id', $tenantId)->where('is_active', 1)->get(),

@@ -35,32 +35,46 @@ class JournalEntry extends Model
     protected $casts = [
         'entry_date' => 'date',
         'posted_at' => 'datetime',
-        'total_debit' => 'decimal:2',
-        'total_credit' => 'decimal:2',
+        'total_debit' => 'integer',
+        'total_credit' => 'integer',
         'is_balanced' => 'boolean',
     ];
 
-    // 👇 ACCESSORS - Format for display
-    public function getTotalDebitAttribute($value)
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getTotalDebitAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTotalCreditAttribute($value)
+    public function getTotalCreditAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // 👇 MUTATORS - Convert to USD when saving
-    public function setTotalDebitAttribute($value)
+    /**
+     * Computed attribute - Check if journal entry is balanced
+     */
+    public function getIsBalancedAttribute(): bool
     {
-        $this->attributes['total_debit'] = toUSD($value);
+        return abs($this->total_debit - $this->total_credit) < 0.01;
     }
 
-    public function setTotalCreditAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setTotalDebitAttribute($value): void
     {
-        $this->attributes['total_credit'] = toUSD($value);
+        $this->attributes['total_debit'] = to_base_currency($value);
     }
+
+    public function setTotalCreditAttribute($value): void
+    {
+        $this->attributes['total_credit'] = to_base_currency($value);
+    }
+
 
     // Model Events
     protected static function boot()
@@ -153,17 +167,7 @@ class JournalEntry extends Model
         return $prefix . $nextNumber;
     }
 
-    /**
-     * Check if journal entry is balanced
-     */
-    public function getIsBalancedAttribute(): bool
-    {
-        // Compare raw values (not formatted)
-        $totalDebit = $this->attributes['total_debit'] ?? 0;
-        $totalCredit = $this->attributes['total_credit'] ?? 0;
-        
-        return abs($totalDebit - $totalCredit) < 0.01; // Allow small rounding difference
-    }
+
 
     /**
      * Get balance difference (for debugging)

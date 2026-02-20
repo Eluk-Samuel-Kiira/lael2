@@ -25,59 +25,130 @@ class AccountBalance extends Model
 
     protected $casts = [
         'balance_date' => 'date',
-        'opening_balance' => 'decimal:2',
-        'debit_total' => 'decimal:2',
-        'credit_total' => 'decimal:2',
+        'opening_balance' => 'integer', // Stored in smallest unit
+        'debit_total' => 'integer',      // Stored in smallest unit
+        'credit_total' => 'integer',      // Stored in smallest unit
     ];
 
-    // 👇 ACCESSORS - Format for display
-    public function getOpeningBalanceAttribute($value)
+
+
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getOpeningBalanceAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getDebitTotalAttribute($value)
+    public function getDebitTotalAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getCreditTotalAttribute($value)
+    public function getCreditTotalAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getClosingBalanceAttribute()
+    /**
+     * Computed closing balance accessor
+     */
+    public function getClosingBalanceAttribute(): ?float
     {
-        // Calculate closing balance
-        $openingBalance = $this->attributes['opening_balance'] ?? 0;
-        $debitTotal = $this->attributes['debit_total'] ?? 0;
-        $creditTotal = $this->attributes['credit_total'] ?? 0;
+        $opening = $this->opening_balance ?? 0;
+        $debits = $this->debit_total ?? 0;
+        $credits = $this->credit_total ?? 0;
         
-        $account = $this->account;
-        if ($account && $account->normal_balance === 'D') {
-            $closingBalance = $openingBalance + $debitTotal - $creditTotal;
-        } else {
-            $closingBalance = $openingBalance + $creditTotal - $debitTotal;
+        // For asset/expense accounts: opening + debits - credits
+        // For liability/equity/revenue accounts: opening + credits - debits
+        // You might want to adjust based on account type
+        if ($this->account && in_array($this->account->type, ['asset', 'expense'])) {
+            return $opening + $debits - $credits;
         }
         
-        return formatCurrency($closingBalance);
+        return $opening + $credits - $debits;
     }
 
-    // 👇 MUTATORS - Convert to USD when saving
-    public function setOpeningBalanceAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setOpeningBalanceAttribute($value): void
     {
-        $this->attributes['opening_balance'] = toUSD($value);
+        $this->attributes['opening_balance'] = to_base_currency($value);
     }
 
-    public function setDebitTotalAttribute($value)
+    public function setDebitTotalAttribute($value): void
     {
-        $this->attributes['debit_total'] = toUSD($value);
+        $this->attributes['debit_total'] = to_base_currency($value);
     }
 
-    public function setCreditTotalAttribute($value)
+    public function setCreditTotalAttribute($value): void
     {
-        $this->attributes['credit_total'] = toUSD($value);
+        $this->attributes['credit_total'] = to_base_currency($value);
     }
+
+    /**
+     * Helper method to update balances based on a transaction
+     */
+    public static function updateBalance(
+        int $accountId,
+        int $periodId,
+        string $date,
+        float $debitAmount = 0,
+        float $creditAmount = 0
+    ): self {
+        $tenantId = current_tenant_id();
+        
+        $balance = self::firstOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'account_id' => $accountId,
+                'period_id' => $periodId,
+                'balance_date' => $date,
+            ],
+            [
+                'opening_balance' => 0,
+                'debit_total' => 0,
+                'credit_total' => 0,
+            ]
+        );
+
+        $balance->debit_total = ($balance->debit_total ?? 0) + $debitAmount;
+        $balance->credit_total = ($balance->credit_total ?? 0) + $creditAmount;
+        $balance->save();
+
+        return $balance;
+    }
+
+    /**
+     * Scope for date range
+     */
+    public function scopeForDateRange($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('balance_date', [$startDate, $endDate]);
+    }
+
+    /**
+     * Get balances in raw integer form (for calculations)
+     */
+    public function getRawOpeningBalance(): ?int
+    {
+        return $this->attributes['opening_balance'] ?? null;
+    }
+
+    public function getRawDebitTotal(): ?int
+    {
+        return $this->attributes['debit_total'] ?? null;
+    }
+
+    public function getRawCreditTotal(): ?int
+    {
+        return $this->attributes['credit_total'] ?? null;
+    }
+
+    
+
 
     // Relationships
     public function tenant(): BelongsTo
@@ -139,29 +210,9 @@ class AccountBalance extends Model
         return $this->calculateClosingBalance();
     }
 
-    /**
-     * Get raw opening balance (for calculations)
-     */
-    public function getRawOpeningBalance(): float
-    {
-        return $this->attributes['opening_balance'] ?? 0;
-    }
 
-    /**
-     * Get raw debit total (for calculations)
-     */
-    public function getRawDebitTotal(): float
-    {
-        return $this->attributes['debit_total'] ?? 0;
-    }
 
-    /**
-     * Get raw credit total (for calculations)
-     */
-    public function getRawCreditTotal(): float
-    {
-        return $this->attributes['credit_total'] ?? 0;
-    }
+
 
     /**
      * Get net change (difference between debits and credits)
@@ -184,7 +235,9 @@ class AccountBalance extends Model
      */
     public function getFormattedNetChangeAttribute()
     {
-        return formatCurrency(abs($this->getNetChange()));
+        $netChange = abs($this->getRawNetChange());
+        $currencyCode = $this->getCurrencyCode();
+        return format_currency($netChange, $currencyCode);
     }
 
     /**

@@ -11,16 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('locations', function (Blueprint $table) {
+        Schema::create('departments', function (Blueprint $table) {
             $table->id();
-            $table->string('name', 255);
-            $table->string('address', 255);
-            $table->boolean('is_primary')->default(true);
-            $table->boolean('is_active')->default(true);
+            $table->string('name');
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
             $table->foreignId('manager_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
+            $table->foreignId('location_id')->nullable()->constrained('locations')->nullOnDelete();
+            $table->boolean('isActive')->default(1);
             $table->timestamps();
+            
+            // Add indexes for faster lookups
+            $table->index(['tenant_id', 'location_id']);
+            $table->index(['tenant_id', 'isActive']);
         });
     }
 
@@ -29,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('locations');
+        Schema::dropIfExists('departments');
     }
 };

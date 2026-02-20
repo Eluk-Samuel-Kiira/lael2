@@ -19,16 +19,33 @@ class OrderTax extends Model
         'created_by',
     ];
 
-    public function getTaxAmountAttribute($value)
+    protected $casts = [
+        // Tax rate is a percentage, not a currency amount
+        'tax_rate' => 'decimal:2',
+        // Money field - stored as integer in DB
+        'tax_amount' => 'integer',
+        'is_compound' => 'boolean',
+    ];
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getTaxAmountAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function setTaxAmountAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setTaxAmountAttribute($value): void
     {
-        $this->attributes['tax_amount'] = toUSD($value);
+        $this->attributes['tax_amount'] = to_base_currency($value);
     }
-    
+
+    /**
+     * Relationships
+     */
     public function order()
     {
         return $this->belongsTo(Order::class, 'order_id');

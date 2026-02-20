@@ -12,6 +12,7 @@
                     <th class="min-w-125px">{{__('auth._code')}}</th>
                     <th class="min-w-125px">{{__('auth._name')}}</th>
                     <th class="min-w-125px">{{__('auth._symbol')}}</th>
+                    <th class="min-w-125px">{{__('auth._exchange_rate')}}{{ tenant_currency() }}</th>
                     <th class="min-w-125px">{{__('auth._creater')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
                     <th class="min-w-125px">{{__('auth._status')}}</th>
@@ -30,30 +31,39 @@
                             <td>
                                 <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $currency->id }}</div>
                             </td>
-                            <td>{{ $currency->code }}</td>
+                            <td>
+                                {{ $currency->code }}
+                                @if($currency->is_base_currency)
+                                    <span class="badge badge-success badge-sm ms-1">Default</span>
+                                @endif
+                            </td>
                             <td>{{ $currency->name }}</td>
                             <td>
                                 <div class="fw-bold text-primary ms-3">{{ $currency->symbol }}</div>
+                            </td>
+                            <td>
+                                <div class="fw-bold text-success ms-3">{{ $currency->exchange_rate }}</div>
                             </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $currency->currencyCreater->name ?? 'None' }}</div>
                             </td>
                             <td>{{ $currency->created_at->format('d M Y, h:i a') }}</td>
                             <td>
-                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateStatusCurrency({{ $currency->id }}, this.value)">
-                                    <option value="1" {{ $currency->isActive == 1 ? 'selected' : '' }}><span>{{__('auth._active')}}</option>
-                                    <option value="0" {{ $currency->isActive == 0 ? 'selected' : '' }}>{{__('auth._inactive')}}</option>
+                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateStatusCurrency({{ $currency->id }}, this.value)" @if($currency->is_base_currency) disabled @endif>
+                                    <option value="1" {{ $currency->is_active == 1 ? 'selected' : '' }}><span>{{__('auth._active')}}</option>
+                                    <option value="0" {{ $currency->is_active == 0 ? 'selected' : '' }}>{{__('auth._inactive')}}</option>
                                 </select>
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
+                                    @if(!$currency->is_base_currency)
                                     <!-- Edit User Button -->
                                     <button 
-                                    class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
-                                    data-bs-toggle="modal" 
+                                        class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                        data-bs-toggle="modal" 
                                         data-bs-target="#editCurrency{{$currency->id}}">
                                         <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
-                                        </button>
+                                    </button>
                                     <!-- Delete User Button -->
                                     <button type="button" 
                                         class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
@@ -61,6 +71,7 @@
                                             data-bs-target="#deleteUserModal{{$currency->id}}">
                                             <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('auth._delete') }}</span>
                                     </button>
+                                    @endif
                                 </div>
 
                                 <!-- Delete User Modal -->
@@ -94,7 +105,6 @@
                                     </div>
                                 </div>
                                 @include('settings.currency.edit-currency')
-                                
                             </td>
                         </tr>
                     @endforeach

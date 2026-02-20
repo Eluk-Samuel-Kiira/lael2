@@ -834,7 +834,7 @@
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>{{__('pagination._currency')}}:</span>
-                        <span>{{ getMailOptions('currency') }} - {{ currencySymbol() }}</span>
+                        <span>{{ currency_code() }} - {{ currency_symbol() }}</span>
                     </div>
                 ` : ''}
             </div>

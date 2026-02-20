@@ -39,14 +39,15 @@ class Expense extends Model
 
     protected $casts = [
         'date' => 'date',
-        'amount' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'total_amount' => 'decimal:2',
+        'amount' => 'integer',
+        'tax_amount' => 'integer',
+        'total_amount' => 'integer',
         'is_recurring' => 'boolean',
         'paid_date' => 'date',
         'next_recurring_date' => 'date',
         'approved_at' => 'datetime',
     ];
+
 
     /**
      * The accessors to append to the model's array form.
@@ -58,6 +59,37 @@ class Expense extends Model
         'formatted_tax_amount',
         'formatted_total_amount',
     ];
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getTaxAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getTotalAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setAmountAttribute($value): void
+    {
+        $this->attributes['amount'] = to_base_currency($value);
+    }
+
+    public function setTaxAmountAttribute($value): void
+    {
+        $this->attributes['tax_amount'] = to_base_currency($value);
+    }
 
     /**
      * Get the tenant that owns the expense.
@@ -107,54 +139,34 @@ class Expense extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    // 👇 Accessors for monetary fields
-    protected function amount(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => formatCurrency($value),
-            set: fn ($value) => toUSD($value),
-        );
-    }
+    // // 👇 Accessors for monetary fields
+    // protected function amount(): Attribute
+    // {
+    //     return Attribute::make(
+    //         get: fn ($value) => format_currency($value),
+    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
+    //     );
+    // }
 
-    protected function taxAmount(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => formatCurrency($value),
-            set: fn ($value) => toUSD($value),
-        );
-    }
+    // protected function taxAmount(): Attribute
+    // {
+    //     return Attribute::make(
+    //         get: fn ($value) => format_currency($value),
+    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
+    //     );
+    // }
 
-    protected function totalAmount(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => formatCurrency($value),
-            set: fn ($value) => toUSD($value),
-        );
-    }
+    // protected function totalAmount(): Attribute
+    // {
+    //     return Attribute::make(
+    //         get: fn ($value) => format_currency($value),
+    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
+    //     );
+    // }
 
-    /**
-     * Formatted amount accessor.
-     */
-    protected function getFormattedAmountAttribute()
-    {
-        return formatCurrency($this->attributes['amount'] ?? 0);
-    }
 
-    /**
-     * Formatted tax amount accessor.
-     */
-    protected function getFormattedTaxAmountAttribute()
-    {
-        return formatCurrency($this->attributes['tax_amount'] ?? 0);
-    }
 
-    /**
-     * Formatted total amount accessor.
-     */
-    protected function getFormattedTotalAmountAttribute()
-    {
-        return formatCurrency($this->attributes['total_amount'] ?? 0);
-    }
+    
 
     /**
      * Scope a query to only include expenses for a specific tenant.

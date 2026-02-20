@@ -5,6 +5,7 @@ namespace Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use App\Models\User;
 use App\Models\Tenant;
+use App\Models\Location;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Model>
@@ -24,6 +25,7 @@ class DepartmentFactory extends Factory
             'tenant_id' => Tenant::inRandomOrder()->first()->id,
             'created_by' => User::where('role_id', 1)->where('status', 'active')->get()->random()->id,
             'manager_id' => User::where('role_id', 1)->where('status', 'active')->get()->random()->id,
+            'location_id' => Location::where('is_active', true)->get()->random()->id,
         ];
     
     }

@@ -20,7 +20,7 @@
                 <div class="col-lg-8">
                     <div class="row">
                         <div class="col-lg-12 fv-row">
-                            <select name="font_family" class="form-select form-select-lg form-select-solid mb-3 mb-lg-0">
+                            <select name="font_family" class="form-select form-select-lg form-select-solid mb-3 mb-lg-0" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                 <option value="">Select a font family</option>
                                 <!-- Serif Fonts -->
                                 <optgroup label="Serif Fonts">

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+// use App\ValueObjects\Money;
 
 class ProductVariant extends Model
 {
@@ -27,27 +28,34 @@ class ProductVariant extends Model
         'is_taxable',
     ];
 
-    // 👇 Accessors to format currency automatically
-    public function getPriceAttribute($value)
+    protected $casts = [
+        'price' => 'integer', // Stored in smallest unit
+        'cost_price' => 'integer',
+        'weight' => 'decimal:2', 
+    ];
+
+    // Accessors - convert from stored integer to display float
+    public function getPriceAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getCostPriceAttribute($value)
+    public function getCostPriceAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // 👇 MUTATORS - Convert to USD when WRITING to database
-    public function setPriceAttribute($value)
+    // Mutators - convert from display float to stored integer
+    public function setPriceAttribute($value): void
     {
-        $this->attributes['price'] = toUSD($value);
+        $this->attributes['price'] = to_base_currency($value);
     }
 
-    public function setCostPriceAttribute($value)
+    public function setCostPriceAttribute($value): void
     {
-        $this->attributes['cost_price'] = toUSD($value);
+        $this->attributes['cost_price'] = to_base_currency($value);
     }
+
 
 
 

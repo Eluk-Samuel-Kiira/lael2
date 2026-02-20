@@ -918,16 +918,65 @@
             return;
         }
 
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
+        // Use FormData instead of Object.fromEntries to properly handle array inputs
+        const formData = new FormData(form);
+        
+        // IMPORTANT FIX: Handle selected_taxes[] properly
+        // Remove any existing selected_taxes entries to avoid duplication
+        formData.delete('selected_taxes[]');
+        
+        // Get all checked tax checkboxes
+        // Note: You'll need to adjust the selector based on your form's structure
+        const taxCheckboxes = form.querySelectorAll('input[name="selected_taxes[]"]:checked');
+        console.log('Found checked tax checkboxes:', taxCheckboxes.length);
+        
+        if (taxCheckboxes.length > 0) {
+            // Append each checked checkbox value
+            taxCheckboxes.forEach(checkbox => {
+                formData.append('selected_taxes[]', checkbox.value);
+                console.log('Appending tax ID:', checkbox.value);
+            });
+        } else {
+            // If no taxes selected, append an empty value to ensure the field exists
+            // This ensures the array is sent even if empty
+            formData.append('selected_taxes[]', '');
+        }
+
+        // Add method override
+        formData.append('_method', method);
+        
+        // Add route name if needed
+        formData.append('routeName', url);
+
+        // Debug: Log all form entries being sent
+        console.log('Form entries being sent:');
+        for (let pair of formData.entries()) {
+            console.log(pair[0] + ': ' + pair[1]);
+        }
 
         // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
 
+        // Convert FormData to object for the existing handler
+        // This maintains compatibility with your handleFormSubmission function
+        const data = {};
+        for (let pair of formData.entries()) {
+            // Handle array values specially
+            if (pair[0].endsWith('[]')) {
+                const key = pair[0].slice(0, -2);
+                if (!data[key]) {
+                    data[key] = [];
+                }
+                if (pair[1] !== '') { // Don't push empty values
+                    data[key].push(pair[1]);
+                }
+            } else {
+                data[pair[0]] = pair[1];
+            }
+        }
+
         // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
+        handleFormSubmission(data, submitButton, discardButtonId);
     }
 
 
@@ -939,17 +988,115 @@
         var form = document.getElementById('editPaymentForm' + uniqueId);
         var formData = new FormData(form);
 
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
+        // CRITICAL FIX: Remove hidden tax fields so they don't override server calculations
+        // These should be calculated on the server, not submitted from the form
+        formData.delete('total_tax_amount');
+        formData.delete('net_amount');
+        
+        // Also remove the display fields if they're in the form
+        formData.delete('edit_total_tax_' + uniqueId);
+        formData.delete('edit_net_amount_' + uniqueId);
+
+        // IMPORTANT FIX: Handle selected_taxes[] properly
+        // Remove any existing selected_taxes entries
+        formData.delete('selected_taxes[]');
+        formData.delete('selected_taxes');
+        
+        // Get all checked tax checkboxes for this payment
+        const taxCheckboxes = document.querySelectorAll('.edit-tax-checkbox-' + uniqueId + ':checked');
+        console.log('Found checked tax checkboxes:', taxCheckboxes.length);
+        
+        if (taxCheckboxes.length > 0) {
+            // For multiple checkboxes, append each one with the same key
+            taxCheckboxes.forEach(checkbox => {
+                formData.append('selected_taxes[]', checkbox.value);
+                console.log('Appending tax ID:', checkbox.value);
+            });
+        } else {
+            // If no taxes are selected, we need to send an empty array
+            // This ensures the field exists in the request
+            formData.append('selected_taxes[]', '');
+        }
+
+        // Debug: Log all form entries being sent
+        console.log('Form entries being sent:');
+        for (let pair of formData.entries()) {
+            console.log(pair[0] + ': ' + pair[1]);
+        }
 
         // Set up the URL dynamically
-        var updateUrl = '{{ route('payment.update', ['payment' => ':id']) }}'.replace(':id', uniqueId);
+        var updateUrl = '/payment/' + uniqueId;
         
         // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
+        fetch(updateUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.log('Response data:', data);
+            
+            if (data.success) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(data.message);
+                } else {
+                    alert(data.message);
+                }
+                
+                $('#editPaymentModal' + uniqueId).modal('hide');
+                
+                if (data.reload) {
+                    location.reload();
+                } else if (data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } else {
+                // Handle validation errors
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(key => {
+                        const errorElement = document.getElementById(key + uniqueId);
+                        if (errorElement) {
+                            errorElement.innerHTML = '<span class="text-danger">' + data.errors[key][0] + '</span>';
+                        }
+                    });
+                }
+                
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(data.message || 'Error updating payment');
+                } else {
+                    alert(data.message || 'Error updating payment');
+                }
+            }
+        })
+        .catch(error => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.error('Error:', error);
+            
+            if (error.errors) {
+                // Display validation errors
+                Object.keys(error.errors).forEach(key => {
+                    const errorElement = document.getElementById(key + uniqueId);
+                    if (errorElement) {
+                        errorElement.innerHTML = '<span class="text-danger">' + error.errors[key][0] + '</span>';
+                    }
+                });
+            }
+            
+            alert('An error occurred while updating the payment');
+        });
     }
-    
+        
     function updatePaymentStatus(uniqueId, selectedStatus) {
         // Get the current status from the select element
         const selectElement = event.target;
@@ -984,6 +1131,340 @@
     }
 
 
+</script>
+
+<!-- JavaScript for Tax Calculation -->
+<script>
+    // Make sure all variable names are consistent
+    let selectedPayments = []; // Define the variable if needed
+
+    function calculateTaxPreview() {
+        const grossAmount = document.getElementById('gross_amount')?.value;
+        const selectedTaxes = Array.from(document.querySelectorAll('.tax-checkbox:checked')).map(cb => cb.value);
+        const employeeId = document.getElementById('employee_select')?.value;
+        
+        if (!grossAmount || grossAmount <= 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Please enter gross amount first');
+            } else {
+                alert('Please enter gross amount first');
+            }
+            return;
+        }
+        
+        if (selectedTaxes.length === 0) {
+            document.getElementById('tax_preview')?.classList.add('d-none');
+            return;
+        }
+        
+        // Show loading state
+        const previewDiv = document.getElementById('tax_preview');
+        if (previewDiv) {
+            previewDiv.classList.remove('d-none');
+        }
+        
+        document.getElementById('preview_gross') && (document.getElementById('preview_gross').textContent = '$0.00');
+        document.getElementById('preview_tax') && (document.getElementById('preview_tax').textContent = '$0.00');
+        document.getElementById('preview_net') && (document.getElementById('preview_net').textContent = '$0.00');
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                        document.querySelector('input[name="_token"]')?.value;
+        
+        fetch('{{ route("payment.calculate-tax-preview") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                gross_amount: grossAmount,
+                selected_taxes: selectedTaxes,
+                employee_id: employeeId
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Update summary cards
+                document.getElementById('preview_gross') && (document.getElementById('preview_gross').textContent = formatCurrency(data.calculation.gross_amount));
+                document.getElementById('preview_tax') && (document.getElementById('preview_tax').textContent = formatCurrency(data.calculation.total_tax_amount));
+                document.getElementById('preview_net') && (document.getElementById('preview_net').textContent = formatCurrency(data.calculation.net_amount));
+                
+                // Update tax breakdown table
+                const tbody = document.getElementById('tax_breakdown_body');
+                if (tbody) {
+                    tbody.innerHTML = '';
+                    
+                    if (data.calculation.tax_breakdown && data.calculation.tax_breakdown.length > 0) {
+                        data.calculation.tax_breakdown.forEach(tax => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>
+                                    <span class="fw-bold">${tax.label || 'Tax'}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-light-info">${tax.rate || '0%'}</span>
+                                </td>
+                                <td class="text-end fw-bold">${tax.amount || '$0.00'}</td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    }
+                }
+            } else {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(data.message || 'Failed to calculate taxes');
+                } else {
+                    alert('Failed to calculate taxes');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Failed to calculate taxes');
+            } else {
+                alert('Failed to calculate taxes');
+            }
+        });
+    }
+
+    function formatCurrency(value) {
+        return '$' + parseFloat(value).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+    }
+
+    // Auto-calculate for overtime - FIXED: Wrap in DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', function() {
+        const paymentType = document.getElementById('payment_type');
+        if (paymentType) {
+            paymentType.addEventListener('change', function() {
+                const overtimeFields = document.querySelectorAll('.overtime-fields');
+                if (this.value === 'overtime') {
+                    overtimeFields.forEach(field => field.style.display = 'block');
+                } else {
+                    overtimeFields.forEach(field => field.style.display = 'none');
+                }
+            });
+        }
+
+        // Auto-calculate gross amount for overtime
+        const hoursWorked = document.getElementById('hours_worked');
+        const hourlyRate = document.getElementById('hourly_rate');
+        
+        if (hoursWorked) {
+            hoursWorked.addEventListener('input', calculateOvertimeGross);
+        }
+        
+        if (hourlyRate) {
+            hourlyRate.addEventListener('input', calculateOvertimeGross);
+        }
+
+        // Auto-preview when taxes are selected/deselected
+        document.querySelectorAll('.tax-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (document.getElementById('gross_amount')?.value) {
+                    calculateTaxPreview();
+                }
+            });
+        });
+    });
+
+    function calculateOvertimeGross() {
+        const hours = document.getElementById('hours_worked')?.value;
+        const rate = document.getElementById('hourly_rate')?.value;
+        const paymentType = document.getElementById('payment_type')?.value;
+        const grossAmount = document.getElementById('gross_amount');
+        
+        if (hours && rate && paymentType === 'overtime' && grossAmount) {
+            grossAmount.value = (parseFloat(hours) * parseFloat(rate)).toFixed(2);
+        }
+    }
+
+    function editCalculateTaxPreview(paymentId) {
+        const grossAmount = document.getElementById(`edit_gross_amount_${paymentId}`)?.value;
+        const selectedTaxes = Array.from(document.querySelectorAll(`.edit-tax-checkbox-${paymentId}:checked`)).map(cb => cb.value);
+        const employeeId = document.getElementById(`edit_employee_select_${paymentId}`)?.value;
+        
+        if (!grossAmount || grossAmount <= 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Please enter gross amount first');
+            }
+            return;
+        }
+        
+        if (selectedTaxes.length === 0) {
+            const previewDiv = document.getElementById(`edit_tax_preview_${paymentId}`);
+            if (previewDiv) {
+                previewDiv.classList.add('d-none');
+            }
+            return;
+        }
+        
+        // Show loading state
+        const previewDiv = document.getElementById(`edit_tax_preview_${paymentId}`);
+        if (previewDiv) {
+            previewDiv.classList.remove('d-none');
+        }
+        
+        // Safely set preview values with null checks
+        const grossEl = document.getElementById(`edit_preview_gross_${paymentId}`);
+        const taxEl = document.getElementById(`edit_preview_tax_${paymentId}`);
+        const netEl = document.getElementById(`edit_preview_net_${paymentId}`);
+        
+        if (grossEl) grossEl.textContent = '$0.00';
+        if (taxEl) taxEl.textContent = '$0.00';
+        if (netEl) netEl.textContent = '$0.00';
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                        document.querySelector('input[name="_token"]')?.value;
+        
+        fetch('{{ route("payment.calculate-tax-preview") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                gross_amount: grossAmount,
+                selected_taxes: selectedTaxes,
+                employee_id: employeeId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update summary cards with null checks
+                if (grossEl) grossEl.textContent = formatCurrency(data.calculation.gross_amount);
+                if (taxEl) taxEl.textContent = formatCurrency(data.calculation.total_tax_amount);
+                if (netEl) netEl.textContent = formatCurrency(data.calculation.net_amount);
+                
+                // Update tax breakdown table
+                const tbody = document.getElementById(`edit_tax_breakdown_body_${paymentId}`);
+                if (tbody) {
+                    tbody.innerHTML = '';
+                    
+                    if (data.calculation.tax_breakdown && data.calculation.tax_breakdown.length > 0) {
+                        data.calculation.tax_breakdown.forEach(tax => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>
+                                    <span class="fw-bold">${tax.label || 'Tax'}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-light-info">${tax.rate || '0%'}</span>
+                                </td>
+                                <td class="text-end fw-bold">${tax.amount || '$0.00'}</td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    }
+                }
+            } else {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(data.message || 'Failed to calculate taxes');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (typeof toastr !== 'undefined') {
+                toastr.error('Failed to calculate taxes');
+            }
+        });
+    }
+
+    // Auto-calculate for overtime in edit modal
+    document.addEventListener('DOMContentLoaded', function() {
+        @foreach($payments ?? [] as $payment)
+            @if($payment->status !== 'completed')
+            const paymentTypeSelect{{ $payment->id }} = document.getElementById('edit_payment_type_{{ $payment->id }}');
+            if (paymentTypeSelect{{ $payment->id }}) {
+                paymentTypeSelect{{ $payment->id }}.addEventListener('change', function() {
+                    const overtimeFields = document.querySelectorAll('.edit-overtime-fields-{{ $payment->id }}');
+                    if (this.value === 'overtime') {
+                        overtimeFields.forEach(field => field.style.display = 'block');
+                    } else {
+                        overtimeFields.forEach(field => field.style.display = 'none');
+                    }
+                });
+            }
+
+            // Auto-calculate gross amount for overtime in edit
+            const hoursWorked{{ $payment->id }} = document.getElementById('edit_hours_worked_{{ $payment->id }}');
+            const hourlyRate{{ $payment->id }} = document.getElementById('edit_hourly_rate_{{ $payment->id }}');
+            
+            if (hoursWorked{{ $payment->id }}) {
+                hoursWorked{{ $payment->id }}.addEventListener('input', function() {
+                    calculateEditOvertimeGross({{ $payment->id }});
+                });
+            }
+            
+            if (hourlyRate{{ $payment->id }}) {
+                hourlyRate{{ $payment->id }}.addEventListener('input', function() {
+                    calculateEditOvertimeGross({{ $payment->id }});
+                });
+            }
+
+            // Auto-preview when taxes are selected/deselected in edit - FIXED: Corrected string interpolation
+            document.querySelectorAll('.edit-tax-checkbox-{{ $payment->id }}').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const grossAmount = document.getElementById(`edit_gross_amount_{{ $payment->id }}`)?.value;
+                    if (grossAmount) {
+                        editCalculateTaxPreview({{ $payment->id }});
+                    }
+                });
+            });
+            @endif
+        @endforeach
+    });
+
+    function calculateEditOvertimeGross(paymentId) {
+        const hours = document.getElementById(`edit_hours_worked_${paymentId}`)?.value;
+        const rate = document.getElementById(`edit_hourly_rate_${paymentId}`)?.value;
+        const paymentType = document.getElementById(`edit_payment_type_${paymentId}`)?.value;
+        const grossAmount = document.getElementById(`edit_gross_amount_${paymentId}`);
+        
+        if (hours && rate && paymentType === 'overtime' && grossAmount) {
+            grossAmount.value = (parseFloat(hours) * parseFloat(rate)).toFixed(2);
+        }
+    }
+
+    function recalculateTaxes() {
+        const grossAmount = parseFloat(document.getElementById('gross_amount').value) || 0;
+        const selectedTaxes = document.querySelectorAll('input[name="selected_taxes[]"]:checked');
+        
+        let totalTax = 0;
+        let netAmount = grossAmount;
+        
+        // If you have tax rates available client-side
+        selectedTaxes.forEach(checkbox => {
+            const taxRate = parseFloat(checkbox.dataset.rate) || 0;
+            const taxType = checkbox.dataset.type || 'percentage';
+            
+            if (taxType === 'percentage') {
+                totalTax += grossAmount * (taxRate / 100);
+            } else {
+                totalTax += taxRate; // Fixed amount
+            }
+        });
+        
+        netAmount = grossAmount - totalTax;
+        
+        // Update hidden fields
+        document.getElementById('net_amount').value = netAmount.toFixed(2);
+        document.getElementById('total_tax_amount').value = totalTax.toFixed(2);
+        
+        // Optionally display these values to the user
+        document.getElementById('display_net_amount').textContent = netAmount.toFixed(2);
+        document.getElementById('display_tax_amount').textContent = totalTax.toFixed(2);
+    }
 </script>
 
 

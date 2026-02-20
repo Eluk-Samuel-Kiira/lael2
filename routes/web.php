@@ -13,6 +13,72 @@ use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
     PurchasingReportsController };
 
+    Route::get('/test-currency', function() {
+        return debug_currency_conversion(4, 'AUD');
+    });
+
+    // Route::get('/test-aud-detailed', function() {
+    //     $aud = \App\Models\Currency::where('code', 'AUD')->first();
+    //     $usd = \App\Models\Currency::where('code', 'USD')->first();
+        
+    //     $amount = 4;
+        
+    //     // Test 1: Direct calculation
+    //     $directStored = round(($amount / $aud->exchange_rate) * 100);
+    //     $directBack = round(($directStored / 100) * $aud->exchange_rate, 2);
+        
+    //     // Test 2: Your helper
+    //     $helperStored = to_base_currency($amount, $aud);
+    //     $helperBack = from_base_currency($helperStored, $aud);
+        
+    //     // Test 3: Different calculation methods
+    //     $method1 = round(($amount * 100) / $aud->exchange_rate); // (400 cents) / 1.52
+    //     $method2 = round(($amount / $aud->exchange_rate) * 100); // (4 / 1.52) * 100
+    //     $method3 = (int) round($amount * 100 / $aud->exchange_rate); // Same as method1
+        
+    //     return [
+    //         'currency_info' => [
+    //             'AUD' => [
+    //                 'code' => $aud->code,
+    //                 'rate' => $aud->exchange_rate,
+    //                 'multiplier' => $aud->getMultiplier(),
+    //                 'decimal_places' => $aud->decimal_places,
+    //             ],
+    //             'USD' => [
+    //                 'code' => $usd->code,
+    //                 'rate' => $usd->exchange_rate,
+    //                 'multiplier' => $usd->getMultiplier(),
+    //                 'decimal_places' => $usd->decimal_places,
+    //             ]
+    //         ],
+    //         'test_amount' => $amount . ' AUD',
+    //         'direct_calculation' => [
+    //             'stored' => $directStored . ' cents',
+    //             'back' => $directBack . ' AUD',
+    //             'difference' => ($amount - $directBack) . ' AUD',
+    //         ],
+    //         'helper_calculation' => [
+    //             'stored' => $helperStored . ' cents',
+    //             'back' => $helperBack . ' AUD',
+    //             'difference' => ($amount - $helperBack) . ' AUD',
+    //         ],
+    //         'calculation_methods' => [
+    //             'method1: (amount * 100) / rate = ' . round(($amount * 100) / $aud->exchange_rate, 2) . ' cents',
+    //             'method2: (amount / rate) * 100 = ' . round(($amount / $aud->exchange_rate) * 100, 2) . ' cents',
+    //             'method3: round(amount * 100 / rate) = ' . round($amount * 100 / $aud->exchange_rate) . ' cents',
+    //         ],
+    //         'manual_step_by_step' => [
+    //             'step1: 4 AUD ÷ 1.52 = ' . (4/1.52) . ' USD',
+    //             'step2: × 100 = ' . (4/1.52 * 100) . ' cents (before rounding)',
+    //             'step3: rounded = ' . round(4/1.52 * 100) . ' cents',
+    //             'step4: ÷ 100 = ' . (round(4/1.52 * 100) / 100) . ' USD',
+    //             'step5: × 1.52 = ' . (round(4/1.52 * 100) / 100 * 1.52) . ' AUD',
+    //             'step6: rounded to 2 decimals = ' . round(round(4/1.52 * 100) / 100 * 1.52, 2) . ' AUD',
+    //         ],
+    //         'expected_result' => '~4.00 AUD (may be 3.99 or 4.01 due to rounding)',
+    //     ];
+    // });
+
 
     Route::get('/', function () {
         return view('welcome');
@@ -73,7 +139,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         Route::resource('paymentmethod', PaymentMethodController::class);
         Route::post('/payment-methods-status/{id}', [PaymentMethodController::class, 'changePaymentMethodStatus'])->name('payment-methods.status');
-
+        
+        Route::post('payments/calculate-tax-preview', [EmployeePaymentController::class, 'calculateTaxPreview'])
+            ->name('payment.calculate-tax-preview');
 
         // Roles n Permissions
         Route::get('/role-index', [RoleController::class, 'index'])->name('role.index');

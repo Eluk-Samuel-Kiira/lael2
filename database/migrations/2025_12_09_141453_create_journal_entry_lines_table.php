@@ -15,13 +15,17 @@ return new class extends Migration
             $table->foreignId('account_id')->constrained('chart_of_accounts')->restrictOnDelete();
             $table->integer('line_number');
             $table->text('description')->nullable();
-            $table->decimal('debit_amount', 15, 2)->default(0);
-            $table->decimal('credit_amount', 15, 2)->default(0);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('debit_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('credit_amount')->default(0)->comment('Stored in smallest currency unit');
+            
             $table->string('reference_type')->nullable();
             $table->unsignedBigInteger('reference_id')->nullable();
             $table->timestamps();
 
             $table->unique(['journal_id', 'line_number']);
+            $table->index(['reference_type', 'reference_id']);
         });
     }
 

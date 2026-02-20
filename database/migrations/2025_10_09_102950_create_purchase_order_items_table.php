@@ -16,11 +16,14 @@ return new class extends Migration
             $table->string('product_name', 100);
             $table->string('sku', 50);
             $table->integer('quantity');
-            $table->decimal('unit_cost', 12, 2);
-            $table->decimal('tax_amount', 12, 2)->default(0);
-            $table->decimal('total_cost', 12, 2);
-            $table->enum('payment_status', ['pending', 'partial', 'paid', 'overdue'])->default('pending'); // Added
-            $table->date('payment_date')->nullable(); // Added
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('unit_cost')->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_cost')->comment('Stored in smallest currency unit');
+            
+            $table->enum('payment_status', ['pending', 'partial', 'paid', 'overdue'])->default('pending');
+            $table->date('payment_date')->nullable();
             $table->integer('received_quantity')->default(0);
             
             $table->timestamps();

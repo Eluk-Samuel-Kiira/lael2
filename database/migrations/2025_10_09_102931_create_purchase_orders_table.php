@@ -16,9 +16,12 @@ return new class extends Migration
             $table->string('po_number', 50);
             $table->enum('status', ['draft', 'sent', 'pending_approval', 'approved', 'partially_received', 'received', 'cancelled']);
             $table->date('expected_delivery_date')->nullable();
-            $table->decimal('subtotal', 12, 2);
-            $table->decimal('tax_total', 12, 2)->default(0);
-            $table->decimal('total', 12, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('subtotal')->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_total')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total')->comment('Stored in smallest currency unit');
+            
             $table->text('notes')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users');
             
