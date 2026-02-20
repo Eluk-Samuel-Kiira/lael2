@@ -7,7 +7,6 @@ use App\Models\Currency;
 use App\Models\{ TenantSetting, PaymentMethod };
 use Illuminate\Support\Facades\Auth;
 use App\Models\Location;
-use App\ValueObjects\Money;
 
 if (! function_exists('is_tab_show')) {
     function is_tab_show($routeName)
