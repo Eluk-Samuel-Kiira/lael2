@@ -12,28 +12,27 @@ return new class extends Migration
         Schema::create('journal_entries', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants')->onDelete('cascade');
-            $table->string('entry_number'); // Remove ->unique() from here
+            $table->string('entry_number', 50)->unique();
             $table->date('entry_date');
             $table->foreignId('period_id')->constrained('accounting_periods')->restrictOnDelete();
-            $table->text('description');
+            $table->text('description')->nullable();
             $table->string('reference_number')->nullable();
-            $table->enum('source_module', ['sales', 'purchases', 'payroll', 'inventory', 'expenses', 'manual', 'adjustment'])->nullable();
+            $table->string('source_module')->nullable();
             $table->unsignedBigInteger('source_id')->nullable();
-            $table->decimal('total_debit', 15, 2)->default(0);
-            $table->decimal('total_credit', 15, 2)->default(0);
-            $table->boolean('is_balanced')->storedAs('total_debit = total_credit');
-            $table->enum('status', ['draft', 'posted', 'void'])->default('draft');
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('total_debit')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_credit')->default(0)->comment('Stored in smallest currency unit');
+            
+            $table->enum('status', ['draft', 'posted', 'voided'])->default('draft');
             $table->timestamp('posted_at')->nullable();
             $table->foreignId('posted_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            // Add composite unique constraint (tenant_id + entry_number)
-            $table->unique(['tenant_id', 'entry_number'], 'journal_entries_tenant_entry_unique');
-            
             $table->index(['tenant_id', 'entry_date']);
+            $table->index(['tenant_id', 'period_id']);
             $table->index(['tenant_id', 'status']);
-            $table->index(['source_module', 'source_id']);
         });
     }
 

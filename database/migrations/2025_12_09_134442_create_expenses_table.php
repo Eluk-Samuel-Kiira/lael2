@@ -10,7 +10,7 @@ return new class extends Migration
     public function up()
     {
         Schema::create('expenses', function (Blueprint $table) {
-            $table->id(); // Laravel uses 'id' as primary key, not 'expense_id'
+            $table->id();
             $table->unsignedBigInteger('tenant_id');
             
             // Basic Info
@@ -22,10 +22,10 @@ return new class extends Migration
             $table->unsignedBigInteger('category_id');
             $table->string('vendor_name', 200)->nullable();
             
-            // Amounts
-            $table->decimal('amount', 12, 2);
-            $table->decimal('tax_amount', 12, 2)->default(0);
-            $table->decimal('total_amount', 12, 2)->storedAs('amount + tax_amount');
+            // Amounts - Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_amount')->storedAs('amount + tax_amount')->comment('Stored in smallest currency unit');
             
             // Payment Info
             $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete();  
@@ -45,7 +45,7 @@ return new class extends Migration
             
             // Audit
             $table->unsignedBigInteger('created_by')->nullable();
-            $table->timestamps(); // Laravel manages created_at and updated_at
+            $table->timestamps();
             
             // Foreign key constraints
             $table->foreign('tenant_id')

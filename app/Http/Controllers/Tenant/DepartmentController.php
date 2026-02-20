@@ -19,10 +19,10 @@ class DepartmentController extends Controller
         
         // If user is super_admin, get all departments without tenant filter
         if ($user->hasRole('super_admin')) {
-            $departments = Department::latest()->get();
+            $departments = Department::with('location')->latest()->get();
         } else {
             // Regular users only see their tenant's departments
-            $departments = Department::where('tenant_id', $user->tenant_id)->latest()->get();
+            $departments = Department::with('location')->where('tenant_id', $user->tenant_id)->latest()->get();
         }
         
         $bladeToReload = $request->query('bladeFileToReload');
@@ -59,14 +59,16 @@ class DepartmentController extends Controller
                 'required',
                 'string',
                 'max:55',
-                Rule::unique('departments')->where(function ($query) use ($tenantId) {
-                    return $query->where('tenant_id', $tenantId);
+                Rule::unique('departments')->where(function ($query) use ($tenantId, $request) {
+                    return $query->where('tenant_id', $tenantId)
+                        ->where('location_id', $request->location_id);
                 })
             ],
             'manager_id' => 'required|exists:users,id',
+            'location_id' => 'required|exists:locations,id',
         ]);
 
-        // Check maximum departments limit
+        // Check maximum departments limit for the tenant
         $currentDepartmentCount = Department::where('tenant_id', $tenantId)->count();
         $maxDepartments = tenant_setting($tenantId, 'max_departments', 3);
 
@@ -81,6 +83,7 @@ class DepartmentController extends Controller
             'name' => $request->name,
             'created_by' => $user->id,
             'manager_id' => $request->manager_id,
+            'location_id' => $request->location_id,
             'tenant_id' => $tenantId,
         ]);
 
@@ -139,16 +142,19 @@ class DepartmentController extends Controller
             'name' => [
                 'required',
                 'max:255',
-                Rule::unique('departments')->where(function ($query) use ($tenantId) {
-                    return $query->where('tenant_id', $tenantId);
+                Rule::unique('departments')->where(function ($query) use ($tenantId, $request) {
+                    return $query->where('tenant_id', $tenantId)
+                        ->where('location_id', $request->location_id);
                 })->ignore($department->id),
             ],
             'manager_id' => 'required|exists:users,id',
+            'location_id' => 'required|exists:locations,id',
         ]);
 
         $department->update([
             'name' => $request->name,
             'manager_id' => $request->manager_id,
+            'location_id' => $request->location_id,
             'created_by' => $user->id,
         ]);
 

@@ -17,8 +17,11 @@ return new class extends Migration
             
             // Receiving details
             $table->integer('quantity_received');
-            $table->decimal('unit_cost', 12, 2);
-            $table->decimal('total_cost', 12, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('unit_cost')->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_cost')->comment('Stored in smallest currency unit');
+            
             $table->string('batch_number')->nullable();
             $table->date('expiry_date')->nullable();
             $table->text('notes')->nullable();

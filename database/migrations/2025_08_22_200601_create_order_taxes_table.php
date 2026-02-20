@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
             $table->string('tax_name', 100);
-            $table->decimal('tax_rate', 5, 2);
-            $table->decimal('tax_amount', 12, 2);
+            $table->decimal('tax_rate', 5, 2); // Percentage - stays as decimal
+            $table->bigInteger('tax_amount')->comment('Stored in smallest currency unit'); // 👈 Changed to BIGINT
             $table->boolean('is_compound')->default(false);
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
             $table->timestampsTz();

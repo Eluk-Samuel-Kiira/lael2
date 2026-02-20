@@ -33,27 +33,30 @@ class ChartOfAccount extends Model
         'is_system_account' => 'boolean',
     ];
 
-    // 👇 ACCESSORS - Format for display (if you add monetary fields)
-    public function getOpeningBalanceAttribute($value)
-    {
-        return formatCurrency($value);
-    }
-    
-    public function getCurrentBalanceAttribute($value)
-    {
-        return formatCurrency($value);
-    }
+    // No need
+    // public function getBalanceAttribute(): float
+    // {
+    //     // Get raw sums from general ledger (stored as integers)
+    //     $debits = $this->generalLedgerEntries()->sum('debit_amount');
+    //     $credits = $this->generalLedgerEntries()->sum('credit_amount');
+        
+    //     // Convert from stored integers to display floats
+    //     $debitSum = from_base_currency($debits) ?: 0;
+    //     $creditSum = from_base_currency($credits) ?: 0;
 
-    // 👇 MUTATORS - Convert to USD when saving (if you add monetary fields)
-    public function setOpeningBalanceAttribute($value)
-    {
-        $this->attributes['opening_balance'] = toUSD($value);
-    }
+    //     if ($this->normal_balance === 'D') {
+    //         return $debitSum - $creditSum;
+    //     }
+
+    //     return $creditSum - $debitSum;
+    // }
     
-    public function setCurrentBalanceAttribute($value)
-    {
-        $this->attributes['current_balance'] = toUSD($value);
-    }
+
+
+
+    
+
+    
 
     // Relationships
     public function tenant(): BelongsTo

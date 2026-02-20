@@ -10,6 +10,7 @@
                     </th>
                     <th class="min-w-125px">{{__('auth._id')}}</th>
                     <th class="min-w-125px">{{__('auth._department')}}</th>
+                    <th class="min-w-125px">{{__('auth.location')}}</th>
                     <th class="min-w-125px">{{__('auth._creater')}}</th>
                     <th class="min-w-125px">{{__('auth._manager')}}</th>
                     {{--<th class="min-w-125px">{{__('auth._tenant')}}</th>--}}
@@ -31,6 +32,7 @@
                                 <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $department->id }}</div>
                             </td>
                             <td>{{ $department->name }}</td>
+                            <td>{{ $department->location->name ?? 'None' }}</td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $department->departmentCreater->name ?? 'None' }}</div>
                             </td>

@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseOrderItem extends Model
 {
@@ -21,48 +20,60 @@ class PurchaseOrderItem extends Model
         'unit_cost',
         'tax_amount',
         'total_cost',
+        'payment_status',
+        'payment_date',
         'received_quantity',
     ];
 
     protected $casts = [
-        'unit_cost' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'total_cost' => 'decimal:2',
         'quantity' => 'integer',
         'received_quantity' => 'integer',
+        'payment_date' => 'date',
+        // Money fields - stored as integers in DB
+        'unit_cost' => 'integer',
+        'tax_amount' => 'integer',
+        'total_cost' => 'integer',
     ];
 
-    // 👇 Accessors for monetary fields
-    public function getUnitCostAttribute($value)
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getUnitCostAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTaxAmountAttribute($value)
+    public function getTaxAmountAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTotalCostAttribute($value)
+    public function getTotalCostAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // 👇 Mutators for monetary fields
-    public function setUnitCostAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setUnitCostAttribute($value): void
     {
-        $this->attributes['unit_cost'] = toUSD($value);
+        $this->attributes['unit_cost'] = to_base_currency($value);
     }
 
-    public function setTaxAmountAttribute($value)
+    public function setTaxAmountAttribute($value): void
     {
-        $this->attributes['tax_amount'] = toUSD($value);
+        $this->attributes['tax_amount'] = to_base_currency($value);
     }
 
-    public function setTotalCostAttribute($value)
+    public function setTotalCostAttribute($value): void
     {
-        $this->attributes['total_cost'] = toUSD($value);
+        $this->attributes['total_cost'] = to_base_currency($value);
     }
+
+
+
+
 
     public function purchaseOrder(): BelongsTo
     {

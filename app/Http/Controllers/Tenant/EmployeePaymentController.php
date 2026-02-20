@@ -7,9 +7,16 @@ use Illuminate\Http\Request;
 use App\Models\{ Employee, EmployeePayment, PaymentMethod };
 use Illuminate\Support\Facades\{ Auth, Log, DB };
 use Illuminate\Validation\Rule;
+use App\Services\TaxCalculationService;
 
 class EmployeePaymentController extends Controller
 {
+    protected $taxService;
+
+    public function __construct(TaxCalculationService $taxService)
+    {
+        $this->taxService = $taxService;
+    }
     
     /**
      * Display a listing of the resource.
@@ -17,31 +24,35 @@ class EmployeePaymentController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
         
         // Build the query
-        $query = EmployeePayment::with(['employee', 'tenant']);
-        
-        // If user is NOT super_admin, filter by tenant
-        // if (!$user->hasRole('super_admin')) {
-        //     $query->scopeForTenant($query, $user->tenant_id);
-        // }
+        $query = EmployeePayment::with(['employee', 'tenant', 'paymentMethod']);
 
         // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+                if (!$user->hasRole('super_admin')) {
+            $query->where('tenant_id', $tenantId);
         }
+        // Get data for the create modal and edit modals
+        $taxService = app(TaxCalculationService::class);
+        $availableTaxes = $taxService->getAvailableTaxes($tenantId);
         
         $payments = $query->latest()->get();
+
+        // Get data for the create modal
+        // $availableTaxes = $this->taxService->getAvailableTaxes($tenantId);
 
         $bladeToReload = $request->query('bladeFileToReload');
         switch ($bladeToReload) {
             case 'reloadPaymentComponent':
                 return view('department.employee-payment.component', [
                     'payments' => $payments,
+                    'taxes' => $availableTaxes,
                 ]);
             default:
                 return view('department.employee-payment-index', [
                     'payments' => $payments,
+                    'taxes' => $availableTaxes,
                 ]);
         }
     }
@@ -59,7 +70,7 @@ class EmployeePaymentController extends Controller
             'payment_date' => 'required|date',
             'payment_type' => 'required|in:salary,allowance,bonus,overtime,advance,other',
             'description' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|decimal:0,2',
+            'gross_amount' => 'required|numeric|min:0.01|decimal:0,2',
             'payment_method_id' => [
                 'required',
                 Rule::exists('payment_methods', 'id')->where(function ($query) use ($tenantId) {
@@ -74,6 +85,8 @@ class EmployeePaymentController extends Controller
             'hours_worked' => 'nullable|numeric|min:0|decimal:0,2',
             'hourly_rate' => 'nullable|numeric|min:0|decimal:0,2',
             'notes' => 'nullable|string|max:500',
+            'selected_taxes' => 'nullable|array',
+            'selected_taxes.*' => 'exists:taxes,id',
         ]);
 
         // Check if employee belongs to tenant
@@ -88,19 +101,37 @@ class EmployeePaymentController extends Controller
             ]);
         }
 
-        // Calculate amount if hours and rate provided
+        // Calculate amount if hours and rate provided for overtime
         if ($request->payment_type === 'overtime' && $request->hours_worked && $request->hourly_rate) {
-            $validated['amount'] = $request->hours_worked * $request->hourly_rate;
+            $validated['gross_amount'] = $request->hours_worked * $request->hourly_rate;
+        }
+
+        // Calculate taxes if any are selected
+        $taxCalculation = null;
+        $netAmount = $validated['gross_amount'];
+        
+        if ($request->has('selected_taxes') && !empty($request->selected_taxes)) {
+            $taxCalculation = $this->taxService->calculateTaxes(
+                $validated['gross_amount'],
+                $request->selected_taxes,
+                $tenantId,
+                $employee
+            );
+            
+            $netAmount = $taxCalculation['net_amount'];
         }
 
         // Prepare breakdown data
-        $breakdown = null;
-        if ($request->has(['hours_worked', 'hourly_rate'])) {
-            $breakdown = [
-                'hours_worked' => $request->hours_worked,
-                'hourly_rate' => $request->hourly_rate,
-                'calculated_amount' => $validated['amount']
-            ];
+        $breakdown = [
+            'hours_worked' => $request->hours_worked,
+            'hourly_rate' => $request->hourly_rate,
+            'calculated_gross' => $validated['gross_amount']
+        ];
+
+        if ($taxCalculation) {
+            $breakdown['taxes'] = $taxCalculation['tax_breakdown'];
+            $breakdown['total_tax'] = $taxCalculation['total_tax_amount'];
+            $breakdown['net_amount'] = $taxCalculation['net_amount'];
         }
 
         $payment = EmployeePayment::create([
@@ -109,8 +140,13 @@ class EmployeePaymentController extends Controller
             'payment_date' => $validated['payment_date'],
             'payment_type' => $validated['payment_type'],
             'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'payment_method_id' => $validated['payment_method_id'], // Use ID instead of string
+            'gross_amount' => $validated['gross_amount'],
+            'net_amount' => $netAmount,
+            'amount' => $netAmount, // Store net amount as the actual payment amount
+            'total_tax_amount' => $taxCalculation['total_tax_amount'] ?? 0,
+            'applied_taxes' => $taxCalculation['applied_taxes'] ?? null,
+            'is_tax_computed' => !is_null($taxCalculation),
+            'payment_method_id' => $validated['payment_method_id'],
             'reference_number' => $validated['reference_number'] ?? null,
             'status' => $validated['status'],
             'pay_period_start' => $validated['pay_period_start'] ?? null,
@@ -128,24 +164,22 @@ class EmployeePaymentController extends Controller
             'refresh' => false,
             'message' => __('auth.payment_created'),
             'redirect' => route('payment.index'),
+            'payment_summary' => [
+                'gross' => number_format($payment->gross_amount, 2),
+                'tax' => number_format($payment->total_tax_amount, 2),
+                'net' => number_format($payment->net_amount, 2),
+            ]
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, $id)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        // \Log::info($id);
-
         $payment = EmployeePayment::where('id', $id)
             ->where('tenant_id', $tenantId)
             ->first();
-
-        // \Log::info($payment);
 
         if (!$payment) {
             return response()->json([
@@ -154,12 +188,30 @@ class EmployeePaymentController extends Controller
             ]);
         }
 
+        // DEBUG: Log the raw request data
+        \Log::info('=== UPDATE PAYMENT DEBUG ===');
+        \Log::info('Payment ID: ' . $id);
+        \Log::info('Raw request data:', $request->all());
+        \Log::info('Selected taxes raw: ' . json_encode($request->input('selected_taxes')));
+        \Log::info('Has selected_taxes: ' . ($request->has('selected_taxes') ? 'yes' : 'no'));
+        
+        $selectedTaxes = $request->input('selected_taxes', []);
+        
+        // Filter out empty values (like the empty string we might send)
+        if (is_array($selectedTaxes)) {
+            $selectedTaxes = array_filter($selectedTaxes, function($value) {
+                return !is_null($value) && $value !== '';
+            });
+        }
+        
+        \Log::info('Selected taxes after filtering:', $selectedTaxes);
+        
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'payment_date' => 'required|date',
             'payment_type' => 'required|in:salary,allowance,bonus,overtime,advance,other',
             'description' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|decimal:0,2',
+            'gross_amount' => 'required|numeric|min:0.01',
             'payment_method_id' => [
                 'required',
                 Rule::exists('payment_methods', 'id')->where(function ($query) use ($tenantId) {
@@ -171,10 +223,15 @@ class EmployeePaymentController extends Controller
             'status' => 'required|in:pending,completed,failed,cancelled',
             'pay_period_start' => 'nullable|date',
             'pay_period_end' => 'nullable|date|after_or_equal:pay_period_start',
-            'hours_worked' => 'nullable|numeric|min:0|decimal:0,2',
-            'hourly_rate' => 'nullable|numeric|min:0|decimal:0,2',
+            'hours_worked' => 'nullable|numeric|min:0',
+            'hourly_rate' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string|max:500',
+            'selected_taxes' => 'nullable|array',
+            'selected_taxes.*' => 'nullable|exists:taxes,id',
         ]);
+
+        \Log::info('Validated data:', $validated);
+        \Log::info('Selected taxes after validation:', $validated['selected_taxes'] ?? []);
 
         // Check if employee belongs to tenant
         $employee = Employee::where('id', $validated['employee_id'])
@@ -188,28 +245,113 @@ class EmployeePaymentController extends Controller
             ]);
         }
 
-        // Recalculate amount if hours and rate changed
-        if ($request->payment_type === 'overtime' && $request->hours_worked && $request->hourly_rate) {
-            $validated['amount'] = $request->hours_worked * $request->hourly_rate;
+        // FIXED: Recalculate amount if hours and rate changed for overtime
+        // Only recalculate if both values are greater than 0
+        if ($request->payment_type === 'overtime') {
+            $hoursWorked = floatval($request->hours_worked ?? 0);
+            $hourlyRate = floatval($request->hourly_rate ?? 0);
+            
+            if ($hoursWorked > 0 && $hourlyRate > 0) {
+                $validated['gross_amount'] = $hoursWorked * $hourlyRate;
+                \Log::info('Recalculated gross for overtime: ' . $validated['gross_amount']);
+            } else {
+                \Log::info('Overtime but hours/rate are zero or not provided, keeping submitted gross_amount: ' . $validated['gross_amount']);
+            }
+        }
+
+        // Calculate taxes if any are selected
+        $taxCalculation = null;
+        $netAmount = $validated['gross_amount']; // Default to gross amount (no taxes)
+        $totalTaxAmount = 0;
+        $appliedTaxes = null;
+        $isTaxComputed = false;
+        
+        if (!empty($selectedTaxes)) {
+            \Log::info('Calling taxService with:', [
+                'gross_amount' => $validated['gross_amount'],
+                'selected_taxes' => $selectedTaxes,
+                'tenant_id' => $tenantId,
+                'employee_id' => $employee->id
+            ]);
+            
+            try {
+                $taxCalculation = $this->taxService->calculateTaxes(
+                    $validated['gross_amount'],
+                    $selectedTaxes,
+                    $tenantId,
+                    $employee
+                );
+                
+                \Log::info('Tax calculation result:', $taxCalculation);
+                
+                if ($taxCalculation && isset($taxCalculation['net_amount'])) {
+                    $netAmount = $taxCalculation['net_amount'];
+                    $totalTaxAmount = $taxCalculation['total_tax_amount'] ?? 0;
+                    
+                    // Prepare applied_taxes JSON
+                    if (isset($taxCalculation['applied_taxes'])) {
+                        $appliedTaxes = $taxCalculation['applied_taxes'];
+                    } elseif (isset($taxCalculation['tax_breakdown'])) {
+                        $appliedTaxes = $taxCalculation['tax_breakdown'];
+                    }
+                    
+                    $isTaxComputed = true;
+                    
+                    \Log::info('Net amount set to: ' . $netAmount);
+                    \Log::info('Total tax set to: ' . $totalTaxAmount);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Tax calculation error: ' . $e->getMessage());
+                \Log::error($e->getTraceAsString());
+                // On error, keep gross as net (no taxes)
+            }
+        } else {
+            \Log::info('No taxes selected, keeping gross amount as net amount');
+            // When no taxes are selected, net_amount = gross_amount, total_tax_amount = 0
+            $netAmount = $validated['gross_amount'];
+            $totalTaxAmount = 0;
+            $appliedTaxes = null;
+            $isTaxComputed = false;
         }
 
         // Update breakdown
-        $breakdown = null;
-        if ($request->has(['hours_worked', 'hourly_rate'])) {
-            $breakdown = [
-                'hours_worked' => $request->hours_worked,
-                'hourly_rate' => $request->hourly_rate,
-                'calculated_amount' => $validated['amount']
-            ];
+        $breakdown = [
+            'hours_worked' => $request->hours_worked,
+            'hourly_rate' => $request->hourly_rate,
+            'calculated_gross' => $validated['gross_amount'],
+            'updated_at' => now()->toDateTimeString()
+        ];
+
+        if ($taxCalculation) {
+            $breakdown['taxes'] = $taxCalculation['tax_breakdown'] ?? [];
+            $breakdown['total_tax'] = $totalTaxAmount;
+            $breakdown['net_amount'] = $netAmount;
+        } else {
+            $breakdown['taxes'] = [];
+            $breakdown['total_tax'] = 0;
+            $breakdown['net_amount'] = $netAmount;
         }
+
+        \Log::info('Final values to save:', [
+            'gross_amount' => $validated['gross_amount'],
+            'net_amount' => $netAmount,
+            'total_tax_amount' => $totalTaxAmount,
+            'applied_taxes' => json_encode($appliedTaxes),
+            'is_tax_computed' => $isTaxComputed
+        ]);
 
         $payment->update([
             'employee_id' => $validated['employee_id'],
             'payment_date' => $validated['payment_date'],
             'payment_type' => $validated['payment_type'],
             'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'payment_method_id' => $validated['payment_method_id'], // Use ID instead of string
+            'gross_amount' => $validated['gross_amount'],
+            'net_amount' => $netAmount,
+            'amount' => $netAmount,
+            'total_tax_amount' => $totalTaxAmount,
+            'applied_taxes' => $appliedTaxes,
+            'is_tax_computed' => $isTaxComputed,
+            'payment_method_id' => $validated['payment_method_id'],
             'reference_number' => $validated['reference_number'] ?? null,
             'status' => $validated['status'],
             'pay_period_start' => $validated['pay_period_start'] ?? null,
@@ -220,6 +362,9 @@ class EmployeePaymentController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
+        // Refresh the model to get updated values
+        $payment->refresh();
+
         return response()->json([
             'success' => true,
             'reload' => true,
@@ -227,6 +372,43 @@ class EmployeePaymentController extends Controller
             'refresh' => false,
             'message' => __('auth.payment_updated'),
             'redirect' => route('payment.index'),
+            'payment_summary' => [
+                'gross' => number_format($payment->gross_amount, 2),
+                'tax' => number_format($payment->total_tax_amount, 2),
+                'net' => number_format($payment->net_amount, 2),
+            ]
+        ]);
+    }
+
+    /**
+     * Calculate taxes for preview (AJAX endpoint)
+     */
+    public function calculateTaxPreview(Request $request)
+    {
+        $request->validate([
+            'gross_amount' => 'required|numeric|min:0',
+            'selected_taxes' => 'required|array',
+            'selected_taxes.*' => 'exists:taxes,id',
+            'employee_id' => 'nullable|exists:employees,id',
+        ]);
+
+        $tenantId = Auth::user()->tenant_id;
+        $employee = null;
+        
+        if ($request->employee_id) {
+            $employee = Employee::find($request->employee_id);
+        }
+
+        $calculation = $this->taxService->calculateTaxes(
+            $request->gross_amount,
+            $request->selected_taxes,
+            $tenantId,
+            $employee
+        );
+
+        return response()->json([
+            'success' => true,
+            'calculation' => $calculation
         ]);
     }
 

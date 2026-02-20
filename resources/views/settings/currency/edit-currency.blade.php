@@ -46,7 +46,7 @@
                         <div class="row g-9 mb-8">
                             <div class="d-flex flex-column mb-8 fv-row col-md-12">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('auth._exchange_rate')}}</span>
+                                    <span class="required">{{__('auth._exchange_rate')}}{{ tenant_currency() }}</span>
                                 </label>
                                 <input type="text" value="{{ $currency->exchange_rate }}" class="form-control form-control-solid" name="exchange_rate" />
                                 <div id="exchange_rate{{ $currency->id }}"></div>

@@ -35,7 +35,7 @@
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('pagination._type')}}</span></label>
-                                <select name="type" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="type" class="form-select"  data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                     <option></option>
                                     <option value="percentage">{{__('pagination._percentage')}}</option>
                                     <option value="fixed">{{__('pagination._fixed')}}</option>

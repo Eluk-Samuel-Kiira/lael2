@@ -21,12 +21,15 @@ return new class extends Migration
             $table->string('order_number', 50);
             $table->enum('type', ['sale', 'return', 'quote', 'layby']);
             $table->enum('status', ['draft', 'confirmed', 'processing', 'completed', 'cancelled', 'refunded']);
-            $table->decimal('subtotal', 12, 2);
-            $table->decimal('discount_total', 12, 2)->default(0);
-            $table->decimal('tax_total', 12, 2)->default(0);
-            $table->decimal('total', 12, 2);
-            $table->decimal('paid_amount', 12, 2)->default(0);
-            $table->decimal('balance_due', 12, 2)->default(0);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('subtotal')->comment('Stored in smallest currency unit');
+            $table->bigInteger('discount_total')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_total')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total')->comment('Stored in smallest currency unit');
+            $table->bigInteger('paid_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('balance_due')->default(0)->comment('Stored in smallest currency unit');
+            
             $table->enum('source', ['pos', 'online', 'phone', 'mobile'])->nullable();
             $table->text('notes')->nullable();
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();

@@ -13,8 +13,8 @@
                     <th class="min-w-125px">{{__('payments.employee')}}</th>
                     <th class="min-w-125px">{{__('payments.payment_type')}}</th>
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
-                    <th class="min-w-125px">{{__('payments.description')}}</th>
-                    <th class="min-w-125px">{{__('payments.amount')}}</th>
+                    <th class="min-w-125px">{{__('payments.gross_amount')}}</th>
+                    <th class="min-w-125px">{{__('payments.net_amount')}}</th>
                     <th class="min-w-125px">{{__('payments.payment_date')}}</th>
                     <th class="min-w-125px">{{__('payments.payment_status')}}</th>
                     <th class="min-w-100px text-end">{{__('auth._actions')}}</th>
@@ -93,9 +93,9 @@
                                     </span>
                                 @endif
                             </td>
-                            <td>{{ $payment->description }}</td>
+                            <td>{{ $payment->gross_amount }}</td>
                             <td>
-                                <div class="badge badge-light fw-bold">${{ number_format($payment->amount, 2) }}</div>
+                                <div class="badge badge-light fw-bold">{{ number_format($payment->net_amount, 2) }}</div>
                             </td>
                             <td>{{ $payment->payment_date->format('d M Y') }}</td>
                             <td>

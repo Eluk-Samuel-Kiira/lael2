@@ -16,9 +16,12 @@ return new class extends Migration
             $table->foreignId('account_id')->constrained('chart_of_accounts')->restrictOnDelete();
             $table->date('entry_date');
             $table->foreignId('period_id')->constrained('accounting_periods')->restrictOnDelete();
-            $table->decimal('debit_amount', 15, 2)->default(0);
-            $table->decimal('credit_amount', 15, 2)->default(0);
-            $table->decimal('running_balance', 15, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('debit_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('credit_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('running_balance')->comment('Stored in smallest currency unit');
+            
             $table->text('description')->nullable();
             $table->string('source_module')->nullable();
             $table->unsignedBigInteger('source_id')->nullable();

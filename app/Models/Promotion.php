@@ -29,29 +29,50 @@ class Promotion extends Model
         'is_active' => 'boolean',
         'start_date' => 'datetime',
         'end_date' => 'datetime',
+        // Money fields - stored as integers in DB
+        'discount_value' => 'integer',
+        'min_order_amount' => 'integer',
     ];
 
-        // Accessor for discount_value - format as currency only when discount_type is 'fixed'
-    public function getDiscountValueAttribute($value)
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getDiscountValueAttribute(?int $value): ?float
     {
-        if ($this->discount_type === 'fixed_amount') {
-            return formatCurrency($value);
-        }
-        
-        return $value; // Return raw value for percentage and other types
+        // If discount_type is percentage, value is stored as integer (e.g., 1500 = 15.00%)
+        // If discount_type is fixed_amount, value is stored as currency in smallest unit
+        return $this->discount_type === 'percentage' 
+            ? (float) ($value / 100) // Convert percentage to decimal (1500 → 15.00)
+            : from_base_currency($value); // Convert currency amount
     }
 
-    // Mutator for discount_value - convert to USD only when discount_type is 'fixed'
-    public function setDiscountValueAttribute($value)
+    public function getMinOrderAmountAttribute(?int $value): ?float
     {
-        if ($this->discount_type === 'fixed_amount') {
-            $this->attributes['discount_value'] = toUSD($value);
+        return from_base_currency($value);
+    }
+
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setDiscountValueAttribute($value): void
+    {
+        if ($this->discount_type === 'percentage') {
+            // Convert percentage to integer (15.00% → 1500)
+            $this->attributes['discount_value'] = (int) round((float) $value * 100);
         } else {
-            $this->attributes['discount_value'] = $value; // Store raw value for percentages
+            // Fixed amount - convert currency to smallest unit
+            $this->attributes['discount_value'] = to_base_currency($value);
         }
     }
 
-    // Relationships
+    public function setMinOrderAmountAttribute($value): void
+    {
+        $this->attributes['min_order_amount'] = to_base_currency($value);
+    }
+
+    /**
+     * Relationships
+     */
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);

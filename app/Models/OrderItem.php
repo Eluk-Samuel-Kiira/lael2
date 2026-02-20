@@ -7,23 +7,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class OrderItem extends Model
 {
-        use HasFactory;
+    use HasFactory;
 
-        protected $fillable = [
-            'order_id',
-            'product_id',
-            'variant_id',
-            'item_name',
-            'sku',
-            'unit_price',
-            'quantity',
-            'discount',
-            'tax_amount',
-            'total_price',
-            'inventory_data',
-            'tax_data',
-            'promotion_data',
-        ];
+    protected $fillable = [
+        'order_id',
+        'product_id',
+        'variant_id',
+        'item_name',
+        'sku',
+        'unit_price',
+        'quantity',
+        'discount',
+        'tax_amount',
+        'total_price',
+        'inventory_data',
+        'tax_data',
+        'promotion_data',
+    ];
 
     /**
      * The attributes that should be cast.
@@ -31,43 +31,61 @@ class OrderItem extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'unit_price' => 'decimal:2',
-        'discount' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'total_price' => 'decimal:2',
-        'inventory_data' => 'array', // Automatically cast JSON to array
-        'tax_data' => 'array', 
+        // Money fields - stored as integers in DB
+        'unit_price' => 'integer',
+        'discount' => 'integer',
+        'tax_amount' => 'integer',
+        'total_price' => 'integer',
+        'inventory_data' => 'array',
+        'tax_data' => 'array',
         'promotion_data' => 'array',
     ];
 
-    // 👇 Accessors
-    public function getUnitPriceAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getDiscountAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getTaxAmountAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getTotalPriceAttribute($value) {
-        return formatCurrency($value);
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getUnitPriceAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
 
-        // 👇 Mutators - Convert to USD when WRITING to database
-    public function setUnitPriceAttribute($value) {
-        $this->attributes['unit_price'] = toUSD($value);
+    public function getDiscountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setDiscountAttribute($value) {
-        $this->attributes['discount'] = toUSD($value);
+
+    public function getTaxAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setTaxAmountAttribute($value) {
-        $this->attributes['tax_amount'] = toUSD($value);
+
+    public function getTotalPriceAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setTotalPriceAttribute($value) {
-        $this->attributes['total_price'] = toUSD($value);
+
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setUnitPriceAttribute($value): void
+    {
+        $this->attributes['unit_price'] = to_base_currency($value);
     }
-    
+
+    public function setDiscountAttribute($value): void
+    {
+        $this->attributes['discount'] = to_base_currency($value);
+    }
+
+    public function setTaxAmountAttribute($value): void
+    {
+        $this->attributes['tax_amount'] = to_base_currency($value);
+    }
+
+    public function setTotalPriceAttribute($value): void
+    {
+        $this->attributes['total_price'] = to_base_currency($value);
+    }
 
     /**
      * Get the order that owns the order item.

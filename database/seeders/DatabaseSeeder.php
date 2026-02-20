@@ -17,11 +17,11 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TenantSeeder::class,
             UserSeeder::class, 
+            CurrencySeeder::class,
             LocationSeeder::class,
             DepartmentSeeder::class,
             SettingSeeder::class,
             UnitOfMeasureSeeder::class,
-            CurrencySeeder::class,
             PaymentMethodSeeder::class,
             CategorySeeder::class,
             ProductCategorySeeder::class,

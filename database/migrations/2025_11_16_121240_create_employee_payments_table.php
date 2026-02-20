@@ -16,7 +16,10 @@ return new class extends Migration
             $table->date('payment_date');
             $table->enum('payment_type', ['salary', 'allowance', 'bonus', 'overtime', 'advance', 'other']);
             $table->string('description');
-            $table->decimal('amount', 12, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
+            
             $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete();            
             $table->string('reference_number')->nullable();
             $table->enum('status', ['pending', 'completed', 'failed', 'cancelled'])->default('pending');
@@ -26,6 +29,16 @@ return new class extends Migration
             $table->decimal('hourly_rate', 8, 2)->nullable();
             $table->json('breakdown')->nullable(); // For detailed payment breakdown
             $table->text('notes')->nullable();
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('gross_amount')->nullable()->comment('Stored in smallest currency unit');
+            $table->bigInteger('net_amount')->nullable()->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_tax_amount')->comment('Stored in smallest currency unit');
+            
+            $table->json('applied_taxes')->nullable(); // Store breakdown of applied taxes
+            $table->boolean('is_tax_computed')->default(false);
+            $table->date('failed_at')->nullable();
+            $table->date('completed_at')->nullable();
             $table->timestamps();
 
             $table->index(['employee_id', 'payment_date']);

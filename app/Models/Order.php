@@ -30,52 +30,107 @@ class Order extends Model
         'created_by',
     ];
 
-    // 👇 Accessors to format currency
-    public function getSubtotalAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getDiscountTotalAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getTaxTotalAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getTotalAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getPaidAmountAttribute($value) {
-        return formatCurrency($value);
-    }
-    public function getBalanceDueAttribute($value) {
-        return formatCurrency($value);
+    protected $casts = [
+        // Money fields - stored as integers in DB
+        'subtotal' => 'integer',
+        'discount_total' => 'integer',
+        'tax_total' => 'integer',
+        'total' => 'integer',
+        'paid_amount' => 'integer',
+        'balance_due' => 'integer',
+    ];
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getSubtotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
 
-        // 👇 Mutators to convert to USD when WRITING to database
-    public function setSubtotalAttribute($value) {
-        $this->attributes['subtotal'] = toUSD($value);
+    public function getDiscountTotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setDiscountTotalAttribute($value) {
-        $this->attributes['discount_total'] = toUSD($value);
+
+    public function getTaxTotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setTaxTotalAttribute($value) {
-        $this->attributes['tax_total'] = toUSD($value);
+
+    public function getTotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setTotalAttribute($value) {
-        $this->attributes['total'] = toUSD($value);
+
+    public function getPaidAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setPaidAmountAttribute($value) {
-        $this->attributes['paid_amount'] = toUSD($value);
+
+    public function getBalanceDueAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
     }
-    public function setBalanceDueAttribute($value) {
-        $this->attributes['balance_due'] = toUSD($value);
+
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setSubtotalAttribute($value): void
+    {
+        $this->attributes['subtotal'] = to_base_currency($value);
+    }
+
+    public function setDiscountTotalAttribute($value): void
+    {
+        $this->attributes['discount_total'] = to_base_currency($value);
+    }
+
+    public function setTaxTotalAttribute($value): void
+    {
+        $this->attributes['tax_total'] = to_base_currency($value);
+    }
+
+    public function setTotalAttribute($value): void
+    {
+        $this->attributes['total'] = to_base_currency($value);
+    }
+
+    public function setPaidAmountAttribute($value): void
+    {
+        $this->attributes['paid_amount'] = to_base_currency($value);
+    }
+
+    public function setBalanceDueAttribute($value): void
+    {
+        $this->attributes['balance_due'] = to_base_currency($value);
     }
 
     // Relationships
-    public function tenant() { return $this->belongsTo(Tenant::class); }
-    public function customer() { return $this->belongsTo(Customer::class); }
-    public function location() { return $this->belongsTo(Location::class); }
-    public function department() { return $this->belongsTo(Department::class); }
-    public function orderCreater() { return $this->belongsTo(User::class, 'created_by'); }
+    public function tenant() 
+    { 
+        return $this->belongsTo(Tenant::class); 
+    }
+    
+    public function customer() 
+    { 
+        return $this->belongsTo(Customer::class); 
+    }
+    
+    public function location() 
+    { 
+        return $this->belongsTo(Location::class); 
+    }
+    
+    public function department() 
+    { 
+        return $this->belongsTo(Department::class); 
+    }
+    
+    public function orderCreater() 
+    { 
+        return $this->belongsTo(User::class, 'created_by'); 
+    }
 
     public function orderItems()
     {
@@ -87,7 +142,7 @@ class Order extends Model
         return $this->hasOne(OrderPayment::class);
     }
 
-    // Add this relationship to your Order model
+    // Alias for orderItems
     public function items()
     {
         return $this->hasMany(OrderItem::class);
@@ -97,4 +152,82 @@ class Order extends Model
     {
         return $this->hasMany(OrderPayment::class);
     }
+
+    /**
+     * Helper Methods
+     */
+    public function isPaid(): bool
+    {
+        return $this->balance_due <= 0;
+    }
+
+    public function isPartial(): bool
+    {
+        return $this->paid_amount > 0 && $this->balance_due > 0;
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
+    public function isConfirmed(): bool
+    {
+        return $this->status === 'confirmed';
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    public function updateBalances(): void
+    {
+        $totalPaid = $this->orderPayments()
+            ->where('status', 'completed')
+            ->sum('amount');
+        
+        $this->paid_amount = $totalPaid;
+        $this->balance_due = $this->total - $totalPaid;
+        $this->saveQuietly(); // Save without triggering events
+    }
+
+    /**
+     * Get raw amounts for calculations (stored integers)
+     */
+    public function getRawSubtotal(): ?int
+    {
+        return $this->getRawOriginal('subtotal');
+    }
+
+    public function getRawDiscountTotal(): ?int
+    {
+        return $this->getRawOriginal('discount_total');
+    }
+
+    public function getRawTaxTotal(): ?int
+    {
+        return $this->getRawOriginal('tax_total');
+    }
+
+    public function getRawTotal(): ?int
+    {
+        return $this->getRawOriginal('total');
+    }
+
+    public function getRawPaidAmount(): ?int
+    {
+        return $this->getRawOriginal('paid_amount');
+    }
+
+    public function getRawBalanceDue(): ?int
+    {
+        return $this->getRawOriginal('balance_due');
+    }
+    
 }

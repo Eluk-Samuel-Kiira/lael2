@@ -16,8 +16,11 @@ return new class extends Migration
             $table->string('sku', 50)->unique();
             $table->string('name', 100);
             $table->string('barcode', 50)->nullable();
-            $table->decimal('price', 12, 2);
-            $table->decimal('cost_price', 12, 2)->nullable();
+            
+            // Convert decimal to bigInteger (storing in smallest currency unit, e.g., cents)
+            $table->bigInteger('price')->nullable()->comment('Price in smallest currency unit (e.g., cents)');
+            $table->bigInteger('cost_price')->nullable()->comment('Cost price in smallest currency unit (e.g., cents)');
+            
             $table->decimal('weight', 15, 2)->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('overal_quantity_at_hand')->default(0);
@@ -28,7 +31,6 @@ return new class extends Migration
             $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
             $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-
             $table->timestamps();
         });
     }

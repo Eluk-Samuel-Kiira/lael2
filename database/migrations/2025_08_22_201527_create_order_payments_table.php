@@ -14,7 +14,10 @@ return new class extends Migration
         Schema::create('order_payments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-            $table->decimal('amount', 12, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
+            
             $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete(); 
             $table->string('transaction_id', 100)->nullable();
             $table->enum('status', ['pending', 'completed', 'failed', 'refunded']);

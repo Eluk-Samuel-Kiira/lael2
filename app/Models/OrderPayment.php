@@ -26,7 +26,8 @@ class OrderPayment extends Model
 
     protected $casts = [
         'processed_at' => 'datetime',
-        'amount' => 'decimal:2',
+        // Money field - stored as integer in DB
+        'amount' => 'integer',
     ];
 
     // Status constants
@@ -35,16 +36,20 @@ class OrderPayment extends Model
     const STATUS_FAILED = 'failed';
     const STATUS_REFUNDED = 'refunded';
 
-    // Accessor to format amount automatically
-    public function getAmountAttribute($value)
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getAmountAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    // Mutator to convert to USD when WRITING to database
-    public function setAmountAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setAmountAttribute($value): void
     {
-        $this->attributes['amount'] = toUSD($value);
+        $this->attributes['amount'] = to_base_currency($value);
     }
 
     // Relationships

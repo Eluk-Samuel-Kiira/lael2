@@ -745,10 +745,10 @@ class PurchaseOrderController extends Controller
                 }
                 
                 // Validate the payment method can handle this transaction
-                // $validation = $paymentMethod->validateTransaction($totalCost);
-                // if (!$validation['success']) {
-                //     throw new \Exception($validation['message']);
-                // }
+                $validation = $paymentMethod->validateTransaction($totalCost);
+                if (!$validation['success']) {
+                    throw new \Exception($validation['message']);
+                }
 
                 // Record purchase order payment withdrawal using PaymentTransactionService
                 $transactionData = [

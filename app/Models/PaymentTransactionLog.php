@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class PaymentTransactionLog extends Model
 {
@@ -45,11 +44,12 @@ class PaymentTransactionLog extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'transaction_fee' => 'decimal:2',
-        'net_amount' => 'decimal:2',
-        'balance_before' => 'decimal:2',
-        'balance_after' => 'decimal:2',
+        // Money fields - stored as integers in DB
+        'amount' => 'integer',
+        'transaction_fee' => 'integer',
+        'net_amount' => 'integer',
+        'balance_before' => 'integer',
+        'balance_after' => 'integer',
         'exchange_rate' => 'decimal:6',
         'metadata' => 'array',
         'transaction_date' => 'datetime',
@@ -64,6 +64,62 @@ class PaymentTransactionLog extends Model
         'status' => 'COMPLETED',
         'exchange_rate' => 1,
     ];
+
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getTransactionFeeAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getNetAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getBalanceBeforeAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getBalanceAfterAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setAmountAttribute($value): void
+    {
+        $this->attributes['amount'] = to_base_currency($value);
+    }
+
+    public function setTransactionFeeAttribute($value): void
+    {
+        $this->attributes['transaction_fee'] = to_base_currency($value);
+    }
+
+    public function setNetAmountAttribute($value): void
+    {
+        $this->attributes['net_amount'] = to_base_currency($value);
+    }
+
+    public function setBalanceBeforeAttribute($value): void
+    {
+        $this->attributes['balance_before'] = to_base_currency($value);
+    }
+
+    public function setBalanceAfterAttribute($value): void
+    {
+        $this->attributes['balance_after'] = to_base_currency($value);
+    }
 
     // Transaction type constants
     const TYPE_DEPOSIT = 'DEPOSIT';
@@ -245,45 +301,7 @@ class PaymentTransactionLog extends Model
         return $query->where('amount', '>=', $threshold);
     }
 
-    // Accessors & Mutators
-    protected function formattedAmount(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                $currency = $this->currency;
-                $symbol = $currency?->symbol ?? '$';
-                $code = $currency?->code ?? 'USD';
-                
-                return $symbol . number_format($this->amount, 2) . ' ' . $code;
-            }
-        );
-    }
 
-    protected function formattedBalanceBefore(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                $currency = $this->currency;
-                $symbol = $currency?->symbol ?? '$';
-                $code = $currency?->code ?? 'USD';
-                
-                return $symbol . number_format($this->balance_before, 2) . ' ' . $code;
-            }
-        );
-    }
-
-    protected function formattedBalanceAfter(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                $currency = $this->currency;
-                $symbol = $currency?->symbol ?? '$';
-                $code = $currency?->code ?? 'USD';
-                
-                return $symbol . number_format($this->balance_after, 2) . ' ' . $code;
-            }
-        );
-    }
 
     protected function isCredit(): Attribute
     {
@@ -664,4 +682,5 @@ class PaymentTransactionLog extends Model
             'notes' => ($this->notes ? $this->notes . ' | ' : '') . 'Failed: ' . $reason,
         ]);
     }
+
 }

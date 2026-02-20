@@ -40,12 +40,12 @@ class PurchaseOrder extends Model
 
     protected $casts = [
         'expected_delivery_date' => 'date',
-        'subtotal' => 'decimal:2',
-        'tax_total' => 'decimal:2',
-        'total' => 'decimal:2',
+        // Money fields - stored as integers in DB
+        'subtotal' => 'integer',
+        'tax_total' => 'integer',
+        'total' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'sent_at' => 'datetime',
@@ -53,48 +53,45 @@ class PurchaseOrder extends Model
         'cancelled_at' => 'datetime',
     ];
 
-    protected static function boot()
+    /**
+     * Accessors - Convert from stored integer to display float
+     */
+    public function getSubtotalAttribute(?int $value): ?float
     {
-        parent::boot();
-
-        static::creating(function ($model) {
-            if (empty($model->status)) {
-                $model->status = 'draft';
-            }
-        });
+        return from_base_currency($value);
     }
 
-    // 👇 Accessors for monetary fields
-    public function getSubtotalAttribute($value)
+    public function getTaxTotalAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTaxTotalAttribute($value)
+    public function getTotalAttribute(?int $value): ?float
     {
-        return formatCurrency($value);
+        return from_base_currency($value);
     }
 
-    public function getTotalAttribute($value)
+    /**
+     * Mutators - Convert from display float to stored integer
+     */
+    public function setSubtotalAttribute($value): void
     {
-        return formatCurrency($value);
+        $this->attributes['subtotal'] = to_base_currency($value);
     }
 
-    // 👇 Mutators for monetary fields
-    public function setSubtotalAttribute($value)
+    public function setTaxTotalAttribute($value): void
     {
-        $this->attributes['subtotal'] = toUSD($value);
+        $this->attributes['tax_total'] = to_base_currency($value);
     }
 
-    public function setTaxTotalAttribute($value)
+    public function setTotalAttribute($value): void
     {
-        $this->attributes['tax_total'] = toUSD($value); 
+        $this->attributes['total'] = to_base_currency($value);
     }
 
-    public function setTotalAttribute($value)
-    {
-        $this->attributes['total'] = toUSD($value);
-    }
+
+    
+
 
 
 

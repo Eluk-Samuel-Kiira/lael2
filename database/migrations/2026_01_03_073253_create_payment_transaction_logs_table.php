@@ -33,16 +33,16 @@ return new class extends Migration
             $table->string('reference_table')->nullable()->index('idx_payment_logs_ref_table');
             $table->unsignedBigInteger('reference_id')->nullable()->index('idx_payment_logs_ref_id');
             
-            // Amount Information
-            $table->decimal('amount', 20, 2);
-            $table->decimal('transaction_fee', 10, 2)->default(0);
-            $table->decimal('net_amount', 20, 2);
-            $table->decimal('balance_before', 20, 2);
-            $table->decimal('balance_after', 20, 2);
+            // Amount Information - 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
+            $table->bigInteger('transaction_fee')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('net_amount')->comment('Stored in smallest currency unit');
+            $table->bigInteger('balance_before')->comment('Stored in smallest currency unit');
+            $table->bigInteger('balance_after')->comment('Stored in smallest currency unit');
             
             // Currency Information
             $table->foreignId('currency_id')->constrained('currencies');
-            $table->decimal('exchange_rate', 12, 6)->default(1);
+            $table->decimal('exchange_rate', 12, 6)->default(1); // Stays as decimal for precision
             
             // Status & Timing
             $table->enum('status', [
@@ -55,7 +55,7 @@ return new class extends Migration
             
             // Description & Metadata
             $table->text('description')->nullable();
-            $table->json('metadata')->nullable(); // For additional transaction data
+            $table->json('metadata')->nullable();
             $table->string('notes')->nullable();
             
             // References
@@ -112,7 +112,6 @@ return new class extends Migration
                 'idx_payment_logs_ext_ref_tenant'
             );
             
-            // Additional useful indexes
             $table->index(
                 ['payment_method_id', 'status'],
                 'idx_payment_logs_method_status'

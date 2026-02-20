@@ -45,12 +45,11 @@
                 <div class="col-lg-8">
                     <div class="row">
                         <div class="col-lg-12 fv-row">
-                            <select name="currency" class="form-control" id="currency">
-                                <option></option>
-                                @foreach ($currencies as $currency)
-                                    <option value="{{ $currency->code }}" {{ $app_info->currency == $currency->code ? 'selected' : '' }}>{{ $currency->code }} - {{ $currency->symbol }}</option>
-                                @endforeach 
-                            </select>
+                            <input type="text" 
+                                name="currency" 
+                                class="form-control form-control-lg form-control-solid mb-3 mb-lg-0" 
+                                value="{{ tenant_currency() }}" 
+                                readonly/>
                             <div id="currency"></div>
                         </div>
                     </div>

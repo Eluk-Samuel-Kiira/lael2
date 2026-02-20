@@ -18,11 +18,14 @@ return new class extends Migration
             $table->foreignId('variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
             $table->string('item_name');
             $table->string('sku')->nullable();
-            $table->decimal('unit_price', 12, 2);
+            
+            // 👇 Changed to BIGINT for storing in smallest currency unit
+            $table->bigInteger('unit_price')->comment('Stored in smallest currency unit');
             $table->integer('quantity');
-            $table->decimal('discount', 12, 2)->default(0);
-            $table->decimal('tax_amount', 12, 2)->default(0);
-            $table->decimal('total_price', 12, 2);
+            $table->bigInteger('discount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_amount')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('total_price')->comment('Stored in smallest currency unit');
+            
             $table->json('inventory_data')->nullable(); 
             $table->json('tax_data')->nullable(); 
             $table->json('promotion_data')->nullable(); 
