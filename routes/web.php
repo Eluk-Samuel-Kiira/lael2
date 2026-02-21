@@ -3,7 +3,7 @@
 use App\Http\Controllers\{ ProfileController, UserController, RoleController};
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Tenant\{ DepartmentController, EmployeeController, EmployeePaymentController };
+use App\Http\Controllers\Tenant\{ DepartmentController, EmployeeController, EmployeePaymentController, TenantController };
 use App\Http\Controllers\Catalog\ {CategoryController, InventoryItemController, ProductVariantController, 
     InventoryAdjustmentsController, ProductController, ProductCategoryController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
@@ -237,6 +237,11 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/expenses/{id}/approve', [ExpenseController::class, 'approve'])
             ->name('expenses.approve')
             ->middleware('auth');
+
+        
+
+        // Tenant Mgt
+        Route::resource('tenant', TenantController::class);
 
 
 
