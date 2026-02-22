@@ -8,33 +8,39 @@ use Spatie\Permission\Models\Role;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class RoleController extends Controller
 {
+
     public function index(Request $request) 
     {
-        $roles = Role::where('tenant_id', current_tenant_id())->with('permissions')->latest()->get();
+        $user = Auth::user();
+        
+        $roles = Role::where('tenant_id', $user->tenant_id)
+                    ->where('name', '!=', 'super_admin')
+                    ->with('permissions')
+                    ->withCount(['users' => function($query) use ($user) {
+                        $query->where('tenant_id', $user->tenant_id);
+                    }])
+                    ->latest()
+                    ->get();
+        
         $permissions = Permission::regular()->get();
-
-        $rolesWithUserCounts = $roles->map(function($role) {
-            $role->user_count = User::where('tenant_id', current_tenant_id())->where('role_id', $role->id)->count();
-            return $role;
-        });
 
         $bladeToReload = $request->query('bladeFileToReload');
         switch ($bladeToReload) {
             case 'reloadRoleComponent':
                 return view('human-resource.role.role-component', [
-                    'roles' => $roles,
+                    'all_roles' => $roles,  // 👈 Use the same $roles with user_count
                     'permissions' => $permissions,
                 ]);
             default:
                 return view('human-resource.role-index', [
-                    'roles' => $rolesWithUserCounts,
+                    'all_roles' => $roles,  // 👈 Use the same $roles with user_count
                     'permissions' => $permissions,
                 ]);
         }
-
     }
 
     
@@ -169,7 +175,7 @@ class RoleController extends Controller
             // Find the user role by ID and ensure it belongs to the tenant
             $userRole = Role::where('id', $id)
                 ->where('tenant_id', $tenantId)
-                ->whereNotIn('name', ['admin'])
+                ->whereNotIn('name', ['admin', 'super_admin'])
                 ->first();
 
             // Check if role exists and belongs to tenant
@@ -212,6 +218,7 @@ class RoleController extends Controller
 
         // Find the role and ensure it belongs to the tenant
         $role = Role::where('id', $id)
+            ->whereNotIn('name', ['admin', 'super_admin'])
             ->where('tenant_id', $tenantId)
             ->first();
 
@@ -239,7 +246,7 @@ class RoleController extends Controller
         // Check if the role is deletable (i.e., not a special role like 'admin', 'cashier', etc.)
         $deletableRole = Role::where('id', $id)
             ->where('tenant_id', $tenantId)
-            ->whereNotIn('name', ['admin', 'cashier', 'manager', 'inventory_clerk'])
+            ->whereNotIn('name', ['admin', 'cashier', 'manager', 'inventory_clerk', 'super_admin'])
             ->first();
 
         // If the role is deletable, delete it and return a success response

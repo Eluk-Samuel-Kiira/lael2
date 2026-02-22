@@ -71,7 +71,7 @@
                                 <span class="text-gray-800 fw-bold">{{ ucwords($order->source) }}</span>
                             </td>
                             <td>
-                                <span class="text-gray-800 fw-bold">{{ currencySymbol() }} {{ $order->total }}</span>
+                                <span class="text-gray-800 fw-bold"> {{ $order->total }}</span>
                             </td>
                             <td>
                                 @if($order->payments && $order->payments->paymentMethod)
@@ -191,7 +191,7 @@
                                                         <div class="d-flex flex-column gap-4">
                                                             <div>
                                                                 <div class="text-muted fs-7 fw-semibold mb-1">{{ __('payments.amount') }}</div>
-                                                                <div class="fw-bold text-primary fs-2">{{ currencySymbol() }} {{ $order->payments->amount }}</div>
+                                                                <div class="fw-bold text-primary fs-2"> {{ $order->payments->amount }}</div>
                                                             </div>
                                                             <div class="row g-3">
                                                                 <div class="col-6">
@@ -264,10 +264,10 @@
                                                                     <td class="text-center">
                                                                         <span class="fw-bold">{{ $item->quantity }}</span>
                                                                     </td>
-                                                                    <td class="text-end">{{ displayFormatedCurrency($item->unit_price) }} {{ currencySymbol() }}</td>
-                                                                    <td class="text-end text-danger">-{{ displayFormatedCurrency($item->discount) }} {{ currencySymbol() }}</td>
-                                                                    <td class="text-end">{{ displayFormatedCurrency($item->tax_amount) }} {{ currencySymbol() }}</td>
-                                                                    <td class="text-end pe-0 fw-bold text-primary">{{ displayFormatedCurrency($item->total_price) }} {{ currencySymbol() }}</td>
+                                                                    <td class="text-end">{{ format_currency($item->unit_price) }} </td>
+                                                                    <td class="text-end text-danger">-{{ format_currency($item->discount) }} </td>
+                                                                    <td class="text-end">{{ format_currency($item->tax_amount) }} </td>
+                                                                    <td class="text-end pe-0 fw-bold text-primary">{{ format_currency($item->total_price) }} </td>
                                                                 </tr>
                                                             @endforeach
                                                         </tbody>
@@ -296,30 +296,30 @@
                                                             <div class="d-flex flex-column gap-3">
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="text-muted fs-7">{{ __('passwords.subtotal') }}</span>
-                                                                    <span class="fw-bold fs-6">{{ displayFormatedCurrency($order->subtotal) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold fs-6">{{ format_currency($order->subtotal) }} </span>
                                                                 </div>
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="text-muted fs-7">{{ __('passwords.discount') }}</span>
-                                                                    <span class="fw-bold fs-6 text-danger">-{{ displayFormatedCurrency($order->discount_total) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold fs-6 text-danger">-{{ format_currency($order->discount_total) }} </span>
                                                                 </div>
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="text-muted fs-7">{{ __('passwords.tax') }}</span>
-                                                                    <span class="fw-bold fs-6">{{ displayFormatedCurrency($order->tax_total) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold fs-6">{{ format_currency($order->tax_total) }} </span>
                                                                 </div>
                                                                 <div class="separator separator-dashed my-3"></div>
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="fw-bold text-gray-800 fs-5">{{ __('passwords.total') }}</span>
-                                                                    <span class="fw-bold text-primary fs-3">{{ displayFormatedCurrency($order->total) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold text-primary fs-3">{{ format_currency($order->total) }} </span>
                                                                 </div>
                                                                 @if($order->payments)
                                                                 <div class="separator separator-dashed my-3"></div>
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="text-muted fs-7">{{ __('passwords.paid') }}</span>
-                                                                    <span class="fw-bold fs-6 text-success">{{ displayFormatedCurrency($order->paid_amount) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold fs-6 text-success">{{ format_currency($order->paid_amount) }} </span>
                                                                 </div>
                                                                 <div class="d-flex justify-content-between">
                                                                     <span class="text-muted fs-7">{{ __('passwords.balance_due') }}</span>
-                                                                    <span class="fw-bold fs-6 text-danger">{{ displayFormatedCurrency($order->balance_due) }} {{ currencySymbol() }}</span>
+                                                                    <span class="fw-bold fs-6 text-danger">{{ format_currency($order->balance_due) }} </span>
                                                                 </div>
                                                                 @endif
                                                             </div>
@@ -405,12 +405,12 @@
                     
                     <div class="payment-item">
                         <div class="payment-label">{{ __('pagination._currency') }}</div>
-                        <div class="payment-value">{{ getMailOptions('currency') }} - {{ currencySymbol() }}</div>
+                        <div class="payment-value">{{ getMailOptions('currency') }} - </div>
                     </div>
                     
                     <div class="payment-item">
                         <div class="payment-label">{{ __('payments.amount') }}</div>
-                        <div class="payment-value text-success">{{ currencySymbol() }} {{ number_format($order->payments->amount, 2) }}</div>
+                        <div class="payment-value text-success"> {{ number_format($order->payments->amount, 2) }}</div>
                     </div>
                     
                     <div class="payment-item">
@@ -447,10 +447,10 @@
                                 <td><span class="item-name">{{ $item->item_name }}</span></td>
                                 <td><span class="item-sku">{{ $item->sku }}</span></td>
                                 <td class="text-center"><strong>{{ $item->quantity }}</strong></td>
-                                <td class="text-right">{{ currencySymbol() }} {{ number_format($item->unit_price, 2) }}</td>
-                                <td class="text-right text-danger">-{{ currencySymbol() }} {{ number_format($item->discount, 2) }}</td>
-                                <td class="text-right">{{ currencySymbol() }} {{ number_format($item->tax_amount, 2) }}</td>
-                                <td class="text-right"><strong>{{ currencySymbol() }} {{ number_format($item->total_price, 2) }}</strong></td>
+                                <td class="text-right"> {{ number_format($item->unit_price, 2) }}</td>
+                                <td class="text-right text-danger">- {{ number_format($item->discount, 2) }}</td>
+                                <td class="text-right"> {{ number_format($item->tax_amount, 2) }}</td>
+                                <td class="text-right"><strong> {{ number_format($item->total_price, 2) }}</strong></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -462,28 +462,28 @@
                 <div class="summary-box">
                     <div class="summary-row">
                         <span class="summary-label">{{ __('passwords.subtotal') }}</span>
-                        <span class="summary-value">{{ currencySymbol() }} {{ number_format($order->subtotal, 2) }}</span>
+                        <span class="summary-value"> {{ number_format($order->subtotal, 2) }}</span>
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">{{ __('passwords.discount') }}</span>
-                        <span class="summary-value text-danger">-{{ currencySymbol() }} {{ number_format($order->discount_total, 2) }}</span>
+                        <span class="summary-value text-danger">- {{ number_format($order->discount_total, 2) }}</span>
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">{{ __('passwords.tax') }}</span>
-                        <span class="summary-value">{{ currencySymbol() }} {{ number_format($order->tax_total, 2) }}</span>
+                        <span class="summary-value"> {{ number_format($order->tax_total, 2) }}</span>
                     </div>
                     <div class="summary-row total">
                         <span class="summary-label">{{ __('passwords.total') }}</span>
-                        <span class="summary-value">{{ currencySymbol() }} {{ number_format($order->total, 2) }}</span>
+                        <span class="summary-value"> {{ number_format($order->total, 2) }}</span>
                     </div>
                     @if($order->payments)
                     <div class="summary-row">
                         <span class="summary-label">{{ __('passwords.paid') }}</span>
-                        <span class="summary-value text-success">{{ currencySymbol() }} {{ number_format($order->paid_amount, 2) }}</span>
+                        <span class="summary-value text-success"> {{ number_format($order->paid_amount, 2) }}</span>
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">{{ __('passwords.balance_due') }}</span>
-                        <span class="summary-value text-danger">{{ currencySymbol() }} {{ number_format($order->balance_due, 2) }}</span>
+                        <span class="summary-value text-danger"> {{ number_format($order->balance_due, 2) }}</span>
                     </div>
                     @endif
                 </div>

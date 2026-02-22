@@ -75,7 +75,7 @@ protected $casts = [
 
 
 
-        /**
+    /**
      * Accessors - Convert from stored integer to display float
      */
     public function getAmountAttribute(?int $value): ?float
@@ -122,7 +122,29 @@ protected $casts = [
     }
 
 
+    /**
+     * Get the tenant that owns the employee.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
 
+    /**
+     * Get the tenant that owns the employee.
+     */
+    public function employee() : BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Get the tenant that owns the employee.
+     */
+    public function paymentMethod() : BelongsTo
+    {
+        return $this->belongsTo(PaymentMethod::class, 'payment_method_id', 'id');
+    }
 
     /**
      * Get status color for badges.

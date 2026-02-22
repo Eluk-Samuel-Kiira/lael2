@@ -35,271 +35,310 @@ class UserSeeder extends Seeder
             ]);
         }
 
-        // Define regular permissions
-        $permissions = [
-            // Product Management
-            'create product',
-            'view product',
-            'edit product',
-            'delete product',
-            'update product',
-
-            // Product Management
-            'create variant',
-            'view variant',
-            'edit variant',
-            'delete variant',
-            'update variant',
-            
-            // Sales Management
-            'process sale',
-            'view sales report',
-            'refund sale',
-            'apply discounts',
-
-            // Inventory Management
-            'create inventory record',
-            'view inventory',
-            'edit inventory',
-            'delete inventory',
-            'update stock levels',
-
-            // Customer Management
-            'create customer',
-            'view customer',
-            'edit customer',
-            'delete customer',
-
-            // Admin Permissions
-            'configure system',
-            'manage roles',
-            'manage permissions',
-
-            // Unit of measure Management
-            'create uom',
-            'view uom',
-            'edit uom',
-            'delete uom',
-            'update uom',
-            
-            // Department
-            'create department',
-            'view department',
-            'edit department',
-            'delete department',
-            'update department',
-
-            // Tenant mgt (regular tenant admin level)
-            'create tenant',
-            'view tenant',
-            'edit tenant',
-            'delete tenant',
-            'update tenant',
-
-            // User Management
-            'create user',
-            'view user',
-            'edit user',
-            'delete user',
-            'update user',
-            
-            // Category Management
-            'create category',
-            'view category',
-            'edit category',
-            'delete category',
-            'update category',
-            
-            // Location Management
-            'create location',
-            'view location',
-            'edit location',
-            'delete location',
-            'update location',
-
-            // subcategory Management
-            'create subcategory',
-            'view subcategory',
-            'edit subcategory',
-            'delete subcategory',
-            'update subcategory',
-
-            // tax Management
-            'create tax',
-            'view tax',
-            'edit tax',
-            'delete tax',
-            'update tax',
-
-            // employee Management
-            'create employee',
-            'view employee',
-            'edit employee',
-            'delete employee',
-            'update employee',
-
-            // employee payment Management
-            'create employee payment',
-            'view employee payment',
-            'edit employee payment',
-            'delete employee payment',
-            'update employee payment',
-            'edit completed payment',
-            'delete completed payment',
-
-            // tax Management
-            'create employee-payment',
-            'view employee-payment',
-            'edit employee-payment',
-            'delete employee-payment',
-            'update employee-payment',
-
-            // promotion Management
-            'create promotion',
-            'view promotion',
-            'edit promotion',
-            'delete promotion',
-            'update promotion',
-
-            // category-expense Management
-            'create category-expense',
-            'view category-expense',
-            'edit category-expense',
-            'delete category-expense',
-            'update category-expense',
-
-            // expense Management
-            'create expense',
-            'view expense',
-            'edit expense',
-            'delete expense',
-            'update expense',
-            'approve expense',
-            'upload expense',
-
-            // supplier Management
-            'create supplier',
-            'view supplier',
-            'edit supplier',
-            'delete supplier',
-            'update supplier',
-
-            // Typical purchase order permissions
-            'view purchase_orders',
-            'create purchase_orders',
-            'edit purchase_orders', 
-            'delete purchase_orders',
-            'submit purchase_orders',
-            'approve purchase_orders',
-            'send purchase_orders',
-            'update purchase_orders',
-            'receive purchase_orders',
-            'cancel purchase_orders',
-
-            // Payment Method
-            'create payment method',
-            'view payment method',
-            'edit payment method',
-            'delete payment method',
-            'update payment method',
-            'update current balance',
-
-            // Financial Reports
-            'view payment-method report',
-            'view account-balance report',
-            'view transaction-ledger  report',
-            'view income-settlement report',
-            'view cash-flow report',
-            'view Transaction-analysis report',
-            'view expense-analysis report',
-            'view payment-method-analysis report',
-            'view Daily Summary report',
-            'view monthly report',
-            'view Reconcillation report',
-
-            // Admin Management
-            'admin only',
-            'create role',
-            'edit role',
-            'delete role',
-            'update role',
-            'update permission',
-            'update settings',
+        // Define permissions with categories
+        $permissionCategories = [
+            'Product Management' => [
+                'create product',
+                'view product',
+                'edit product',
+                'delete product',
+                'update product',
+            ],
+            'Variant Management' => [
+                'create variant',
+                'view variant',
+                'edit variant',
+                'delete variant',
+                'update variant',
+            ],
+            'Sales Management' => [
+                'process sale',
+                'view sales report',
+                'refund sale',
+                'apply discounts',
+            ],
+            'Inventory Management' => [
+                'create inventory record',
+                'view inventory',
+                'edit inventory',
+                'delete inventory',
+                'update stock levels',
+            ],
+            'Customer Management' => [
+                'create customer',
+                'view customer',
+                'edit customer',
+                'delete customer',
+            ],
+            'Unit of Measure (UOM)' => [
+                'create uom',
+                'view uom',
+                'edit uom',
+                'delete uom',
+                'update uom',
+            ],
+            'Department Management' => [
+                'create department',
+                'view department',
+                'edit department',
+                'delete department',
+                'update department',
+            ],
+            'Category Management' => [
+                'create category',
+                'view category',
+                'edit category',
+                'delete category',
+                'update category',
+            ],
+            'Subcategory Management' => [
+                'create subcategory',
+                'view subcategory',
+                'edit subcategory',
+                'delete subcategory',
+                'update subcategory',
+            ],
+            'Location Management' => [
+                'create location',
+                'view location',
+                'edit location',
+                'delete location',
+                'update location',
+            ],
+            'Tax Management' => [
+                'create tax',
+                'view tax',
+                'edit tax',
+                'delete tax',
+                'update tax',
+            ],
+            'Employee Management' => [
+                'create employee',
+                'view employee',
+                'edit employee',
+                'delete employee',
+                'update employee',
+            ],
+            'Employee Payment Management' => [
+                'create employee payment',
+                'view employee payment',
+                'edit employee payment',
+                'delete employee payment',
+                'update employee payment',
+                'edit completed payment',
+                'delete completed payment',
+            ],
+            'Promotion Management' => [
+                'create promotion',
+                'view promotion',
+                'edit promotion',
+                'delete promotion',
+                'update promotion',
+            ],
+            'Expense Category Management' => [
+                'create category-expense',
+                'view category-expense',
+                'edit category-expense',
+                'delete category-expense',
+                'update category-expense',
+            ],
+            'Expense Management' => [
+                'create expense',
+                'view expense',
+                'edit expense',
+                'delete expense',
+                'update expense',
+                'approve expense',
+                'upload expense',
+            ],
+            'Supplier Management' => [
+                'create supplier',
+                'view supplier',
+                'edit supplier',
+                'delete supplier',
+                'update supplier',
+            ],
+            'Purchase Order Management' => [
+                'view purchase_orders',
+                'create purchase_orders',
+                'edit purchase_orders', 
+                'delete purchase_orders',
+                'submit purchase_orders',
+                'approve purchase_orders',
+                'send purchase_orders',
+                'update purchase_orders',
+                'receive purchase_orders',
+                'cancel purchase_orders',
+            ],
+            'Payment Method Management' => [
+                'create payment method',
+                'view payment method',
+                'edit payment method',
+                'delete payment method',
+                'update payment method',
+                'update current balance',
+            ],
+            'Financial Reports' => [
+                'view payment-method report',
+                'view account-balance report',
+                'view transaction-ledger report',
+                'view income-settlement report',
+                'view cash-flow report',
+                'view Transaction-analysis report',
+                'view expense-analysis report',
+                'view payment-method-analysis report',
+                'view Daily Summary report',
+                'view monthly report',
+                'view Reconcillation report',
+            ],
+            'User Management' => [
+                'create user',
+                'view user',
+                'edit user',
+                'delete user',
+                'update user',
+            ],
+            'Role & Permission Management' => [
+                'create role',
+                'edit role',
+                'delete role',
+                'update role',
+                'update permission',
+                'update settings',
+            ],
+            'Tenant Management' => [
+                'create tenant',
+                'view tenant',
+                'edit tenant',
+                'delete tenant',
+                'update tenant',
+            ],
+            'System Configuration' => [
+                'configure system',
+                'manage roles',
+                'manage permissions',
+                'admin only',
+            ],
         ];
 
-        // Create regular permissions
-        foreach ($permissions as $permission) {
-            Permission::firstOrCreate([
-                'name' => $permission,
-                'guard_name' => 'web',
-                'is_super_admin' => false // 👈 MARK AS REGULAR
-            ]);
-        }
-
-        // Define SUPER ADMIN ONLY permissions
-        $superAdminOnlyPermissions = [
-            'tenant_manage_all',
-            'tenant_delete_any',
-            'tenant_billing_manage',
-            'system_settings_manage',
-            'user_impersonate',
-            'subscription_manage_all',
-            'data_export_all',
-            'audit_log_view_all',
-            'backup_manage',
-            'payment_gateway_manage',
-            'super_admin_dashboard',
-            'manage_all_tenants',
-            'override_tenant_limits',
-            'system_maintenance'
+        // Define SUPER ADMIN ONLY permissions with categories
+        $superAdminOnlyCategories = [
+            'Super Admin - Tenant Management' => [
+                'tenant_manage_all',
+                'tenant_delete_any',
+                'manage_all_tenants',
+                'override_tenant_limits',
+            ],
+            'Super Admin - Billing & Subscription' => [
+                'tenant_billing_manage',
+                'subscription_manage_all',
+                'payment_gateway_manage',
+            ],
+            'Super Admin - System Settings' => [
+                'system_settings_manage',
+                'system_maintenance',
+                'backup_manage',
+            ],
+            'Super Admin - User Management' => [
+                'user_impersonate',
+            ],
+            'Super Admin - Data & Audit' => [
+                'data_export_all',
+                'audit_log_view_all',
+            ],
+            'Super Admin - Dashboard' => [
+                'super_admin_dashboard',
+            ],
         ];
 
-        // Create super admin only permissions
-        foreach ($superAdminOnlyPermissions as $permission) {
-            Permission::firstOrCreate([
-                'name' => $permission,
-                'guard_name' => 'web',
-                'is_super_admin' => true // 👈 MARK AS SUPER ADMIN
-            ]);
+        // Create regular permissions with category
+        foreach ($permissionCategories as $category => $permissions) {
+            foreach ($permissions as $permission) {
+                Permission::firstOrCreate([
+                    'name' => $permission,
+                    'guard_name' => 'web',
+                ], [
+                    'is_super_admin' => false,
+                    'category' => $category
+                ]);
+            }
         }
 
-        // Get all permissions (regular + super admin only)
+        // Create super admin only permissions with category
+        foreach ($superAdminOnlyCategories as $category => $permissions) {
+            foreach ($permissions as $permission) {
+                Permission::firstOrCreate([
+                    'name' => $permission,
+                    'guard_name' => 'web',
+                ], [
+                    'is_super_admin' => true,
+                    'category' => $category
+                ]);
+            }
+        }
+
+        // Get all permissions
         $allPermissions = Permission::all();
         
         // Get regular permissions only (for tenant admins)
-        $regularPermissions = Permission::whereNotIn('name', $superAdminOnlyPermissions)->get();
+        $regularPermissions = Permission::where('is_super_admin', false)->get();
 
-        // Assign ALL permissions to super_admin (global role)
+        // Get super admin role
         $superAdminRole = Role::where('name', 'super_admin')->first();
-        $superAdminRole->syncPermissions($allPermissions);
-
-        // Assign regular permissions to admin (tenant-specific role)
+        
+        // Get admin role for tenant
         $adminRole = Role::where('name', 'admin')->where('tenant_id', $tenantId)->first();
-        $adminRole->syncPermissions($regularPermissions);
-
-        // Assign basic permissions to other roles
+        
+        // Get other roles
         $managerRole = Role::where('name', 'manager')->where('tenant_id', $tenantId)->first();
-        $managerPermissions = $regularPermissions->whereIn('name', [
-            'view product', 'view sales report', 'view inventory', 'view customer',
-            'create product', 'edit product', 'process sale', 'view user'
-        ]);
-        $managerRole->syncPermissions($managerPermissions);
-
         $cashierRole = Role::where('name', 'cashier')->where('tenant_id', $tenantId)->first();
-        $cashierPermissions = $regularPermissions->whereIn('name', [
-            'view product', 'process sale', 'apply discounts', 'view customer',
-            'create customer'
-        ]);
-        $cashierRole->syncPermissions($cashierPermissions);
-
         $inventoryClerkRole = Role::where('name', 'inventory_clerk')->where('tenant_id', $tenantId)->first();
-        $inventoryPermissions = $regularPermissions->whereIn('name', [
-            'view product', 'view inventory', 'update stock levels', 'create inventory record',
-            'edit inventory', 'view supplier'
-        ]);
-        $inventoryClerkRole->syncPermissions($inventoryPermissions);
 
-        // Create SUPER ADMIN user (global user, no tenant)
+        // Assign ALL permissions to super_admin
+        if ($superAdminRole) {
+            $superAdminRole->syncPermissions($allPermissions);
+        }
+
+        // Assign regular permissions to admin
+        if ($adminRole) {
+            $adminRole->syncPermissions($regularPermissions);
+        }
+
+        // Assign permissions to manager
+        if ($managerRole) {
+            $managerPermissions = $regularPermissions->filter(function($permission) {
+                return in_array($permission->name, [
+                    'view product', 'view sales report', 'view inventory', 'view customer',
+                    'create product', 'edit product', 'process sale', 'view user',
+                    'view expense', 'view supplier', 'view purchase_orders',
+                ]);
+            });
+            $managerRole->syncPermissions($managerPermissions);
+        }
+
+        // Assign permissions to cashier
+        if ($cashierRole) {
+            $cashierPermissions = $regularPermissions->filter(function($permission) {
+                return in_array($permission->name, [
+                    'view product', 'process sale', 'apply discounts', 'view customer',
+                    'create customer'
+                ]);
+            });
+            $cashierRole->syncPermissions($cashierPermissions);
+        }
+
+        // Assign permissions to inventory clerk
+        if ($inventoryClerkRole) {
+            $inventoryPermissions = $regularPermissions->filter(function($permission) {
+                return in_array($permission->name, [
+                    'view product', 'view inventory', 'update stock levels', 'create inventory record',
+                    'edit inventory', 'view supplier', 'create uom', 'view uom'
+                ]);
+            });
+            $inventoryClerkRole->syncPermissions($inventoryPermissions);
+        }
+
+        // Create SUPER ADMIN user
         $superAdminUser = User::factory()->create([
             'name' => 'Super Admin',
             'first_name' => 'Super',
@@ -309,9 +348,9 @@ class UserSeeder extends Seeder
             'department_id' => 2,
             'location_id' => 2,
             'profile_image' => '',
-            'role_id' => $superAdminRole->id,
+            'role_id' => $superAdminRole?->id,
             'status' => 'active',
-            'tenant_id' => 2, // Super admin has no tenant
+            'tenant_id' => 2,
             'email' => 'superadmin@system.com',
             'password' => bcrypt('superadmin&#123')
         ]);
@@ -327,7 +366,7 @@ class UserSeeder extends Seeder
             'department_id' => 1,
             'location_id' => 1,
             'profile_image' => '',
-            'role_id' => $adminRole->id,
+            'role_id' => $adminRole?->id,
             'status' => 'active',
             'tenant_id' => $tenantId,
             'email' => 'samuelkiiraeluk@gmail.com',
@@ -336,7 +375,7 @@ class UserSeeder extends Seeder
         $adminUser->assignRole('admin');
 
         // Create trial user
-        $adminUser2 = User::factory()->create([
+        $trialUser = User::factory()->create([
             'name' => 'Trial User',
             'first_name' => 'Trial',
             'last_name' => 'User',
@@ -345,13 +384,13 @@ class UserSeeder extends Seeder
             'department_id' => 1,
             'location_id' => 1,
             'profile_image' => '',
-            'role_id' => $adminRole->id,
+            'role_id' => $adminRole?->id,
             'status' => 'active',
             'email' => 'trialuser@gmail.com',
             'tenant_id' => $tenantId,
             'password' => bcrypt('password@123')
         ]);
-        $adminUser2->assignRole('admin');
+        $trialUser->assignRole('admin');
         
         // Create other users
         User::factory()->count(5)->create([

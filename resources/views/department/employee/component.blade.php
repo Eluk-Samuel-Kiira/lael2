@@ -54,7 +54,7 @@
                             <td>{{ $employee->job_title ?? 'N/A' }}</td>
                             <td>
                                 <div class="d-flex flex-column">
-                                    <span class="badge badge-light fw-bold">{{ $employee->salary }} - {{ currencySymbol() }}</span>
+                                    <span class="badge badge-light fw-bold">{{ $employee->salary }} - {{ currency_symbol() }}</span>
                                     @if($employee->salary_type)
                                         <small class="text-muted mt-1">({{ $employee->salary_type }})</small>
                                     @endif

@@ -1,5 +1,5 @@
 <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-5 g-xl-9" id="reloadRoleComponent">
-    @foreach ($roles as $role)
+    @foreach ($all_roles as $role)
         <div class="col-md-4 role-card" data-role="{{ $role->name }}">
             <div class="card card-flush h-md-100">
                 <div class="card-header">
@@ -8,7 +8,12 @@
                     </div>
                 </div>
                 <div class="card-body pt-1">
-                    <div class="fw-bold text-gray-600 mb-5">Total users with this role: {{ $role->user_count }}</div>
+                    <div class="fw-bold text-gray-600 mb-5">
+                        {{__('payments.users_with_role')}}
+                        <span class="badge badge-{{ $role->users_count > 0 ? 'light-primary' : 'light-secondary' }} ms-2">
+                            {{ $role->users_count }}
+                        </span>
+                    </div>
                     <div class="d-flex flex-column text-gray-600">
                         @foreach ($role->permissions->take(7) as $permission)
                             <div class="d-flex align-items-center py-2">
@@ -46,44 +51,92 @@
 
         <!-- Modal for displaying all permissions -->
         <div class="modal fade" id="permissionsModal{{ $role->id }}" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
+            <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">All Permissions for {{ ucwords(str_replace('_', ' ', $role->name)) }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h2 class="fw-bold">{{ ucwords(str_replace('_', ' ', $role->name)) }} - {{ __('Permissions') }}</h2>
+                        <button type="button" class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal" aria-label="Close">
+                            <i class="ki-duotone ki-cross fs-1"></i>
+                        </button>
                     </div>
-                    <div class="modal-body">
-                        <!-- First Section: Permissions Group 1 -->
-                        <div class="row">
-                            <div class="col-4">
-                                @foreach ($role->permissions->slice(0, ceil($role->permissions->count() / 3)) as $permission)
-                                    <div class="d-flex align-items-center py-2">
-                                        <span class="bullet bg-primary me-3"></span>
-                                        {{ $permission->name }}
+                    <div class="modal-body scroll-y mx-lg-5 my-7" style="max-height: 70vh;">
+                        @php
+                            $groupedPermissions = $role->permissions->groupBy('category')->sortKeys();
+                        @endphp
+                        
+                        @if($groupedPermissions->isNotEmpty())
+                            <!-- Permissions grouped by category -->
+                            @foreach($groupedPermissions as $category => $categoryPermissions)
+                                <div class="card card-flush mb-6">
+                                    <div class="card-header py-4">
+                                        <div class="card-title">
+                                            <h3 class="fw-bold fs-4">{{ $category ?? 'Other Permissions' }}</h3>
+                                            <span class="badge badge-light-primary ms-3">{{ $categoryPermissions->count() }} permissions</span>
+                                        </div>
                                     </div>
-                                @endforeach
+                                    <div class="card-body">
+                                        <div class="row">
+                                            @foreach($categoryPermissions as $permission)
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="bullet bg-{{ ['primary', 'success', 'info', 'warning', 'danger'][$loop->index % 5] }} me-3" style="width: 8px; height: 8px; border-radius: 50%;"></span>
+                                                        <span class="text-gray-800 fw-semibold">
+                                                            {{ Str::title(str_replace('_', ' ', $permission->name)) }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        @else
+                            <!-- If permissions aren't categorized, show in columns -->
+                            <div class="row">
+                                @php
+                                    $permissions = $role->permissions;
+                                    $chunkSize = ceil($permissions->count() / 3);
+                                @endphp
+                                
+                                @for($i = 0; $i < 3; $i++)
+                                    <div class="col-md-4">
+                                        <div class="card card-flush mb-6">
+                                            <div class="card-body">
+                                                @foreach($permissions->slice($i * $chunkSize, $chunkSize) as $permission)
+                                                    <div class="d-flex align-items-center py-2 border-bottom border-gray-300 border-bottom-dashed">
+                                                        <span class="bullet bg-{{ ['primary', 'success', 'info', 'warning', 'danger'][$loop->index % 5] }} me-3" style="width: 8px; height: 8px; border-radius: 50%;"></span>
+                                                        <span class="text-gray-800 fw-semibold">
+                                                            {{ Str::title(str_replace('_', ' ', $permission->name)) }}
+                                                        </span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endfor
                             </div>
-
-                            <!-- Second Section: Permissions Group 2 -->
-                            <div class="col-4">
-                                @foreach ($role->permissions->slice(ceil($role->permissions->count() / 3), ceil($role->permissions->count() / 3)) as $permission)
-                                    <div class="d-flex align-items-center py-2">
-                                        <span class="bullet bg-primary me-3"></span>
-                                        {{ $permission->name }}
+                        @endif
+                        
+                        <!-- Summary -->
+                        <div class="card card-flush mb-6 bg-light-primary">
+                            <div class="card-body">
+                                <div class="d-flex flex-stack">
+                                    <div>
+                                        <span class="fw-bold text-primary fs-3">{{ $role->permissions->count() }}</span>
+                                        <span class="text-gray-600 fw-semibold ms-2">Total Permissions</span>
                                     </div>
-                                @endforeach
-                            </div>
-
-                            <!-- Third Section: Permissions Group 3 -->
-                            <div class="col-4">
-                                @foreach ($role->permissions->slice(ceil($role->permissions->count() * 2 / 3)) as $permission)
-                                    <div class="d-flex align-items-center py-2">
-                                        <span class="bullet bg-primary me-3"></span>
-                                        {{ $permission->name }}
+                                    <div class="d-flex gap-5">
+                                        <div>
+                                            <span class="badge badge-light-primary">{{ $groupedPermissions->count() }}</span>
+                                            <span class="text-gray-600 fw-semibold ms-2">Categories</span>
+                                        </div>
                                     </div>
-                                @endforeach
+                                </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Close') }}</button>
                     </div>
                 </div>
             </div>

@@ -21,7 +21,7 @@
                             <div class="text-muted fs-7">{{ __('passwords._customer') }}: {{ $order->customer_name ?? __('passwords.none') }}</div>
                         </div>
                         <div class="text-end">
-                            <div class="fw-bold text-primary fs-2">{{ currencySymbol() }} {{ number_format($order->total, 2) }}</div>
+                            <div class="fw-bold text-primary fs-2">{{ currency_symbol() }} {{ number_format($order->total, 2) }}</div>
                         </div>
                     </div>
                 </div>
@@ -219,7 +219,7 @@
                                         {{__('pagination.amount_tendered')}} *
                                     </label>
                                     <div class="input-group input-group-lg input-group-solid">
-                                        <span class="input-group-text fw-bold">{{ currencySymbol() }}</span>
+                                        <span class="input-group-text fw-bold">{{ currency_symbol() }}</span>
                                         <!-- Simple version - keep as number input without formatting -->
                                         <input type="number" 
                                             class="form-control form-control-lg" 
@@ -236,7 +236,7 @@
                                     <div class="d-flex flex-column justify-content-center h-100">
                                         <div class="d-flex justify-content-between align-items-center mb-3">
                                             <span class="text-muted fs-6">{{__('passwords.total')}}:</span>
-                                            <span class="fw-bold fs-5 text-gray-800">{{ currencySymbol() }} {{ number_format($order->total, 2) }}</span>
+                                            <span class="fw-bold fs-5 text-gray-800">{{ currency_symbol() }} {{ number_format($order->total, 2) }}</span>
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <span class="text-muted fs-6">{{__('pagination.change_due')}}:</span>
@@ -444,7 +444,7 @@
                                     <div class="text-muted fs-7">{{ __('passwords.balance') }}</div>
                                     <div class="fw-bold ${balanceColor} fs-5">
                                         <i class="ki-duotone ${balanceIcon} fs-3 me-1"></i>
-                                        {{ currencySymbol() }}${parseFloat(account.current_balance).toFixed(2)}
+                                        {{ currency_symbol() }}${parseFloat(account.current_balance).toFixed(2)}
                                     </div>
                                 </div>
                             </div>
@@ -487,7 +487,7 @@
         if (accountData.provider) accountDetails += accountDetails ? ` • ${accountData.provider}` : accountData.provider;
         
         document.getElementById(`selectedAccountDetails${orderId}`).textContent = accountDetails || '{{__("pagination.no_additional_info")}}';
-        document.getElementById(`selectedAccountBalance${orderId}`).textContent = '{{ currencySymbol() }}' + parseFloat(accountData.current_balance).toFixed(2);
+        document.getElementById(`selectedAccountBalance${orderId}`).textContent = '{{ currency_symbol() }}' + parseFloat(accountData.current_balance).toFixed(2);
         
         // Focus on amount tendered input
         setTimeout(() => {
@@ -515,10 +515,10 @@
         const changeEl = document.getElementById(`changeDue${orderId}`);
         
         if (change >= 0) {
-            changeEl.textContent = '{{ currencySymbol() }}' + change.toFixed(2);
+            changeEl.textContent = '{{ currency_symbol() }}' + change.toFixed(2);
             changeEl.className = 'fw-bold fs-4 text-success';
         } else {
-            changeEl.textContent = '{{ currencySymbol() }}0.00';
+            changeEl.textContent = '{{ currency_symbol() }}0.00';
             changeEl.className = 'fw-bold fs-4 text-danger';
         }
     }

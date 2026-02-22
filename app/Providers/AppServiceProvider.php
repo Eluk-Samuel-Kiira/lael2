@@ -75,7 +75,7 @@ class AppServiceProvider extends ServiceProvider
                             $query->where('name', 'super_admin');
                         })
                         ->get(),
-                    'roles' => Role::where('tenant_id', $tenantId)->with('permissions')->latest()->get(),
+                    'roles' => Role::where('tenant_id', $tenantId)->whereNot('name', 'super_admin')->with('permissions')->latest()->get(),
                     'permissions' => Permission::regular()->get(),
                     'departments' => Department::where('tenant_id', $tenantId)->where('isActive', 1)->get(),
                     'categories' => Category::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
