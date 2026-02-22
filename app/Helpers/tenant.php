@@ -188,3 +188,13 @@ if (!function_exists('clear_tenant_config_cache')) {
         }
     }
 }
+
+function getTenantUserCountAttribute($tenantId)
+{
+    return DB::table('model_has_roles')
+        ->join('users', 'model_has_roles.model_id', '=', 'users.id')
+        ->where('model_has_roles.role_id', $this->id)
+        ->where('users.tenant_id', $tenantId)
+        ->where('model_has_roles.model_type', 'App\\Models\\User')
+        ->count();
+}

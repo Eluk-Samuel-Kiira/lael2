@@ -323,6 +323,7 @@ return [
     'create_admin' => 'Create Admin',
     'add_admin' => 'Add Admin',
     'pending' => 'Pending',
+    'users_with_role' => 'Total users with this role: ',
     'select_currency' => 'Select a currency',
     'base_currency_created' => 'Base currency created successfully',
 ];
