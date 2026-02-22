@@ -242,6 +242,16 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         // Tenant Mgt
         Route::resource('tenant', TenantController::class);
+        Route::prefix('tenant')->name('tenant.')->group(function () {
+            // Route::get('/create', [TenantController::class, 'create'])->name('create');
+            Route::post('/step1', [TenantController::class, 'storeStep1'])->name('step1');
+            Route::post('/step2', [TenantController::class, 'storeStep2'])->name('step2');
+            Route::post('/step3', [TenantController::class, 'storeStep3'])->name('step3');
+            Route::get('/default-settings', [TenantController::class, 'getDefaultSettings'])->name('default-settings');
+            Route::get('/current-step', [TenantController::class, 'getCurrentStep'])->name('current-step');
+            Route::post('/reset-step', [TenantController::class, 'resetStep'])->name('reset-step');
+            Route::post('/{tenant}/add-admin', [TenantController::class, 'addAdminUser'])->name('add-admin');
+        });
 
 
 

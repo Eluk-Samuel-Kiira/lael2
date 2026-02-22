@@ -21,7 +21,7 @@ return new class extends Migration
             
             // Audit
             $table->foreignId('updated_by')->nullable()->constrained('users');
-            $table->timestamp('updated_at')->useCurrent();
+            $table->timestamps();
             
             // Composite unique key
             $table->unique(['tenant_id', 'setting_key']);

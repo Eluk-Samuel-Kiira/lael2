@@ -48,6 +48,15 @@
                             <td>
                                 <div class="d-flex gap-2 justify-content-end">
                                     @can('view tenant')
+                                        <!-- Admin Users Button -->
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-dark d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#adminUsersTenant{{$tenant->id}}"
+                                            title="{{ __('payments.admin_users') }}">
+                                            <i class="bi bi-people-fill me-1 fs-5"></i> <span>{{ __('payments.admins') }}</span>
+                                        </button>
+
                                         <!-- Configuration Button -->
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-info d-flex align-items-center px-3 py-2" 
@@ -92,6 +101,7 @@
                                 </div>
 
                                 @include('tenant.partials.modals.configuration-modal')
+                                @include('tenant.partials.modals.admins-modal')
                                 @include('tenant.partials.modals.settings-modal')
                                 @include('tenant.partials.modals.usage-modal')
                                 @include('tenant.partials.modals.app-settings-modal')
@@ -105,59 +115,3 @@
         </table>
     </div>
 </div>
-
-<script>
-function updateStatusTenant(tenantId, status) {
-    // Add your status update logic here
-    console.log('Update tenant', tenantId, 'to status', status);
-}
-
-function deleteItem(button) {
-    const btn = $(button);
-    const url = btn.data('item-url');
-    const id = btn.data('item-id');
-    
-    // Show loading state
-    btn.find('.indicator-label').hide();
-    btn.find('.indicator-progress').show();
-    btn.prop('disabled', true);
-    
-    // Perform delete
-    fetch(url, {
-        method: 'DELETE',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Close modal and refresh
-            $(`#deleteTenantModal${id}`).modal('hide');
-            // Option 1: Reload the page
-            location.reload();
-            // Option 2: Remove the row from table (if you prefer)
-            // $(`#deleteTenantModal${id}`).closest('tr').remove();
-        } else {
-            // Reset button state
-            btn.find('.indicator-label').show();
-            btn.find('.indicator-progress').hide();
-            btn.prop('disabled', false);
-            
-            // Show error message
-            alert(data.message || 'Error deleting tenant');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        // Reset button state
-        btn.find('.indicator-label').show();
-        btn.find('.indicator-progress').hide();
-        btn.prop('disabled', false);
-        
-        alert('Error deleting tenant');
-    });
-}
-</script>

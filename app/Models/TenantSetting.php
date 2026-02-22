@@ -19,11 +19,11 @@ class TenantSetting extends Model
         'setting_value',
         'data_type',
         'category',
-        'updated_by',
     ];
 
     protected $casts = [
         'updated_at' => 'datetime',
+        'created_at' => 'datetime',
     ];
 
     /**
