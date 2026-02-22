@@ -49,7 +49,7 @@
                                         <tbody>
                                             @foreach($settings as $setting)
                                                 <tr>
-                                                    <td class="fw-bold">{{ $setting->setting_key }}</td>
+                                                    <td class="fw-bold">{{ Str::title(str_replace('_', ' ', $setting->setting_key)) }}</td>
                                                     <td>
                                                         @if($setting->data_type == 'boolean')
                                                             <span class="badge badge-light-{{ $setting->setting_value ? 'success' : 'danger' }}">

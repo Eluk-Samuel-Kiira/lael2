@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name', 100);
             $table->string('subdomain', 225)->unique(); // e.g. 'acme.pointofsale.com'
             $table->enum('status', ['active', 'suspended', 'trial'])->default('trial');
-            $table->timestampTz('created_at')->useCurrent(); // created_at with time zone
+            $table->timestamps();
         });
     }
 

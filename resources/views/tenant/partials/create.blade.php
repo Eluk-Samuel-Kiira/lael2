@@ -1,1383 +1,847 @@
-<div class="modal fade" id="kt_modal_add_tenant" tabindex="-1" aria-hidden="true">
-    <!--begin::Modal dialog-->
-    <div class="modal-dialog modal-fullscreen p-9">
-        <!--begin::Modal content-->
-        <div class="modal-content modal-rounded">
-            <!--begin::Modal header-->
-            <div class="modal-header">
-                <!--begin::Modal title-->
-                <h2>Create Project</h2>
-                <!--end::Modal title-->
-                <!--begin::Close-->
-                <div class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal">
-                    <i class="ki-duotone ki-cross fs-1">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
-                    </i>
-                </div>
-                <!--end::Close-->
+<x-app-layout>
+    @section('title', __('payments.new_tenant'))
+    @section('content')
+    
+    <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
+            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('payments.new_tenant')}}</h1>
+                <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                    <li class="breadcrumb-item text-muted">
+                        @php
+                            $previousUrl = url()->previous();
+                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
+                            $formattedRouteName = $previousRouteName 
+                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
+                                : __('auth._back');
+                        @endphp
+                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
+                            {{ $formattedRouteName }}
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                    </li>
+                    <li class="breadcrumb-item text-muted">{{__('payments.new_tenant')}}</li>
+                </ul>
             </div>
-            <!--end::Modal header-->
-            <!--begin::Modal body-->
-            <div class="modal-body scroll-y m-5">
-                <!--begin::Stepper-->
-                <div class="stepper stepper-links d-flex flex-column" id="kt_modal_create_project_stepper">
-                    <!--begin::Container-->
-                    <div class="container">
-                        <!--begin::Nav-->
-                        <div class="stepper-nav justify-content-center py-2">
-                            <!--begin::Step 1-->
-                            <div class="stepper-item me-5 me-md-15 current" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Project Type</h3>
-                            </div>
-                            <!--end::Step 1-->
-                            <!--begin::Step 2-->
-                            <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Project Settings</h3>
-                            </div>
-                            <!--end::Step 2-->
-                            <!--begin::Step 3-->
-                            <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Budget</h3>
-                            </div>
-                            <!--end::Step 3-->
-                            <!--begin::Step 4-->
-                            <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Build A Team</h3>
-                            </div>
-                            <!--end::Step 4-->
-                            <!--begin::Step 5-->
-                            <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Set First Target</h3>
-                            </div>
-                            <!--end::Step 5-->
-                            <!--begin::Step 6-->
-                            <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Upload Files</h3>
-                            </div>
-                            <!--end::Step 6-->
-                            <!--begin::Step 7-->
-                            <div class="stepper-item" data-kt-stepper-element="nav">
-                                <h3 class="stepper-title">Completed</h3>
-                            </div>
-                            <!--end::Step 7-->
-                        </div>
-                        <!--end::Nav-->
-                        <!--begin::Form-->
-                        <form class="mx-auto w-100 mw-600px pt-15 pb-10" novalidate="novalidate" id="kt_modal_create_project_form" method="post">
-                            <!--begin::Type-->
-                            <div class="current" data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-7 pb-lg-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Project Type</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check out 
-                                        <a href="#" class="link-primary fw-bold">FAQ Page</a></div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-15" data-kt-buttons="true">
-                                        <!--begin::Option-->
-                                        <label class="btn btn-outline btn-outline-dashed btn-active-light-primary d-flex text-start p-6 mb-6 active">
-                                            <!--begin::Input-->
-                                            <input class="btn-check" type="radio" checked="checked" name="project_type" value="1" />
-                                            <!--end::Input-->
-                                            <!--begin::Label-->
-                                            <span class="d-flex">
-                                                <!--begin::Icon-->
-                                                <i class="ki-duotone ki-profile-circle fs-3hx">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                    <span class="path3"></span>
-                                                </i>
-                                                <!--end::Icon-->
-                                                <!--begin::Info-->
-                                                <span class="ms-4">
-                                                    <span class="fs-3 fw-bold text-gray-900 mb-2 d-block">Personal Project</span>
-                                                    <span class="fw-semibold fs-4 text-muted">If you need more info, please check it out</span>
-                                                </span>
-                                                <!--end::Info-->
-                                            </span>
-                                            <!--end::Label-->
-                                        </label>
-                                        <!--end::Option-->
-                                        <!--begin::Option-->
-                                        <label class="btn btn-outline btn-outline-dashed btn-active-light-primary d-flex text-start p-6">
-                                            <!--begin::Input-->
-                                            <input class="btn-check" type="radio" name="project_type" value="2" />
-                                            <!--end::Input-->
-                                            <!--begin::Label-->
-                                            <span class="d-flex">
-                                                <!--begin::Icon-->
-                                                <i class="ki-duotone ki-rocket fs-3hx">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                                <!--end::Icon-->
-                                                <!--begin::Info-->
-                                                <span class="ms-4">
-                                                    <span class="fs-3 fw-bold text-gray-900 mb-2 d-block">Team Project</span>
-                                                    <span class="fw-semibold fs-4 text-muted">Create corporate account to manage users</span>
-                                                </span>
-                                                <!--end::Info-->
-                                            </span>
-                                            <!--end::Label-->
-                                        </label>
-                                        <!--end::Option-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex justify-content-end">
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="type-next">
-                                            <span class="indicator-label">Project Settings</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Type-->
-                            <!--begin::Settings-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Project Settings</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check 
-                                        <a href="#" class="link-primary">Project Guidelines</a></div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Dropzone-->
-                                        <div class="dropzone" id="kt_modal_create_project_settings_logo">
-                                            <!--begin::Message-->
-                                            <div class="dz-message needsclick">
-                                                <!--begin::Icon-->
-                                                <i class="ki-duotone ki-file-up fs-3hx text-primary">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                                <!--end::Icon-->
-                                                <!--begin::Info-->
-                                                <div class="ms-4">
-                                                    <h3 class="dfs-3 fw-bold text-gray-900 mb-1">Drop files here or click to upload.</h3>
-                                                    <span class="fw-semibold fs-4 text-muted">Upload up to 10 files</span>
-                                                </div>
-                                                <!--end::Info-->
-                                            </div>
-                                        </div>
-                                        <!--end::Dropzone-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="required fs-6 fw-semibold mb-2">Customer</label>
-                                        <!--end::Label-->
-                                        <!--begin::Input-->
-                                        <select class="form-select form-select-solid" data-control="select2" data-hide-search="true" data-placeholder="Select..." name="settings_customer">
-                                            <option></option>
-                                            <option value="1">Keenthemes</option>
-                                            <option value="2">CRM App</option>
-                                        </select>
-                                        <!--end::Input-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="d-flex align-items-center fs-6 fw-semibold form-label mb-2">
-                                            <span class="required">Project Name</span>
-                                            <span class="ms-1" data-bs-toggle="tooltip" title="Specify project name">
-                                                <i class="ki-duotone ki-information-5 text-gray-500 fs-6">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                    <span class="path3"></span>
-                                                </i>
-                                            </span>
-                                        </label>
-                                        <!--end::Label-->
-                                        <!--begin::Input-->
-                                        <input type="text" class="form-control form-control-solid" placeholder="Enter Project Name" value="StockPro Mobile App" name="settings_name" />
-                                        <!--end::Input-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="required fs-6 fw-semibold mb-2">Project Description</label>
-                                        <!--end::Label-->
-                                        <!--begin::Input-->
-                                        <textarea class="form-control form-control-solid" rows="3" placeholder="Enter Project Description" name="settings_description">Experience share market at your fingertips with TICK PRO stock investment mobile trading app</textarea>
-                                        <!--end::Input-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="required fs-6 fw-semibold mb-2">Release Date</label>
-                                        <!--end::Label-->
-                                        <!--begin::Wrapper-->
-                                        <div class="position-relative d-flex align-items-center">
-                                            <!--begin::Icon-->
-                                            <i class="ki-duotone ki-calendar-8 fs-2 position-absolute mx-4">
-                                                <span class="path1"></span>
-                                                <span class="path2"></span>
-                                                <span class="path3"></span>
-                                                <span class="path4"></span>
-                                                <span class="path5"></span>
-                                                <span class="path6"></span>
-                                            </i>
-                                            <!--end::Icon-->
-                                            <!--begin::Input-->
-                                            <input class="form-control form-control-solid ps-12" placeholder="Pick date range" name="settings_release_date" />
-                                            <!--end::Input-->
-                                        </div>
-                                        <!--end::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-15">
-                                        <!--begin::Wrapper-->
-                                        <div class="d-flex flex-stack">
-                                            <!--begin::Label-->
-                                            <div class="me-5">
-                                                <label class="required fs-6 fw-semibold">Notifications</label>
-                                                <div class="fs-7 fw-semibold text-muted">Allow Notifications by Phone or Email</div>
-                                            </div>
-                                            <!--end::Label-->
-                                            <!--begin::Checkboxes-->
-                                            <div class="d-flex">
-                                                <!--begin::Checkbox-->
-                                                <label class="form-check form-check-custom form-check-solid me-10">
-                                                    <!--begin::Input-->
-                                                    <input class="form-check-input h-20px w-20px" type="checkbox" value="email" name="settings_notifications[]" />
-                                                    <!--end::Input-->
-                                                    <!--begin::Label-->
-                                                    <span class="form-check-label fw-semibold">Email</span>
-                                                    <!--end::Label-->
-                                                </label>
-                                                <!--end::Checkbox-->
-                                                <!--begin::Checkbox-->
-                                                <label class="form-check form-check-custom form-check-solid">
-                                                    <!--begin::Input-->
-                                                    <input class="form-check-input h-20px w-20px" type="checkbox" value="phone" checked="checked" name="settings_notifications[]" />
-                                                    <!--end::Input-->
-                                                    <!--begin::Label-->
-                                                    <span class="form-check-label fw-semibold">Phone</span>
-                                                    <!--end::Label-->
-                                                </label>
-                                                <!--end::Checkbox-->
-                                            </div>
-                                            <!--end::Checkboxes-->
-                                        </div>
-                                        <!--begin::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-stack">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="settings-previous">Project Type</button>
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="settings-next">
-                                            <span class="indicator-label">Budget</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Settings-->
-                            <!--begin::Budget-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-10 pb-lg-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Budget</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check 
-                                        <a href="#" class="link-primary">Project Guidelines</a></div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                            <span class="required">Setup Budget</span>
-                                            <span class="lh-1 ms-1" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-html="true" data-bs-content="&lt;div class=&#039;p-4 rounded bg-light&#039;&gt; &lt;div class=&#039;d-flex flex-stack text-muted mb-4&#039;&gt; &lt;i class=&quot;ki-duotone ki-bank fs-3 me-3&quot;&gt;&lt;span class=&quot;path1&quot;&gt;&lt;/span&gt;&lt;span class=&quot;path2&quot;&gt;&lt;/span&gt;&lt;/i&gt; &lt;div class=&#039;fw-bold&#039;&gt;INCBANK **** 1245 STATEMENT&lt;/div&gt; &lt;/div&gt; &lt;div class=&#039;d-flex flex-stack fw-semibold text-gray-600&#039;&gt; &lt;div&gt;Amount&lt;/div&gt; &lt;div&gt;Transaction&lt;/div&gt; &lt;/div&gt; &lt;div class=&#039;separator separator-dashed my-2&#039;&gt;&lt;/div&gt; &lt;div class=&#039;d-flex flex-stack text-gray-900 fw-bold mb-2&#039;&gt; &lt;div&gt;USD345.00&lt;/div&gt; &lt;div&gt;KEENTHEMES*&lt;/div&gt; &lt;/div&gt; &lt;div class=&#039;d-flex flex-stack text-muted mb-2&#039;&gt; &lt;div&gt;USD75.00&lt;/div&gt; &lt;div&gt;Hosting fee&lt;/div&gt; &lt;/div&gt; &lt;div class=&#039;d-flex flex-stack text-muted&#039;&gt; &lt;div&gt;USD3,950.00&lt;/div&gt; &lt;div&gt;Payrol&lt;/div&gt; &lt;/div&gt; &lt;/div&gt;">
-                                                <i class="ki-duotone ki-information-5 text-gray-500 fs-6">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                    <span class="path3"></span>
-                                                </i>
-                                            </span>
-                                        </label>
-                                        <!--end::Label-->
-                                        <!--begin::Dialer-->
-                                        <div class="position-relative w-lg-250px" id="kt_modal_create_project_budget_setup" data-kt-dialer="true" data-kt-dialer-min="50" data-kt-dialer-max="50000" data-kt-dialer-step="100" data-kt-dialer-prefix="$" data-kt-dialer-decimals="2">
-                                            <!--begin::Decrease control-->
-                                            <button type="button" class="btn btn-icon btn-active-color-gray-700 position-absolute translate-middle-y top-50 start-0" data-kt-dialer-control="decrease">
-                                                <i class="ki-duotone ki-minus-circle fs-1">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                            </button>
-                                            <!--end::Decrease control-->
-                                            <!--begin::Input control-->
-                                            <input type="text" class="form-control form-control-solid border-0 ps-12" data-kt-dialer-control="input" placeholder="Amount" name="budget_setup" readonly="readonly" value="$50" />
-                                            <!--end::Input control-->
-                                            <!--begin::Increase control-->
-                                            <button type="button" class="btn btn-icon btn-active-color-gray-700 position-absolute translate-middle-y top-50 end-0" data-kt-dialer-control="increase">
-                                                <i class="ki-duotone ki-plus-circle fs-1">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                            </button>
-                                            <!--end::Increase control-->
-                                        </div>
-                                        <!--end::Dialer-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Label-->
-                                        <label class="fs-6 fw-semibold mb-2">Budget Usage</label>
-                                        <!--end::Label-->
-                                        <!--begin::Row-->
-                                        <div class="row g-9" data-kt-buttons="true" data-kt-buttons-target="[data-kt-button='true']">
-                                            <!--begin::Col-->
-                                            <div class="col-md-6 col-lg-12 col-xxl-6">
-                                                <!--begin::Option-->
-                                                <label class="btn btn-outline btn-outline-dashed btn-active-light-primary active d-flex text-start p-6" data-kt-button="true">
-                                                    <!--begin::Radio-->
-                                                    <span class="form-check form-check-custom form-check-solid form-check-sm align-items-start mt-1">
-                                                        <input class="form-check-input" type="radio" name="budget_usage" value="1" checked="checked" />
-                                                    </span>
-                                                    <!--end::Radio-->
-                                                    <!--begin::Info-->
-                                                    <span class="ms-5">
-                                                        <span class="fs-4 fw-bold text-gray-800 mb-2 d-block">Precise Usage</span>
-                                                        <span class="fw-semibold fs-7 text-gray-600">Withdraw money to your bank account per transaction under $50,000 budget</span>
-                                                    </span>
-                                                    <!--end::Info-->
-                                                </label>
-                                                <!--end::Option-->
-                                            </div>
-                                            <!--end::Col-->
-                                            <!--begin::Col-->
-                                            <div class="col-md-6 col-lg-12 col-xxl-6">
-                                                <!--begin::Option-->
-                                                <label class="btn btn-outline btn-outline-dashed btn-active-light-primary d-flex text-start p-6" data-kt-button="true">
-                                                    <!--begin::Radio-->
-                                                    <span class="form-check form-check-custom form-check-solid form-check-sm align-items-start mt-1">
-                                                        <input class="form-check-input" type="radio" name="budget_usage" value="2" />
-                                                    </span>
-                                                    <!--end::Radio-->
-                                                    <!--begin::Info-->
-                                                    <span class="ms-5">
-                                                        <span class="fs-4 fw-bold text-gray-800 mb-2 d-block">Extreme Usage</span>
-                                                        <span class="fw-semibold fs-7 text-gray-600">Withdraw money to your bank account per transaction under $50,000 budget</span>
-                                                    </span>
-                                                    <!--end::Info-->
-                                                </label>
-                                                <!--end::Option-->
-                                            </div>
-                                            <!--end::Col-->
-                                        </div>
-                                        <!--end::Row-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-15">
-                                        <!--begin::Wrapper-->
-                                        <div class="d-flex flex-stack">
-                                            <!--begin::Label-->
-                                            <div class="me-5">
-                                                <label class="fs-6 fw-semibold">Allow Changes in Budget</label>
-                                                <div class="fs-7 fw-semibold text-muted">If you need more info, please check budget planning</div>
-                                            </div>
-                                            <!--end::Label-->
-                                            <!--begin::Switch-->
-                                            <label class="form-check form-switch form-check-custom form-check-solid">
-                                                <input class="form-check-input" type="checkbox" value="1" name="budget_allow" checked="checked" />
-                                                <span class="form-check-label fw-semibold text-muted">Allowed</span>
-                                            </label>
-                                            <!--end::Switch-->
-                                        </div>
-                                        <!--end::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-stack">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="budget-previous">Project Settings</button>
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="budget-next">
-                                            <span class="indicator-label">Build Team</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Budget-->
-                            <!--begin::Team-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Build a Team</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check 
-                                        <a href="#" class="link-primary">Project Guidelines</a></div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="mb-8">
-                                        <!--begin::Label-->
-                                        <label class="fs-6 fw-semibold mb-2">Invite Teammates</label>
-                                        <!--end::Label-->
-                                        <!--begin::Input-->
-                                        <input type="text" class="form-control form-control-solid" placeholder="Add project memnbers by name or email.." name="invite_teammates" />
-                                        <!--end::Input-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="mb-8">
-                                        <!--begin::Label-->
-                                        <div class="fs-6 fw-semibold mb-2">Team Members</div>
-                                        <!--end::Label-->
-                                        <!--begin::Users-->
-                                        <div class="mh-300px scroll-y me-n7 pe-7">
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-6.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Emma Smith</a>
-                                                        <div class="fw-semibold text-muted">smith@kpmg.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-danger text-danger fw-semibold">M</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Melody Macy</a>
-                                                        <div class="fw-semibold text-muted">melody@altbox.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1" selected="selected">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-1.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Max Smith</a>
-                                                        <div class="fw-semibold text-muted">max@kt.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-5.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Sean Bean</a>
-                                                        <div class="fw-semibold text-muted">sean@dellito.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-25.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Brian Cox</a>
-                                                        <div class="fw-semibold text-muted">brian@exchange.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-warning text-warning fw-semibold">C</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Mikaela Collins</a>
-                                                        <div class="fw-semibold text-muted">mik@pex.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-9.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Francis Mitcham</a>
-                                                        <div class="fw-semibold text-muted">f.mit@kpmg.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-danger text-danger fw-semibold">O</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Olivia Wild</a>
-                                                        <div class="fw-semibold text-muted">olivia@corpmail.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-primary text-primary fw-semibold">N</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Neil Owen</a>
-                                                        <div class="fw-semibold text-muted">owen.neil@gmail.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1" selected="selected">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-23.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Dan Wilson</a>
-                                                        <div class="fw-semibold text-muted">dam@consilting.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-danger text-danger fw-semibold">E</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Emma Bold</a>
-                                                        <div class="fw-semibold text-muted">emma@intenso.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-12.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Ana Crown</a>
-                                                        <div class="fw-semibold text-muted">ana.cf@limtel.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1" selected="selected">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-info text-info fw-semibold">A</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Robert Doe</a>
-                                                        <div class="fw-semibold text-muted">robert@benko.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-13.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">John Miller</a>
-                                                        <div class="fw-semibold text-muted">miller@mapple.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-success text-success fw-semibold">L</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Lucy Kunic</a>
-                                                        <div class="fw-semibold text-muted">lucy.m@fentech.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2" selected="selected">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4 border-bottom border-gray-300 border-bottom-dashed">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <img alt="Pic" src="assets/media/avatars/300-21.jpg" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Ethan Wilder</a>
-                                                        <div class="fw-semibold text-muted">ethan@loop.com.au</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1" selected="selected">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                            <!--begin::User-->
-                                            <div class="d-flex flex-stack py-4">
-                                                <!--begin::Details-->
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px symbol-circle">
-                                                        <span class="symbol-label bg-light-danger text-danger fw-semibold">M</span>
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-5">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Melody Macy</a>
-                                                        <div class="fw-semibold text-muted">melody@altbox.com</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--end::Details-->
-                                                <!--begin::Access menu-->
-                                                <div class="ms-2 w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true">
-                                                        <option value="1">Guest</option>
-                                                        <option value="2">Owner</option>
-                                                        <option value="3" selected="selected">Can Edit</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Access menu-->
-                                            </div>
-                                            <!--end::User-->
-                                        </div>
-                                        <!--end::Users-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Notice-->
-                                    <div class="d-flex flex-stack mb-15">
-                                        <!--begin::Label-->
-                                        <div class="me-5 fw-semibold">
-                                            <label class="fs-6">Adding Users by Team Members</label>
-                                            <div class="fs-7 text-muted">If you need more info, please check budget planning</div>
-                                        </div>
-                                        <!--end::Label-->
-                                        <!--begin::Switch-->
-                                        <label class="form-check form-switch form-check-custom form-check-solid">
-                                            <input class="form-check-input" type="checkbox" value="" checked="checked" />
-                                        </label>
-                                        <!--end::Switch-->
-                                    </div>
-                                    <!--end::Notice-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-stack">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="team-previous">Budget</button>
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="team-next">
-                                            <span class="indicator-label">Set Target</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Team-->
-                            <!--begin::Targets-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Set First Target</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Title-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check 
-                                        <a href="#" class="link-primary">Project Guidelines</a></div>
-                                        <!--end::Title-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <label class="fs-6 fw-semibold mb-2">Target Title</label>
-                                        <input type="text" class="form-control form-control-solid" placeholder="Enter Target Title" name="Project Launch" />
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="row g-9 mb-8">
-                                        <!--begin::Col-->
-                                        <div class="col-md-6 fv-row">
-                                            <label class="required fs-6 fw-semibold mb-2">Assign</label>
-                                            <select class="form-select form-select-solid" data-control="select2" data-hide-search="true" data-placeholder="Select a Team Member" name="target_assign">
-                                                <option></option>
-                                                <option value="1">Karina Clark</option>
-                                                <option value="2" selected="selected">Robert Doe</option>
-                                                <option value="3">Niel Owen</option>
-                                                <option value="4">Olivia Wild</option>
-                                                <option value="5">Sean Bean</option>
-                                            </select>
-                                        </div>
-                                        <!--end::Col-->
-                                        <!--begin::Col-->
-                                        <div class="col-md-6 fv-row">
-                                            <label class="required fs-6 fw-semibold mb-2">Due Date</label>
-                                            <div class="position-relative d-flex align-items-center">
-                                                <!--begin::Icon-->
-                                                <i class="ki-duotone ki-calendar-8 fs-2 position-absolute mx-4">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                    <span class="path3"></span>
-                                                    <span class="path4"></span>
-                                                    <span class="path5"></span>
-                                                    <span class="path6"></span>
-                                                </i>
-                                                <!--end::Icon-->
-                                                <!--begin::Datepicker-->
-                                                <input class="form-control form-control-solid ps-12" placeholder="Pick date range" name="target_due_date" />
-                                                <!--end::Datepicker-->
-                                            </div>
-                                        </div>
-                                        <!--end::Col-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <label class="fs-6 fw-semibold mb-2">Target Details</label>
-                                        <textarea class="form-control form-control-solid" rows="2" name="target_details" placeholder="Type Target Details">Experience share market at your fingertips with TICK PRO stock investment mobile trading app</textarea>
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <label class="required fs-6 fw-semibold mb-2">Tags</label>
-                                        <input class="form-control form-control-solid" value="Important, Urgent" name="target_tags" />
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Wrapper-->
-                                        <div class="d-flex flex-stack">
-                                            <!--begin::Label-->
-                                            <div class="me-5">
-                                                <label class="fs-6 fw-semibold">Allow Changes in Budget</label>
-                                                <div class="fs-7 fw-semibold text-muted">If you need more info, please check budget planning</div>
-                                            </div>
-                                            <!--end::Label-->
-                                            <!--begin::Switch-->
-                                            <label class="form-check form-switch form-check-custom form-check-solid">
-                                                <input class="form-check-input" type="checkbox" value="1" name="target_allow" checked="checked" />
-                                                <span class="form-check-label fw-semibold text-muted">Allowed</span>
-                                            </label>
-                                            <!--end::Switch-->
-                                        </div>
-                                        <!--end::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-15">
-                                        <!--begin::Wrapper-->
-                                        <div class="d-flex flex-stack">
-                                            <!--begin::Label-->
-                                            <div class="me-5">
-                                                <label class="fs-6 fw-semibold">Notifications</label>
-                                                <div class="fs-7 fw-semibold text-muted">Allow Notifications by Phone or Email</div>
-                                            </div>
-                                            <!--end::Label-->
-                                            <!--begin::Checkboxes-->
-                                            <div class="d-flex">
-                                                <!--begin::Checkbox-->
-                                                <label class="form-check form-check-custom form-check-solid me-10">
-                                                    <!--begin::Input-->
-                                                    <input class="form-check-input h-20px w-20px" type="checkbox" value="email" name="target_notifications[]" />
-                                                    <!--end::Input-->
-                                                    <!--begin::Label-->
-                                                    <span class="form-check-label fw-semibold">Email</span>
-                                                    <!--end::Label-->
-                                                </label>
-                                                <!--end::Checkbox-->
-                                                <!--begin::Checkbox-->
-                                                <label class="form-check form-check-custom form-check-solid">
-                                                    <!--begin::Input-->
-                                                    <input class="form-check-input h-20px w-20px" type="checkbox" value="phone" checked="checked" name="target_notifications[]" />
-                                                    <!--end::Input-->
-                                                    <!--begin::Label-->
-                                                    <span class="form-check-label fw-semibold">Phone</span>
-                                                    <!--end::Label-->
-                                                </label>
-                                                <!--end::Checkbox-->
-                                            </div>
-                                            <!--end::Checkboxes-->
-                                        </div>
-                                        <!--end::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-stack">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="targets-previous">Build a Team</button>
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="targets-next">
-                                            <span class="indicator-label">Upload Files</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Targets-->
-                            <!--begin::Files-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-10 pb-lg-12">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Upload Files</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check 
-                                        <a href="#" class="link-primary">Project Guidelines</a></div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Dropzone-->
-                                        <div class="dropzone" id="kt_modal_create_project_files_upload">
-                                            <!--begin::Message-->
-                                            <div class="dz-message needsclick">
-                                                <!--begin::Icon-->
-                                                <i class="ki-duotone ki-file-up fs-3hx text-primary">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                                <!--end::Icon-->
-                                                <!--begin::Info-->
-                                                <div class="ms-4">
-                                                    <h3 class="dfs-3 fw-bold text-gray-900 mb-1">Drop files here or click to upload.</h3>
-                                                    <span class="fw-semibold fs-4 text-muted">Upload up to 10 files</span>
-                                                </div>
-                                                <!--end::Info-->
-                                            </div>
-                                        </div>
-                                        <!--end::Dropzone-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="mb-8">
-                                        <!--begin::Label-->
-                                        <label class="fs-6 fw-semibold mb-2">Uploaded File</label>
-                                        <!--End::Label-->
-                                        <!--begin::Files-->
-                                        <div class="mh-300px scroll-y me-n7 pe-7">
-                                            <!--begin::File-->
-                                            <div class="d-flex flex-stack py-4 border border-top-0 border-left-0 border-right-0 border-dashed">
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px">
-                                                        <img src="assets/media/svg/files/pdf.svg" alt="icon" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-6">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Avionica Technical Requirements</a>
-                                                        <div class="fw-semibold text-muted">230kb</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--begin::Menu-->
-                                                <div class="min-w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true" data-placeholder="Edit">
-                                                        <option></option>
-                                                        <option value="1">Remove</option>
-                                                        <option value="2">Modify</option>
-                                                        <option value="3">Select</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Menu-->
-                                            </div>
-                                            <!--end::File-->
-                                            <!--begin::File-->
-                                            <div class="d-flex flex-stack py-4 border border-top-0 border-left-0 border-right-0 border-dashed">
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px">
-                                                        <img src="assets/media/svg/files/doc.svg" alt="icon" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-6">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">9 Degree CURD draftplan</a>
-                                                        <div class="fw-semibold text-muted">3.6mb</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--begin::Menu-->
-                                                <div class="min-w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true" data-placeholder="Edit">
-                                                        <option></option>
-                                                        <option value="1">Remove</option>
-                                                        <option value="2">Modify</option>
-                                                        <option value="3">Select</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Menu-->
-                                            </div>
-                                            <!--end::File-->
-                                            <!--begin::File-->
-                                            <div class="d-flex flex-stack py-4 border border-top-0 border-left-0 border-right-0 border-dashed">
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px">
-                                                        <img src="assets/media/svg/files/css.svg" alt="icon" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-6">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">User CRUD Styles</a>
-                                                        <div class="fw-semibold text-muted">85kb</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--begin::Menu-->
-                                                <div class="min-w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true" data-placeholder="Edit">
-                                                        <option></option>
-                                                        <option value="1">Remove</option>
-                                                        <option value="2">Modify</option>
-                                                        <option value="3">Select</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Menu-->
-                                            </div>
-                                            <!--end::File-->
-                                            <!--begin::File-->
-                                            <div class="d-flex flex-stack py-4 border border-top-0 border-left-0 border-right-0 border-dashed">
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px">
-                                                        <img src="assets/media/svg/files/ai.svg" alt="icon" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-6">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Design Initial Logo</a>
-                                                        <div class="fw-semibold text-muted">40kb</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--begin::Menu-->
-                                                <div class="min-w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true" data-placeholder="Edit">
-                                                        <option></option>
-                                                        <option value="1">Remove</option>
-                                                        <option value="2">Modify</option>
-                                                        <option value="3">Select</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Menu-->
-                                            </div>
-                                            <!--end::File-->
-                                            <!--begin::File-->
-                                            <div class="d-flex flex-stack py-4">
-                                                <div class="d-flex align-items-center">
-                                                    <!--begin::Avatar-->
-                                                    <div class="symbol symbol-35px">
-                                                        <img src="assets/media/svg/files/tif.svg" alt="icon" />
-                                                    </div>
-                                                    <!--end::Avatar-->
-                                                    <!--begin::Details-->
-                                                    <div class="ms-6">
-                                                        <a href="#" class="fs-5 fw-bold text-gray-900 text-hover-primary mb-2">Tower Hill Bilboard</a>
-                                                        <div class="fw-semibold text-muted">27mb</div>
-                                                    </div>
-                                                    <!--end::Details-->
-                                                </div>
-                                                <!--begin::Menu-->
-                                                <div class="min-w-100px">
-                                                    <select class="form-select form-select-solid form-select-sm" data-control="select2" data-hide-search="true" data-placeholder="Edit">
-                                                        <option></option>
-                                                        <option value="1">Remove</option>
-                                                        <option value="2">Modify</option>
-                                                        <option value="3">Select</option>
-                                                    </select>
-                                                </div>
-                                                <!--end::Menu-->
-                                            </div>
-                                            <!--end::File-->
-                                        </div>
-                                        <!--end::Files-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Input group-->
-                                    <div class="fv-row mb-8">
-                                        <!--begin::Wrapper-->
-                                        <div class="d-flex flex-stack">
-                                            <!--begin::Label-->
-                                            <div class="me-5">
-                                                <label class="fs-6 fw-semibold">Allow Changes in Budget</label>
-                                                <div class="fs-7 fw-semibold text-muted">If you need more info, please check budget planning</div>
-                                            </div>
-                                            <!--end::Label-->
-                                            <!--begin::Switch-->
-                                            <label class="form-check form-switch form-check-custom form-check-solid">
-                                                <input class="form-check-input" type="checkbox" value="1" name="target_allow" checked="checked" />
-                                                <span class="form-check-label fw-semibold text-muted">Allowed</span>
-                                            </label>
-                                            <!--end::Switch-->
-                                        </div>
-                                        <!--end::Wrapper-->
-                                    </div>
-                                    <!--end::Input group-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-stack">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="files-previous">Set First Target</button>
-                                        <button type="button" class="btn btn-lg btn-primary" data-kt-element="files-next">
-                                            <span class="indicator-label">Complete</span>
-                                            <span class="indicator-progress">Please wait... 
-                                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-                                        </button>
-                                    </div>
-                                    <!--end::Actions-->
-                                </div>
-                                <!--end::Wrapper-->
-                            </div>
-                            <!--end::Files-->
-                            <!--begin::Complete-->
-                            <div data-kt-stepper-element="content">
-                                <!--begin::Wrapper-->
-                                <div class="w-100">
-                                    <!--begin::Heading-->
-                                    <div class="pb-12 text-center">
-                                        <!--begin::Title-->
-                                        <h1 class="fw-bold text-gray-900">Project Created!</h1>
-                                        <!--end::Title-->
-                                        <!--begin::Description-->
-                                        <div class="text-muted fw-semibold fs-4">If you need more info, please check how to create project</div>
-                                        <!--end::Description-->
-                                    </div>
-                                    <!--end::Heading-->
-                                    <!--begin::Actions-->
-                                    <div class="d-flex flex-center pb-20">
-                                        <button type="button" class="btn btn-lg btn-light me-3" data-kt-element="complete-start">Create New Project</button>
-                                        <a href="" class="btn btn-lg btn-primary" data-bs-toggle="tooltip" title="Coming Soon">View Project</a>
-                                    </div>
-                                    <!--end::Actions-->
-                                    <!--begin::Illustration-->
-                                    <div class="text-center px-4">
-                                        <img src="assets/media/illustrations/sketchy-1/9.png" alt="" class="mww-100 mh-350px" />
-                                    </div>
-                                    <!--end::Illustration-->
-                                </div>
-                            </div>
-                            <!--end::Complete-->
-                        </form>
-                        <!--end::Form-->
-                    </div>
-                    <!--begin::Container-->
-                </div>
-                <!--end::Stepper-->
-            </div>
-            <!--end::Modal body-->
         </div>
-        <!--end::Modal content-->
     </div>
-    <!--end::Modal dialog-->
-</div>
 
+    <div class="d-flex flex-column flex-column-fluid">
+        <div id="kt_app_content" class="app-content flex-column-fluid">
+            <div id="kt_app_content_container" class="app-container container-xxl">
+                <div id="status"></div>
+                <div class="card">
+                    <!--begin::Stepper-->
+                    <div class="stepper stepper-links d-flex flex-column" id="kt_tenant_create_stepper">
+                        <!--begin::Container-->
+                        <div class="container">
+                            <!--begin::Nav-->
+                            <div class="stepper-nav justify-content-center py-2">
+                                <!--begin::Step 1-->
+                                <div class="stepper-item me-5 me-md-15 current" data-kt-stepper-element="nav">
+                                    <h3 class="stepper-title">{{ __('payments.basic_information') }}</h3>
+                                </div>
+                                <!--end::Step 1-->
+                                <!--begin::Step 2-->
+                                <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
+                                    <h3 class="stepper-title">{{ __('payments.configuration') }}</h3>
+                                </div>
+                                <!--end::Step 2-->
+                                <!--begin::Step 3-->
+                                <div class="stepper-item me-5 me-md-15" data-kt-stepper-element="nav">
+                                    <h3 class="stepper-title">{{ __('payments.settings') }}</h3>
+                                </div>
+                                <!--end::Step 3-->
+                                <!--begin::Step 4-->
+                                <div class="stepper-item" data-kt-stepper-element="nav">
+                                    <h3 class="stepper-title">{{ __('payments.completed') }}</h3>
+                                </div>
+                                <!--end::Step 4-->
+                            </div>
+                            <!--end::Nav-->
+
+                            <!--begin::Form-->
+                            <form class="mx-auto w-100 mw-600px pt-15 pb-10" novalidate="novalidate" id="kt_tenant_create_form">
+                                @csrf
+                                
+                                <!--begin::Step 1 - Basic Information-->
+                                <div class="current" data-kt-stepper-element="content">
+                                    <div class="w-100">
+                                        <div class="pb-7 pb-lg-12">
+                                            <h1 class="fw-bold text-gray-900">{{ __('payments.basic_information') }}</h1>
+                                            <div class="text-muted fw-semibold fs-4">{{ __('payments.enter_basic_tenant_info') }}</div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.tenant_name') }}</label>
+                                            <input type="text" 
+                                                   class="form-control form-control-solid" 
+                                                   placeholder="{{ __('payments.enter_tenant_name') }}" 
+                                                   name="name"
+                                                   id="name" />
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.subdomain') }}</label>
+                                            <div class="input-group">
+                                                <input type="text" 
+                                                       class="form-control form-control-solid" 
+                                                       placeholder="{{ __('payments.enter_subdomain') }}" 
+                                                       name="subdomain"
+                                                       id="subdomain" />
+                                                <span class="input-group-text">.{{ config('app.domain') }}</span>
+                                            </div>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.status') }}</label>
+                                            <select class="form-select form-select-solid" name="status" id="status">
+                                                <option value="active">{{ __('payments.active') }}</option>
+                                                <option value="trial" selected>{{ __('payments.trial') }}</option>
+                                                <option value="suspended">{{ __('payments.suspended') }}</option>
+                                            </select>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-lg btn-primary" id="step1_next">
+                                                <span class="indicator-label">{{ __('payments.next') }} - {{ __('payments.configuration') }}</span>
+                                                <span class="indicator-progress" style="display: none;">
+                                                    {{ __('auth.please_wait') }} 
+                                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--end::Step 1-->
+
+                                <!--begin::Step 2 - Configuration-->
+                                <div data-kt-stepper-element="content">
+                                    <div class="w-100">
+                                        <div class="pb-12">
+                                            <h1 class="fw-bold text-gray-900">{{ __('payments.configuration') }}</h1>
+                                            <div class="text-muted fw-semibold fs-4">{{ __('payments.enter_configuration_details') }}</div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.currency_code') }}</label>
+                                            <select class="form-select form-select-solid" name="currency_code" id="currency_code" data-control="select2" data-placeholder="Select a currency">
+                                                <option value="">{{ __('payments.select_currency') }}</option>
+                                                @foreach(config('currencies.currencies') as $code => $details)
+                                                    <option value="{{ $code }}" {{ old('currency_code', 'USD') == $code ? 'selected' : '' }}>
+                                                        {{ $code }} - {{ $details['name'] }} ({{ $details['symbol'] }})
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.timezone') }}</label>
+                                            <select class="form-select form-select-solid" name="timezone" id="timezone">
+                                                @php
+                                                    $timezones = DateTimeZone::listIdentifiers();
+                                                @endphp
+                                                @foreach($timezones as $timezone)
+                                                    <option value="{{ $timezone }}" {{ $timezone == 'Africa/Kampala' ? 'selected' : '' }}>{{ str_replace('_', ' ', $timezone) }}</option>
+                                                @endforeach
+                                            </select>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.locale') }}</label>
+                                            <select class="form-select form-select-solid" name="locale" id="locale">
+                                                <option value="en">English</option>
+                                                <option value="fr">French</option>
+                                                <option value="es">Spanish</option>
+                                                <option value="de">German</option>
+                                                <option value="it">Italian</option>
+                                            </select>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-8">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.fiscal_year_start') }}</label>
+                                            <input type="date" 
+                                                   class="form-control form-control-solid" 
+                                                   name="fiscal_year_start" 
+                                                   id="fiscal_year_start"
+                                                   value="{{ date('Y') }}-01-01" />
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="fv-row mb-15">
+                                            <label class="required fs-6 fw-semibold mb-2">{{ __('payments.tax_calculation_method') }}</label>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <label class="btn btn-outline btn-outline-dashed btn-active-light-primary d-flex text-start p-6">
+                                                        <input class="btn-check" type="radio" name="tax_calculation_method" value="exclusive" checked />
+                                                        <span class="d-flex">
+                                                            <span class="ms-4">
+                                                                <span class="fs-4 fw-bold text-gray-800 mb-2 d-block">{{ __('payments.exclusive') }}</span>
+                                                                <span class="fw-semibold fs-7 text-gray-600">{{ __('payments.tax_exclusive_desc') }}</span>
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="btn btn-outline btn-outline-dashed btn-active-light-primary d-flex text-start p-6">
+                                                        <input class="btn-check" type="radio" name="tax_calculation_method" value="inclusive" />
+                                                        <span class="d-flex">
+                                                            <span class="ms-4">
+                                                                <span class="fs-4 fw-bold text-gray-800 mb-2 d-block">{{ __('payments.inclusive') }}</span>
+                                                                <span class="fw-semibold fs-7 text-gray-600">{{ __('payments.tax_inclusive_desc') }}</span>
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="fv-plugins-message-container invalid-feedback"></div>
+                                        </div>
+                                        
+                                        <div class="d-flex flex-stack">
+                                            <button type="button" class="btn btn-lg btn-light me-3" id="step2_previous">
+                                                {{ __('payments.previous') }} - {{ __('payments.basic_information') }}
+                                            </button>
+                                            <button type="button" class="btn btn-lg btn-primary" id="step2_next">
+                                                <span class="indicator-label">{{ __('payments.next') }} - {{ __('payments.settings') }}</span>
+                                                <span class="indicator-progress" style="display: none;">
+                                                    {{ __('auth.please_wait') }} 
+                                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--end::Step 2-->
+
+                                <!--begin::Step 3 - Settings-->
+                                <div data-kt-stepper-element="content">
+                                    <div class="w-100">
+                                        <div class="pb-12">
+                                            <h1 class="fw-bold text-gray-900">{{ __('payments.settings') }}</h1>
+                                            <div class="text-muted fw-semibold fs-4">{{ __('payments.configure_tenant_settings') }}</div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <!-- Limits Section -->
+                                            <div class="col-md-6">
+                                                <div class="card card-flush mb-8">
+                                                    <div class="card-header">
+                                                        <h3 class="card-title">{{ __('payments.limits') }}</h3>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <!-- Max Users -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.max_users') }}</label>
+                                                            <input type="number" 
+                                                                class="form-control form-control-solid" 
+                                                                name="settings[0][value]" 
+                                                                value="10" 
+                                                                min="1" />
+                                                            <input type="hidden" name="settings[0][key]" value="max_users" />
+                                                            <input type="hidden" name="settings[0][data_type]" value="integer" />
+                                                            <input type="hidden" name="settings[0][category]" value="limits" />
+                                                        </div>
+                                                        
+                                                        <!-- Max Products -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.max_products') }}</label>
+                                                            <input type="number" 
+                                                                class="form-control form-control-solid" 
+                                                                name="settings[1][value]" 
+                                                                value="1000" 
+                                                                min="1" />
+                                                            <input type="hidden" name="settings[1][key]" value="max_products" />
+                                                            <input type="hidden" name="settings[1][data_type]" value="integer" />
+                                                            <input type="hidden" name="settings[1][category]" value="limits" />
+                                                        </div>
+                                                        
+                                                        <!-- Max Departments -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.max_departments') }}</label>
+                                                            <input type="number" 
+                                                                class="form-control form-control-solid" 
+                                                                name="settings[2][value]" 
+                                                                value="5" 
+                                                                min="1" />
+                                                            <input type="hidden" name="settings[2][key]" value="max_departments" />
+                                                            <input type="hidden" name="settings[2][data_type]" value="integer" />
+                                                            <input type="hidden" name="settings[2][category]" value="limits" />
+                                                        </div>
+                                                        
+                                                        <!-- Max Locations -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.max_locations') }}</label>
+                                                            <input type="number" 
+                                                                class="form-control form-control-solid" 
+                                                                name="settings[3][value]" 
+                                                                value="3" 
+                                                                min="1" />
+                                                            <input type="hidden" name="settings[3][key]" value="max_locations" />
+                                                            <input type="hidden" name="settings[3][data_type]" value="integer" />
+                                                            <input type="hidden" name="settings[3][category]" value="limits" />
+                                                        </div>
+                                                        
+                                                        <!-- Max Employees -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.max_employees') }}</label>
+                                                            <input type="number" 
+                                                                class="form-control form-control-solid" 
+                                                                name="settings[4][value]" 
+                                                                value="20" 
+                                                                min="1" />
+                                                            <input type="hidden" name="settings[4][key]" value="max_employees" />
+                                                            <input type="hidden" name="settings[4][data_type]" value="integer" />
+                                                            <input type="hidden" name="settings[4][category]" value="limits" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Features Section -->
+                                            <div class="col-md-6">
+                                                <div class="card card-flush mb-8">
+                                                    <div class="card-header">
+                                                        <h3 class="card-title">{{ __('payments.features') }}</h3>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <!-- Enable Inventory -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.enable_inventory') }}</label>
+                                                            <select class="form-control form-control-solid" name="settings[5][value]">
+                                                                <option value="1" selected>{{ __('payments.yes') }}</option>
+                                                                <option value="0">{{ __('payments.no') }}</option>
+                                                            </select>
+                                                            <input type="hidden" name="settings[5][key]" value="enable_inventory" />
+                                                            <input type="hidden" name="settings[5][data_type]" value="boolean" />
+                                                            <input type="hidden" name="settings[5][category]" value="features" />
+                                                        </div>
+                                                        
+                                                        <!-- Enable Multi Location -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.enable_multi_location') }}</label>
+                                                            <select class="form-control form-control-solid" name="settings[6][value]">
+                                                                <option value="1">{{ __('payments.yes') }}</option>
+                                                                <option value="0" selected>{{ __('payments.no') }}</option>
+                                                            </select>
+                                                            <input type="hidden" name="settings[6][key]" value="enable_multi_location" />
+                                                            <input type="hidden" name="settings[6][data_type]" value="boolean" />
+                                                            <input type="hidden" name="settings[6][category]" value="features" />
+                                                        </div>
+                                                        
+                                                        <!-- Enable Reports -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.enable_reports') }}</label>
+                                                            <select class="form-control form-control-solid" name="settings[7][value]">
+                                                                <option value="1" selected>{{ __('payments.yes') }}</option>
+                                                                <option value="0">{{ __('payments.no') }}</option>
+                                                            </select>
+                                                            <input type="hidden" name="settings[7][key]" value="enable_reports" />
+                                                            <input type="hidden" name="settings[7][data_type]" value="boolean" />
+                                                            <input type="hidden" name="settings[7][category]" value="features" />
+                                                        </div>
+                                                        
+                                                        <!-- Enable API -->
+                                                        <div class="fv-row mb-8">
+                                                            <label class="fs-6 fw-semibold mb-2">{{ __('payments.enable_api') }}</label>
+                                                            <select class="form-control form-control-solid" name="settings[8][value]">
+                                                                <option value="1" selected>{{ __('payments.yes') }}</option>
+                                                                <option value="0">{{ __('payments.no') }}</option>
+                                                            </select>
+                                                            <input type="hidden" name="settings[8][key]" value="enable_api" />
+                                                            <input type="hidden" name="settings[8][data_type]" value="boolean" />
+                                                            <input type="hidden" name="settings[8][category]" value="features" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Billing Section -->
+                                            <div class="col-md-12">
+                                                <div class="card card-flush mb-8">
+                                                    <div class="card-header">
+                                                        <h3 class="card-title">{{ __('payments.billing') }}</h3>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="row">
+                                                            <div class="col-md-4">
+                                                                <!-- Billing Plan -->
+                                                                <div class="fv-row mb-8">
+                                                                    <label class="fs-6 fw-semibold mb-2">{{ __('payments.billing_plan') }}</label>
+                                                                    <select class="form-control form-control-solid" name="settings[9][value]">
+                                                                        <option value="starter" selected>Starter</option>
+                                                                        <option value="professional">Professional</option>
+                                                                        <option value="enterprise">Enterprise</option>
+                                                                    </select>
+                                                                    <input type="hidden" name="settings[9][key]" value="billing_plan" />
+                                                                    <input type="hidden" name="settings[9][data_type]" value="string" />
+                                                                    <input type="hidden" name="settings[9][category]" value="billing" />
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <!-- Subscription Status -->
+                                                                <div class="fv-row mb-8">
+                                                                    <label class="fs-6 fw-semibold mb-2">{{ __('payments.subscription_status') }}</label>
+                                                                    <select class="form-control form-control-solid" name="settings[10][value]">
+                                                                        <option value="trial" selected>Trial</option>
+                                                                        <option value="active">Active</option>
+                                                                        <option value="suspended">Suspended</option>
+                                                                    </select>
+                                                                    <input type="hidden" name="settings[10][key]" value="subscription_status" />
+                                                                    <input type="hidden" name="settings[10][data_type]" value="string" />
+                                                                    <input type="hidden" name="settings[10][category]" value="billing" />
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                <!-- Trial Ends At -->
+                                                                <div class="fv-row mb-8">
+                                                                    <label class="fs-6 fw-semibold mb-2">{{ __('payments.trial_ends_at') }}</label>
+                                                                    <input type="date" 
+                                                                        class="form-control form-control-solid" 
+                                                                        name="settings[11][value]" 
+                                                                        value="{{ now()->addDays(14)->format('Y-m-d') }}" />
+                                                                    <input type="hidden" name="settings[11][key]" value="trial_ends_at" />
+                                                                    <input type="hidden" name="settings[11][data_type]" value="string" />
+                                                                    <input type="hidden" name="settings[11][category]" value="billing" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="d-flex flex-stack mt-15">
+                                            <button type="button" class="btn btn-lg btn-light me-3" id="step3_previous">
+                                                {{ __('payments.previous') }} - {{ __('payments.configuration') }}
+                                            </button>
+                                            <button type="button" class="btn btn-lg btn-primary" id="step3_submit">
+                                                <span class="indicator-label">{{ __('payments.create_tenant') }}</span>
+                                                <span class="indicator-progress" style="display: none;">
+                                                    {{ __('auth.please_wait') }} 
+                                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--end::Step 3-->
+
+                                <!--begin::Step 4 - Completed-->
+                                <div data-kt-stepper-element="content">
+                                    <div class="w-100">
+                                        <div class="pb-12 text-center">
+                                            <h1 class="fw-bold text-gray-900">{{ __('payments.tenant_created') }}</h1>
+                                            <div class="text-muted fw-semibold fs-4">{{ __('payments.tenant_created_success') }}</div>
+                                        </div>
+                                        
+                                        <div class="d-flex flex-center pb-20">
+                                            <a href="{{ route('tenant.create') }}" class="btn btn-lg btn-light me-3">
+                                                {{ __('payments.create_new_tenant') }}
+                                            </a>
+                                            <a href="{{ route('tenant.index') }}" class="btn btn-lg btn-primary">
+                                                {{ __('payments.view_tenants') }}
+                                            </a>
+                                        </div>
+                                        
+                                        <div class="text-center px-4">
+                                            <img src="{{ asset('assets/media/illustrations/sketchy-1/9.png') }}" alt="" class="mw-100 mh-350px" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <!--end::Step 4-->
+                            </form>
+                            <!--end::Form-->
+                        </div>
+                        <!--end::Container-->
+                    </div>
+                    <!--end::Stepper-->
+                </div>
+            </div>
+        </div>
+    </div>
+ 
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        "use strict";
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const form = document.querySelector('#kt_tenant_create_form');
+            const stepperElement = document.querySelector('#kt_tenant_create_stepper');
+            
+            // Buttons
+            const step1Next = document.querySelector('#step1_next');
+            const step2Previous = document.querySelector('#step2_previous');
+            const step2Next = document.querySelector('#step2_next');
+            const step3Previous = document.querySelector('#step3_previous');
+            const step3Submit = document.querySelector('#step3_submit');
+            
+            // Content sections
+            const stepContents = document.querySelectorAll('[data-kt-stepper-element="content"]');
+            const stepNavs = document.querySelectorAll('[data-kt-stepper-element="nav"]');
+            
+            let tenantId = null;
+            let currentStep = 0;
+
+            // Check for existing tenant session
+            function checkExistingSession() {
+                fetch('{{ route("tenant.current-step") }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.has_session) {
+                            tenantId = data.tenant_id;
+                            
+                            // Show resume dialog
+                            Swal.fire({
+                                title: 'Resume Tenant Creation?',
+                                text: 'You have an incomplete tenant creation. Would you like to continue?',
+                                icon: 'question',
+                                showCancelButton: true,
+                                confirmButtonText: 'Yes, continue',
+                                cancelButtonText: 'No, start over',
+                                buttonsStyling: false,
+                                customClass: {
+                                    confirmButton: 'btn btn-primary',
+                                    cancelButton: 'btn btn-light'
+                                }
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    // Resume from where they left off
+                                    if (data.step > 1) {
+                                        // Pre-fill step 1 data
+                                        if (data.data && data.data.tenant) {
+                                            form.querySelector('[name="name"]').value = data.data.tenant.name || '';
+                                            form.querySelector('[name="subdomain"]').value = data.data.tenant.subdomain || '';
+                                            form.querySelector('[name="status"]').value = data.data.tenant.status || 'trial';
+                                        }
+                                        
+                                        // Pre-fill step 2 data if available
+                                        if (data.data && data.data.configuration) {
+                                            form.querySelector('[name="currency_code"]').value = data.data.configuration.currency_code || 'USD';
+                                            form.querySelector('[name="timezone"]').value = data.data.configuration.timezone || 'Africa/Kampala';
+                                            form.querySelector('[name="locale"]').value = data.data.configuration.locale || 'en';
+                                            form.querySelector('[name="fiscal_year_start"]').value = data.data.configuration.fiscal_year_start || '{{ date("Y") }}-01-01';
+                                            
+                                            const taxMethod = data.data.configuration.tax_calculation_method;
+                                            if (taxMethod) {
+                                                const radio = form.querySelector(`[name="tax_calculation_method"][value="${taxMethod}"]`);
+                                                if (radio) radio.checked = true;
+                                            }
+                                        }
+                                        
+                                        // Go to the appropriate step
+                                        window.tenantStepper.goTo(data.step - 1);
+                                    }
+                                } else {
+                                    // Start over - reset session
+                                    fetch('{{ route("tenant.reset-step") }}', {
+                                        method: 'POST',
+                                        headers: {
+                                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking session:', error);
+                    });
+            }
+
+            
+            // Initialize - show only first step
+            function showStep(stepIndex) {
+                // Hide all content sections
+                stepContents.forEach((content, index) => {
+                    if (index === stepIndex) {
+                        content.classList.add('current');
+                        content.style.display = 'block';
+                    } else {
+                        content.classList.remove('current');
+                        content.style.display = 'none';
+                    }
+                });
+                
+                // Update nav items
+                stepNavs.forEach((nav, index) => {
+                    if (index === stepIndex) {
+                        nav.classList.add('current');
+                    } else {
+                        nav.classList.remove('current');
+                    }
+                });
+                
+                currentStep = stepIndex;
+            }
+            
+            // Initialize KTStepper but we'll control it manually
+            if (typeof KTStepper !== 'undefined') {
+                const stepper = new KTStepper(stepperElement);
+                
+                // Override KTStepper methods to use our showStep
+                stepper.goNext = function() {
+                    if (currentStep < stepContents.length - 1) {
+                        showStep(currentStep + 1);
+                    }
+                };
+                
+                stepper.goPrevious = function() {
+                    if (currentStep > 0) {
+                        showStep(currentStep - 1);
+                    }
+                };
+                
+                stepper.goTo = function(index) {
+                    if (index >= 0 && index < stepContents.length) {
+                        showStep(index);
+                    }
+                };
+                
+                // Store stepper in a variable we can use
+                window.tenantStepper = stepper;
+            } else {
+                console.error('KTStepper not found');
+                return;
+            }
+            
+            // Show first step initially
+            showStep(0);
+            
+            // Step 1 Next
+            step1Next.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Show loading
+                step1Next.querySelector('.indicator-label').style.display = 'none';
+                step1Next.querySelector('.indicator-progress').style.display = 'inline-block';
+                step1Next.disabled = true;
+                
+                // Submit step 1
+                const formData = new FormData();
+                formData.append('name', form.querySelector('[name="name"]').value);
+                formData.append('subdomain', form.querySelector('[name="subdomain"]').value);
+                formData.append('status', form.querySelector('[name="status"]').value);
+                formData.append('_token', '{{ csrf_token() }}');
+                
+                fetch('{{ route("tenant.step1") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        tenantId = data.tenant_id;
+                        window.tenantStepper.goNext();
+                    } else {
+                        Swal.fire({
+                            text: data.message || 'Validation failed',
+                            icon: 'error',
+                            buttonsStyling: false,
+                            confirmButtonText: 'OK',
+                            customClass: { confirmButton: 'btn btn-danger' }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        text: 'An error occurred',
+                        icon: 'error',
+                        buttonsStyling: false,
+                        confirmButtonText: 'OK',
+                        customClass: { confirmButton: 'btn btn-danger' }
+                    });
+                })
+                .finally(() => {
+                    step1Next.querySelector('.indicator-label').style.display = 'inline-block';
+                    step1Next.querySelector('.indicator-progress').style.display = 'none';
+                    step1Next.disabled = false;
+                });
+            });
+            
+            // Step 2 Previous
+            step2Previous.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.tenantStepper.goPrevious();
+            });
+            
+            // Step 2 Next
+            step2Next.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Show loading
+                step2Next.querySelector('.indicator-label').style.display = 'none';
+                step2Next.querySelector('.indicator-progress').style.display = 'inline-block';
+                step2Next.disabled = true;
+                
+                // Submit step 2
+                const formData = new FormData();
+                formData.append('currency_code', form.querySelector('[name="currency_code"]').value);
+                formData.append('timezone', form.querySelector('[name="timezone"]').value);
+                formData.append('locale', form.querySelector('[name="locale"]').value);
+                formData.append('fiscal_year_start', form.querySelector('[name="fiscal_year_start"]').value);
+                formData.append('tax_calculation_method', form.querySelector('[name="tax_calculation_method"]:checked')?.value || 'exclusive');
+                formData.append('_token', '{{ csrf_token() }}');
+                
+                fetch('{{ route("tenant.step2") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.tenantStepper.goNext();
+                    } else {
+                        Swal.fire({
+                            text: data.message || 'Validation failed',
+                            icon: 'error',
+                            buttonsStyling: false,
+                            confirmButtonText: 'OK',
+                            customClass: { confirmButton: 'btn btn-danger' }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        text: 'An error occurred',
+                        icon: 'error',
+                        buttonsStyling: false,
+                        confirmButtonText: 'OK',
+                        customClass: { confirmButton: 'btn btn-danger' }
+                    });
+                })
+                .finally(() => {
+                    step2Next.querySelector('.indicator-label').style.display = 'inline-block';
+                    step2Next.querySelector('.indicator-progress').style.display = 'none';
+                    step2Next.disabled = false;
+                });
+            });
+            
+            
+            // Step 3 Previous
+            step3Previous.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.tenantStepper.goPrevious();
+            });
+            
+            // Step 3 Submit
+            step3Submit.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Collect settings
+                const settings = [];
+                const settingInputs = form.querySelectorAll('[name^="settings["]');
+                const settingsData = {};
+                
+                for (let i = 0; i < settingInputs.length; i++) {
+                    const input = settingInputs[i];
+                    const name = input.getAttribute('name');
+                    
+                    if (name.match(/settings\[\d+\]\[value\]/)) {
+                        const index = name.match(/\d+/)[0];
+                        if (!settingsData[index]) settingsData[index] = {};
+                        settingsData[index].value = input.value;
+                    }
+                    
+                    if (name.match(/settings\[\d+\]\[key\]/)) {
+                        const index = name.match(/\d+/)[0];
+                        if (!settingsData[index]) settingsData[index] = {};
+                        settingsData[index].key = input.value;
+                    }
+                    
+                    if (name.match(/settings\[\d+\]\[data_type\]/)) {
+                        const index = name.match(/\d+/)[0];
+                        if (!settingsData[index]) settingsData[index] = {};
+                        settingsData[index].data_type = input.value;
+                    }
+                    
+                    if (name.match(/settings\[\d+\]\[category\]/)) {
+                        const index = name.match(/\d+/)[0];
+                        if (!settingsData[index]) settingsData[index] = {};
+                        settingsData[index].category = input.value;
+                    }
+                }
+                
+                // Convert to array
+                for (let key in settingsData) {
+                    settings.push(settingsData[key]);
+                }
+                
+                // Show loading
+                step3Submit.querySelector('.indicator-label').style.display = 'none';
+                step3Submit.querySelector('.indicator-progress').style.display = 'inline-block';
+                step3Submit.disabled = true;
+                
+                // Submit step 3
+                fetch('{{ route("tenant.step3") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ settings: settings })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.tenantStepper.goNext();
+                        if (data.redirect) {
+                            setTimeout(() => {
+                                window.location.href = data.redirect;
+                            }, 3000);
+                        }
+                    } else {
+                        Swal.fire({
+                            text: data.message || 'Failed to save settings',
+                            icon: 'error',
+                            buttonsStyling: false,
+                            confirmButtonText: 'OK',
+                            customClass: { confirmButton: 'btn btn-danger' }
+                        });
+                        
+                        step3Submit.querySelector('.indicator-label').style.display = 'inline-block';
+                        step3Submit.querySelector('.indicator-progress').style.display = 'none';
+                        step3Submit.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        text: 'An error occurred',
+                        icon: 'error',
+                        buttonsStyling: false,
+                        confirmButtonText: 'OK',
+                        customClass: { confirmButton: 'btn btn-danger' }
+                    });
+                    
+                    step3Submit.querySelector('.indicator-label').style.display = 'inline-block';
+                    step3Submit.querySelector('.indicator-progress').style.display = 'none';
+                    step3Submit.disabled = false;
+                });
+            });
+        });
+        
+        checkExistingSession();
+    </script>
+    @endpush
+    @endsection
+</x-app-layout>

@@ -10,7 +10,6 @@ class TenantConfiguration extends Model
     use HasFactory;
 
     protected $primaryKey = 'config_id';
-    public $timestamps = false;
 
     protected $fillable = [
         'tenant_id',

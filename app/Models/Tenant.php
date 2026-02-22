@@ -26,7 +26,13 @@ class Tenant extends Model
     public function usageTracking()
     {
         return $this->hasMany(TenantUsageTracking::class, 'tenant_id');
-    }    
+    }  
+
+    public function adminUsers()
+    {
+        return $this->hasMany(User::class, 'tenant_id')
+                    ->where('role_id', 1); // Assuming role_id 1 = admin
+    }  
     
     public function settings()
     {
@@ -43,5 +49,15 @@ class Tenant extends Model
     {
         return $this->hasOne(TenantUsageTracking::class, 'tenant_id')
                     ->latest('tracking_date');
+    }
+
+    public function currencies()
+    {
+        return $this->hasMany(Currency::class, 'tenant_id');
+    }
+
+    public function baseCurrency()
+    {
+        return $this->hasOne(Currency::class, 'tenant_id')->where('is_base_currency', 1);
     }
 }

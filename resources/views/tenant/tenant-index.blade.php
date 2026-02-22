@@ -32,10 +32,9 @@
                         onkeyup="searchTable(this.value, 'kt_table_users')">
                 </div>
                 @can('create promotion')
-                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_tenant">
-                    <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_tenant')}}</button>
+                    <a href="{{ route('tenant.create') }}"  class="btn btn-sm btn-primary">
+                    <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_tenant')}}</a>
                 @endcan  
-                @include('tenant.partials.create') 
             </div>
         </div>
     </div>

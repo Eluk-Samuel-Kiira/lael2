@@ -101,7 +101,7 @@
                                             <div class="modal-header">
                                                 <h5 class="modal-title">
                                                     <i class="bi bi-diagram-3 me-2"></i>
-                                                    {{ __('Departments in') }} {{ $location->name }}
+                                                    {{ __('payments.dept_in') }} {{ $location->name }}
                                                 </h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>

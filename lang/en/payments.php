@@ -233,6 +233,96 @@ return [
     'about_to_delete' => 'You are about to delete:',
     'created' => 'Created',
 
-    // Common
     'close' => 'Close',
+    'locale' => 'Locale',
+    'dept_in' => 'Departments in',
+
+    
+    // Tenant Creation
+    'new_tenant' => 'New Tenant',
+    'basic_information' => 'Basic Information',
+    'configuration' => 'Configuration',
+    'settings' => 'Settings',
+    'completed' => 'Completed',
+    'enter_basic_tenant_info' => 'Enter basic tenant information',
+    'enter_configuration_details' => 'Enter configuration details',
+    'configure_tenant_settings' => 'Configure tenant settings',
+    'tenant_created' => 'Tenant Created!',
+    'tenant_created_success' => 'Your tenant has been created successfully.',
+    'create_new_tenant' => 'Create New Tenant',
+    'view_tenants' => 'View Tenants',
+    
+    // Form Fields
+    'tenant_name' => 'Tenant Name',
+    'enter_tenant_name' => 'Enter tenant name',
+    'subdomain' => 'Subdomain',
+    'enter_subdomain' => 'Enter subdomain',
+    'status' => 'Status',
+    'active' => 'Active',
+    'trial' => 'Trial',
+    'suspended' => 'Suspended',
+    'currency_code' => 'Currency Code',
+    'timezone' => 'Timezone',
+    'locale' => 'Locale',
+    'fiscal_year_start' => 'Fiscal Year Start',
+    'tax_calculation_method' => 'Tax Calculation Method',
+    'exclusive' => 'Exclusive',
+    'inclusive' => 'Inclusive',
+    'tax_exclusive_desc' => 'Tax is added to the price',
+    'tax_inclusive_desc' => 'Tax is included in the price',
+    
+    // Settings Categories
+    'limits' => 'Limits',
+    'features' => 'Features',
+    'billing' => 'Billing',
+    
+    // Settings Keys
+    'max_users' => 'Max Users',
+    'max_products' => 'Max Products',
+    'max_departments' => 'Max Departments',
+    'enable_inventory' => 'Enable Inventory',
+    'enable_multi_location' => 'Enable Multi-Location',
+    'billing_plan' => 'Billing Plan',
+    'subscription_status' => 'Subscription Status',
+    
+    // Navigation
+    'next' => 'Next',
+    'previous' => 'Previous',
+    'create_tenant' => 'Create Tenant',
+    
+    // Validation
+    'form_errors' => 'Please fix the errors in the form',
+    // Admin Users related strings
+    'admin_users' => 'Admin Users',
+    'admins' => 'Admins',
+    'total_admins' => 'Total Admins',
+    'active_admins' => 'Active Admins',
+    'super_admins' => 'Super Admins',
+    'profile' => 'Profile',
+    'name' => 'Name',
+    'email' => 'Email',
+    'contact' => 'Contact',
+    'job_title' => 'Job Title',
+    'last_active' => 'Last Active',
+    'never' => 'Never',
+    'no_admin_users' => 'No admin users found for this tenant.',
+    'add_admin' => 'Add Admin',
+    'pending' => 'Pending',
+    'inactive' => 'Inactive',
+
+    // Add Admin related strings
+    'first_name' => 'First Name',
+    'last_name' => 'Last Name',
+    'telephone' => 'Telephone Number',
+    'password' => 'Password',
+    'confirm_password' => 'Confirm Password',
+    'department' => 'Department',
+    'location' => 'Location',
+    'select_department' => 'Select Department',
+    'select_location' => 'Select Location',
+    'create_admin' => 'Create Admin',
+    'add_admin' => 'Add Admin',
+    'pending' => 'Pending',
+    'select_currency' => 'Select a currency',
+    'base_currency_created' => 'Base currency created successfully',
 ];
