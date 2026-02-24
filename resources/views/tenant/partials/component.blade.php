@@ -38,8 +38,7 @@
                             </td>
                             <td>{{ $tenant->created_at->format('d M Y, h:i a') }}</td>
                             <td>
-                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateStatusTenant({{ $tenant->id }}, this.value)"
-                                @cannot('update uom') disabled @endcannot>
+                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateStatusTenant({{ $tenant->id }}, this.value)" disabled>
                                     <option value="active" {{ $tenant->status == 'active' ? 'selected' : '' }}>{{__('payments.active')}}</option>
                                     <option value="suspended" {{ $tenant->status == 'suspended' ? 'selected' : '' }}>{{__('payments.suspended')}}</option>
                                     <option value="trial" {{ $tenant->status == 'trial' ? 'selected' : '' }}>{{__('payments.trial')}}</option>
@@ -55,6 +54,14 @@
                                             data-bs-target="#adminUsersTenant{{$tenant->id}}"
                                             title="{{ __('payments.admin_users') }}">
                                             <i class="bi bi-people-fill me-1 fs-5"></i> <span>{{ __('payments.admins') }}</span>
+                                        </button>
+
+                                        <!-- Edit Tenant Button -->
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-warning d-flex align-items-center px-3 py-2" 
+                                            onclick="window.location.href='{{ route('tenant.edit', $tenant->id) }}'"
+                                            title="{{ __('auth._edit') }}">
+                                            <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                         </button>
 
                                         <!-- Configuration Button -->

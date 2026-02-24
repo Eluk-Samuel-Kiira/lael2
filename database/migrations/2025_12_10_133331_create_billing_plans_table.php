@@ -24,6 +24,7 @@ return new class extends Migration
             
             // Limits
             $table->integer('default_shops')->default(1);
+            $table->integer('default_payment_methods')->default(1);
             $table->integer('default_locations')->default(1);
             $table->integer('default_departments')->default(3);
             $table->integer('default_users')->default(1);
@@ -31,19 +32,62 @@ return new class extends Migration
             $table->integer('default_customers')->default(100);
             $table->integer('default_suppliers')->default(50);
             $table->integer('default_storage_gb')->default(1);
+            $table->integer('default_rooms')->default(0); // For hotel
+            $table->integer('default_events')->default(0); // For events
             
-            // Features (booleans)
+            // RETAIL/POS FEATURES (Current)
             $table->boolean('includes_inventory')->default(false);
+            $table->boolean('includes_expenses')->default(false);
             $table->boolean('includes_accounting')->default(false);
             $table->boolean('includes_hr_payroll')->default(false);
             $table->boolean('includes_multicurrency')->default(false);
             $table->boolean('includes_advanced_reports')->default(false);
+            $table->boolean('includes_financial_reports')->default(false);
             $table->boolean('includes_api_access')->default(false);
             $table->boolean('includes_ecommerce')->default(false);
             $table->boolean('includes_pos')->default(false);
             $table->boolean('includes_crm')->default(false);
             $table->boolean('includes_support_priority')->default(false);
             $table->boolean('includes_custom_branding')->default(false);
+            
+            // FRONT DESK / RECEPTION MODULES (Future Hotel)
+            $table->boolean('includes_front_desk')->default(false);
+            $table->boolean('includes_housekeeping')->default(false);
+            $table->boolean('includes_room_management')->default(false);
+            $table->boolean('includes_reservations')->default(false);
+            $table->boolean('includes_guest_management')->default(false);
+            $table->boolean('includes_group_booking')->default(false);
+            $table->boolean('includes_travel_agent')->default(false);
+            $table->boolean('includes_night_audit')->default(false);
+            $table->boolean('includes_guest_history')->default(false);
+            $table->boolean('includes_lost_found')->default(false);
+            $table->boolean('includes_guest_services')->default(false);
+            $table->boolean('includes_phone_book')->default(false);
+            $table->boolean('includes_guest_preferences')->default(false);
+            
+            // EVENTS & BANQUETING MODULES (Future Hotel)
+            $table->boolean('includes_events_banqueting')->default(false);
+            $table->boolean('includes_event_booking')->default(false);
+            $table->boolean('includes_function_sheets')->default(false);
+            $table->boolean('includes_outside_catering')->default(false);
+            $table->boolean('includes_venue_management')->default(false);
+            $table->boolean('includes_equipment_management')->default(false);
+            
+            // ASSETS MANAGEMENT MODULES
+            $table->boolean('includes_asset_management')->default(false);
+            $table->boolean('includes_asset_register')->default(false);
+            
+            // MAINTENANCE & REPAIRS MODULES
+            $table->boolean('includes_maintenance_management')->default(false);
+            $table->boolean('includes_repair_jobs')->default(false);
+            $table->boolean('includes_maintenance_schedules')->default(false);
+            
+            // ADDITIONAL HOTEL FEATURES
+            $table->boolean('includes_laundry_management')->default(false);
+            $table->boolean('includes_restaurant_management')->default(false);
+            $table->boolean('includes_hotel_management')->default(false);
+            $table->boolean('includes_booking_engine')->default(false);
+            $table->boolean('includes_channel_manager')->default(false);
             
             // Trial & Billing
             $table->integer('trial_days')->default(14);
