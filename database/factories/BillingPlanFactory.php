@@ -12,264 +12,475 @@ class BillingPlanFactory extends Factory
 
     public function definition()
     {
-        $planTypes = ['starter', 'professional', 'enterprise', 'custom', 'onetime'];
-        $planType = $this->faker->randomElement($planTypes);
-        
-        $monthlyPrice = $planType === 'onetime' ? 0 : $this->faker->randomFloat(2, 9, 299);
-        $annualPrice = $planType === 'onetime' ? 0 : $monthlyPrice * 12 * 0.8; // 20% discount for annual
-        
         return [
-            'plan_code' => $planType . '_' . $this->faker->unique()->word(),
-            'plan_name' => ucfirst($planType) . ' Plan',
-            'description' => $this->faker->paragraph(),
-            'monthly_price' => $monthlyPrice,
-            'annual_price' => $annualPrice,
-            'onetime_fee' => $planType === 'onetime' ? $this->faker->randomFloat(2, 99, 999) : 0,
-            'setup_fee' => $this->faker->randomFloat(2, 0, 199),
+            'plan_code' => $this->faker->unique()->word(),
+            'plan_name' => $this->faker->words(2, true),
+            'description' => $this->faker->sentence(),
+            'monthly_price' => 0,
+            'annual_price' => 0,
+            'onetime_fee' => 0,
+            'setup_fee' => 0,
             'currency' => 'USD',
-            'default_shops' => $this->faker->numberBetween(1, 10),
-            'default_locations' => $this->faker->numberBetween(1, 5),
-            'default_departments' => $this->faker->numberBetween(3, 20),
-            'default_users' => $this->faker->numberBetween(1, 50),
-            'default_products' => $this->faker->numberBetween(100, 10000),
-            'default_customers' => $this->faker->numberBetween(100, 5000),
-            'default_suppliers' => $this->faker->numberBetween(50, 1000),
-            'default_storage_gb' => $this->faker->numberBetween(1, 100),
-            'includes_inventory' => $planType !== 'starter',
-            'includes_accounting' => $planType !== 'starter',
-            'includes_hr_payroll' => $planType === 'enterprise',
-            'includes_multicurrency' => $planType === 'enterprise',
-            'includes_advanced_reports' => $planType !== 'starter',
-            'includes_api_access' => $planType !== 'starter',
-            'includes_ecommerce' => $planType === 'enterprise' || $planType === 'professional',
-            'includes_pos' => $planType === 'enterprise' || $planType === 'professional',
-            'includes_crm' => $planType === 'enterprise',
-            'includes_support_priority' => $planType === 'enterprise',
-            'includes_custom_branding' => $planType === 'enterprise',
-            'trial_days' => $this->faker->numberBetween(0, 30),
+            'default_shops' => 1,
+            'default_payment_methods' => 1,
+            'default_locations' => 1,
+            'default_departments' => 3,
+            'default_users' => 1,
+            'default_products' => 100,
+            'default_customers' => 100,
+            'default_suppliers' => 50,
+            'default_storage_gb' => 1,
+            
+            // Retail/POS Modules (Current)
+            'includes_inventory' => false,
+            'includes_expenses' => false,
+            'includes_accounting' => false,
+            'includes_hr_payroll' => false,
+            'includes_multicurrency' => false,
+            'includes_advanced_reports' => false,
+            'includes_financial_reports' => true,
+            'includes_api_access' => false,
+            'includes_ecommerce' => false,
+            'includes_pos' => false,
+            'includes_crm' => false,
+            'includes_support_priority' => false,
+            'includes_custom_branding' => false,
+            
+            // ALL HOTEL MODULES SET TO FALSE (Future Features)
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            'includes_phone_book' => false,
+            'includes_guest_preferences' => false,
+            
+            'trial_days' => 14,
             'billing_cycle_days' => 30,
-            'is_public' => $this->faker->boolean(80),
-            'is_active' => $this->faker->boolean(90),
-            'sort_order' => $this->faker->numberBetween(1, 100),
-            'features_list' => json_encode($this->generateFeatures($planType)),
-            'limitations' => json_encode($this->generateLimitations($planType)),
+            'is_public' => true,
+            'is_active' => true,
+            'sort_order' => 0,
         ];
     }
 
-    public function active()
-    {
-        return $this->state(function (array $attributes) {
-            return [
-                'is_active' => true,
-                'is_public' => true,
-            ];
-        });
-    }
-
+    // ==================== FREE PLAN ====================
     public function free()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'plan_code' => 'free',
-                'plan_name' => 'Free Plan',
-                'monthly_price' => 0,
-                'annual_price' => 0,
-                'onetime_fee' => 0,
-                'setup_fee' => 0,
-                'default_users' => 1,
-                'default_products' => 50,
-                'default_storage_gb' => 0.5,
-                'trial_days' => 0,
-                'is_public' => true,
-                'is_active' => true,
-            ];
-        });
+        return $this->state([
+            'plan_code' => 'free',
+            'plan_name' => 'Free Trial',
+            'description' => '2 months free trial with basic retail features',
+            'trial_days' => 60,
+            'default_shops' => 1,
+            'default_payment_methods' => 1,
+            'default_locations' => 1,
+            'default_departments' => 3,
+            'default_users' => 2,
+            'default_products' => 100,
+            'default_customers' => 100,
+            'default_suppliers' => 20,
+            'default_storage_gb' => 1,
+            
+            // Retail Features
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => false,
+            'includes_hr_payroll' => false,
+            'includes_multicurrency' => false,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => false,
+            'includes_api_access' => false,
+            'includes_ecommerce' => false,
+            'includes_crm' => false,
+            
+            // Hotel Features - All False
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            
+            'sort_order' => 1,
+        ]);
     }
 
+    // ==================== STARTER PLAN ====================
     public function starter()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'plan_code' => 'starter',
-                'plan_name' => 'Starter Plan',
-                'monthly_price' => 19.99,
-                'annual_price' => 199.99,
-                'onetime_fee' => 0,
-                'setup_fee' => 49.99,
-                'default_users' => 3,
-                'default_products' => 500,
-                'default_storage_gb' => 5,
-                'includes_inventory' => true,
-                'includes_accounting' => true,
-                'includes_advanced_reports' => true,
-                'is_public' => true,
-                'is_active' => true,
-                'sort_order' => 1,
-            ];
-        });
+        return $this->state([
+            'plan_code' => 'starter',
+            'plan_name' => 'Starter Plan',
+            'description' => 'Essential features for small retail businesses',
+            'monthly_price' => 29.99,
+            'annual_price' => 299.99,
+            'default_shops' => 1,
+            'default_locations' => 1,
+            'default_payment_methods' => 1,
+            'default_departments' => 3,
+            'default_users' => 2,
+            'default_products' => 500,
+            'default_customers' => 500,
+            'default_suppliers' => 50,
+            'default_storage_gb' => 5,
+            
+            // Retail Features
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => false,
+            'includes_hr_payroll' => false,
+            'includes_multicurrency' => false,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => false,
+            'includes_api_access' => false,
+            'includes_ecommerce' => false,
+            'includes_crm' => false,
+            
+            // Hotel Features - All False
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            
+            'sort_order' => 2,
+        ]);
     }
 
-    public function professional()
+    // ==================== BUSINESS PLAN ====================
+    public function business()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'plan_code' => 'professional',
-                'plan_name' => 'Professional Plan',
-                'monthly_price' => 49.99,
-                'annual_price' => 499.99,
-                'onetime_fee' => 0,
-                'setup_fee' => 99.99,
-                'default_users' => 10,
-                'default_products' => 5000,
-                'default_storage_gb' => 25,
-                'includes_inventory' => true,
-                'includes_accounting' => true,
-                'includes_advanced_reports' => true,
-                'includes_api_access' => true,
-                'includes_ecommerce' => true,
-                'includes_pos' => true,
-                'is_public' => true,
-                'is_active' => true,
-                'sort_order' => 2,
-            ];
-        });
+        return $this->state([
+            'plan_code' => 'business',
+            'plan_name' => 'Business Plan',
+            'description' => 'Advanced features for growing retail businesses',
+            'monthly_price' => 79.99,
+            'annual_price' => 799.99,
+            'default_shops' => 3,
+            'default_locations' => 3,
+            'default_payment_methods' => 3,
+            'default_departments' => 10,
+            'default_users' => 10,
+            'default_products' => 5000,
+            'default_customers' => 5000,
+            'default_suppliers' => 200,
+            'default_storage_gb' => 25,
+            
+            // Retail Features - All True
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => true,
+            'includes_hr_payroll' => true,
+            'includes_multicurrency' => true,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => true,
+            'includes_api_access' => true,
+            'includes_ecommerce' => true,
+            'includes_crm' => true,
+            'includes_support_priority' => true,
+            
+            // Hotel Features - Still False (Future)
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            
+            'sort_order' => 3,
+        ]);
     }
 
+    // ==================== ENTERPRISE PLAN ====================
     public function enterprise()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'plan_code' => 'enterprise',
-                'plan_name' => 'Enterprise Plan',
-                'monthly_price' => 199.99,
-                'annual_price' => 1999.99,
-                'onetime_fee' => 0,
-                'setup_fee' => 299.99,
-                'default_users' => 50,
-                'default_products' => 50000,
-                'default_storage_gb' => 100,
-                'includes_inventory' => true,
-                'includes_accounting' => true,
-                'includes_hr_payroll' => true,
-                'includes_multicurrency' => true,
-                'includes_advanced_reports' => true,
-                'includes_api_access' => true,
-                'includes_ecommerce' => true,
-                'includes_pos' => true,
-                'includes_crm' => true,
-                'includes_support_priority' => true,
-                'includes_custom_branding' => true,
-                'is_public' => true,
-                'is_active' => true,
-                'sort_order' => 3,
-            ];
-        });
+        return $this->state([
+            'plan_code' => 'enterprise',
+            'plan_name' => 'Enterprise Plan',
+            'description' => 'Full access to all retail features + Hotel modules (optional)',
+            'monthly_price' => 199.99,
+            'annual_price' => 1999.99,
+            'default_shops' => 999999,
+            'default_locations' => 999999,
+            'default_payment_methods' => 999999,
+            'default_departments' => 999999,
+            'default_users' => 999999,
+            'default_products' => 999999,
+            'default_customers' => 999999,
+            'default_suppliers' => 999999,
+            'default_storage_gb' => 999999,
+            
+            // Retail Features - All True
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => true,
+            'includes_hr_payroll' => true,
+            'includes_multicurrency' => true,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => true,
+            'includes_api_access' => true,
+            'includes_ecommerce' => true,
+            'includes_crm' => true,
+            'includes_support_priority' => true,
+            'includes_custom_branding' => true,
+            
+            // Hotel Features - Optional (Can be enabled later)
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            
+            'sort_order' => 4,
+        ]);
     }
 
-    public function onetime()
+    // ==================== LIFETIME PLAN ====================
+    public function lifetime()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'plan_code' => 'onetime_' . $this->faker->unique()->word(),
-                'plan_name' => 'One-Time Purchase',
-                'monthly_price' => 0,
-                'annual_price' => 0,
-                'onetime_fee' => $this->faker->randomFloat(2, 299, 2999),
-                'setup_fee' => 0,
-                'default_users' => 5,
-                'default_products' => 1000,
-                'default_storage_gb' => 10,
-                'includes_inventory' => true,
-                'includes_accounting' => true,
-                'trial_days' => 0,
-                'billing_cycle_days' => 0,
-                'is_public' => true,
-                'is_active' => true,
-                'sort_order' => 4,
-            ];
-        });
+        return $this->state([
+            'plan_code' => 'onetime_lifetime',
+            'plan_name' => 'Lifetime License',
+            'description' => 'One-time payment for lifetime access to all features',
+            'onetime_fee' => 999.99,
+            'setup_fee' => 0,
+            'default_shops' => 999999,
+            'default_locations' => 999999,
+            'default_payment_methods' => 999999,
+            'default_departments' => 999999,
+            'default_users' => 999999,
+            'default_products' => 999999,
+            'default_customers' => 999999,
+            'default_suppliers' => 999999,
+            'default_storage_gb' => 999999,
+            
+            // Retail Features - All True
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => true,
+            'includes_hr_payroll' => true,
+            'includes_multicurrency' => true,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => true,
+            'includes_api_access' => true,
+            'includes_ecommerce' => true,
+            'includes_crm' => true,
+            'includes_support_priority' => true,
+            'includes_custom_branding' => true,
+            
+            // Hotel Features - Still False (Future)
+            'includes_front_desk' => false,
+            'includes_housekeeping' => false,
+            'includes_room_management' => false,
+            'includes_reservations' => false,
+            'includes_guest_management' => false,
+            'includes_group_booking' => false,
+            'includes_travel_agent' => false,
+            'includes_night_audit' => false,
+            'includes_guest_history' => false,
+            'includes_lost_found' => false,
+            'includes_guest_services' => false,
+            'includes_events_banqueting' => false,
+            'includes_event_booking' => false,
+            'includes_function_sheets' => false,
+            'includes_outside_catering' => false,
+            'includes_venue_management' => false,
+            'includes_equipment_management' => false,
+            'includes_asset_management' => false,
+            'includes_asset_register' => false,
+            'includes_maintenance_management' => false,
+            'includes_repair_jobs' => false,
+            'includes_maintenance_schedules' => false,
+            'includes_laundry_management' => false,
+            'includes_restaurant_management' => false,
+            'includes_hotel_management' => false,
+            'includes_booking_engine' => false,
+            'includes_channel_manager' => false,
+            
+            'trial_days' => 0,
+            'sort_order' => 5,
+        ]);
     }
 
-    private function generateFeatures(string $planType): array
+    // ==================== FUTURE HOTEL PLAN ====================
+    // When ready to launch hotel, you can add this method
+    public function hotelEnterprise()
     {
-        $features = [
-            'Basic Inventory Tracking',
-            'Sales & Purchase Management',
-            'Customer & Supplier Management',
-            'Basic Reports',
-            'Email Support',
-        ];
-
-        if ($planType !== 'starter') {
-            $features = array_merge($features, [
-                'Advanced Reporting',
-                'API Access',
-                'Custom Fields',
-                'Bulk Operations',
-                'Priority Email Support',
-            ]);
-        }
-
-        if ($planType === 'enterprise') {
-            $features = array_merge($features, [
-                'Multi-currency Support',
-                'HR & Payroll Integration',
-                'CRM Integration',
-                'Custom Branding',
-                'Dedicated Support',
-                'Custom Development',
-                'Training Sessions',
-            ]);
-        }
-
-        if ($planType === 'onetime') {
-            $features = array_merge($features, [
-                'Lifetime License',
-                'One-Time Payment',
-                'Perpetual Updates (1 year)',
-                'No Recurring Fees',
-            ]);
-        }
-
-        return $features;
-    }
-
-    private function generateLimitations(string $planType): array
-    {
-        $limitations = [];
-
-        if ($planType === 'starter') {
-            $limitations = [
-                'Limited to 3 users',
-                '500 products maximum',
-                '5GB storage',
-                'No API access',
-                'Basic support only',
-                'No multi-currency',
-            ];
-        } elseif ($planType === 'professional') {
-            $limitations = [
-                'Limited to 10 users',
-                '5000 products maximum',
-                '25GB storage',
-                'No HR/payroll features',
-                'No custom branding',
-            ];
-        } elseif ($planType === 'enterprise') {
-            $limitations = [
-                'Custom limits apply',
-                'Annual billing required',
-                'Contract commitment',
-            ];
-        } elseif ($planType === 'onetime') {
-            $limitations = [
-                'No recurring updates after 1 year',
-                'Limited to major version',
-                'Support limited to 1 year',
-                'No cloud backup',
-            ];
-        }
-
-        return $limitations;
+        return $this->state([
+            'plan_code' => 'hotel_enterprise',
+            'plan_name' => 'Hotel Enterprise',
+            'description' => 'Complete hotel management suite with all modules',
+            'monthly_price' => 399.99,
+            'annual_price' => 3999.99,
+            'default_shops' => 999999,
+            'default_locations' => 999999,
+            'default_payment_methods' => 999999,
+            'default_departments' => 999999,
+            'default_users' => 999999,
+            'default_products' => 999999,
+            'default_customers' => 999999,
+            'default_suppliers' => 999999,
+            'default_storage_gb' => 999999,
+            'default_rooms' => 999999,
+            
+            // All Features True - Including Hotel
+            'includes_inventory' => true,
+            'includes_expenses' => true,
+            'includes_pos' => true,
+            'includes_accounting' => true,
+            'includes_hr_payroll' => true,
+            'includes_multicurrency' => true,
+            'includes_financial_reports' => true,
+            'includes_advanced_reports' => true,
+            'includes_api_access' => true,
+            'includes_ecommerce' => true,
+            'includes_crm' => true,
+            
+            // Hotel Features All True
+            'includes_front_desk' => true,
+            'includes_housekeeping' => true,
+            'includes_room_management' => true,
+            'includes_reservations' => true,
+            'includes_guest_management' => true,
+            'includes_group_booking' => true,
+            'includes_travel_agent' => true,
+            'includes_night_audit' => true,
+            'includes_guest_history' => true,
+            'includes_lost_found' => true,
+            'includes_guest_services' => true,
+            'includes_events_banqueting' => true,
+            'includes_event_booking' => true,
+            'includes_function_sheets' => true,
+            'includes_outside_catering' => true,
+            'includes_venue_management' => true,
+            'includes_equipment_management' => true,
+            'includes_asset_management' => true,
+            'includes_asset_register' => true,
+            'includes_maintenance_management' => true,
+            'includes_repair_jobs' => true,
+            'includes_maintenance_schedules' => true,
+            'includes_laundry_management' => true,
+            'includes_restaurant_management' => true,
+            'includes_hotel_management' => true,
+            'includes_booking_engine' => true,
+            'includes_channel_manager' => true,
+            'includes_phone_book' => true,
+            'includes_guest_preferences' => true,
+            
+            'sort_order' => 6,
+        ]);
     }
 }

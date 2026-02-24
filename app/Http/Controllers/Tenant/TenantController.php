@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ Tenant, TenantConfiguration, TenantSetting, TenantUsageTracking, Setting };
-use Illuminate\Support\Facades\{ Hash, Mail, Auth, Log, DB };
+use App\Models\{ Tenant, TenantConfiguration, TenantSetting, TenantUsageTracking, Setting, BillingPlan };
+use Illuminate\Support\Facades\{ Artisan, Hash, Mail, Auth, Log, DB };
 use App\Models\User;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Str;
@@ -90,13 +90,15 @@ class TenantController extends Controller
                 'message' => __('auth._not_found'),
             ]);
         }
-        return view('tenant.partials.create');
+        $plans = BillingPlan::active()->public()->orderBy('sort_order')->get();
+        return view('tenant.partials.create', compact('plans'));
     }
 
+
     /**
-     * Store Step 1 - Basic Information
+     * Store a newly created tenant with plan selection
      */
-    public function storeStep1(Request $request)
+    public function store(Request $request)
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
@@ -110,6 +112,13 @@ class TenantController extends Controller
             'name' => 'required|string|max:255',
             'subdomain' => 'required|string|unique:tenants,subdomain|max:255|regex:/^[a-z0-9-.]+$/',
             'status' => 'required|in:active,suspended,trial',
+            'plan_id' => 'required|exists:billing_plans,plan_id',
+            'currency_code' => 'required|string|size:3',
+            'timezone' => 'required|string|timezone',
+            'locale' => 'required|string|max:10',
+            'fiscal_year_start' => 'required|date',
+            'tax_calculation_method' => 'required|in:exclusive,inclusive',
+            'trial_ends_at' => 'nullable|date|after:today',
         ]);
 
         try {
@@ -122,72 +131,14 @@ class TenantController extends Controller
                 'status' => $request->status,
             ]);
             
-            DB::commit();
-            
-            // Store tenant ID in session for next steps
-            session(['creating_tenant_id' => $tenant->id]);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Step 1 completed successfully',
-                'tenant_id' => $tenant->id
+            // Create tenant configuration
+            $configuration = $tenant->configuration()->create([
+                'currency_code' => $request->currency_code,
+                'timezone' => $request->timezone,
+                'locale' => $request->locale,
+                'fiscal_year_start' => $request->fiscal_year_start,
+                'tax_calculation_method' => $request->tax_calculation_method,
             ]);
-            
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error creating tenant: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Store Step 2 - Configuration
-     */
-    public function storeStep2(Request $request)
-    {
-        $user = Auth::user();
-        if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
-        }
-
-        $tenantId = session('creating_tenant_id');
-        
-        if (!$tenantId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tenant session expired. Please start over.'
-            ], 400);
-        }
-
-        $request->validate([
-            'currency_code' => 'required|string|size:3',
-            'timezone' => 'required|string|timezone',
-            'locale' => 'required|string|max:10',
-            'fiscal_year_start' => 'required|date',
-            'tax_calculation_method' => 'required|in:exclusive,inclusive',
-        ]);
-
-        try {
-            DB::beginTransaction();
-            
-            $tenant = Tenant::findOrFail($tenantId);
-            
-            // Create or update configuration
-            $configuration = $tenant->configuration()->updateOrCreate(
-                ['tenant_id' => $tenantId],
-                [
-                    'currency_code' => $request->currency_code,
-                    'timezone' => $request->timezone,
-                    'locale' => $request->locale,
-                    'fiscal_year_start' => $request->fiscal_year_start,
-                    'tax_calculation_method' => $request->tax_calculation_method,
-                ]
-            );
             
             // Get currency details from config
             $currencies = config('currencies.currencies');
@@ -198,7 +149,7 @@ class TenantController extends Controller
                 'decimal_places' => 2
             ];
             
-            // Create base currency for this tenant
+            // Create base currency
             $currency = $tenant->currencies()->create([
                 'code' => $request->currency_code,
                 'name' => $currencyDetails['name'],
@@ -211,80 +162,28 @@ class TenantController extends Controller
                 'is_base_currency' => 1,
             ]);
             
-            DB::commit();
+            // Get selected plan and apply settings
+            $plan = BillingPlan::findOrFail($request->plan_id);
+            $plan->applyToTenant($tenant->id, $user->id);
             
-            return response()->json([
-                'success' => true,
-                'message' => 'Step 2 completed successfully',
-                'configuration' => $configuration,
-                'currency' => $currency
-            ]);
-            
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error saving configuration: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Store Step 3 - Settings
-     */
-    public function storeStep3(Request $request)
-    {
-        $user = Auth::user();
-        if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
-        }
-
-        $tenantId = session('creating_tenant_id');
-        
-        if (!$tenantId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tenant session expired. Please start over.'
-            ], 400);
-        }
-
-        $request->validate([
-            'settings' => 'required|array',
-            'settings.*.key' => 'required|string',
-            'settings.*.value' => 'required',
-            'settings.*.data_type' => 'required|in:string,integer,boolean,json',
-            'settings.*.category' => 'required|string',
-        ]);
-
-        try {
-            DB::beginTransaction();
-            
-            $tenant = Tenant::findOrFail($tenantId);
-            
-            // Delete existing settings (if any)
-            $tenant->settings()->delete();
-            
-            // Create new settings
-            foreach ($request->settings as $setting) {
-                $tenant->settings()->create([
-                    'setting_key' => $setting['key'],
-                    'setting_value' => $setting['value'],
-                    'data_type' => $setting['data_type'],
-                    'category' => $setting['category'],
-                ]);
+            // Update or create trial_ends_at if provided
+            if ($request->filled('trial_ends_at')) {
+                $tenant->settings()->updateOrCreate(
+                    ['setting_key' => 'trial_ends_at'],
+                    [
+                        'setting_value' => $request->trial_ends_at,
+                        'data_type' => 'datetime',
+                        'category' => 'billing',
+                        'updated_by' => $user->id,
+                    ]
+                );
             }
             
             DB::commit();
             
-            // Clear session after completion
-            session()->forget('creating_tenant_id');
-            
             return response()->json([
                 'success' => true,
-                'message' => 'Tenant created successfully!',
+                'message' => 'Tenant created successfully with ' . $plan->plan_name,
                 'redirect' => route('tenant.index')
             ]);
             
@@ -292,87 +191,11 @@ class TenantController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Error saving settings: ' . $e->getMessage()
+                'message' => 'Error creating tenant: ' . $e->getMessage()
             ], 500);
         }
     }
 
-
-    /**
-     * Get current step based on session
-     */
-    public function getCurrentStep()
-    {
-        $tenantId = session('creating_tenant_id');
-        
-        if (!$tenantId) {
-            return response()->json([
-                'has_session' => false,
-                'step' => 1
-            ]);
-        }
-        
-        try {
-            $tenant = Tenant::with(['configuration', 'settings'])->find($tenantId);
-            
-            if (!$tenant) {
-                session()->forget('creating_tenant_id');
-                return response()->json([
-                    'has_session' => false,
-                    'step' => 1
-                ]);
-            }
-            
-            // Determine current step based on what data exists
-            $step = 1;
-            $data = [];
-            
-            if ($tenant) {
-                $step = 2; // Tenant exists, step 2
-                $data['tenant'] = [
-                    'name' => $tenant->name,
-                    'subdomain' => $tenant->subdomain,
-                    'status' => $tenant->status
-                ];
-            }
-            
-            if ($tenant->configuration) {
-                $step = 3; // Configuration exists, step 3
-                $data['configuration'] = $tenant->configuration;
-            }
-            
-            if ($tenant->settings && $tenant->settings->count() > 0) {
-                $step = 4; // Settings exist, step 4 (completed)
-            }
-            
-            return response()->json([
-                'has_session' => true,
-                'step' => $step,
-                'tenant_id' => $tenantId,
-                'data' => $data
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'has_session' => false,
-                'step' => 1,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * Reset tenant creation session
-     */
-    public function resetStep()
-    {
-        session()->forget('creating_tenant_id');
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Session reset successfully'
-        ]);
-    }
 
 
     /**
@@ -384,19 +207,120 @@ class TenantController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Show the form for editing the specified tenant.
      */
     public function edit(string $id)
     {
-        //
+        $user = Auth::user();
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 403);
+        }
+
+        $tenant = Tenant::with(['configuration', 'settings'])->findOrFail($id);
+        
+        // Get current plan from settings
+        $currentPlanSetting = $tenant->settings()->where('setting_key', 'billing_plan')->first();
+        $currentPlanCode = $currentPlanSetting ? $currentPlanSetting->setting_value : 'free';
+        
+        // Get all active plans for possible upgrade/downgrade
+        $plans = BillingPlan::active()->public()->orderBy('sort_order')->get();
+        
+        // Get current plan details
+        $currentPlan = BillingPlan::where('plan_code', $currentPlanCode)->first();
+        
+        return view('tenant.partials.edit', compact('tenant', 'plans', 'currentPlan'));
     }
 
+
     /**
-     * Update the specified resource in storage.
+     * Update the specified tenant.
      */
     public function update(Request $request, string $id)
     {
-        //
+        $user = Auth::user();
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 403);
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'status' => 'required|in:active,suspended,trial',
+            'plan_id' => 'sometimes|exists:billing_plans,plan_id',
+            'trial_ends_at' => 'nullable|date|after:today',
+        ]);
+
+        try {
+            DB::beginTransaction();
+            
+            $tenant = Tenant::findOrFail($id);
+            
+            // Update basic info
+            $tenant->update([
+                'name' => $request->name,
+                'status' => $request->status,
+            ]);
+            
+            // Update trial_ends_at if provided
+            if ($request->has('trial_ends_at')) {
+                if ($request->filled('trial_ends_at')) {
+                    $tenant->settings()->updateOrCreate(
+                        ['setting_key' => 'trial_ends_at'],
+                        [
+                            'setting_value' => $request->trial_ends_at,
+                            'data_type' => 'datetime',
+                            'category' => 'billing',
+                            'updated_by' => $user->id,
+                        ]
+                    );
+                } else {
+                    // If empty, delete the trial_ends_at setting
+                    $tenant->settings()->where('setting_key', 'trial_ends_at')->delete();
+                }
+            }
+            
+            // Check if plan is being changed
+            if ($request->has('plan_id') && !empty($request->plan_id)) {
+                $currentPlanSetting = $tenant->settings()->where('setting_key', 'billing_plan')->first();
+                $newPlan = BillingPlan::findOrFail($request->plan_id);
+                
+                if (!$currentPlanSetting || $currentPlanSetting->setting_value != $newPlan->plan_code) {
+                    // Plan changed - apply new plan settings
+                    $newPlan->applyToTenant($tenant->id, $user->id);
+                    
+                    // Update billing_plan setting
+                    $tenant->settings()->updateOrCreate(
+                        ['setting_key' => 'billing_plan'],
+                        [
+                            'setting_value' => $newPlan->plan_code,
+                            'data_type' => 'string',
+                            'category' => 'billing',
+                            'updated_by' => $user->id
+                        ]
+                    );
+                }
+            }
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Tenant updated successfully',
+                'reload' => true
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error updating tenant: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -404,7 +328,30 @@ class TenantController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $user = Auth::user();
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 403);
+        }
+
+        try {
+            $tenant = Tenant::findOrFail($id);
+            $tenant->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Tenant deleted successfully',
+                'reload' => true
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error deleting tenant: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
 
@@ -483,6 +430,116 @@ class TenantController extends Controller
                 ->withInput()
                 ->with('error', 'Error creating admin user: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Refresh billing plans by updating existing or creating new ones
+     */
+    public function refreshPlans(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Check if user is super_admin
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found')
+            ], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            // Get all plan data from the seeder logic
+            $planDefinitions = $this->getPlanDefinitions();
+            $updatedCount = 0;
+            $createdCount = 0;
+            
+            foreach ($planDefinitions as $planData) {
+                // Check if plan already exists by plan_code
+                $existingPlan = BillingPlan::where('plan_code', $planData['code'])->first();
+                
+                // Get factory data
+                $factoryMethod = $planData['method'];
+                $factoryData = BillingPlan::factory()->{$factoryMethod}()->make()->toArray();
+                
+                if ($existingPlan) {
+                    // Update existing plan (preserve plan_id)
+                    $existingPlan->update($factoryData);
+                    $updatedCount++;
+                } else {
+                    // Create new plan (will get new plan_id)
+                    BillingPlan::factory()->{$factoryMethod}()->create([
+                        'plan_code' => $planData['code'],
+                        'plan_name' => $planData['name'],
+                    ]);
+                    $createdCount++;
+                }
+            }
+            
+            // Optionally, deactivate plans that no longer exist in the seeder
+            $existingCodes = array_column($planDefinitions, 'code');
+            BillingPlan::whereNotIn('plan_code', $existingCodes)
+                ->update(['is_active' => false]);
+            
+            $deactivatedCount = BillingPlan::whereNotIn('plan_code', $existingCodes)
+                ->where('is_active', false)
+                ->count();
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Billing plans refreshed: {$updatedCount} updated, {$createdCount} created, {$deactivatedCount} deactivated",
+                'stats' => [
+                    'updated' => $updatedCount,
+                    'created' => $createdCount,
+                    'deactivated' => $deactivatedCount
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error refreshing plans: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get plan definitions from seeder
+     */
+    private function getPlanDefinitions()
+    {
+        return [
+            [
+                'method' => 'free',
+                'code' => 'free',
+                'name' => 'Free Trial',
+            ],
+            [
+                'method' => 'starter',
+                'code' => 'starter',
+                'name' => 'Starter Plan',
+            ],
+            [
+                'method' => 'business',
+                'code' => 'business',
+                'name' => 'Business Plan',
+            ],
+            [
+                'method' => 'enterprise',
+                'code' => 'enterprise',
+                'name' => 'Enterprise Plan',
+            ],
+            [
+                'method' => 'lifetime',
+                'code' => 'onetime_lifetime',
+                'name' => 'Lifetime License',
+            ],
+        ];
     }
 
 }

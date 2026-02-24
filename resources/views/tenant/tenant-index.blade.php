@@ -31,11 +31,83 @@
                     <input type="text" id="searchInput" class="form-control" placeholder="{{__('auth._search')}} {{__('payments.tenant')}}"
                         onkeyup="searchTable(this.value, 'kt_table_users')">
                 </div>
+                
                 @can('create promotion')
-                    <a href="{{ route('tenant.create') }}"  class="btn btn-sm btn-primary">
-                    <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_tenant')}}</a>
-                @endcan  
+                    <a href="{{ route('tenant.create') }}" class="btn btn-sm btn-primary">
+                        <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_tenant')}}
+                    </a>
+                @endcan
+                
+                <!-- Refresh Billing Plans Button -->
+                @role('super_admin')
+                    <button type="button" class="btn btn-sm btn-light-warning" id="refreshPlansBtn" onclick="refreshBillingPlans()">
+                        <i class="ki-duotone ki-arrows-circle fs-2">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                        </i>
+                        {{__('payments.refresh_plans')}}
+                    </button>
+                @endrole
             </div>
+
+            @push('scripts')
+            <script>
+                function refreshBillingPlans() {
+                    Swal.fire({
+                        title: '{{ __("payments.confirm_refresh_plans") }}',
+                        text: '{{ __("payments.refresh_plans_warning") }}',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: '{{ __("payments.yes_refresh") }}',
+                        cancelButtonText: '{{ __("auth._discard") }}',
+                        showLoaderOnConfirm: true,
+                        preConfirm: () => {
+                            return fetch('{{ route("billing.refresh-plans") }}', {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                }
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(response.statusText);
+                                }
+                                return response.json();
+                            })
+                            .catch(error => {
+                                Swal.showValidationMessage(
+                                    `{{ __("payments.refresh_failed") }}: ${error}`
+                                );
+                            });
+                        },
+                        allowOutsideClick: () => !Swal.isLoading()
+                    }).then((result) => {
+                        if (result.isConfirmed && result.value && result.value.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '{{ __("payments.refresh_success") }}',
+                                text: result.value.message || '{{ __("payments.plans_refreshed") }}',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                // Optionally reload the page or update the UI
+                                location.reload();
+                            });
+                        } else if (result.isConfirmed && result.value && !result.value.success) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '{{ __("payments.refresh_failed") }}',
+                                text: result.value.message || '{{ __("payments.unknown_error") }}'
+                            });
+                        }
+                    });
+                }
+            </script>
+            @endpush
         </div>
     </div>
     

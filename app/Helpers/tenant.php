@@ -198,3 +198,109 @@ function getTenantUserCountAttribute($tenantId)
         ->where('model_has_roles.model_type', 'App\\Models\\User')
         ->count();
 }
+
+
+
+
+
+
+
+
+if (!function_exists('tenant_can')) {
+    /**
+     * Check if tenant has a specific module enabled
+     * Works for both retail and hotel modules
+     */
+    function tenant_can(string $module): bool
+    {
+        $tenantId = auth()->user()->tenant_id;
+        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        
+        $moduleKey = 'module_' . $module;
+        return isset($settings[$moduleKey]) && $settings[$moduleKey] == '1';
+    }
+}
+
+if (!function_exists('tenant_is_hotel')) {
+    /**
+     * Check if tenant has hotel modules enabled
+     */
+    function tenant_is_hotel(): bool
+    {
+        return tenant_can('hotel_management') || 
+               tenant_can('front_desk') || 
+               tenant_can('room_management');
+    }
+}
+
+if (!function_exists('tenant_limit')) {
+    /**
+     * Get tenant limit value
+     */
+    function tenant_limit(string $key, $default = 0)
+    {
+        $tenantId = auth()->user()->tenant_id;
+        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        
+        return $settings[$key] ?? $default;
+    }
+}
+
+if (!function_exists('check_tenant_limit')) {
+    /**
+     * Check if tenant has reached a limit
+     */
+    function check_tenant_limit(string $resource, int $currentCount): bool
+    {
+        $limit = tenant_limit('max_' . $resource, 0);
+        
+        if ($limit >= 999999) { // Unlimited
+            return true;
+        }
+        
+        return $currentCount < $limit;
+    }
+}
+
+if (!function_exists('get_tenant_plan')) {
+    /**
+     * Get current tenant plan
+     */
+    function get_tenant_plan()
+    {
+        $tenantId = auth()->user()->tenant_id;
+        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        
+        return $settings['billing_plan'] ?? 'free';
+    }
+}
+
+
+// Example: Check before creating a new product
+// public function store(Request $request)
+// {
+//     $tenantId = auth()->user()->tenant_id;
+//     $productCount = Product::where('tenant_id', $tenantId)->count();
+    
+//     if (!check_tenant_limit('products', $productCount)) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'You have reached your product limit. Please upgrade your plan.'
+//         ], 403);
+//     }
+    
+//     // Proceed with product creation
+// }
+
+// // Example: Check if module is enabled
+// public function index()
+// {
+//     if (!tenant_can('advanced_reports')) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Advanced reports are not included in your current plan.'
+//         ], 403);
+//     }
+    
+//     // Show advanced reports
+// }
