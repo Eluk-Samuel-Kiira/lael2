@@ -1,3 +1,4 @@
+@can('view supplier')
 <div class="card-body py-4" id="reloadSupplierComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -33,7 +34,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $supplier->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $supplier->id }}</div>
                             </td>
                             
                             <td>{{ $supplier->name }}</td>
@@ -58,7 +59,7 @@
                                         class="form-check-input status-switch"
                                         onchange="updateSupplierStatus({{ $supplier->id }}, this.checked ? 1 : 0)"
                                         {{ $supplier->is_active ? 'checked' : '' }}
-                                        @cannot('update tax') disabled @endcannot>
+                                        @cannot('update supplier') disabled @endcannot>
                                     <span id="supplier-label-{{ $supplier->id }}"
                                         class="form-check-label ms-2 fw-bold fs-6 text-gray-700">
                                         {{ $supplier->is_active ? __('auth._active') : __('auth._inactive') }}
@@ -67,7 +68,7 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
-                                    @can('view tax')
+                                    @can('view supplier')
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal"
@@ -75,7 +76,7 @@
                                             <i class="bi bi-eye me-1 fs-5"></i> <span>{{ __('passwords._view') }}</span>
                                         </button>
                                     @endcan
-                                    @can('edit tax')
+                                    @can('edit supplier')
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal"
@@ -83,7 +84,7 @@
                                             <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                         </button>
                                     @endcan
-                                    @can('delete tax')
+                                    @can('delete supplier')
                                         <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
@@ -133,5 +134,6 @@
         </table>
     </div>
 </div>
+@endcan
 
 

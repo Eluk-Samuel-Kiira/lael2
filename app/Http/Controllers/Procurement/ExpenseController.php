@@ -17,6 +17,12 @@ class ExpenseController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!$user->hasPermissionTo('delete expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Expense::with('tenant');
@@ -56,6 +62,13 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('create expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validation rules
         $validated = $request->validate([
@@ -176,6 +189,12 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find the expense
         $expense = Expense::where('id', $id)
@@ -306,6 +325,12 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find the expense
         $expense = Expense::where('id', $id)
@@ -349,6 +374,13 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'status' => 'required|in:pending,paid,reimbursed',
@@ -524,6 +556,13 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('approve expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $expense = Expense::where('id', $id)
             ->where('tenant_id', $tenantId)
@@ -578,6 +617,13 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('upload expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         try {
             $request->validate([

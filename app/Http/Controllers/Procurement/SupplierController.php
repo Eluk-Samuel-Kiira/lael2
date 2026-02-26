@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Procurement;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Supplier;
+use App\Models\{ Supplier, PurchaseOrder };
 use Illuminate\Support\Facades\{ Mail, Auth };
 use Illuminate\Validation\Rule;
 
@@ -17,6 +17,12 @@ class SupplierController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!$user->hasPermissionTo('view supplier')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Supplier::query();
@@ -56,6 +62,12 @@ class SupplierController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create supplier')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $validated = $request->validate([
             'name' => [
@@ -143,6 +155,12 @@ class SupplierController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit supplier')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find supplier and ensure it belongs to tenant
         $supplier = Supplier::where('id', $id)
@@ -214,7 +232,7 @@ class SupplierController extends Controller
         return response()->json([
             'success' => true,
             'reload' => true,
-            'componentId' => 'supplierIndexTable', // Update to match your component ID
+            'componentId' => 'reloadSupplierComponent', // Update to match your component ID
             'refresh' => false,
             'message' => __('auth._updated'),
             'redirect' => route('suppliers.index'),
@@ -230,6 +248,12 @@ class SupplierController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete supplier')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $supplier = Supplier::find($id);
         
@@ -300,7 +324,7 @@ class SupplierController extends Controller
         return response()->json([
             'success' => true,
             'reload' => true,
-            'componentId' => 'supplierIndexTable',
+            'componentId' => 'reloadSupplierComponent',
             'refresh' => false,
             'message' => __('auth._deleted'),
             'redirect' => route('suppliers.index'),
@@ -312,6 +336,12 @@ class SupplierController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update supplier')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Validate the request data for status
         $validated = $request->validate([
@@ -329,7 +359,7 @@ class SupplierController extends Controller
                     'success' => true,
                     'reload' => true,
                     'refresh' => false,
-                    'componentId' => 'supplierIndexTable',
+                    'componentId' => 'reloadSupplierComponent',
                     'message' => __('auth._updated'),
                     'redirect' => route('suppliers.index'),
                 ]);

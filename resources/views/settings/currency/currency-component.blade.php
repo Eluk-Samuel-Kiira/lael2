@@ -30,7 +30,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $currency->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $currency->id }}</div>
                             </td>
                             <td>
                                 {{ $currency->code }}

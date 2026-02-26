@@ -15,6 +15,14 @@ class PurchaseOrderController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('view purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = PurchaseOrder::with(['items', 'supplier', 'location', 'creator']);
@@ -47,6 +55,13 @@ class PurchaseOrderController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('create purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the main purchase order data with tenant checks
         $validated = $request->validate([
@@ -187,9 +202,19 @@ class PurchaseOrderController extends Controller
      */
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('edit purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Check tenant access and ensure it's in draft status
         if ($purchaseOrder->tenant_id !== auth()->user()->tenant_id || $purchaseOrder->status !== 'draft') {
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
 
         // Validate the main purchase order data
@@ -343,12 +368,23 @@ class PurchaseOrderController extends Controller
     // purchase status 
     public function submitApproval(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('submit purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // \Log::info($request->all());
         $validated = $request->validate([
             'status' => 'required', 
         ]);
         
-        $purchase = PurchaseOrder::find($id);
+        $purchase = PurchaseOrder::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$purchase) {
             return response()->json([
@@ -418,13 +454,23 @@ class PurchaseOrderController extends Controller
 
     public function approve(Request $request, $id)
     {
-        // \Log::info('Approve purchase order request:', $request->all());
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('approve purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         $validated = $request->validate([
             'status' => 'required', 
         ]);
         
-        $purchase = PurchaseOrder::find($id);
+        $purchase = PurchaseOrder::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$purchase) {
             return response()->json([
@@ -495,13 +541,24 @@ class PurchaseOrderController extends Controller
 
     public function sendToSupplier(Request $request, $id)
     {
-        // \Log::info('Send to supplier request:', $request->all());
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('send purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         $validated = $request->validate([
             'status' => 'required', 
         ]);
         
-        $purchase = PurchaseOrder::with(['supplier', 'items.productVariant'])->find($id);
+        $purchase = PurchaseOrder::with(['supplier', 'items.productVariant'])
+                        ->where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$purchase) {
             return response()->json([
@@ -603,6 +660,16 @@ class PurchaseOrderController extends Controller
     
     public function receiveItems(Request $request, PurchaseOrder $purchaseOrder)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('receive purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         $validated = $request->validate([
             'status' => 'required|in:partially_received,received',
             'items' => 'required|array',
@@ -785,12 +852,12 @@ class PurchaseOrderController extends Controller
                 // Record the withdrawal transaction
                 $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
                 
-                \Log::info('Payment withdrawal recorded for PO #' . $purchaseOrder->po_number, [
-                    'transaction_ref' => $transactionLog->transaction_ref ?? 'N/A',
-                    'amount' => $totalCost,
-                    'payment_method' => $paymentMethod->name,
-                    'items_received' => $totalReceived,
-                ]);
+                // \Log::info('Payment withdrawal recorded for PO #' . $purchaseOrder->po_number, [
+                //     'transaction_ref' => $transactionLog->transaction_ref ?? 'N/A',
+                //     'amount' => $totalCost,
+                //     'payment_method' => $paymentMethod->name,
+                //     'items_received' => $totalReceived,
+                // ]);
             }
 
             // Update payment information for ALL items that were received
@@ -870,13 +937,23 @@ class PurchaseOrderController extends Controller
 
     public function cancel(Request $request, $id)
     {
-        // \Log::info('Cancel purchase order request:', $request->all());
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('cancel purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         $validated = $request->validate([
             'status' => 'required', 
         ]);
         
-        $purchase = PurchaseOrder::find($id);
+        $purchase = PurchaseOrder::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$purchase) {
             return response()->json([
@@ -951,7 +1028,19 @@ class PurchaseOrderController extends Controller
      */
     public function destroy(string $id)
     {
-        $purchaseOrder = PurchaseOrder::find($id);
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('edit purchase_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $purchaseOrder = PurchaseOrder::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$purchaseOrder) {
             return response()->json([

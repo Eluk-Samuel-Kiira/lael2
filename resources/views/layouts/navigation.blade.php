@@ -205,6 +205,7 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+                        @can('view supplier')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('suppliers.index') }}')">
                                 <span class="menu-bullet">
@@ -213,7 +214,9 @@
                                 <span class="menu-title">{{ __('passwords.suppliers') }}</span>
                             </a>
                         </div>
+                        @endcan
 
+                        @can('view purchase_orders')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('purchase_order.index') }}')">
                                 <span class="menu-bullet">
@@ -222,7 +225,9 @@
                                 <span class="menu-title">{{ __('passwords.purchase_order') }}</span>
                             </a>
                         </div>
+                        @endcan
 
+                        @can('view category-expense')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('expense-category.index') }}')">
                                 <span class="menu-bullet">
@@ -231,7 +236,9 @@
                                 <span class="menu-title">{{ __('passwords.expense-category') }}</span>
                             </a>
                         </div>
+                        @endcan
 
+                        @can('view expense')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('expense.index') }}')">
                                 <span class="menu-bullet">
@@ -240,6 +247,7 @@
                                 <span class="menu-title">{{ __('passwords.expense') }}</span>
                             </a>
                         </div>
+                        @endcan
 
                     </div>
                 </div>
@@ -261,6 +269,7 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+                        @can('view user')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('employee.index') }}')">
                                 <span class="menu-bullet">
@@ -269,6 +278,9 @@
                                 <span class="menu-title">{{ __('auth._users_index') }}</span>
                             </a>
                         </div>
+                        @endcan
+
+                        @can('view employee')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('user.index') }}')">
                                 <span class="menu-bullet">
@@ -277,6 +289,9 @@
                                 <span class="menu-title">{{ __('pagination.employee_index') }}</span>
                             </a>
                         </div>
+                        @endcan
+
+                        @can('view employee payment')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('payment.index') }}')">
                                 <span class="menu-bullet">
@@ -285,6 +300,7 @@
                                 <span class="menu-title">{{ __('pagination.employee_payment') }}</span>
                             </a>
                         </div>
+                        @endcan
 
                         @can('admin only')
                         <div class="menu-item">

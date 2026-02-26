@@ -1,3 +1,4 @@
+@can('view purchase_orders')
 <div class="card-body py-4" id="reloadPurchasesComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -35,7 +36,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $order->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $order->id }}</div>
                             </td>
                             
                             <td>
@@ -47,7 +48,7 @@
                                 </a>
                             </td>
 
-                            <td>{{ $order->supplier->name ?? 'N/A' }}</td>
+                            <td>{{ $order->supplier->name ?? __('pagination._none') }}</td>
 
                             <td>
                                 <div class="badge badge-{{ $order->status_badge }} fw-bold">
@@ -57,13 +58,13 @@
 
                             <td>
                                 <div class="badge badge-light fw-bold">
-                                    {{ displayFormatedCurrency($order->total) }} {{ currencySymbol() }}
+                                    {{ $order->total }} {{ currency_symbol() }}
                                 </div>
                             </td>
 
                             <td>
                                 <div class="badge badge-light fw-bold">
-                                    {{ $order->expected_delivery_date ? $order->expected_delivery_date->format('M d, Y') : 'N/A' }}
+                                    {{ $order->expected_delivery_date ? $order->expected_delivery_date->format('M d, Y') : __('pagination._none') }}
                                 </div>
                             </td>
 
@@ -194,3 +195,4 @@
         </table>
     </div>
 </div>
+@endcan

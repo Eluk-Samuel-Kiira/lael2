@@ -17,6 +17,14 @@ class ExpenseCategoryController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('view category-expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = ExpenseCategory::with('tenant');
@@ -56,6 +64,12 @@ class ExpenseCategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create category-expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validation rules
         $validated = $request->validate([
@@ -137,6 +151,12 @@ class ExpenseCategoryController extends Controller
         
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit category-expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
 
         $category = ExpenseCategory::where('id', $id)->where('tenant_id', $tenantId)->first();
@@ -219,9 +239,17 @@ class ExpenseCategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete category-expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find the category
-        $category = ExpenseCategory::find($id);
+        $category = ExpenseCategory::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
         
         if (!$category) {
             return response()->json([
