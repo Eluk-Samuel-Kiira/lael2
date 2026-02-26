@@ -17,7 +17,13 @@ class PaymentMethodController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = current_tenant_id();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('view payment method')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Get payment methods for current tenant
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
@@ -53,6 +59,12 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create payment method')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'name' => [
@@ -153,8 +165,16 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit payment method')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
-        $paymentMethod = PaymentMethod::findOrFail($id);
+        $paymentMethod = PaymentMethod::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         // Check if payment method belongs to current tenant
         if ($paymentMethod->tenant_id !== $tenantId) {
@@ -245,8 +265,16 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete payment method')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
-        $paymentMethod = PaymentMethod::findOrFail($id);
+        $paymentMethod = PaymentMethod::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         // Check if payment method belongs to current tenant
         if ($paymentMethod->tenant_id !== $tenantId) {
@@ -299,15 +327,22 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-
-        $paymentMethod = PaymentMethod::findOrFail($id);
+        
+        if (!$user->hasPermissionTo('update payment method')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',
         ]);
 
-        $paymentMethod = PaymentMethod::find($id);
+        $paymentMethod = PaymentMethod::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         // Check if payment method exists
         if (!$paymentMethod) {

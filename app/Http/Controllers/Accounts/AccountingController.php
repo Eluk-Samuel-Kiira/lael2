@@ -13,8 +13,12 @@ class AccountingController extends Controller
     // 1. Payment Methods Report
     public function paymentMethods(Request $request)
     {
-        $user = Auth::user();
+        $user = auth()->user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->with(['currency'])
@@ -36,6 +40,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get all payment methods with balances
         $accounts = PaymentMethod::where('tenant_id', $tenantId)
@@ -69,6 +76,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $filters = [
             'start_date' => $request->get('start_date', now()->subDays(30)->format('Y-m-d')),
@@ -127,6 +137,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $transaction = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->where('id', $id)
@@ -155,6 +168,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $period = $request->get('period', 'month');
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
@@ -207,6 +223,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
@@ -258,6 +277,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
@@ -328,6 +350,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
@@ -379,6 +404,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
@@ -427,6 +455,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $date = $request->get('date', now()->format('Y-m-d'));
         
@@ -491,6 +522,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get month and year from request with proper defaults
         $month = $request->input('month', date('m')); // Use input() instead of get()
@@ -597,6 +631,9 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $date = $request->get('date', now()->format('Y-m-d'));
         

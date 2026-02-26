@@ -1,3 +1,4 @@
+@can('view employee payment')
 <!-- resources/views/procurement/employee-payment/component.blade.php -->
 <div class="card-body py-4" id="reloadPaymentComponent">
     <div class="table-responsive">
@@ -99,6 +100,7 @@
                             </td>
                             <td>{{ $payment->payment_date->format('d M Y') }}</td>
                             <td>
+                                
                                 @if($payment->status === 'completed')
                                     <span class="badge badge-light-success">
                                         {{ __('payments.completed') }}
@@ -164,6 +166,7 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" id="closeDeleteModal{{$payment->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
+                                                @can('delete employee payment')
                                                 @if($payment->status !== 'completed')
                                                     <button type="button" id="deleteButton{{$payment->id}}" class="btn btn-danger" 
                                                         data-item-url="{{ route('payment.destroy', $payment->id) }}" 
@@ -176,6 +179,7 @@
                                                         </span>
                                                     </button>
                                                 @endif
+                                                @endcan
                                             </div>
                                         </div>
                                     </div>
@@ -200,4 +204,5 @@
         </table>
     </div>
 </div>
+@endcan
 

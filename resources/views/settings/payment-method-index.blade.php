@@ -31,9 +31,10 @@
                     <input type="text" id="searchInput" class="form-control" placeholder="{{__('auth._search')}} {{__('payments._payment_methods')}}"
                         onkeyup="searchTable(this.value, 'kt_table_payment_methods')">
                 </div>
-
+                @can('create payment method')
                 <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_payment_method">
                 <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_payment_method')}}</button>
+                @endcan
                 @include('settings.payment-method.create')    
             </div>
         </div>

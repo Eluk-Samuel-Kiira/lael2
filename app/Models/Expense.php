@@ -50,17 +50,6 @@ class Expense extends Model
 
 
     /**
-     * The accessors to append to the model's array form.
-     *
-     * @var array
-     */
-    protected $appends = [
-        'formatted_amount',
-        'formatted_tax_amount',
-        'formatted_total_amount',
-    ];
-
-    /**
      * Accessors - Convert from stored integer to display float
      */
     public function getAmountAttribute(?int $value): ?float

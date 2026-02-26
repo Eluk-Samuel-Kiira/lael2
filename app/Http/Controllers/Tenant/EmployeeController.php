@@ -15,13 +15,21 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('view employee')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Employee::query();
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+            $query->where('tenant_id', $tenantId);
         }
         
         $employees = $query->latest()->get();
@@ -79,6 +87,13 @@ class EmployeeController extends Controller
         try {
             $user = Auth::user();
             $tenantId = $user->tenant_id;
+            
+            if (!$user->hasPermissionTo('edit employee')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
 
             // Find the employee and ensure it belongs to tenant
             $employee = Employee::where('id', $id)
@@ -166,6 +181,13 @@ class EmployeeController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update employee')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([

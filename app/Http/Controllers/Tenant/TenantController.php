@@ -26,10 +26,7 @@ class TenantController extends Controller
         
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
 
         $tenants = Tenant::with([
@@ -85,10 +82,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
         $plans = BillingPlan::active()->public()->orderBy('sort_order')->get();
         return view('tenant.partials.create', compact('plans'));
@@ -102,10 +96,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
 
         $request->validate([
@@ -213,10 +204,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ], 403);
+            abort(403, __('payments.not_authorized'));
         }
 
         $tenant = Tenant::with(['configuration', 'settings'])->findOrFail($id);
@@ -242,10 +230,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ], 403);
+            abort(403, __('payments.not_authorized'));
         }
 
         $request->validate([
@@ -330,10 +315,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ], 403);
+            abort(403, __('payments.not_authorized'));
         }
 
         try {
@@ -359,10 +341,7 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
 
         $request->validate([
@@ -441,10 +420,7 @@ class TenantController extends Controller
         
         // Check if user is super_admin
         if (!$user->hasRole('super_admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found')
-            ], 403);
+            abort(403, __('payments.not_authorized'));
         }
 
         try {

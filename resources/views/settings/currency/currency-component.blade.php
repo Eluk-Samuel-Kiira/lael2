@@ -1,3 +1,4 @@
+@can('view currency')
 <div class="card-body py-4" id="currencyIndexTable">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -58,19 +59,24 @@
                                 <div class="d-flex gap-2">
                                     @if(!$currency->is_base_currency)
                                     <!-- Edit User Button -->
+                                    @can('edit currency')
                                     <button 
                                         class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
                                         data-bs-toggle="modal" 
                                         data-bs-target="#editCurrency{{$currency->id}}">
                                         <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                     </button>
+                                    @endcan
+
                                     <!-- Delete User Button -->
+                                    @can('delete currency')
                                     <button type="button" 
                                         class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                         data-bs-toggle="modal" 
                                             data-bs-target="#deleteUserModal{{$currency->id}}">
                                             <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('auth._delete') }}</span>
                                     </button>
+                                    @endcan
                                     @endif
                                 </div>
 
@@ -113,3 +119,4 @@
         </table>
     </div>
 </div>
+@endcan

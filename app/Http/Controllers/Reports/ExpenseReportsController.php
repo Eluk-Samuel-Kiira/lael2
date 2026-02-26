@@ -19,6 +19,10 @@ class ExpenseReportsController extends Controller
     {
         $user = auth()->user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         if (!$tenantId) {
             return redirect()->back()->with('error', __('accounting.invalid_tenant'));
@@ -165,8 +169,13 @@ class ExpenseReportsController extends Controller
     // Expenses by Category
     public function byCategory(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
-        
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         
@@ -226,6 +235,10 @@ class ExpenseReportsController extends Controller
     {
         $user = auth()->user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         if (!$tenantId) {
             return redirect()->back()->with('error', __('accounting.invalid_tenant'));
@@ -417,6 +430,10 @@ class ExpenseReportsController extends Controller
     {
         $user = auth()->user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         if (!$tenantId) {
             return redirect()->back()->with('error', __('accounting.invalid_tenant'));
@@ -575,7 +592,13 @@ class ExpenseReportsController extends Controller
     // Budget vs Actual Report
     public function budgetVsActual(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         $year = $request->get('year', date('Y'));
         $month = $request->get('month', date('m'));
         
@@ -695,6 +718,13 @@ class ExpenseReportsController extends Controller
     // Export functions for each report
     public function exportSummary(Request $request)
     {
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         $data = $this->summary($request);
         // Add export logic here
         return response()->streamDownload(function() use ($data) {
@@ -708,7 +738,12 @@ class ExpenseReportsController extends Controller
     // Expenses by Payment Method
     public function byPaymentMethod(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -799,7 +834,12 @@ class ExpenseReportsController extends Controller
     // Recurring Expenses Report
     public function recurring(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $frequency = $request->get('frequency');
         $categoryId = $request->get('category_id');
@@ -945,7 +985,12 @@ class ExpenseReportsController extends Controller
     // Expense Trends Report (Optimized)
     public function trends(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $period = $request->get('period', 'monthly'); // monthly, quarterly, yearly
         $year = $request->get('year', date('Y'));
@@ -1177,7 +1222,12 @@ class ExpenseReportsController extends Controller
     // Tax Report
     public function taxReport(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1291,7 +1341,12 @@ class ExpenseReportsController extends Controller
     // Expense Audit Report (Fixed with Locale)
     public function audit(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->subMonths(3)->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->format('Y-m-d'));
@@ -1460,6 +1515,12 @@ class ExpenseReportsController extends Controller
     // Export functions for each report
     public function exportByCategory(Request $request)
     {
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('expense reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         $data = $this->byCategory($request);
         // Export logic here
         return response()->streamDownload(function() use ($data) {

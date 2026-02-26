@@ -1,3 +1,4 @@
+@can('admin only')
 <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-5 g-xl-9" id="reloadPermissionComponent">
     @foreach ($users as $user)
         <div class="col-md-4 permission-card" data-perm="{{ $user->name }}">
@@ -161,3 +162,4 @@
 
     }
 </script>
+@endcan

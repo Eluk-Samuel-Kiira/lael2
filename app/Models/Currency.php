@@ -39,7 +39,10 @@ class Currency extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-  
+    public function locations()
+    {
+        return $this->hasMany(Location::class);
+    }
 
     protected static function boot()
     {

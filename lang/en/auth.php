@@ -50,7 +50,7 @@ return [
     '_favicon' => 'Favicon',
     '_filter' => 'Filter',
     '_full_name' => 'Full Name',
-    '_id' => 'ID',
+    '_id' => 'ID-',
     '_inactive' => 'Inactive',
     '_light' => 'Light',
     '_logo' => 'Logo',
@@ -861,7 +861,7 @@ return [
     '_roles' => 'Roles',
     '_permissions' => 'Permissions',
     '_permission' => 'Permissions',
-    '_users_table' => 'Permissions',
+    '_users_table' => 'Users Table',
 
     // Product Margin Report Translations
     'product_margin' => 'Product Margin',
@@ -911,6 +911,7 @@ return [
     'gold' => 'Gold',
     'silver' => 'Silver',
     'bronze' => 'Bronze',
+    'currency_in_use' => 'Currency still in use at some locations',
     'excellent' => 'Excellent',
     'good' => 'Good',
     'average' => 'Average',

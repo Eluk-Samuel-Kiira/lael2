@@ -103,6 +103,13 @@ class SettingsController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+        if (!$user->hasPermissionTo('update settings')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Validate the incoming request data
         $validatedData = $request->validate([
             'app_name' => 'nullable|string|max:255',

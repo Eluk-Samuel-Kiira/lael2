@@ -1,3 +1,4 @@
+@can('view uom')
 <div class="card-body py-4" id="uomIndexTable">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -27,19 +28,19 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $uom->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $uom->id }}</div>
                             </td>
                             <td>{{ $uom->name }}</td>
                             <td class="fw-bold text-primary ms-3">{{ $uom->symbol }}</td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $uom->UOMCreater->name ?? 'None' }}</div>
+                                <div class="badge badge-light fw-bold">{{ $uom->UOMCreater->name ?? __('payments.none') }}</div>
                             </td>
                             <td>{{ $uom->created_at->format('d M Y, h:i a') }}</td>
                             <td>
                                 <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateStatusUOM({{ $uom->id }}, this.value)"
                                 @cannot('update uom') disabled @endcannot>
-                                    <option value="1" {{ $uom->isActive == 1 ? 'selected' : '' }}><span>{{__('Active')}}</option>
-                                    <option value="0" {{ $uom->isActive == 0 ? 'selected' : '' }}>{{__('Inactive')}}</option>
+                                    <option value="1" {{ $uom->isActive == 1 ? 'selected' : '' }}><span>{{__('payments.active')}}</option>
+                                    <option value="0" {{ $uom->isActive == 0 ? 'selected' : '' }}>{{__('payments.inactive')}}</option>
                                 </select>
                             </td>
                             <td>
@@ -102,4 +103,5 @@
         </table>
     </div>
 </div>
+@endcan
 

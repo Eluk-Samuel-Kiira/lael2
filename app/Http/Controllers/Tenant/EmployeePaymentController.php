@@ -26,6 +26,13 @@ class EmployeePaymentController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         
+        if (!$user->hasPermissionTo('view employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
         // Build the query
         $query = EmployeePayment::with(['employee', 'tenant', 'paymentMethod']);
 
@@ -64,6 +71,12 @@ class EmployeePaymentController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -176,6 +189,12 @@ class EmployeePaymentController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $payment = EmployeePayment::where('id', $id)
             ->where('tenant_id', $tenantId)
@@ -189,11 +208,11 @@ class EmployeePaymentController extends Controller
         }
 
         // DEBUG: Log the raw request data
-        \Log::info('=== UPDATE PAYMENT DEBUG ===');
-        \Log::info('Payment ID: ' . $id);
-        \Log::info('Raw request data:', $request->all());
-        \Log::info('Selected taxes raw: ' . json_encode($request->input('selected_taxes')));
-        \Log::info('Has selected_taxes: ' . ($request->has('selected_taxes') ? 'yes' : 'no'));
+        // \Log::info('=== UPDATE PAYMENT DEBUG ===');
+        // \Log::info('Payment ID: ' . $id);
+        // \Log::info('Raw request data:', $request->all());
+        // \Log::info('Selected taxes raw: ' . json_encode($request->input('selected_taxes')));
+        // \Log::info('Has selected_taxes: ' . ($request->has('selected_taxes') ? 'yes' : 'no'));
         
         $selectedTaxes = $request->input('selected_taxes', []);
         
@@ -204,7 +223,7 @@ class EmployeePaymentController extends Controller
             });
         }
         
-        \Log::info('Selected taxes after filtering:', $selectedTaxes);
+        // \Log::info('Selected taxes after filtering:', $selectedTaxes);
         
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
@@ -267,12 +286,12 @@ class EmployeePaymentController extends Controller
         $isTaxComputed = false;
         
         if (!empty($selectedTaxes)) {
-            \Log::info('Calling taxService with:', [
-                'gross_amount' => $validated['gross_amount'],
-                'selected_taxes' => $selectedTaxes,
-                'tenant_id' => $tenantId,
-                'employee_id' => $employee->id
-            ]);
+            // \Log::info('Calling taxService with:', [
+            //     'gross_amount' => $validated['gross_amount'],
+            //     'selected_taxes' => $selectedTaxes,
+            //     'tenant_id' => $tenantId,
+            //     'employee_id' => $employee->id
+            // ]);
             
             try {
                 $taxCalculation = $this->taxService->calculateTaxes(
@@ -282,7 +301,7 @@ class EmployeePaymentController extends Controller
                     $employee
                 );
                 
-                \Log::info('Tax calculation result:', $taxCalculation);
+                // \Log::info('Tax calculation result:', $taxCalculation);
                 
                 if ($taxCalculation && isset($taxCalculation['net_amount'])) {
                     $netAmount = $taxCalculation['net_amount'];
@@ -420,6 +439,12 @@ class EmployeePaymentController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+        if (!$user->hasPermissionTo('delete employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         $payment = EmployeePayment::where('id', $id)
             ->where('tenant_id', $tenantId)
             ->first();
@@ -456,6 +481,12 @@ class EmployeePaymentController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'status' => 'required|in:pending,completed,failed,cancelled',
