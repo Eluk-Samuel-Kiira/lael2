@@ -1,3 +1,4 @@
+@role('super_admin')
 <div class="card-body py-4" id="reloadtenantComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -46,7 +47,7 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-2 justify-content-end">
-                                    @can('view tenant')
+                                    @role('super_admin')
                                         <!-- Admin Users Button -->
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-dark d-flex align-items-center px-3 py-2" 
@@ -95,16 +96,14 @@
                                             data-bs-target="#appSettingsTenant{{$tenant->id}}">
                                             <i class="bi bi-app-indicator me-1 fs-5"></i> <span>{{ __('payments.app') }}</span>
                                         </button>
-                                    @endcan
 
-                                    @can('delete uom')
-                                        <button type="button" 
+                                        <!-- <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#deleteTenantModal{{$tenant->id}}">
                                             <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('auth._delete') }}</span>
-                                        </button>
-                                    @endcan
+                                        </button> -->
+                                    @endrole
                                 </div>
 
                                 @include('tenant.partials.modals.configuration-modal')
@@ -122,3 +121,4 @@
         </table>
     </div>
 </div>
+@endrole

@@ -24,7 +24,13 @@ class PurchasingReportsController extends Controller
      */
     private function getTenantId()
     {
-        return auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('purchasing reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+        return $tenantId;
     }
 
     /**

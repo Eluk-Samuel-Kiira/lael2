@@ -20,7 +20,12 @@ class OrderReportsController extends Controller
     // Order Summary Report - IMPROVED VERSION
     public function summary(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Default date range: Last 30 days
         $startDate = $request->get('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
@@ -129,6 +134,13 @@ class OrderReportsController extends Controller
     // Helper Methods for Query Building
     private function validateAndFormatDates($startDate, $endDate)
     {
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         try {
             $startDate = Carbon::parse($startDate)->format('Y-m-d');
             $endDate = Carbon::parse($endDate)->format('Y-m-d');
@@ -146,6 +158,12 @@ class OrderReportsController extends Controller
 
     private function buildOrderQuery($tenantId, $startDate, $endDate, $filters = [])
     {
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         $query = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
             
@@ -352,7 +370,12 @@ class OrderReportsController extends Controller
     // Sales by Customer Report
     public function byCustomer(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get and validate dates
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -463,7 +486,12 @@ class OrderReportsController extends Controller
     // Sales by Product/Variant Report
     public function byProduct(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get and validate dates
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -596,7 +624,12 @@ class OrderReportsController extends Controller
     // Payment Method Analysis Report
     public function byPaymentMethod(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -758,7 +791,12 @@ class OrderReportsController extends Controller
     // Employee Performance Report
     public function byEmployee(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -879,7 +917,12 @@ class OrderReportsController extends Controller
     // Time-based Sales Report
     public function timeAnalysis(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1015,7 +1058,12 @@ class OrderReportsController extends Controller
     // Returns and Refunds Report
     public function returnsRefunds(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1110,7 +1158,12 @@ class OrderReportsController extends Controller
     
     public function discountAnalysis(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1215,7 +1268,12 @@ class OrderReportsController extends Controller
     // Sales Forecast Report
     public function salesForecast(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get historical data (last 90 days by default)
         $startDate = $request->get('start_date', Carbon::now()->subDays(90)->format('Y-m-d'));
@@ -1287,7 +1345,12 @@ class OrderReportsController extends Controller
     // Inventory Sales Report (Sold vs Unsold)
     public function inventorySales(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));

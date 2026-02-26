@@ -23,6 +23,13 @@ class UserController extends Controller
     {
         $user = Auth::user();
         
+        if (!$user->hasPermissionTo('view user')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
         // Build the query with tenant relationship for super_admin
         $query = User::with(['userRole', 'userDepartment']);
         
@@ -63,6 +70,12 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create user')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Check maximum users limit
         $currentUserCount = User::where('tenant_id', $tenantId)->count();
@@ -147,11 +160,19 @@ class UserController extends Controller
      */
     public function update(UpdateEmployeeRequest $request, $id)
     {
+        // Get the authenticated user
+        $authUser = auth()->user();
+        
+        if (!$authUser->hasPermissionTo('edit user')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
         // Get the validated data
         $validatedData = $request->validated();
 
-        // Get the authenticated user
-        $authUser = auth()->user();
 
         // Check if the authenticated user has the required role
         if ($authUser) {
@@ -199,12 +220,24 @@ class UserController extends Controller
      */
     public function destroy($id)
     {
-        $user = User::find($id);
+        // Get the authenticated user
+        $authUser = auth()->user();
+        
+        if (!$authUser->hasPermissionTo('delete user')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $user = User::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
 
         // Get the authenticated user
         $authUser = auth()->user();
 
-        if ($authUser && in_array($authUser->role_id, [1])) { 
+        if ($authUser) { 
             $user->delete();
             
             return response()->json([
@@ -228,6 +261,13 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update user')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([
@@ -258,12 +298,15 @@ class UserController extends Controller
         $userToUpdate->status = $validated['status'];
         
         if ($userToUpdate->save()) {
+
+            // Return success response
             return response()->json([
                 'success' => true,
                 'reload' => true,
-                'refresh' => false,
                 'componentId' => 'reloadEmployeeComponent',
+                'refresh' => false,
                 'message' => __('auth._updated'),
+                'redirect' => route('employee.index'),
             ]);
         }
 
@@ -277,6 +320,10 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update user')) {
+            abort(403, __('payments.not_authorized'));
+        }
 
         // Find the employee and ensure it belongs to the same tenant
         $employee = User::where('id', $id)

@@ -17,6 +17,11 @@ class RoleController extends Controller
     {
         $user = Auth::user();
         
+        if (!$user->hasPermissionTo('admin only')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
+        
         $roles = Role::where('tenant_id', $user->tenant_id)
                     ->where('name', '!=', 'super_admin')
                     ->with('permissions')
@@ -32,12 +37,12 @@ class RoleController extends Controller
         switch ($bladeToReload) {
             case 'reloadRoleComponent':
                 return view('human-resource.role.role-component', [
-                    'all_roles' => $roles,  // 👈 Use the same $roles with user_count
+                    'all_roles' => $roles,
                     'permissions' => $permissions,
                 ]);
             default:
                 return view('human-resource.role-index', [
-                    'all_roles' => $roles,  // 👈 Use the same $roles with user_count
+                    'all_roles' => $roles, 
                     'permissions' => $permissions,
                 ]);
         }
@@ -47,7 +52,12 @@ class RoleController extends Controller
 
     public function permissionIndex(Request $request) 
     {
-        $users = User::where('tenant_id', current_tenant_id())->with('permissions')->latest()->get();
+        $user = Auth::user();
+        
+        if (!$user->hasPermissionTo('admin only')) {
+            abort(403, __('payments.not_authorized'));
+        }
+        $users = User::where('tenant_id', $user->tenant_id)->with('permissions')->latest()->get();
         $permissions = Permission::regular()->get();
 
         $bladeToReload = $request->query('bladeFileToReload');
@@ -68,6 +78,16 @@ class RoleController extends Controller
 
     public function updatePermission(Request $request, $user_id)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update permission')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Validate the input permissions
         $validatedPermission = $request->validate([
             'permissions' => 'nullable|array|max:2225',  
@@ -75,7 +95,9 @@ class RoleController extends Controller
         ]);
 
         try {
-            $user = User::findOrFail($user_id);
+            $user = User::where('id', $user_id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
             $permissions = Permission::regular()->whereIn('id', $validatedPermission['permissions'])->pluck('name');
 
@@ -106,6 +128,16 @@ class RoleController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create role')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $validatedPermission = $request->validate([
             'permissions' => 'required|array|max:2225',  
@@ -155,6 +187,13 @@ class RoleController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update role')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $validatedPermission = $request->validate([
             'permissions' => 'required|array|max:2225',  
@@ -216,6 +255,12 @@ class RoleController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+        if (!$user->hasPermissionTo('delete role')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Find the role and ensure it belongs to the tenant
         $role = Role::where('id', $id)
             ->whereNotIn('name', ['admin', 'super_admin'])

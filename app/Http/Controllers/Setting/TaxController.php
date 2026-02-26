@@ -17,6 +17,12 @@ class TaxController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!$user->hasPermissionTo('view tax')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Tax::query();
@@ -56,6 +62,12 @@ class TaxController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create tax')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'name' => [
@@ -121,6 +133,12 @@ class TaxController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit tax')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $tax = Tax::where('id', $id)
                 ->where('tenant_id', $tenantId)
@@ -184,6 +202,12 @@ class TaxController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+        if (!$user->hasPermissionTo('delete tax')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Find tax and ensure it belongs to the tenant
         $tax = Tax::where('id', $id)
                 ->where('tenant_id', $tenantId)
@@ -243,13 +267,22 @@ class TaxController extends Controller
 
     public function updateTaxStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update tax')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // \Log::info($id);
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $tax = Tax::find($id);
+        $tax = Tax::where('id', $id)->where('tenant_id', $tenantId)->first();
     
         if ($tax) {
             $tax->is_active = $validated['status']; 

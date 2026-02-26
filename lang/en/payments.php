@@ -50,6 +50,8 @@ return [
     'hours_worked' => 'Hours Worked',
     'hourly_rate' => 'Hourly Rate',
     'notes' => 'Notes',
+    'none' => 'None',
+    '_id' => 'ID-',
     'status' => 'Status',
     
     // Buttons
@@ -340,6 +342,9 @@ return [
     'unlimited' => 'Unlimited',
     'shops' => 'Shops',
     'locations' => 'Locations',
+    'no_manager' => 'No Manager',
+    'locations' => 'Locations',
+    'not_authorized' => 'Unauthorized action. You do not have permission to access this resource...',
     'users' => 'Users',
     'select_this_plan' => 'Select this plan',
     'plan_selected' => 'Plan Selected',

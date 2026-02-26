@@ -17,13 +17,22 @@ class PromotionController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view tax')) {
+            // abort(403, __('payments.not_authorized'));
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Promotion::query();
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+            $query->where('tenant_id', $tenantId);
         }
         
         $promotions = $query->latest()->get();
@@ -56,6 +65,13 @@ class PromotionController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('create promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'name' => [
@@ -116,6 +132,14 @@ class PromotionController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+        if (!$user->hasPermissionTo('edit promotion')) {
+            // abort(403, __('payments.not_authorized')); for reloading pages
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Find promotion and ensure it belongs to tenant
         $promotion = Promotion::where('id', $id)
                             ->where('tenant_id', $tenantId)
@@ -170,6 +194,12 @@ class PromotionController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find promotion and ensure it belongs to tenant
         $promotion = Promotion::where('id', $id)
@@ -217,13 +247,22 @@ class PromotionController extends Controller
 
     public function updatePromotionStatus(Request $request, $id) 
     {
-        // \Log::info($id);
-        // Validate the request data for status
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $promotion = Promotion::find($id);
+        $promotion = Promotion::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
+
     
         if ($promotion) {
             $promotion->is_active = $validated['status']; 

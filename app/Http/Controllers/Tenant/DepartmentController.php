@@ -16,6 +16,13 @@ class DepartmentController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+
+        if (!$user->hasPermissionTo('view department')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // If user is super_admin, get all departments without tenant filter
         if ($user->hasRole('super_admin')) {
@@ -53,6 +60,13 @@ class DepartmentController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('create department')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'name' => [
@@ -119,9 +133,17 @@ class DepartmentController extends Controller
     public function update(Request $request, string $id)
     {
         $user = Auth::user();
-        $tenantId = $user->tenant_id;
+        $tenantId = $user->tenant_id;        
+        if (!$user->hasPermissionTo('edit department')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
-        $department = Department::find($id);
+        $department = Department::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
         
         // Check if department exists and belongs to tenant
         if (!$department) {
@@ -175,8 +197,16 @@ class DepartmentController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete department')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
-        $department = Department::find($id);
+        $department = Department::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
         
         // Check if department exists and belongs to tenant
         if (!$department) {
@@ -263,13 +293,24 @@ class DepartmentController extends Controller
 
     public function changeDepartmentStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update department')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
     
         // Find the user by ID
-        $department = Department::find($id);
+        $department = Department::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
     
         if ($department) {
             $department->isActive = $validated['status']; 

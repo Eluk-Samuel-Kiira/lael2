@@ -59,10 +59,10 @@
                                     <img alt="Logo" src="{{ getProfileImage() }}" />
                                 </div>
                                 <div class="d-flex flex-column">
-                                    <div class="fw-bold d-flex align-items-center fs-5">{{ auth()->user()->name }}
+                                    <div class="fw-bold d-flex align-items-center fs-5">{{ auth()->user()->name ?? __('payments.none') }}
                                         <span class="badge badge-light-success fw-bold fs-8 px-2 py-1 ms-2">{{__('auth._pro')}}</span>
                                     </div>
-                                    <a href="#" class="fw-semibold text-muted text-hover-primary fs-7">{{ auth()->user()->email }}</a>
+                                    <a href="#" class="fw-semibold text-muted text-hover-primary fs-7">{{ auth()->user()->email ?? __('payments.none') }}</a>
                                 </div>
                             </div>
                         </div>

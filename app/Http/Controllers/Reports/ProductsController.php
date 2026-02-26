@@ -19,7 +19,12 @@ class ProductsController extends Controller
      */
     public function summary(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -138,7 +143,12 @@ class ProductsController extends Controller
      */
     public function performance(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -198,7 +208,12 @@ class ProductsController extends Controller
      */
     public function inventory(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -298,7 +313,12 @@ class ProductsController extends Controller
      */
     public function stockMovement(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -374,7 +394,12 @@ class ProductsController extends Controller
      */
     public function margin(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -466,7 +491,12 @@ class ProductsController extends Controller
      */
     public function byCategory(Request $request)
     {
-        $tenantId = auth()->user()->tenant_id;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('product reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
         
         // Get category performance
         $categories = ProductCategory::with(['products.variants'])

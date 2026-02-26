@@ -1,3 +1,4 @@
+@can('admin only')
 <div class="modal fade edit-role-modal" id="direct_permissions{{ $user->id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-900px">
         <div class="modal-content">
@@ -118,6 +119,7 @@
                         </div>
                     </div>
                     
+                    @can('update permission')
                     <div class="text-center pt-15">
                         <button type="reset" class="btn btn-light me-3" id="closeModalEditButton{{ $user->id }}" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
                         <button type="button" onclick="editInstanceLoopPermissions({{ $user->id }})" class="btn btn-primary" id="submitButton{{ $user->id }}">
@@ -128,6 +130,7 @@
                             </span>
                         </button>
                     </div>
+                    @endcan
                 </form>
             </div>
         </div>
@@ -312,3 +315,4 @@
 
     }
 </script>
+@endcan

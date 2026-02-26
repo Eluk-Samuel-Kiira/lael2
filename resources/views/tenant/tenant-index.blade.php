@@ -32,14 +32,12 @@
                         onkeyup="searchTable(this.value, 'kt_table_users')">
                 </div>
                 
-                @can('create promotion')
+                @role('super_admin')
                     <a href="{{ route('tenant.create') }}" class="btn btn-sm btn-primary">
                         <i class="ki-duotone ki-plus fs-2"></i>{{__('payments.new_tenant')}}
                     </a>
-                @endcan
                 
-                <!-- Refresh Billing Plans Button -->
-                @role('super_admin')
+                    <!-- Refresh Billing Plans Button -->
                     <button type="button" class="btn btn-sm btn-light-warning" id="refreshPlansBtn" onclick="refreshBillingPlans()">
                         <i class="ki-duotone ki-arrows-circle fs-2">
                             <span class="path1"></span>

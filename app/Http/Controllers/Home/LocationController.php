@@ -16,9 +16,16 @@ class LocationController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!$user->hasPermissionTo('view location')) {
+            // abort(403, __('payments.not_authorized'));
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Start the query with relationships
-        $query = Location::with('locationCreater', 'locationManager');
+        $query = Location::with('locationCreater', 'locationManager', 'departments');
         
         // Apply tenant filter only if not super_admin
         if (!$user->hasRole('super_admin')) {
@@ -53,6 +60,15 @@ class LocationController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create location')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         $request->validate([
             'name' => 'required|string|max:55|unique:locations,name',
             'address' => 'required|string|max:55',
@@ -60,8 +76,6 @@ class LocationController extends Controller
             'currency_id' => 'required|exists:currencies,id',
         ]);
 
-        $user = Auth::user();
-        $tenantId = $user->tenant_id;
 
         // Check maximum locations limit
         $currentLocationCount = Location::where('tenant_id', $tenantId)->count();
@@ -116,6 +130,12 @@ class LocationController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit location')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find location and ensure it belongs to tenant
         $location = Location::where('id', $id)
@@ -189,7 +209,16 @@ class LocationController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        $location = Location::find($id);
+        if (!$user->hasPermissionTo('delete location')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $location = Location::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
         
         // Check if location exists and belongs to tenant
         if (!$location) {
@@ -199,7 +228,7 @@ class LocationController extends Controller
             ]);
         }
 
-        if ($location->tenant_id !== $tenantId) {
+        if (($location->departments->count() > 0)) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.unauthorized_access'),
@@ -264,12 +293,24 @@ class LocationController extends Controller
         
     public function updatePrimaryStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update location')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $location = Location::find($id);
+        $location = Location::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
     
         if ($location) {
             $location->is_primary = $validated['status']; 
@@ -294,13 +335,24 @@ class LocationController extends Controller
     
     public function updateLocationStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update location')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         // \Log::info($request->all());
         
-        $location = Location::find($id);
+        $location = Location::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
     
         if ($location) {
             $location->is_active = $validated['status']; 

@@ -18,6 +18,13 @@ class CurrencyController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         
+        if (!$user->hasPermissionTo('view currency')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
         $query = Currency::where('tenant_id', $tenantId);
         
         // If user is super_admin, also show all other currencies
@@ -58,6 +65,13 @@ class CurrencyController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create currency')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Get the tenant's base currency
         $baseCurrency = Currency::where('tenant_id', $tenantId)
@@ -167,6 +181,13 @@ class CurrencyController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('edit currency')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Get the tenant's base currency
         $baseCurrency = Currency::where('tenant_id', $tenantId)
@@ -257,6 +278,13 @@ class CurrencyController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('delete currency')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Check if currency belongs to current tenant
         if ($currency->tenant_id !== $tenantId) {
@@ -276,6 +304,14 @@ class CurrencyController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('auth.base_currency_cannot_be_deleted'),
+            ]);
+        }
+
+        // Check if currency is attached to any location
+        if ($currency->locations()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.currency_in_use'),
             ]);
         }
 
@@ -304,6 +340,13 @@ class CurrencyController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
+                
+        if (!$user->hasPermissionTo('update currency')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',

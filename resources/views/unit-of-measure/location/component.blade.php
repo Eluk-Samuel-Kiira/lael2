@@ -1,3 +1,4 @@
+@can('view location')
 <div class="card-body py-4" id="locationIndexTable">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -83,6 +84,7 @@
                                         </button>
                                     @endcan
                                     
+                                    @if($location->departments->count() == 0)
                                     @can('delete location')
                                         <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
@@ -92,6 +94,7 @@
                                             <span>{{ __('Delete') }}</span>
                                         </button>
                                     @endcan 
+                                    @endif
                                 </div>
 
                                 <!-- View Departments Modal -->
@@ -127,17 +130,17 @@
                                                                             <div class="d-flex align-items-center">
                                                                                 <div class="symbol symbol-35px symbol-circle me-2">
                                                                                     <span class="symbol-label bg-light-primary text-primary fw-bold">
-                                                                                        {{ substr($department->manager->name ?? 'NA', 0, 2) }}
+                                                                                        {{ substr($department->departmentManager->name ?? 'NA', 0, 2) }}
                                                                                     </span>
                                                                                 </div>
-                                                                                <span>{{ $department->manager->name ?? 'No Manager' }}</span>
+                                                                                <span>{{ $department->departmentManager->name ?? __('payments.no_manager') }}</span>
                                                                             </div>
                                                                         </td>
                                                                         <td>
-                                                                            @if($department->is_active)
-                                                                                <span class="badge badge-light-success">{{ __('Active') }}</span>
+                                                                            @if($department->isActive)
+                                                                                <span class="badge badge-light-success">{{ __('payments.active') }}</span>
                                                                             @else
-                                                                                <span class="badge badge-light-secondary">{{ __('Inactive') }}</span>
+                                                                                <span class="badge badge-light-secondary">{{ __('payments.inactive') }}</span>
                                                                             @endif
                                                                         </td>
                                                                         <td>{{ $department->created_at->format('d M Y') }}</td>
@@ -208,3 +211,4 @@
         </table>
     </div>
 </div>
+@endcan

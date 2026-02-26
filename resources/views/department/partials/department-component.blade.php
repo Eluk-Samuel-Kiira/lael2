@@ -1,3 +1,4 @@
+@can('view department')
 <div class="card-body py-4" id="departmentIndexTable">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -29,19 +30,19 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $department->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $department->id }}</div>
                             </td>
                             <td>{{ $department->name }}</td>
-                            <td>{{ $department->location->name ?? 'None' }}</td>
+                            <td>{{ $department->location->name ?? __('payments.none') }}</td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $department->departmentCreater->name ?? 'None' }}</div>
+                                <div class="badge badge-light fw-bold">{{ $department->departmentCreater->name ?? __('payments.none') }}</div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $department->departmentManager->name ?? 'None' }}</div>
+                                <div class="badge badge-light fw-bold">{{ $department->departmentManager->name ?? __('payments.none') }}</div>
                             </td>
                             {{--
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $department->departmentTenant->name ?? 'None' }}</div>
+                                <div class="badge badge-light fw-bold">{{ $department->departmentTenant->name ?? __('payments.none') }}</div>
                             </td>
                             --}}
                             <td>{{ $department->created_at->format('d M Y, h:i a') }}</td>
@@ -112,6 +113,7 @@
         </table>
     </div>
 </div>
+@endcan
 
 
 

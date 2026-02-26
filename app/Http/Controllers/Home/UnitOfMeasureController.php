@@ -16,6 +16,13 @@ class UnitOfMeasureController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+
+        if (!$user->hasPermissionTo('view uom')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = UnitOfMeasure::query();
@@ -55,6 +62,13 @@ class UnitOfMeasureController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('create uom')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $request->validate([
             'name' => [
@@ -106,11 +120,20 @@ class UnitOfMeasureController extends Controller
     */
     public function update(Request $request, $id)
     {
-        $uOM = UnitOfMeasure::find($id);
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit uom')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
-        \Log::info($uOM);
+        $uOM = UnitOfMeasure::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+        // \Log::info($uOM);
         
         $request->validate([
             'name' => [
@@ -147,7 +170,17 @@ class UnitOfMeasureController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         
-        $unitOfMeasure = UnitOfMeasure::find($id);
+
+        if (!$user->hasPermissionTo('delete uom')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $unitOfMeasure = UnitOfMeasure::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
         
         // Check if UOM exists
         if (!$unitOfMeasure) {
@@ -200,6 +233,13 @@ class UnitOfMeasureController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update uom')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([
@@ -207,7 +247,9 @@ class UnitOfMeasureController extends Controller
         ]);
 
         // Find the UOM by ID
-        $uom = UnitOfMeasure::find($id);
+        $uom = UnitOfMeasure::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
         if (!$uom) {
             return response()->json([
