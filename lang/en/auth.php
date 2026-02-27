@@ -862,6 +862,9 @@ return [
     '_permissions' => 'Permissions',
     '_permission' => 'Permissions',
     '_users_table' => 'Users Table',
+    '_loading' => 'Loading...',
+    'no_departments_found' => 'No departments found for this location',
+    'error_loading_departments' => 'Error loading departments',
 
     // Product Margin Report Translations
     'product_margin' => 'Product Margin',

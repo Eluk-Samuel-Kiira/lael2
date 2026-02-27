@@ -1,5 +1,5 @@
 <x-app-layout>
-    @section('title', __('pagination._inventory_item'))
+    @section('title', __('passwords.inv_adjustments'))
     @section('content')
 
     @unless(tenant_is_single_shop(auth()->user()->tenant_id))

@@ -17,13 +17,21 @@ class CategoryController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view category')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Category::with('categoryCreater');
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+            $query->where('tenant_id', $tenantId);
         }
         
         $categories = $query->latest()->get();
@@ -56,6 +64,13 @@ class CategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create category')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $validated = $request->validate([
             'name' => [
@@ -119,6 +134,13 @@ class CategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('edit category')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Check if category belongs to tenant
         if ($category->tenant_id !== $tenantId) {
@@ -163,6 +185,13 @@ class CategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('delete category')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Check if category belongs to tenant
         if ($category->tenant_id !== $tenantId) {
@@ -205,12 +234,23 @@ class CategoryController extends Controller
 
     public function changeCategoryStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update category')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $category = Category::find($id);
+        $category = Category::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
     
         if ($category) {
             $category->is_active = $validated['status']; 

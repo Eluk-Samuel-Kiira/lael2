@@ -19,6 +19,14 @@ class ProductCategoryController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view subcategory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = ProductCategory::with('productCategoryCreater', 'parentCategory');
@@ -48,6 +56,13 @@ class ProductCategoryController extends Controller
      */
     public function create()
     {
+        $user = Auth::user();
+        // $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create subcategory')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         return view('inventory.product-category.create', [
             
         ]);
@@ -59,9 +74,13 @@ class ProductCategoryController extends Controller
     
     public function store(Request $request)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('create subcategory')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         try {
-            $user = Auth::user();
-            $tenantId = $user->tenant_id;
 
             $validated = $request->validate([
                 'name' => [
@@ -144,6 +163,12 @@ class ProductCategoryController extends Controller
      */
     public function edit(ProductCategory $productCategory)
     {
+        
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit subcategory')) {
+            abort(403, __('payments.not_authorized'));
+        }
         return view('inventory.product-category.edit', compact('productCategory'));
     }
 
@@ -152,9 +177,14 @@ class ProductCategoryController extends Controller
      */
     public function update(Request $request, $id)
     {
+        
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('edit subcategory')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
         try {
-            $user = Auth::user();
-            $tenantId = $user->tenant_id;
 
             // Find product category and ensure it belongs to tenant
             $category = ProductCategory::where('id', $id)
@@ -236,6 +266,13 @@ class ProductCategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('delete subcategory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find product category and ensure it belongs to tenant
         $category = ProductCategory::where('id', $id)
@@ -257,7 +294,7 @@ class ProductCategoryController extends Controller
         }
 
         // Check if product category is attached to any products
-        $attachedToProducts = Product::where('product_category_id', $id)
+        $attachedToProducts = Product::where('category_id', $id)
             ->where('tenant_id', $tenantId)
             ->exists();
 

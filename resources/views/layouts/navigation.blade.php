@@ -67,6 +67,7 @@
                 </div>
 
                 <!-- POS -->
+                @can('view order')
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -103,6 +104,7 @@
                         </div>
                     </div>
                 </div>
+                @endcan
 
                 <!-- Product Catalog -->
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
@@ -120,6 +122,7 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+                        @can('view category')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('category.index') }}')">
                                 <span class="menu-bullet">
@@ -128,6 +131,8 @@
                                 <span class="menu-title">{{ __('pagination._category') }}</span>
                             </a>
                         </div>
+                        @endcan
+                        @can('view subcategory')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('product-category.index') }}')">
                                 <span class="menu-bullet">
@@ -136,6 +141,8 @@
                                 <span class="menu-title">{{ __('pagination.product_category') }}</span>
                             </a>
                         </div>
+                        @endcan
+                        @can('view product')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('products.index') }}')">
                                 <span class="menu-bullet">
@@ -144,6 +151,7 @@
                                 <span class="menu-title">{{ __('pagination._products') }}</span>
                             </a>
                         </div>
+                        @endcan
 
                     </div>
                 </div>
@@ -166,6 +174,7 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+                        @can('view inventory')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('items.index') }}')">
                                 <span class="menu-bullet">
@@ -183,6 +192,7 @@
                                 <span class="menu-title">{{ __('passwords.stock_adjustments') }}</span>
                             </a>
                         </div>
+                        @endcan
 
                     </div>
                 </div>

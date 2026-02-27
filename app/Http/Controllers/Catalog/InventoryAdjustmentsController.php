@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\InventoryItems;
 use App\Models\InventoryAdjustments;
-use App\Models\InventoryTransactions;
+use App\Models\{ InventoryTransactions, Department, Location };
+use Illuminate\Support\Facades\{ Auth, DB };
 
 class InventoryAdjustmentsController extends Controller
 {
@@ -15,15 +16,25 @@ class InventoryAdjustmentsController extends Controller
      */
     public function index(Request $request)
     {
-        // Retrieve only those items that have its variants is active
-        $items = InventoryItems::with(['variant', 'itemCreater', 'itemLocation'])
-                ->whereHas('variant', function ($query) {
-                $query->where('is_active', 1);
-            })
-            ->orderBy('department_id', 'asc')
-            ->latest()
-            ->get();
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update stock levels')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
+        // Retrieve only those items that have its variants is active
+        $items = InventoryItems::with(['variant', 'itemCreater'])
+                ->whereHas('variant', function ($query) use ($tenantId) {
+                    $query->where('is_active', 1)
+                        ->where('tenant_id', $tenantId);
+                })
+                ->where('tenant_id', $tenantId)
+                ->latest()
+                ->get();
 
         $bladeToReload = $request->query('bladeFileToReload');
         switch ($bladeToReload) {
@@ -74,65 +85,155 @@ class InventoryAdjustmentsController extends Controller
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id)
-    {       
+    {     
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update stock levels')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        // Get the item first to check variant stock
+        $item = InventoryItems::with('variant')
+                        ->where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ]);
+        }
+
+        if (!$item->variant) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.variant_not_found'),
+            ]);
+        }
+
+        // Validate only the fields we need from the request
         $validated = $request->validate([
-            'overal_quantity_at_hand' => 'required',
-            'current_quantity' => 'required',
-            'adjust_amount' => 'required',
-            'new_quantity' => 'required',
+            'overal_quantity_at_hand' => 'required|integer|min:0',
+            'current_quantity' => 'required|integer|min:0',
+            'adjust_amount' => [
+                'required',
+                'integer',
+                function ($attribute, $value, $fail) use ($item) {
+                    // For positive (adding to branch), check overall stock
+                    if ($value > 0 && $value > $item->variant->overal_quantity_at_hand) {
+                        $fail(__('pagination.adjust_amount_exceeds_stock'));
+                    }
+                    // For negative (removing from branch), check branch stock
+                    if ($value < 0 && abs($value) > $item->quantity_allocated) {
+                        $fail(__('pagination.cannot_remove_more_than_allocated'));
+                    }
+                }
+            ],
         ]);
 
-        $item = InventoryItems::findOrFail($id);
-        // \Log::info($item);
+        // Calculate new quantity automatically
+        $validated['new_quantity'] = $validated['current_quantity'] + $validated['adjust_amount'];
 
-        // update adjustment
-        $item->update([
-            'quantity_allocated' => (int) $validated['new_quantity']
-        ]);
+        // Ensure new quantity is not negative
+        if ($validated['new_quantity'] < 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.new_quantity_negative'),
+            ]);
+        }
 
-        if ($item->variant) {
-            // \Log::info($item->variant);
+        // Skip if no actual adjustment is being made
+        if ($validated['adjust_amount'] == 0) {
+            return response()->json([
+                'success' => true,
+                'message' => __('pagination.no_adjustment_needed'),
+            ]);
+        }
+
+        // Start transaction
+        DB::beginTransaction();
+
+        try {
+            // Update inventory item quantity with calculated value
+            $item->update([
+                'quantity_allocated' => (int) $validated['new_quantity']
+            ]);
+
+            // Update variant overall quantity - FIXED LOGIC
+            if ($validated['adjust_amount'] > 0) {
+                // Moving FROM overall TO branch: decrease overall
+                $newOverallQuantity = $item->variant->overal_quantity_at_hand - $validated['adjust_amount'];
+            } else {
+                // Moving FROM branch BACK TO overall: increase overall
+                $newOverallQuantity = $item->variant->overal_quantity_at_hand + abs($validated['adjust_amount']);
+            }
             
-            // Update overall quantity
-            $item->variant->overal_quantity_at_hand = max(0, $validated['overal_quantity_at_hand']);
+            $item->variant->overal_quantity_at_hand = max(0, $newOverallQuantity);
             $item->variant->save();
 
-            // ✅ Record adjustment (audit trail) — use $item->id here
+            // Determine the direction for notes
+            $direction = $validated['adjust_amount'] > 0 
+                ? 'from overall stock to branch' 
+                : 'from branch back to overall stock';
+            
+            $action = $validated['adjust_amount'] > 0 ? 'Added' : 'Returned';
+
+            // ✅ Record adjustment (audit trail)
             InventoryAdjustments::create([
                 'quantity_before' => (int) $validated['current_quantity'],
                 'quantity_after'  => (int) $validated['new_quantity'],
                 'reason'          => 'stock_adjustment',
-                'notes'           => 'Adding or removing stock quantity of product_variant #' . $item->variant->name,
-                'inventory_id'    => $item->id, // 🔹 use inventory item ID, not variant ID
+                'notes'           => $action . ' ' . abs($validated['adjust_amount']) . ' units ' . $direction . ' for ' . $item->variant->name,
+                'inventory_id'    => $item->id,
                 'created_by'      => auth()->id() ?? null,
                 'tenant_id'       => $item->tenant_id,
             ]);
 
-            // ✅ Record transaction (movement) — also use $item->id
+            // ✅ Record transaction (movement)
             InventoryTransactions::create([
-                'quantity'       => (int) $validated['adjust_amount'],
+                'quantity'       => (int) $validated['adjust_amount'], // Keep original sign
                 'reference_id'   => $item->id,
                 'reference_type' => 'adjustment',
                 'type'           => 'adjustment',
-                'notes'          => 'Adjusted ' . (int) $validated['adjust_amount'] . ' units of ' . $item->variant->name,
-                'inventory_id'   => $item->id, // 🔹 use inventory item ID
+                'notes'          => $action . ' ' . abs($validated['adjust_amount']) . ' units ' . $direction,
+                'inventory_id'   => $item->id,
                 'created_by'     => auth()->id() ?? null,
                 'tenant_id'      => $item->tenant_id,
             ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'refresh' => false,
+                'componentId' => 'reloadStockComponent',
+                'message' => __('passwords._stock_adjusted'),
+                'redirect' => route('stocks.index'),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('Stock adjustment failed', [
+                'item_id' => $id,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.adjustment_failed') . ': ' . $e->getMessage(),
+            ]);
         }
-
-
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'refresh' => false,
-            'componentId' => 'reloadStockComponent',
-            'message' => __('passwords._stock_adjusted'),
-            'redirect' => route('stocks.index'),
-        ]);
-
     }
-
+    
     /**
      * Remove the specified resource from storage.
      */
@@ -145,12 +246,63 @@ class InventoryAdjustmentsController extends Controller
    
     public function transferStock(Request $request, string $id)
     {
-        // 1️⃣ Validate input
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('transfer stock')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
+        // 1️⃣ Validate input with department-location relationship check
         $validated = $request->validate([
-            'department_id'    => 'required|integer',
-            'location_id'      => 'required|integer',
+            'department_id'    => [
+                'required',
+                'integer',
+                'exists:departments,id',
+                function ($attribute, $value, $fail) use ($tenantId, $request) {
+                    // Check if department exists and belongs to tenant
+                    $department = Department::where('id', $value)
+                                        ->where('tenant_id', $tenantId)
+                                        ->first();
+                    
+                    if (!$department) {
+                        $fail(__('pagination.department_invalid'));
+                        return;
+                    }
+                    
+                    // Check if department belongs to the selected location
+                    if ($department->location_id != $request->location_id) {
+                        $fail(__('pagination.department_not_belong_to_location'));
+                    }
+                }
+            ],
+            'location_id'      => [
+                'required',
+                'integer',
+                'exists:locations,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    $location = Location::where('id', $value)
+                                    ->where('tenant_id', $tenantId)
+                                    ->first();
+                    if (!$location) {
+                        $fail(__('pagination.location_invalid'));
+                    }
+                }
+            ],
             'current_quantity' => 'required|integer|min:0',
             'adjust_amount'    => 'required|integer|min:1',
+        ], [
+            'department_id.required' => __('pagination.department_required'),
+            'location_id.required' => __('pagination.location_required'),
+            'current_quantity.required' => __('pagination.current_quantity_required'),
+            'current_quantity.integer' => __('pagination.current_quantity_integer'),
+            'current_quantity.min' => __('pagination.current_quantity_min'),
+            'adjust_amount.required' => __('pagination.adjust_amount_required'),
+            'adjust_amount.integer' => __('pagination.adjust_amount_integer'),
+            'adjust_amount.min' => __('pagination.adjust_amount_min'),
         ]);
 
         $adjustAmount = (int) $validated['adjust_amount'];
@@ -165,7 +317,16 @@ class InventoryAdjustmentsController extends Controller
         }
 
         // 3️⃣ Source inventory item
-        $sourceItem = InventoryItems::findOrFail($id);
+        $sourceItem = InventoryItems::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+
+        if (!$sourceItem) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ]);
+        }
 
         // 4️⃣ If source and target are same location & department, do nothing
         if ($sourceItem->location_id == $validated['location_id'] &&
@@ -181,6 +342,7 @@ class InventoryAdjustmentsController extends Controller
         $targetItem = InventoryItems::where('variant_id', $sourceItem->variant_id)
             ->where('location_id', $validated['location_id'])
             ->where('department_id', $validated['department_id'])
+            ->where('tenant_id', $tenantId)
             ->first();
 
         if (!$targetItem) {
@@ -245,7 +407,6 @@ class InventoryAdjustmentsController extends Controller
             'created_by'     => auth()->id() ?? null,
             'tenant_id'      => $targetItem->tenant_id,
         ]);
-
 
         return response()->json([
             'success' => true,

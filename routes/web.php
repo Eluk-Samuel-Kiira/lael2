@@ -182,6 +182,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::put('/transfer-stock/{id}', [InventoryAdjustmentsController::class, 'transferStock'])
             ->name('transfer.stock');
 
+        Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
+
         
         // Location
         Route::resource('locations', LocationController::class);

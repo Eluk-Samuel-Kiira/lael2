@@ -1,3 +1,4 @@
+@can('view order')
 <div class="d-flex flex-column flex-xl-row">
     <div class="d-flex flex-row-fluid me-xl-9 mb-10 mb-xl-0">
         <div class="card card-flush card-p-0 bg-transparent border-0">
@@ -106,7 +107,7 @@
                                                 </div>
 
                                                 <span class="text-success text-end fw-bold fs-1">
-                                                    {{ displayFormatedCurrency($variant->price) }} {{ currencySymbol() }}
+                                                    {{ $variant->price }} {{ currency_symbol() }}
                                                 </span>
                                             </div>
                                         </div>
@@ -414,6 +415,7 @@
                     </div>
                     
                     <!-- Process Bill Button -->
+                    @can('create order')
                     <div class="mt-8">
                         <button 
                             id="processBill" 
@@ -426,6 +428,7 @@
                             </span>
                         </button>
                     </div>
+                    @endcan
                 </div>
 
                 <style>
@@ -543,5 +546,5 @@
     newOption.addEventListener('change', toggleCustomerFields);
 </script>
 @include('orders.pos.payment-mode')
-
+@endcan
 

@@ -20,6 +20,13 @@ class InventoryItemController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = InventoryItems::with(['variant', 'itemCreater', 'itemLocation']);
@@ -70,6 +77,13 @@ class InventoryItemController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create inventory record')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Fetch the variant first and ensure it belongs to tenant
         $variant = \DB::table('product_variants')
@@ -101,12 +115,20 @@ class InventoryItemController extends Controller
                 'required',
                 'integer',
                 'exists:departments,id',
-                function ($attribute, $value, $fail) use ($tenantId) {
+                function ($attribute, $value, $fail) use ($tenantId, $request) {
+                    // Check if department exists and belongs to tenant
                     $department = Department::where('id', $value)
                                         ->where('tenant_id', $tenantId)
                                         ->first();
+                    
                     if (!$department) {
-                        $fail('The selected department is invalid.');
+                        $fail(__('pagination.selected_dpt_invalid'));
+                        return;
+                    }
+                    
+                    // Check if department belongs to the selected location
+                    if ($department->location_id != $request->location_id) {
+                        $fail('The selected department does not belong to the selected location.');
                     }
                 }
             ],
@@ -217,6 +239,13 @@ class InventoryItemController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('edit inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find inventory item and ensure it belongs to tenant
         $item = InventoryItems::with('variant')
@@ -246,12 +275,20 @@ class InventoryItemController extends Controller
             'department_id'       => [
                 'required',
                 'exists:departments,id',
-                function ($attribute, $value, $fail) use ($tenantId) {
+                function ($attribute, $value, $fail) use ($tenantId, $request) {
+                    // Check if department exists and belongs to tenant
                     $department = Department::where('id', $value)
                                         ->where('tenant_id', $tenantId)
                                         ->first();
+                    
                     if (!$department) {
-                        $fail('The selected department is invalid.');
+                        $fail(__('pagination.department_invalid'));
+                        return;
+                    }
+                    
+                    // Check if department belongs to the selected location
+                    if ($department->location_id != $request->location_id) {
+                        $fail(__('pagination.department_not_belong_to_location'));
                     }
                 }
             ],
@@ -264,7 +301,7 @@ class InventoryItemController extends Controller
                                     ->where('tenant_id', $tenantId)
                                     ->first();
                     if (!$location) {
-                        $fail('The selected location is invalid.');
+                        $fail(__('pagination.location_invalid'));
                     }
                 }
             ],

@@ -18,6 +18,14 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         
         // Build the query
         $query = Product::with('category', 'productCreater');
@@ -57,10 +65,17 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         $data = $request->validate([
             'category_id' => [
-                'nullable',
+                'required',
                 'exists:product_categories,id',
                 function ($attribute, $value, $fail) use ($tenantId) {
                     if ($value) {
@@ -129,6 +144,13 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Build the query
         $query = Product::with('variants')->where('id', $id);
@@ -164,6 +186,13 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('edit product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find product and ensure it belongs to tenant
         $product = Product::where('id', $id)
@@ -233,6 +262,13 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('delete product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find product and ensure it belongs to tenant
         $product = Product::where('id', $id)
@@ -306,12 +342,24 @@ class ProductController extends Controller
     
     public function changeProductStatus(Request $request, $id) 
     {
+        
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $product = Product::find($id);
+        $product = Product::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
     
         if ($product) {
             $product->is_active = $validated['status']; 
@@ -337,12 +385,23 @@ class ProductController extends Controller
     
     public function changeProductTaxStatus(Request $request, $id) 
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update product tax-promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
         ]);
         
-        $product = Product::find($id);
+        $product = Product::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
     
         if ($product) {
             $product->is_taxable = $validated['status']; 
@@ -371,6 +430,16 @@ class ProductController extends Controller
 
     public function uploadProductImage(Request $request)
     {
+        
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('upload product photo')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         // Validate the request to ensure the file exists
         $request->validate([
             'photo' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', 
@@ -402,6 +471,10 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update product')) {
+            abort(403, __('payments.not_authorized'));
+        }
 
         // Check if product belongs to tenant
         if ($product->tenant_id !== $tenantId) {

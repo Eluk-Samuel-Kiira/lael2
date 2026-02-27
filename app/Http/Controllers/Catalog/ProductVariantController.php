@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ProductVariant;
-use App\Models\{ Product, UnitOfMeasure };
+use App\Models\{ Product, UnitOfMeasure, Tax, Promotion };
 use Illuminate\Support\Facades\{ Auth, DB };
 use Illuminate\Validation\Rule;
 
@@ -34,6 +34,10 @@ class ProductVariantController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create variant')) {
+            abort(403, __('payments.not_authorized'));
+        }
 
         $validated = $request->validate([
             'product_id' => [
@@ -157,6 +161,10 @@ class ProductVariantController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view variant')) {
+            abort(403, __('payments.not_authorized'));
+        }
 
         // Find product and ensure it belongs to tenant
         $product = Product::where('id', $id)
@@ -181,6 +189,13 @@ class ProductVariantController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Find product variant and ensure it belongs to tenant
         $productVariant = ProductVariant::where('id', $id)
@@ -272,7 +287,20 @@ class ProductVariantController extends Controller
     public function destroy(string $id)
     {
         
-        $product = ProductVariant::find($id);
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('delete variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $product = ProductVariant::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+
         if ($product->is_active === 1) {
             return response()->json([
                 'success' => false,
@@ -295,6 +323,13 @@ class ProductVariantController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([
@@ -333,8 +368,16 @@ class ProductVariantController extends Controller
 
     public function uploadVariantImage(Request $request)
     {
+        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('upload variant image')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request to ensure the file exists
         $request->validate([
@@ -383,8 +426,16 @@ class ProductVariantController extends Controller
 
     public function changeProductVariantTaxStatus(Request $request, $id) 
     {
+        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update variant tax-promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Validate the request data for status
         $validated = $request->validate([
@@ -427,8 +478,13 @@ class ProductVariantController extends Controller
 
     public function updateVariantAssignments(Request $request, $id)
     {
+        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('update variant tax-promotion')) {
+            abort(403, __('payments.not_authorized'));
+        }
 
         try {
             // Find product variant and ensure it belongs to tenant

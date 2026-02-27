@@ -421,7 +421,174 @@
         handleEditResponse(data, updateUrl, uniqueId, submitButton);
     }
 
+    
+    $(document).ready(function() {
+        // ========== REUSABLE FUNCTIONS ==========
+        
+        // Generic function to load departments based on location
+        function loadDepartments(locationId, targetSelect, options = {}) {
+            const {
+                modal = null,
+                selectedDeptId = null,
+                placeholder = "{{__('auth._department')}}",
+                isFilter = false
+            } = options;
+            
+            // Show loading
+            targetSelect.html(`<option value="">${isFilter ? '{{ __("auth._department") }}' : ''}{{ __("auth._loading") }}</option>`);
+            if (targetSelect.data('select2')) targetSelect.trigger('change');
+            
+            if (!locationId) {
+                // No location - reset to default state
+                if (isFilter) {
+                    // Reset to all departments for filter
+                    let options = '<option value="">{{ __("auth._department") }}</option>';
+                    @foreach ($departments as $department)
+                        options += '<option value="{{ $department->id }}">{{ $department->name }}</option>';
+                    @endforeach
+                    targetSelect.html(options).prop('disabled', false);
+                } else {
+                    // Clear for modals
+                    targetSelect.html('<option value=""></option>').prop('disabled', false);
+                }
+                
+                if (targetSelect.data('select2')) targetSelect.trigger('change');
+                return;
+            }
+            
+            // Fetch departments via AJAX
+            $.ajax({
+                url: '{{ route("get.departments.by.location", "") }}/' + locationId,
+                type: 'GET',
+                dataType: 'json',
+                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
+                success: function(response) {
+                    let options = isFilter ? '<option value="">{{ __("auth._department") }}</option>' : '<option value=""></option>';
+                    
+                    if (response.success && response.departments.length > 0) {
+                        // Sort alphabetically
+                        const sortedDepts = response.departments.sort((a, b) => a.name.localeCompare(b.name));
+                        
+                        sortedDepts.forEach(dept => {
+                            const selected = (selectedDeptId && dept.id == selectedDeptId) ? 'selected' : '';
+                            options += `<option value="${dept.id}" ${selected}>${dept.name}</option>`;
+                        });
+                        targetSelect.html(options).prop('disabled', false);
+                    } else {
+                        options += '<option value="" disabled>{{ __("auth.no_departments_found") }}</option>';
+                        targetSelect.html(options).prop('disabled', true);
+                    }
+                    
+                    if (targetSelect.data('select2')) targetSelect.trigger('change');
+                },
+                error: function() {
+                    targetSelect.html('<option value="">{{ __("auth.error_loading_departments") }}</option>').prop('disabled', true);
+                    if (targetSelect.data('select2')) targetSelect.trigger('change');
+                }
+            });
+        }
+        
+        // Generic function to initialize modal selects
+        function initModalSelects(modal, locationSelect, departmentSelect, originalDeptId = null) {
+            // Store original department ID
+            modal.data('department-id', originalDeptId || departmentSelect.val());
+            
+            // Initialize Select2
+            [locationSelect, departmentSelect].forEach(select => {
+                if (select.data('select2')) select.select2('destroy');
+                select.select2({
+                    placeholder: "{{__('auth._select')}}",
+                    allowClear: true,
+                    dropdownParent: modal
+                });
+            });
+            
+            // Load departments if location is selected
+            const locationId = locationSelect.val();
+            if (locationId) {
+                setTimeout(() => loadDepartments(locationId, departmentSelect, {
+                    modal,
+                    selectedDeptId: modal.data('department-id')
+                }), 200);
+            }
+        }
+        
+        // ========== CREATE MODAL ==========
+        $('#kt_modal_add_inventory').on('shown.bs.modal', function() {
+            const modal = $(this);
+            const locationSelect = modal.find('select[name="location_id"]');
+            const departmentSelect = modal.find('select[name="department_id"]');
+            
+            modal.find('form')[0]?.reset();
+            departmentSelect.html('<option value=""></option>');
+            initModalSelects(modal, locationSelect, departmentSelect);
+        });
+        
+        // ========== EDIT MODALS ==========
+        $(document).on('show.bs.modal', '[id^="editItem"]', function() {
+            const modal = $(this);
+            initModalSelects(
+                modal,
+                modal.find('select[name="location_id"]'),
+                modal.find('select[name="department_id"]')
+            );
+        });
+        
+        // ========== STOCK TRANSFER MODALS ==========
+        $(document).on('show.bs.modal', '[id^="stockTransfer"]', function() {
+            const modal = $(this);
+            const locationSelect = modal.find('select[name="location_id"]');
+            const departmentSelect = modal.find('select[name="department_id"]');
+            
+            initModalSelects(modal, locationSelect, departmentSelect);
+        });
+        
+        // ========== LOCATION CHANGE HANDLER (ALL MODALS) ==========
+        $(document).on('change', '[id^="editItem"] select[name="location_id"], [id^="stockTransfer"] select[name="location_id"], #kt_modal_add_inventory select[name="location_id"]', function() {
+            const locationId = $(this).val();
+            const modal = $(this).closest('.modal');
+            const departmentSelect = modal.find('select[name="department_id"]');
+            
+            loadDepartments(locationId, departmentSelect, {
+                modal,
+                selectedDeptId: modal.data('department-id')
+            });
+        });
+        
+        // ========== FILTER DROPDOWNS ==========
+        $('#locationFilter').on('change', function() {
+            const locationId = $(this).val();
+            const departmentFilter = $('#departmentFilter');
+            const currentDeptId = departmentFilter.val();
+            
+            loadDepartments(locationId, departmentFilter, {
+                selectedDeptId: currentDeptId,
+                isFilter: true
+            });
+        });
+        
+        // Initialize filter on page load
+        const selectedLocation = $('#locationFilter').val();
+        if (selectedLocation) {
+            loadDepartments(selectedLocation, $('#departmentFilter'), {
+                selectedDeptId: $('#departmentFilter').val(),
+                isFilter: true
+            });
+        }
+        
+        // Initialize Select2 for filters
+        $('#locationFilter, #departmentFilter').each(function() {
+            if ($(this).data('select2')) {
+                $(this).select2({
+                    placeholder: $(this).is('#locationFilter') ? "{{ __('pagination._location') }}" : "{{ __('auth._department') }}",
+                    allowClear: true
+                });
+            }
+        });
+    });
+
 </script>
+
 
 <script>
     

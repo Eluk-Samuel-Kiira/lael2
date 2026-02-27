@@ -1,3 +1,4 @@
+@can('view category')
 <div class="card-body py-4" id="reloadCategoryComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -100,4 +101,5 @@
         </table>
     </div>
 </div>
+@endcan
 

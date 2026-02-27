@@ -43,6 +43,8 @@ class UserSeeder extends Seeder
                 'edit product',
                 'delete product',
                 'update product',
+                'update product tax-promotion',
+                'upload product photo',
             ],
             'Variant Management' => [
                 'create variant',
@@ -50,6 +52,8 @@ class UserSeeder extends Seeder
                 'edit variant',
                 'delete variant',
                 'update variant',
+                'upload variant image',
+                'update variant tax-promotion',
             ],
             'Sales Management' => [
                 'process sale',
@@ -63,6 +67,7 @@ class UserSeeder extends Seeder
                 'edit inventory',
                 'delete inventory',
                 'update stock levels',
+                'transfer stock',
             ],
             'Customer Management' => [
                 'create customer',
@@ -158,6 +163,16 @@ class UserSeeder extends Seeder
                 'delete supplier',
                 'update supplier',
             ],
+            'Order Management' => [
+                'create order',
+                'view order',
+                'edit order',
+                'delete order',
+                'update order',
+                'cancel order',
+                'print order',
+                'complete order',
+            ],
             'Purchase Order Management' => [
                 'view purchase_orders',
                 'create purchase_orders',
@@ -212,6 +227,7 @@ class UserSeeder extends Seeder
             'System Configuration' => [
                 'configure system',
                 'admin only',
+                'view dashboard',
             ],
         ];
 

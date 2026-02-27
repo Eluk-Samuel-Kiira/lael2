@@ -1,3 +1,4 @@
+@can('view product')
 <div class="card-body py-4" id="reloadProductComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -90,7 +91,7 @@
                                             <i class="bi bi-building me-1 fs-5"></i> <span>{{ __('pagination._allocation') }}</span>
                                         </button>
                                     @endcan
-                                    @can('view product')
+                                    @can('view variant')
                                         <a href="{{ route('products.show', $product->id) }}" 
                                             class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2">
                                             <i class="bi bi-eye me-1 fs-5"></i> <span>{{ __('pagination._variantions') }}</span>
@@ -157,5 +158,6 @@
         </table>
     </div>
 </div>
+@endcan
 
 

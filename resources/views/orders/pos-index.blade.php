@@ -26,6 +26,11 @@
                 </ul>
             </div>
             <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2 gap-lg-3">
+                
+                <div class="px-3 px-md-7 py-3 py-md-5 w-100 w-md-auto">
+                    <h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ currency_code() }} ({{ currency_symbol() }})</h3>
+                </div>
+
                 <!-- Search Bar -->
                 <div class="px-3 px-md-7 py-3 py-md-5 w-100 w-md-auto">
                     <input type="text" id="variantSearchInput" class="form-control" 
@@ -42,6 +47,7 @@
                     @endforeach
                 </select>
                 @endif
+
             </div>
         </div>
     </div>

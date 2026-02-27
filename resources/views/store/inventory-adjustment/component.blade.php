@@ -1,3 +1,4 @@
+@can('update stock levels')
 <div class="card-body py-4" id="reloadStockComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -31,7 +32,7 @@
                             </td>
 
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $item->variant->sku ?? __('pagination._none')}}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $item->variant->sku ?? __('pagination._none')}}</div>
                             </td>
 
                             <td>
@@ -64,12 +65,14 @@
                                             <i class="bi bi-dash-square me-1 fs-5"></i> <span>{{ __('passwords._adjust') }}</span>
                                         </button>
                                     @endcan
+                                    @can('transfer stock')
                                     <button 
                                         class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2" 
                                         data-bs-toggle="modal"
                                         data-bs-target="#stockTransfer{{$item->id}}">
                                         <i class="bi bi-arrow-left-right me-1 fs-5"></i> <span>{{ __('passwords._transfer') }}</span>
                                     </button>
+                                    @endcan
                                 </div>
                                 @include('store.inventory-adjustment.adjust-stock')
                                 @include('store.inventory-adjustment.transfer')
@@ -81,3 +84,4 @@
         </table>
     </div>
 </div>
+@endcan

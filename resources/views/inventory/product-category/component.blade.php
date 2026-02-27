@@ -1,3 +1,4 @@
+@can('view subcategory')
 <div class="card-body py-4" id="reloadProductCategoryComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -58,7 +59,7 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
-                                    @can('edit category')
+                                    @can('edit subcategory')
                                         <a data-link href="javascript:void(0);" 
                                         onclick="reloadToApp('{{ route('product-category.edit', $category->id) }}')"
                                         class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2">
@@ -67,7 +68,7 @@
                                         </a>
                                     @endcan
 
-                                    @can('delete category')
+                                    @can('delete subcategory')
                                         <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
@@ -119,4 +120,5 @@
         </table>
     </div>
 </div>
+@endcan
 
