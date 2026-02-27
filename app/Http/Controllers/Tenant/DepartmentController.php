@@ -332,4 +332,19 @@ class DepartmentController extends Controller
             'message' => __('auth._not_found'),
         ]);
     }
+
+    public function getByLocation($locationId)
+    {
+        $tenantId = auth()->user()->tenant_id;
+        
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('location_id', $locationId)
+            ->where('isActive', 1)
+            ->get(['id', 'name']); 
+        
+        return response()->json([
+            'success' => true,
+            'departments' => $departments
+        ]);
+    }
 }

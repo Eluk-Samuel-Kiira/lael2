@@ -31,7 +31,7 @@
                     <input type="text" id="searchInput" class="form-control" placeholder="{{__('auth._search')}} {{__('passwords.suppliers')}}"
                         onkeyup="searchTable(this.value, 'kt_table_users')">
                 </div>
-                @can('create tax')
+                @can('create supplier')
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_supplier">
                     <i class="ki-duotone ki-plus fs-2"></i>{{__('passwords.new_supplier')}}</button>
                 @endcan

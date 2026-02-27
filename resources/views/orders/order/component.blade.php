@@ -1,3 +1,4 @@
+@can('view order')
 <div class="card-body py-4" id="ordersIndexTable">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -85,9 +86,9 @@
                                         @endif
                                     </div>
                                 @elseif($order->payments)
-                                    <span class="text-muted fs-8">No payment method</span>
+                                    <span class="text-muted fs-8">{{ __('passwords.no_payment_meth') }}</span>
                                 @else
-                                    <span class="text-muted fs-8">No payment</span>
+                                    <span class="text-muted fs-8">{{ __('passwords.no_payment') }}</span>
                                 @endif
                             </td>
                             <td>
@@ -97,11 +98,12 @@
                                             <span class="fs-7 fw-bold text-primary">{{ substr($order->orderCreater->name ?? 'U', 0, 1) }}</span>
                                         </div>
                                     </div>
-                                    <div class="text-gray-800 fw-bold fs-7">{{ $order->orderCreater->name ?? __('passwords.none') }}</div>
+                                    <op[] class="text-gray-800 fw-bold fs-7">{{ $order->orderCreater->name ?? __('passwords.none') }}</div>
                                 </div>
                             </td>
                             <td>
                                 <div class="d-flex justify-content-end gap-2">
+                                    @can('complete order')
                                     @if ($order->status == 'confirmed' && $order->source == 'pos')
                                         <button 
                                             class="btn btn-sm btn-light-primary btn-active-light-primary d-flex align-items-center px-4 py-2" 
@@ -115,11 +117,17 @@
                                             <span class="fw-bold">{{__('pagination._complete')}}</span>
                                         </button>
                                     @endif
+                                    @endcan
+
+                                    @can('cancel order')
                                     @if ($order->status == 'confirmed')
                                         <button class="btn btn-sm btn-danger" onclick="cancelPOSOrder({{ $order->id }})">
                                             {{ __('passwords.cancel') }}
                                         </button>
                                     @endif
+                                    @endcan
+                                    
+                                    @can('print order')
                                     <button 
                                         class="btn btn-sm btn-icon btn-light btn-active-light-primary"
                                         onclick="printOrder({{ $order->id }})"
@@ -131,6 +139,7 @@
                                             <span class="path3"></span>
                                         </i>
                                     </button>
+                                    @endcan
                                 </div>
                                 @include('orders.order.complete-payment')
                             </td>
@@ -492,8 +501,8 @@
 
         <!-- Footer -->
         <div class="invoice-footer">
-            <div class="footer-thank-you">Thank you for your business!</div>
-            <div>Printed on: {{ now()->format('M d, Y H:i') }}</div>
+            <div class="footer-thank-you">{{ __('passwords.thank_you_business') }}</div>
+            <div>{{ __('passwords.print_on') }}: {{ now()->format('M d, Y H:i') }}</div>
         </div>
     </div>
 @endforeach
@@ -858,7 +867,7 @@
 <script>
 
     function printOrder(orderId) {
-        console.log('Printing order:', orderId);
+        // console.log('Printing order:', orderId);
         
         const printElement = document.getElementById('printableOrder' + orderId);
         
@@ -1329,10 +1338,10 @@
                 
                 <div class="print-actions no-print">
                     <button class="btn btn-primary" onclick="window.print()">
-                        🖨️ Print Invoice
+                        🖨️ {{__('passwords.print_invoice') }}
                     </button>
                     <button class="btn btn-secondary" onclick="window.close()">
-                        ✕ Close Window
+                        ✕ {{__('passwords.close_window') }}
                     </button>
                 </div>
                 
@@ -1370,3 +1379,4 @@
         });
     });
 </script>
+@endcan

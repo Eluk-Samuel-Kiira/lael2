@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Orders;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
+use Illuminate\Support\Facades\{ Auth, DB };
 
 class OrderController extends Controller
 {
@@ -13,6 +14,15 @@ class OrderController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
         $orders = Order::with([
             'orderItems',
             'customer',

@@ -1,3 +1,4 @@
+@can('view expense')
 <!-- resources/views/procurement/expense/expense-component.blade.php -->
 <div class="card-body py-4" id="reloadExpenseComponent">
     <div class="table-responsive">
@@ -30,7 +31,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $expense->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $expense->id }}</div>
                             </td>
                             <td>{{ $expense->expense_number }}</td>
                             <td>{{ $expense->description }}</td>
@@ -206,3 +207,4 @@
         </table>
     </div>
 </div>
+@endcan

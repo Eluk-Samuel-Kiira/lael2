@@ -4,7 +4,8 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    {{ __('passwords.transfer_to_loc_dept') }}: 
+                    {{ __('passwords.transfer_to_loc_dept') }}
+                    {{ $item->departmentItem->name ?? __('pagination._none') }} : 
                     {{ $item->variant->name ?? __('pagination._none') }}
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -16,21 +17,6 @@
                     @method('PUT')
                     <div class="text-center pt-10">
                         <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{ __('auth._department') }}</span>
-                                </label>
-                                <select name="department_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option value="" disabled {{ is_null($item->department_id) ? 'selected' : '' }}></option>
-                                    @foreach ($departments as $department)
-                                        <option value="{{ $department->id }}" {{ $department->id == $item->department_id ? 'selected' : '' }}>
-                                            {{ ucwords(str_replace('_', ' ', $department->name)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="department_id{{ $item->id }}"></div>
-                            </div>
-
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{ __('pagination._location') }}</span>
@@ -45,7 +31,20 @@
                                 </select>
                                 <div id="location_id{{ $item->id }}"></div>
                             </div>
-
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    <span class="required">{{ __('auth._department') }}</span>
+                                </label>
+                                <select name="department_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                    <option value="" disabled {{ is_null($item->department_id) ? 'selected' : '' }}></option>
+                                    @foreach ($departments as $department)
+                                        <option value="{{ $department->id }}" {{ $department->id == $item->department_id ? 'selected' : '' }}>
+                                            {{ ucwords(str_replace('_', ' ', $department->name)) }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div id="department_id{{ $item->id }}"></div>
+                            </div>
                         </div>
                         
                         <div class="row g-9 mb-8">
@@ -74,13 +73,14 @@
                             </div>
                         </div>
                     </div>
-
                     <button type="reset" class="btn btn-light me-3" id="closeModalEditButton{{ $item->id }}" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
+                    @can('transfer stock')
                     <button onclick="updateInventoryTransfer({{$item->id }})" id="editInvTransferButton{{ $item->id }}" type="button" class="btn btn-primary">
                         <span class="indicator-label">{{__('auth._update')}}</span>
                         <span class="indicator-progress">{{__('auth.please_wait')}}
                         <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
                     </button>
+                    @endcan
                 </form>
             </div>
         </div>

@@ -1,3 +1,4 @@
+@can('view category-expense')
 <div class="card-body py-4" id="reloadExpenseCategoryComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -26,7 +27,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $category->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $category->id }}</div>
                             </td>
                             <td>{{ $category->name }}</td>
                             <td>
@@ -35,14 +36,14 @@
                             <td>{{ $category->created_at->format('d M Y, h:i a') }}</td>
                             <td>
                                 <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateExpenseCategoryStatus({{ $category->id }}, this.value)"
-                                    @cannot('update category') disabled @endcannot>
-                                    <option value="1" {{ $category->is_active == 1 ? 'selected' : '' }}><span>{{__('Active')}}</option>
-                                    <option value="0" {{ $category->is_active == 0 ? 'selected' : '' }}>{{__('Inactive')}}</option>
+                                    @cannot('update category-expense') disabled @endcannot>
+                                    <option value="1" {{ $category->is_active == 1 ? 'selected' : '' }}><span>{{__('payments.active')}}</option>
+                                    <option value="0" {{ $category->is_active == 0 ? 'selected' : '' }}>{{__('payments._id.inactive')}}</option>
                                 </select>
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
-                                    @can('edit category')
+                                    @can('edit category-expense')
                                         <button 
                                             class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal"
@@ -50,7 +51,7 @@
                                             <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                         </button>
                                     @endcan
-                                    @can('delete category')
+                                    @can('delete category-expense')
                                         <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
@@ -100,4 +101,5 @@
         </table>
     </div>
 </div>
+@endcan
 

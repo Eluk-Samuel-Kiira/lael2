@@ -1,3 +1,4 @@
+@can('view variant')
 <div class="row g-9 mb-8">
     <div class="d-flex col-md-4 position-relative thumbnail-col">
         <div class="card card-flush py-4 w-100">
@@ -149,7 +150,7 @@
                                     </td>
                                     <td>
                                         <div class="d-flex gap-2">
-                                            @can('update product')
+                                            @can('update variant tax-promotion')
                                                 <button 
                                                     class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2" 
                                                     data-bs-toggle="modal"
@@ -157,7 +158,7 @@
                                                     <i class="bi bi-building me-1 fs-5"></i> <span>{{ __('pagination._allocation') }}</span>
                                                 </button>
                                             @endcan
-                                            @can('edit product')
+                                            @can('edit variant')
                                                 <button 
                                                     class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
                                                     data-bs-toggle="modal"
@@ -166,7 +167,7 @@
                                                 </button>
                                             @endcan
                                             {{--
-                                            @can('delete product')
+                                            @can('delete variant')
                                                 <button type="button" 
                                                     class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                                     data-bs-toggle="modal" 
@@ -395,3 +396,4 @@
         });
     }
 </script>
+@endcan

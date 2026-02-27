@@ -48,7 +48,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $employee->department->name ?? 'N/A' }}</div>
+                                <div class="badge badge-light fw-bold">{{ $employee->department->name ?? __('payments.none') }}</div>
                             </td>
                             <td>{{ $employee->email }}</td>
                             <td>{{ $employee->phone ?? 'N/A' }}</td>
@@ -72,8 +72,8 @@
                             <td>
                                 <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateUserStatus({{ $employee->id }}, this.value)"
                                 @cannot('update employee') disabled @endcannot>
-                                    <option value="1" {{ $employee->is_active == 1 ? 'selected' : '' }}>Active</option>
-                                    <option value="0" {{ $employee->is_active == 0 ? 'selected' : '' }}>Inactive</option>
+                                    <option value="1" {{ $employee->is_active == 1 ? 'selected' : '' }}>__('payments.active')</option>
+                                    <option value="0" {{ $employee->is_active == 0 ? 'selected' : '' }}>__('payments.inactive')</option>
                                 </select>
                             </td>
                             <td>

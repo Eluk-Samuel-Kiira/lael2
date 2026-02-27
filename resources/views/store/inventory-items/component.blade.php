@@ -1,3 +1,4 @@
+@can('view inventory')
 <div class="card-body py-4" id="reloadItemComponent">
     <div class="table-responsive">
         <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
@@ -37,7 +38,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $item->variant->sku ?? __('pagination._none')}}</div>
+                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $item->variant->sku ?? __('pagination._none')}}</div>
                             </td>
 
                             <td>
@@ -132,6 +133,7 @@
         </table>
     </div>
 </div>
+@endcan
 
 
 

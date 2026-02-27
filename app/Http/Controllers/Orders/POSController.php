@@ -19,9 +19,15 @@ class POSController extends Controller
     public function index(Request $request)
     {
         Artisan::call('optimize:clear');
-
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('view order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
 
         // Check if this is a single shop tenant
         $isSingleShop = tenant_is_single_shop($tenantId);
@@ -213,10 +219,18 @@ class POSController extends Controller
 
     public function processPayment(Request $request)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                
+        if (!$user->hasPermissionTo('create order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         try {
             $cartData = json_decode($request->cart_data, true);
-            $user = Auth::user();
-            $tenantId = $user->tenant_id;
             $isSingleShop = tenant_is_single_shop($tenantId);
 
             // Determine customer details
@@ -340,12 +354,20 @@ class POSController extends Controller
 
     public function completePayment(Request $request) 
     {
+
         try {
             $cartData = $request->items; 
             $paymentDetails = $request->payment_details;  
             $user = Auth::user();
             $tenantId = $user->tenant_id;
             $isSingleShop = tenant_is_single_shop($tenantId);
+                      
+            if (!$user->hasPermissionTo('complete order')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
 
             $order = Order::findOrFail($request->order_id);
             $totalAmount = $request->total ?? 0;
@@ -666,11 +688,23 @@ class POSController extends Controller
     
     public function cancel(Request $request, $id)
     {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                  
+        if (!$user->hasPermissionTo('cancel order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
         $validated = $request->validate([
             'status' => 'required', 
         ]);
         
-        $order = Order::find($id);
+        $order = Order::where('id', $id)
+                    ->where('tenant_id', $tenantId)
+                    ->first();
 
         if (!$order) {
             return response()->json([

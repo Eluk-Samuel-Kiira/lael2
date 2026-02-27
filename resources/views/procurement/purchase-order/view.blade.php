@@ -201,7 +201,7 @@
                                                             @endif
                                                             <div class="text-primary fs-6 fw-bold">
                                                                 <i class="bi bi-cash-coin me-1"></i>
-                                                                Group Total: {{ number_format($groupTotal, 2) }} {{ currencySymbol() }}
+                                                                Group Total: {{ number_format($groupTotal, 2) }} {{ currency_symbol() }}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -261,15 +261,15 @@
                                                                 <div class="text-end ms-4" style="min-width: 150px;">
                                                                     <div class="fs-7">
                                                                         <strong>Unit Cost:</strong> 
-                                                                        {{ number_format($item['unit_cost'] ?? 0, 2) }} {{ currencySymbol() }}
+                                                                        {{ number_format($item['unit_cost'] ?? 0, 2) }} {{ currency_symbol() }}
                                                                     </div>
                                                                     <div class="fs-7">
                                                                         <strong>Tax:</strong> 
-                                                                        {{ number_format($item['tax_amount'] ?? 0, 2) }} {{ currencySymbol() }}
+                                                                        {{ number_format($item['tax_amount'] ?? 0, 2) }} {{ currency_symbol() }}
                                                                     </div>
                                                                     <div class="fw-bold text-primary fs-6 mt-1">
                                                                         <strong>Total:</strong> 
-                                                                        {{ number_format($item['total_cost'] ?? 0, 2) }} {{ currencySymbol() }}
+                                                                        {{ number_format($item['total_cost'] ?? 0, 2) }} {{ currency_symbol() }}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -362,9 +362,9 @@
                                                                 <td>
                                                                     <span class="badge badge-light-info">{{ count($groupItems) }}</span>
                                                                 </td>
-                                                                <td class="fw-bold">{{ number_format($groupSubtotal, 2) }} {{ currencySymbol() }}</td>
-                                                                <td class="fw-bold">{{ number_format($groupTax, 2) }} {{ currencySymbol() }}</td>
-                                                                <td class="fw-bold text-primary">{{ number_format($groupTotal, 2) }} {{ currencySymbol() }}</td>
+                                                                <td class="fw-bold">{{ number_format($groupSubtotal, 2) }} {{ currency_symbol() }}</td>
+                                                                <td class="fw-bold">{{ number_format($groupTax, 2) }} {{ currency_symbol() }}</td>
+                                                                <td class="fw-bold text-primary">{{ number_format($groupTotal, 2) }} {{ currency_symbol() }}</td>
                                                                 <td>
                                                                     <span class="badge bg-{{ $statusClass }}">
                                                                         {{ ucfirst($overallStatus) }}
@@ -375,9 +375,9 @@
                                                         <!-- Total Row -->
                                                         <tr class="fw-bold text-gray-800 border-top">
                                                             <td colspan="3" class="text-end">Grand Total:</td>
-                                                            <td class="fw-bold">{{ displayFormatedCurrency($order->subtotal) }} {{ currencySymbol() }}</td>
-                                                            <td class="fw-bold">{{ displayFormatedCurrency($order->tax_total) }} {{ currencySymbol() }}</td>
-                                                            <td class="fw-bold text-primary">{{ displayFormatedCurrency($order->total) }} {{ currencySymbol() }}</td>
+                                                            <td class="fw-bold">{{ ($order->subtotal) }} {{ currency_symbol() }}</td>
+                                                            <td class="fw-bold">{{ ($order->tax_total) }} {{ currency_symbol() }}</td>
+                                                            <td class="fw-bold text-primary">{{ ($order->total) }} {{ currency_symbol() }}</td>
                                                             <td></td>
                                                         </tr>
                                                     </tbody>
@@ -430,9 +430,9 @@
 
                                                 <!-- Right side: Costs -->
                                                 <div class="text-end">
-                                                    <div class="fs-7"><strong>Unit Cost:</strong> {{ number_format($item['unit_cost'] ?? 0, 2) }} {{ currencySymbol() }}</div>
-                                                    <div class="fs-7"><strong>Tax:</strong> {{ number_format($item['tax_amount'] ?? 0, 2) }} {{ currencySymbol() }}</div>
-                                                    <div class="fw-bold text-primary fs-6 mt-1"><strong>Total:</strong> {{ number_format($item['total_cost'] ?? 0, 2) }} {{ currencySymbol() }}</div>
+                                                    <div class="fs-7"><strong>Unit Cost:</strong> {{ number_format($item['unit_cost'] ?? 0, 2) }} {{ currency_symbol() }}</div>
+                                                    <div class="fs-7"><strong>Tax:</strong> {{ number_format($item['tax_amount'] ?? 0, 2) }} {{ currency_symbol() }}</div>
+                                                    <div class="fw-bold text-primary fs-6 mt-1"><strong>Total:</strong> {{ number_format($item['total_cost'] ?? 0, 2) }} {{ currency_symbol() }}</div>
                                                 </div>
 
                                             </div>
@@ -454,15 +454,15 @@
                         <table class="table table-sm table-borderless w-auto">
                             <tr>
                                 <td>{{ __('pagination.subtotal') }}:</td>
-                                <td class="text-end">{{ displayFormatedCurrency($order->subtotal) }} {{ currencySymbol() }}</td>
+                                <td class="text-end">{{ ($order->subtotal) }} {{ currency_symbol() }}</td>
                             </tr>
                             <tr>
                                 <td>{{ __('passwords.tax_total') }}:</td>
-                                <td class="text-end">{{ displayFormatedCurrency($order->tax_total) }} {{ currencySymbol() }}</td>
+                                <td class="text-end">{{ ($order->tax_total) }} {{ currency_symbol() }}</td>
                             </tr>
                             <tr class="fw-bold text-primary">
                                 <td>{{ __('passwords.grand_total') }}:</td>
-                                <td class="text-end">{{ displayFormatedCurrency($order->total) }} {{ currencySymbol() }}</td>
+                                <td class="text-end">{{ ($order->total) }} {{ currency_symbol() }}</td>
                             </tr>
                         </table>
                     </div>
