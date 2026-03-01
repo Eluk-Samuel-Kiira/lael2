@@ -25,11 +25,13 @@
     }
 
 </style>
+
 <div class="app-sidebar-menu overflow-hidden flex-column-fluid">
     <div id="kt_app_sidebar_menu_wrapper" class="app-sidebar-wrapper">
         <div id="kt_app_sidebar_menu_scroll" class="scroll-y my-5 mx-3" data-kt-scroll="true" data-kt-scroll-activate="true" data-kt-scroll-height="auto" data-kt-scroll-dependencies="#kt_app_sidebar_logo, #kt_app_sidebar_footer" data-kt-scroll-wrappers="#kt_app_sidebar_menu" data-kt-scroll-offset="5px">
             <div class="menu menu-column menu-rounded menu-sub-indention px-3" id="#kt_app_sidebar_menu" data-kt-menu="true" data-kt-menu-expand="false">
 
+                @if (tenant_can('dashboard'))
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -46,27 +48,31 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('dashboard') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('dashboard') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title">{{ __('auth._dashboard') }}</span>
                             </a>
                         </div>
+                        @can('view financial dashboard')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('overview') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('overview') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title">{{ __('auth._overview') }}</span>
                             </a>
                         </div>
+                        @endcan
 
 
                     </div>
                 </div>
+                @endif
 
                 <!-- POS -->
+                @if (tenant_can('pos'))
                 @can('view order')
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
@@ -105,8 +111,11 @@
                     </div>
                 </div>
                 @endcan
+                @endif
 
                 <!-- Product Catalog -->
+                @if (tenant_can('product_catalog'))
+                @can('view product')
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -155,10 +164,14 @@
 
                     </div>
                 </div>
+                @endcan
+                @endif
                 
 
-                @if(!tenant_is_single_shop(auth()->user()->tenant_id))
                 <!-- Inventory Items -->
+                @if (tenant_can('inventory'))
+                @if(auth()->check() && !tenant_is_single_shop(auth()->user()->tenant_id))
+                @can('view inventory')
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -174,7 +187,6 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
-                        @can('view inventory')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('items.index') }}')">
                                 <span class="menu-bullet">
@@ -192,14 +204,17 @@
                                 <span class="menu-title">{{ __('passwords.stock_adjustments') }}</span>
                             </a>
                         </div>
-                        @endcan
 
                     </div>
                 </div>
+                @endcan
+                @endif
                 @endif
 
 
                 <!-- Suppliers & Purchasing -->
+                @if (tenant_can('procurement'))
+                @can('view procurement')
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -237,6 +252,8 @@
                         </div>
                         @endcan
 
+                        
+                        @if (tenant_can('expenses'))
                         @can('view category-expense')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('expense-category.index') }}')">
@@ -258,12 +275,17 @@
                             </a>
                         </div>
                         @endcan
+                        @endif
 
                     </div>
                 </div>
+                @endcan
+                @endif
 
                 
                 <!-- Human Reource -->
+                @if (tenant_can('users'))
+                @can('view user')
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -279,7 +301,6 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
-                        @can('view user')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('employee.index') }}')">
                                 <span class="menu-bullet">
@@ -288,8 +309,9 @@
                                 <span class="menu-title">{{ __('auth._users_index') }}</span>
                             </a>
                         </div>
-                        @endcan
 
+                        
+                        @if (tenant_can('hr_payroll'))
                         @can('view employee')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('user.index') }}')">
@@ -311,6 +333,7 @@
                             </a>
                         </div>
                         @endcan
+                        @endif
 
                         @can('admin only')
                         <div class="menu-item">
@@ -321,9 +344,7 @@
                                 <span class="menu-title">{{ __('auth._roles') }}</span>
                             </a>
                         </div>
-                        @endcan
-
-                        @can('admin only')
+                        
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('permission.index') }}')">
                                 <span class="menu-bullet">
@@ -337,6 +358,8 @@
 
                     </div>
                 </div>
+                @endcan
+                @endif
 
 
                 <!-- Updated Reports Menu -->
@@ -362,6 +385,7 @@
                     <div class="menu-sub menu-sub-lg-down-accordion menu-sub-lg-dropdown menu-active-bg px-lg-2 py-lg-4 w-lg-300px">
                         
                         <!-- Financial Reports Section -->
+                        @if (tenant_can('financial_reports'))
                         @can('financial reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -486,8 +510,10 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
                         
                         <!-- Expense Reports Section -->
+                        @if (tenant_can('advanced_reports'))
                         @can('expense reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -1024,6 +1050,8 @@
                             </div>
                         </div>
                         @endcan
+
+                        @endif
                         
                     </div>
                     <!--end:Menu sub-->
@@ -1031,6 +1059,8 @@
                 @endcan
 
                 <!-- Settings -->
+                @if (tenant_can('settings'))
+                @can('view settings')
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -1069,6 +1099,8 @@
                         </div>
                         @endcan
                         
+                        
+                        @if (tenant_can('multicurrency'))
                         @can('view currency')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('currency.index') }}')">
@@ -1079,6 +1111,7 @@
                             </a>
                         </div>
                         @endcan
+                        @endif
                         
                         @can('view payment method')
                         <div class="menu-item">
@@ -1137,7 +1170,7 @@
 
                         @role('super_admin')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('tenant.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('tenant.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1146,9 +1179,10 @@
                         </div>
                         @endrole
 
-
                     </div>
                 </div>
+                @endcan
+                @endif
 
 
 

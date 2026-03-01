@@ -66,6 +66,25 @@ class PaymentMethodController extends Controller
             ]);
         }
 
+        // Clear cache to ensure fresh data
+        // tenant_clear_settings_cache($tenantId);
+
+        // Get the actual max_payment_methods limit from tenant settings
+        $maxPaymentMethods = tenant_limit('payment_methods', 1, $tenantId); // Default to 1 if not set
+
+        // Count current payment methods
+        $currentPaymentMethodCount = PaymentMethod::where('tenant_id', $tenantId)->count();
+
+        // Check if limit is reached
+        if ($currentPaymentMethodCount >= $maxPaymentMethods) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.maximum_payment_methods_reached', ['max' => $maxPaymentMethods]),
+                'current' => $currentPaymentMethodCount,
+                'limit' => $maxPaymentMethods
+            ]);
+        }
+
         $request->validate([
             'name' => [
                 'required',

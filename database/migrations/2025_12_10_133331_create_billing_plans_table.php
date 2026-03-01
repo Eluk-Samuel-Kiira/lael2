@@ -36,16 +36,22 @@ return new class extends Migration
             $table->integer('default_events')->default(0); // For events
             
             // RETAIL/POS FEATURES (Current)
+            $table->boolean('includes_dashboard')->default(false);
+            $table->boolean('includes_pos')->default(false);
+            $table->boolean('includes_product_catelog')->default(false);
+            $table->boolean('includes_procurement')->default(false);
+            $table->boolean('includes_settings')->default(false);
+            $table->boolean('includes_users')->default(false);
             $table->boolean('includes_inventory')->default(false);
             $table->boolean('includes_expenses')->default(false);
             $table->boolean('includes_accounting')->default(false);
+            $table->boolean('includes_advanced_accounting')->default(false);
             $table->boolean('includes_hr_payroll')->default(false);
             $table->boolean('includes_multicurrency')->default(false);
-            $table->boolean('includes_advanced_reports')->default(false);
             $table->boolean('includes_financial_reports')->default(false);
+            $table->boolean('includes_advanced_reports')->default(false);
             $table->boolean('includes_api_access')->default(false);
             $table->boolean('includes_ecommerce')->default(false);
-            $table->boolean('includes_pos')->default(false);
             $table->boolean('includes_crm')->default(false);
             $table->boolean('includes_support_priority')->default(false);
             $table->boolean('includes_custom_branding')->default(false);

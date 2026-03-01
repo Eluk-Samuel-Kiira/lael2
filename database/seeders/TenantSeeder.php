@@ -52,7 +52,7 @@ class TenantSeeder extends Seeder
 
         // Create other tenants using factory
         Tenant::factory()
-            ->count(10)
+            ->count(3)
             ->create()
             ->each(function ($tenant) {
                 // Skip creating configuration if it's ID 2 (already created above)

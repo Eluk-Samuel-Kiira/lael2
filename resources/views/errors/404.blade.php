@@ -20,8 +20,8 @@
 							<!--end::Text-->
 							<!--begin::Illustration-->
 							<div class="mb-3">
-								<img src="assets/media/auth/404-error.png" class="mw-100 mh-300px theme-light-show" alt="" />
-								<img src="assets/media/auth/404-error-dark.png" class="mw-100 mh-300px theme-dark-show" alt="" />
+								<img src="{{ asset('assets/media/auth/404-error.png') }}" class="mw-100 mh-300px theme-light-show" alt="" />
+								<img src="{{ asset('assets/media/auth/404-error-dark.png') }}" class="mw-100 mh-300px theme-dark-show" alt="" />
 							</div>
 							<!--end::Illustration-->
 							<!--begin::Link-->

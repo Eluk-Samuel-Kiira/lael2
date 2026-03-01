@@ -70,23 +70,31 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+
         if (!$user->hasPermissionTo('create user')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
             ]);
         }
+        // tenant_clear_settings_cache($tenantId);
 
-        // Check maximum users limit
+        // Get the actual max_users limit from tenant settings
+        $maxUsers = tenant_limit('users', 3, $tenantId); // 3 is default if not set
+
+        // Count current users
         $currentUserCount = User::where('tenant_id', $tenantId)->count();
-        $maxUsers = tenant_setting($tenantId, 'max_users', 5); // Default to 10 if not set
 
+        // Check if limit is reached
         if ($currentUserCount >= $maxUsers) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.maximum_users_reached', ['max' => $maxUsers]),
+                'current' => $currentUserCount,
+                'limit' => $maxUsers
             ]);
         }
+
 
         $validatedData = $request->validated();
 

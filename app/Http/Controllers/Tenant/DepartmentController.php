@@ -68,6 +68,23 @@ class DepartmentController extends Controller
             ]);
         }
 
+        // Clear cache to ensure fresh data
+        // tenant_clear_settings_cache($tenantId);
+
+        // Check maximum departments limit
+        $currentDepartmentCount = Department::where('tenant_id', $tenantId)->count();
+        $maxDepartments = tenant_limit('departments', 3, $tenantId); // Using tenant_limit instead of tenant_setting
+
+        if ($currentDepartmentCount >= $maxDepartments) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.maximum_departments_reached', ['max' => $maxDepartments]),
+                'current' => $currentDepartmentCount,
+                'limit' => $maxDepartments,
+                'remaining' => 0
+            ]);
+        }
+
         $request->validate([
             'name' => [
                 'required',
@@ -81,17 +98,6 @@ class DepartmentController extends Controller
             'manager_id' => 'required|exists:users,id',
             'location_id' => 'required|exists:locations,id',
         ]);
-
-        // Check maximum departments limit for the tenant
-        $currentDepartmentCount = Department::where('tenant_id', $tenantId)->count();
-        $maxDepartments = tenant_setting($tenantId, 'max_departments', 3);
-
-        if ($currentDepartmentCount >= $maxDepartments) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.maximum_departments_reached', ['max' => $maxDepartments]),
-            ]);
-        }
 
         $department = Department::create([
             'name' => $request->name,
