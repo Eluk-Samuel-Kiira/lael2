@@ -2,61 +2,11 @@
 
 // Add this to your helpers.php file or create a new helper file
 
-use App\Models\TenantConfiguration;
 use App\Models\Tenant;
+use App\Models\TenantSetting;
 use Illuminate\Support\Facades\Cache;
-
-if (!function_exists('tenant_config')) {
-    /**
-     * Get tenant configuration value for the current or specified tenant
-     * 
-     * @param string|null $key Specific config key to retrieve (null returns all config)
-     * @param mixed $default Default value if config not found
-     * @param int|null $tenantId Specific tenant ID (null uses current tenant)
-     * @return mixed
-     */
-    function tenant_config($key = null, $default = null, $tenantId = null)
-    {
-        // Get tenant ID
-        $tenantId = $tenantId ?? current_tenant_id();
-        
-        if (!$tenantId) {
-            return $default;
-        }
-        
-        // Cache key for tenant config
-        $cacheKey = "tenant_config.{$tenantId}";
-        
-        // Get config from cache or database
-        $config = Cache::remember($cacheKey, 3600, function () use ($tenantId) {
-            return TenantConfiguration::where('tenant_id', $tenantId)->first();
-        });
-        
-        // If no config found, return default
-        if (!$config) {
-            return $default;
-        }
-        
-        // If no key specified, return entire config as array
-        if ($key === null) {
-            return $config->toArray();
-        }
-        
-        // Return specific key if it exists
-        $key = str_replace('.', '_', $key); // Convert dot notation to underscore if needed
-        
-        if (isset($config->$key)) {
-            return $config->$key;
-        }
-        
-        // Check if it's a relationship method
-        if (method_exists($config, $key)) {
-            return $config->$key;
-        }
-        
-        return $default;
-    }
-}
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 if (!function_exists('current_tenant_id')) {
     /**
@@ -64,7 +14,7 @@ if (!function_exists('current_tenant_id')) {
      * 
      * @return int|null
      */
-    function current_tenant_id()
+    function current_tenant_id(): ?int
     {
         // Try to get from auth user
         if (auth()->check() && auth()->user()->tenant_id) {
@@ -94,165 +44,252 @@ if (!function_exists('current_tenant_id')) {
     }
 }
 
-if (!function_exists('tenant_currency')) {
+if (!function_exists('current_tenant')) {
     /**
-     * Get tenant currency code
+     * Get current tenant model
      * 
-     * @param int|null $tenantId
-     * @return string|null
+     * @return \App\Models\Tenant|null
      */
-    function tenant_currency($tenantId = null)
+    function current_tenant()
     {
-        return tenant_config('currency_code', 'USD', $tenantId);
+        $tenantId = current_tenant_id();
+        
+        if (!$tenantId) {
+            return null;
+        }
+        
+        return Tenant::find($tenantId);
     }
 }
 
-if (!function_exists('tenant_timezone')) {
+if (!function_exists('tenant_setting')) {
     /**
-     * Get tenant timezone
+     * Get a tenant setting value
      * 
-     * @param int|null $tenantId
-     * @return string|null
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @param string $key Setting key
+     * @param mixed $default Default value if setting not found
+     * @return mixed
      */
-    function tenant_timezone($tenantId = null)
+    function tenant_setting($tenantId = null, string $key, $default = null)
     {
-        return tenant_config('timezone', 'UTC', $tenantId);
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return $default;
+        }
+
+        $setting = TenantSetting::where('tenant_id', $tenantId)
+            ->where('setting_key', $key)
+            ->first();
+
+        if (!$setting) {
+            return $default;
+        }
+
+        // Cast value based on data_type
+        return match($setting->data_type) {
+            'integer' => (int) $setting->setting_value,
+            'boolean' => (bool) $setting->setting_value,
+            'json' => json_decode($setting->setting_value, true),
+            'decimal' => (float) $setting->setting_value,
+            'datetime' => $setting->setting_value ? \Carbon\Carbon::parse($setting->setting_value) : null,
+            default => $setting->setting_value,
+        };
     }
 }
 
-if (!function_exists('tenant_locale')) {
+if (!function_exists('tenant_setting_set')) {
     /**
-     * Get tenant locale
+     * Set a tenant setting value
      * 
-     * @param int|null $tenantId
-     * @return string|null
-     */
-    function tenant_locale($tenantId = null)
-    {
-        return tenant_config('locale', 'en', $tenantId);
-    }
-}
-
-if (!function_exists('tenant_fiscal_year')) {
-    /**
-     * Get tenant fiscal year start
-     * 
-     * @param int|null $tenantId
-     * @return string|null
-     */
-    function tenant_fiscal_year($tenantId = null)
-    {
-        return tenant_config('fiscal_year_start', date('Y-01-01'), $tenantId);
-    }
-}
-
-if (!function_exists('tenant_tax_method')) {
-    /**
-     * Get tenant tax calculation method
-     * 
-     * @param int|null $tenantId
-     * @return string|null
-     */
-    function tenant_tax_method($tenantId = null)
-    {
-        return tenant_config('tax_calculation_method', 'exclusive', $tenantId);
-    }
-}
-
-if (!function_exists('tenant_config_all')) {
-    /**
-     * Get all tenant configuration
-     * 
-     * @param int|null $tenantId
-     * @return array
-     */
-    function tenant_config_all($tenantId = null)
-    {
-        return tenant_config(null, [], $tenantId);
-    }
-}
-
-if (!function_exists('clear_tenant_config_cache')) {
-    /**
-     * Clear tenant configuration cache
-     * 
-     * @param int|null $tenantId
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @param string $key Setting key
+     * @param mixed $value Setting value
+     * @param string $dataType Data type (integer, boolean, string, json, decimal, datetime)
+     * @param string $category Setting category
      * @return void
      */
-    function clear_tenant_config_cache($tenantId = null)
+    function tenant_setting_set($tenantId = null, string $key, $value, string $dataType = 'string', string $category = 'general'): void
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return;
+        }
+        
+        TenantSetting::updateOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'setting_key' => $key,
+            ],
+            [
+                'setting_value' => $value,
+                'data_type' => $dataType,
+                'category' => $category,
+                'updated_at' => now(),
+            ]
+        );
+        
+        // Clear any cached settings
+        tenant_clear_settings_cache($tenantId);
+    }
+}
+
+if (!function_exists('tenant_settings_all')) {
+    /**
+     * Get all settings for a tenant
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @param bool $useCache Whether to use cache
+     * @return array
+     */
+    function tenant_settings_all($tenantId = null, bool $useCache = true): array
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return [];
+        }
+        
+        if ($useCache) {
+            return Cache::remember("tenant_settings.{$tenantId}", 3600, function () use ($tenantId) {
+                return tenant_get_all_settings_from_db($tenantId);
+            });
+        }
+        
+        return tenant_get_all_settings_from_db($tenantId);
+    }
+}
+
+if (!function_exists('tenant_get_all_settings_from_db')) {
+    /**
+     * Get all settings directly from database without cache
+     * 
+     * @param int $tenantId
+     * @return array
+     */
+    function tenant_get_all_settings_from_db(int $tenantId): array
+    {
+        return TenantSetting::where('tenant_id', $tenantId)
+            ->get()
+            ->mapWithKeys(function ($setting) {
+                $value = match($setting->data_type) {
+                    'integer' => (int) $setting->setting_value,
+                    'boolean' => (bool) $setting->setting_value,
+                    'json' => json_decode($setting->setting_value, true),
+                    'decimal' => (float) $setting->setting_value,
+                    'datetime' => $setting->setting_value ? \Carbon\Carbon::parse($setting->setting_value) : null,
+                    default => $setting->setting_value,
+                };
+                
+                return [$setting->setting_key => $value];
+            })
+            ->toArray();
+    }
+}
+
+if (!function_exists('tenant_clear_settings_cache')) {
+    /**
+     * Clear tenant settings cache
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return void
+     */
+    function tenant_clear_settings_cache($tenantId = null): void
     {
         $tenantId = $tenantId ?? current_tenant_id();
         
         if ($tenantId) {
-            Cache::forget("tenant_config.{$tenantId}");
+            Cache::forget("tenant_settings.{$tenantId}");
         }
     }
 }
 
-function getTenantUserCountAttribute($tenantId)
-{
-    return DB::table('model_has_roles')
-        ->join('users', 'model_has_roles.model_id', '=', 'users.id')
-        ->where('model_has_roles.role_id', $this->id)
-        ->where('users.tenant_id', $tenantId)
-        ->where('model_has_roles.model_type', 'App\\Models\\User')
-        ->count();
-}
-
-
-
-
-
-
-
-
 if (!function_exists('tenant_can')) {
     /**
      * Check if tenant has a specific module enabled
-     * Works for both retail and hotel modules
+     * 
+     * @param string $module Module name (inventory, accounting, hr_payroll, etc.)
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
      */
-    function tenant_can(string $module): bool
+    function tenant_can(string $module, $tenantId = null): bool
     {
-        $tenantId = auth()->user()->tenant_id;
-        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return false;
+        }
         
         $moduleKey = 'module_' . $module;
-        return isset($settings[$moduleKey]) && $settings[$moduleKey] == '1';
+        $settings = tenant_settings_all($tenantId);
+        
+        return isset($settings[$moduleKey]) && $settings[$moduleKey] == true;
     }
 }
 
-if (!function_exists('tenant_is_hotel')) {
+
+if (!function_exists('tenant_includes')) {
     /**
-     * Check if tenant has hotel modules enabled
+     * Check if tenant has a specific module enabled
+     * 
+     * @param string $module Module name (inventory, accounting, hr_payroll, etc.)
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
      */
-    function tenant_is_hotel(): bool
+    function tenant_includes(string $module, $tenantId = null): bool
     {
-        return tenant_can('hotel_management') || 
-               tenant_can('front_desk') || 
-               tenant_can('room_management');
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return false;
+        }
+        
+        $moduleKey = 'includes_' . $module;
+        $settings = tenant_settings_all($tenantId);
+        
+        return isset($settings[$moduleKey]) && $settings[$moduleKey] == true;
     }
 }
 
 if (!function_exists('tenant_limit')) {
     /**
      * Get tenant limit value
+     * 
+     * @param string $key Limit key (users, products, locations, etc.)
+     * @param mixed $default Default value
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return mixed
      */
-    function tenant_limit(string $key, $default = 0)
+    function tenant_limit(string $key, $default = 0, $tenantId = null)
     {
-        $tenantId = auth()->user()->tenant_id;
-        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        $tenantId = $tenantId ?? current_tenant_id();
         
-        return $settings[$key] ?? $default;
+        if (!$tenantId) {
+            return $default;
+        }
+        
+        // Handle both with and without max_ prefix
+        $settingKey = str_starts_with($key, 'max_') ? $key : 'max_' . $key;
+        $settings = tenant_settings_all($tenantId);
+        
+        return $settings[$settingKey] ?? $default;
     }
 }
 
-if (!function_exists('check_tenant_limit')) {
+if (!function_exists('tenant_check_limit')) {
     /**
      * Check if tenant has reached a limit
+     * 
+     * @param string $resource Resource name (users, products, locations, etc.)
+     * @param int $currentCount Current count of resource
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool True if under limit, False if reached/exceeded
      */
-    function check_tenant_limit(string $resource, int $currentCount): bool
+    function tenant_check_limit(string $resource, int $currentCount, $tenantId = null): bool
     {
-        $limit = tenant_limit('max_' . $resource, 0);
+        $limit = tenant_limit($resource, 0, $tenantId);
         
         if ($limit >= 999999) { // Unlimited
             return true;
@@ -262,45 +299,339 @@ if (!function_exists('check_tenant_limit')) {
     }
 }
 
-if (!function_exists('get_tenant_plan')) {
+if (!function_exists('tenant_remaining')) {
     /**
-     * Get current tenant plan
+     * Get remaining count for a resource before hitting limit
+     * 
+     * @param string $resource Resource name (users, products, locations, etc.)
+     * @param int $currentCount Current count of resource
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return int Remaining count
      */
-    function get_tenant_plan()
+    function tenant_remaining(string $resource, int $currentCount, $tenantId = null): int
     {
-        $tenantId = auth()->user()->tenant_id;
-        $settings = TenantSetting::getAllSettingsForTenant($tenantId);
+        $limit = tenant_limit($resource, 0, $tenantId);
         
-        return $settings['billing_plan'] ?? 'free';
+        if ($limit >= 999999) { // Unlimited
+            return PHP_INT_MAX;
+        }
+        
+        return max(0, $limit - $currentCount);
     }
 }
 
+if (!function_exists('tenant_plan')) {
+    /**
+     * Get tenant's current plan
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return string
+     */
+    function tenant_plan($tenantId = null): string
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return 'unknown';
+        }
+        
+        return tenant_setting($tenantId, 'billing_plan', 'free');
+    }
+}
 
-// Example: Check before creating a new product
-// public function store(Request $request)
-// {
-//     $tenantId = auth()->user()->tenant_id;
-//     $productCount = Product::where('tenant_id', $tenantId)->count();
-    
-//     if (!check_tenant_limit('products', $productCount)) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'You have reached your product limit. Please upgrade your plan.'
-//         ], 403);
-//     }
-    
-//     // Proceed with product creation
-// }
+if (!function_exists('tenant_is_on_plan')) {
+    /**
+     * Check if tenant is on specific plan
+     * 
+     * @param string $plan Plan code (free, starter, business, enterprise, onetime_lifetime)
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_is_on_plan(string $plan, $tenantId = null): bool
+    {
+        return tenant_plan($tenantId) === $plan;
+    }
+}
 
-// // Example: Check if module is enabled
-// public function index()
-// {
-//     if (!tenant_can('advanced_reports')) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'Advanced reports are not included in your current plan.'
-//         ], 403);
-//     }
-    
-//     // Show advanced reports
-// }
+if (!function_exists('tenant_is_lifetime')) {
+    /**
+     * Check if tenant has lifetime license
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_is_lifetime($tenantId = null): bool
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return false;
+        }
+        
+        $settings = tenant_settings_all($tenantId);
+        
+        // Check if it's lifetime plan or has is_lifetime flag
+        return (isset($settings['billing_plan']) && $settings['billing_plan'] === 'onetime_lifetime') ||
+               (isset($settings['is_lifetime']) && $settings['is_lifetime'] == true);
+    }
+}
+
+if (!function_exists('tenant_is_trial')) {
+    /**
+     * Check if tenant is in trial period
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_is_trial($tenantId = null): bool
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return false;
+        }
+        
+        $settings = tenant_settings_all($tenantId);
+        $status = $settings['subscription_status'] ?? 'active';
+        $trialEndsAt = $settings['trial_ends_at'] ?? null;
+        
+        return $status === 'trial' && 
+               $trialEndsAt && 
+               now()->lt($trialEndsAt);
+    }
+}
+
+if (!function_exists('tenant_billing_info')) {
+    /**
+     * Get tenant billing information
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return array
+     */
+    function tenant_billing_info($tenantId = null): array
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return [
+                'plan' => 'unknown',
+                'status' => 'unknown',
+                'trial_ends_at' => null,
+                'billing_cycle' => null,
+                'currency' => 'USD',
+            ];
+        }
+        
+        $settings = tenant_settings_all($tenantId);
+        
+        return [
+            'plan' => $settings['billing_plan'] ?? 'free',
+            'plan_name' => $settings['plan_name'] ?? 'Free Trial',
+            'status' => $settings['subscription_status'] ?? 'active',
+            'trial_ends_at' => $settings['trial_ends_at'] ?? null,
+            'billing_cycle' => $settings['billing_cycle'] ?? 'monthly',
+            'currency' => $settings['plan_currency'] ?? 'USD',
+            'monthly_price' => $settings['plan_monthly_price'] ?? 0,
+            'annual_price' => $settings['plan_annual_price'] ?? 0,
+            'onetime_fee' => $settings['onetime_fee'] ?? 0,
+            'is_lifetime' => $settings['is_lifetime'] ?? false,
+        ];
+    }
+}
+
+if (!function_exists('tenant_is_single_shop')) {
+    /**
+     * Check if tenant is limited to single shop
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_is_single_shop($tenantId = null): bool
+    {
+        $maxShops = tenant_limit('shops', 1, $tenantId);
+        return $maxShops === 1;
+    }
+}
+
+if (!function_exists('tenant_can_create_shops')) {
+    /**
+     * Check if tenant can create more shops
+     * 
+     * @param int $currentShopCount Current number of shops
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_can_create_shops(int $currentShopCount, $tenantId = null): bool
+    {
+        return tenant_check_limit('shops', $currentShopCount, $tenantId);
+    }
+}
+
+if (!function_exists('tenant_remaining_shops')) {
+    /**
+     * Get remaining shops tenant can create
+     * 
+     * @param int $currentShopCount Current number of shops
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return int
+     */
+    function tenant_remaining_shops(int $currentShopCount, $tenantId = null): int
+    {
+        return tenant_remaining('shops', $currentShopCount, $tenantId);
+    }
+}
+
+if (!function_exists('tenant_features')) {
+    /**
+     * Get all tenant feature flags
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return array
+     */
+    function tenant_features($tenantId = null): array
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return [];
+        }
+        
+        $settings = tenant_settings_all($tenantId);
+        $features = [];
+        
+        foreach ($settings as $key => $value) {
+            if (str_starts_with($key, 'module_') || str_starts_with($key, 'includes_')) {
+                $features[$key] = $value;
+            }
+        }
+        
+        return $features;
+    }
+}
+
+if (!function_exists('tenant_limits')) {
+    /**
+     * Get all tenant limits
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return array
+     */
+    function tenant_limits($tenantId = null): array
+    {
+        $tenantId = $tenantId ?? current_tenant_id();
+        
+        if (!$tenantId) {
+            return [];
+        }
+        
+        $settings = tenant_settings_all($tenantId);
+        $limits = [];
+        
+        foreach ($settings as $key => $value) {
+            if (str_starts_with($key, 'max_')) {
+                $limits[$key] = $value;
+            }
+        }
+        
+        return $limits;
+    }
+}
+
+if (!function_exists('tenant_currency')) {
+    /**
+     * Get tenant currency code
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return string
+     */
+    function tenant_currency($tenantId = null): string
+    {
+        return tenant_setting($tenantId, 'plan_currency', 'USD');
+    }
+}
+
+if (!function_exists('tenant_timezone')) {
+    /**
+     * Get tenant timezone
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return string
+     */
+    function tenant_timezone($tenantId = null): string
+    {
+        return tenant_setting($tenantId, 'timezone', 'UTC');
+    }
+}
+
+if (!function_exists('tenant_locale')) {
+    /**
+     * Get tenant locale
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return string
+     */
+    function tenant_locale($tenantId = null): string
+    {
+        return tenant_setting($tenantId, 'locale', 'en');
+    }
+}
+
+if (!function_exists('tenant_is_hotel')) {
+    /**
+     * Check if tenant has hotel modules enabled
+     * 
+     * @param int|string|null $tenantId Tenant ID (null uses current tenant)
+     * @return bool
+     */
+    function tenant_is_hotel($tenantId = null): bool
+    {
+        return tenant_can('hotel_management', $tenantId) || 
+               tenant_can('front_desk', $tenantId) || 
+               tenant_can('room_management', $tenantId);
+    }
+}
+
+// ==================== USAGE EXAMPLES ====================
+
+/*
+// Get a single setting
+$maxUsers = tenant_setting(current_tenant_id(), 'max_users', 10);
+$moduleEnabled = tenant_setting(null, 'module_advanced_reports', false);
+
+// Set a setting
+tenant_setting_set(null, 'maintenance_mode', true, 'boolean', 'system');
+
+// Check module access
+if (tenant_can('advanced_reports')) {
+    // Show advanced reports
+}
+
+// Check limits
+$userCount = User::where('tenant_id', current_tenant_id())->count();
+if (tenant_check_limit('users', $userCount)) {
+    // Can create new user
+} else {
+    // Limit reached
+}
+
+// Get remaining count
+$remaining = tenant_remaining('users', $userCount);
+echo "You can create {$remaining} more users";
+
+// Get all settings
+$allSettings = tenant_settings_all();
+
+// Get specific groups
+$limits = tenant_limits();
+$features = tenant_features();
+$billing = tenant_billing_info();
+
+// Check plan
+if (tenant_is_on_plan('enterprise')) {
+    // Enterprise features
+}
+
+if (tenant_is_lifetime()) {
+    // Lifetime license features
+}
+*/

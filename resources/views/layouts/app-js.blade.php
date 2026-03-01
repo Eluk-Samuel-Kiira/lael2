@@ -5,199 +5,589 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 
-
 <style>
-    body {
-        font-family: Arial, sans-serif;
-    }
-    nav {
-        margin-bottom: 10px;
-    }
-    a {
-        margin-right: 10px;
-        text-decoration: none;
-        color: blue;
-    }
-    a:hover {
-        text-decoration: underline;
-    }
-    #content {
-        padding: 20px;
-        border: 1px solid #ddd;
-        margin-top: 10px;
-        min-height: 100px;
-        position: relative;
-    }
-    #loader {
+    /* Material UI Loader Styles - Only for SPA navigation */
+    .spa-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: transparent;
+        z-index: 99999;
         display: none;
-        position: absolute;
+        overflow: hidden;
+    }
+
+    .spa-loader.active {
+        display: block;
+    }
+
+    .spa-loader .loader-bar {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #4f46e5, #0ea5e9, #4f46e5);
+        background-size: 200% 100%;
+        animation: material-progress 1.5s ease-in-out infinite;
+        transform-origin: 0% 50%;
+    }
+
+    @keyframes material-progress {
+        0% {
+            transform: translateX(-100%) scaleX(0.2);
+        }
+        50% {
+            transform: translateX(0%) scaleX(0.8);
+        }
+        100% {
+            transform: translateX(100%) scaleX(0.2);
+        }
+    }
+
+    /* Material Circular Loader - Optional for longer loads */
+    .spa-loader-circular {
+        position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 40px;
-        height: 40px;
-        border: 4px solid rgba(0, 0, 0, 0.1);
-        border-top: 4px solid blue;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        z-index: 10;
+        z-index: 99999;
+        display: none;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(4px);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+        align-items: center;
+        gap: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
-    @keyframes spin {
-        from {
-            transform: rotate(0deg);
-        }
-        to {
-            transform: rotate(360deg);
-        }
+
+    .spa-loader-circular.active {
+        display: flex;
+    }
+
+    .material-spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid #e2e8f0;
+        border-top-color: #4f46e5;
+        border-radius: 50%;
+        animation: material-spin 0.8s linear infinite;
+    }
+
+    .spa-loader-circular .loader-text {
+        color: #1e293b;
+        font-size: 14px;
+        font-weight: 500;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    }
+
+    @keyframes material-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Page transition effect - subtle */
+    #kt_app_main {
+        transition: opacity 0.2s ease;
+    }
+
+    #kt_app_main.fade-out {
+        opacity: 0.6;
+    }
+
+    /* 404 Page Styles - Using Material UI design */
+    .error-404-page {
+        min-height: 70vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 48px 24px;
+    }
+
+    .error-404-content {
+        max-width: 500px;
+    }
+
+    .error-404-icon {
+        font-size: 120px;
+        color: #94a3b8;
+        margin-bottom: 24px;
+    }
+
+    .error-404-title {
+        font-size: 96px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 16px;
+        line-height: 1;
+    }
+
+    .error-404-subtitle {
+        font-size: 24px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 16px;
+    }
+
+    .error-404-text {
+        font-size: 16px;
+        color: #64748b;
+        margin-bottom: 32px;
+        line-height: 1.6;
+    }
+
+    .error-404-text code {
+        background: #f1f5f9;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #475569;
+    }
+
+    .error-404-actions {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 </style>
 
+<!-- Material UI Loader - Top progress bar (only for SPA navigation) -->
+<div class="spa-loader" id="spaLoader">
+    <div class="loader-bar"></div>
+</div>
 
-<!-- Page Navigator functions -->
+<!-- Material Circular Loader - For longer operations -->
+<div class="spa-loader-circular" id="spaCircularLoader">
+    <div class="material-spinner"></div>
+    <div class="loader-text" id="loaderText">{{ __('payments.loading')  }}</div>
+</div>
+
 <script>
-    // Function to show the loader
+    // ==================== LOCALE MESSAGES ====================
+    const loaderMessages = [
+        "Loading amazing things...",
+        "Preparing dashboard...",
+        "Fetching data...",
+        "Almost there...",
+        "Making it pretty...",
+        "Loading magic...",
+        "Please wait...",
+        "Getting ready..."
+    ];
+
+    const errorMessages = {
+        networkError: "Network error occurred",
+        pageNotFound: "Page not found",
+        errorLoading: "Error loading page",
+        goBack: "Go back",
+        goToDashboard: "Go to dashboard",
+        reloadPage: "Reload page"
+    };
+
+    // ==================== LOADER FUNCTIONS ====================
+    let loaderTimeout;
+
     function showLoaderApp() {
-        const loader = document.getElementById('loader');
-        if (loader) {
-            loader.style.display = 'block';
+        // Clear any existing timeout
+        if (loaderTimeout) {
+            clearTimeout(loaderTimeout);
         }
+        
+        const loader = document.getElementById('spaLoader');
+        const circularLoader = document.getElementById('spaCircularLoader');
+        const loaderText = document.getElementById('loaderText');
+        const mainContent = document.getElementById('kt_app_main');
+        
+        // Random message for circular loader
+        const randomMessage = loaderMessages[Math.floor(Math.random() * loaderMessages.length)];
+        if (loaderText) loaderText.textContent = randomMessage;
+        
+        // Show top progress bar immediately
+        loader.classList.add('active');
+        
+        // Add fade-out effect to content
+        if (mainContent) mainContent.classList.add('fade-out');
+        
+        // If loading takes more than 800ms, show circular loader
+        loaderTimeout = setTimeout(() => {
+            if (loader.classList.contains('active')) {
+                circularLoader.classList.add('active');
+            }
+        }, 800);
     }
 
-    // Function to hide the loader
     function hideLoaderApp() {
-        const loader = document.getElementById('loader');
-        if (loader) {
-            loader.style.display = 'none';
+        const loader = document.getElementById('spaLoader');
+        const circularLoader = document.getElementById('spaCircularLoader');
+        const mainContent = document.getElementById('kt_app_main');
+        
+        // Clear timeout
+        if (loaderTimeout) {
+            clearTimeout(loaderTimeout);
+        }
+        
+        // Hide all loaders
+        loader.classList.remove('active');
+        circularLoader.classList.remove('active');
+        
+        // Remove fade-out effect
+        if (mainContent) mainContent.classList.remove('fade-out');
+    }
+
+    // ==================== MOBILE MENU CLOSE FUNCTION ====================
+    function closeMobileMenu() {
+        if (window.innerWidth <= 991.98) { // Mobile breakpoint
+            // Method 1: Use Metronic's KTApp if available
+            if (window.KTApp && window.KTApp.hideMobileAside) {
+                window.KTApp.hideMobileAside();
+                return;
+            }
+            
+            // Method 2: Find and click the mobile toggle button
+            const mobileToggle = document.getElementById('kt_app_sidebar_mobile_toggle') || 
+                                document.querySelector('[data-kt-toggle="sidebar"]') ||
+                                document.querySelector('.aside-toggle');
+            
+            if (mobileToggle) {
+                mobileToggle.click();
+                return;
+            }
+            
+            // Method 3: Manual class removal as fallback
+            const sidebar = document.querySelector('.app-sidebar');
+            if (sidebar) {
+                sidebar.classList.remove('show');
+                sidebar.classList.remove('aside-open');
+                
+                // Remove overlay
+                const overlay = document.querySelector('.aside-overlay');
+                if (overlay) {
+                    overlay.classList.remove('active');
+                    setTimeout(() => overlay.remove(), 100);
+                }
+                
+                // Reset body
+                document.body.classList.remove('aside-open');
+            }
         }
     }
 
-
-    // Function to handle navigation
-    function navigateToAppPages(url) {
-        showLoaderApp(); // Show loader during content loading
-
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.text();
-            })
-            .then(data => {
-                history.pushState({ url: url }, null, url); // Store state in history
-
-                // Extract the content within #kt_app_main
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data, 'text/html');
-                const ktAppMain = doc.getElementById('kt_app_main');
-
-                if (ktAppMain) {
-                    // Update the title and content
-                    const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-                    document.title = titleMatch ? titleMatch[1] : 'Default Title';
-
-                    // Replace the content of #kt_app_main in the current page
-                    document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
-
-                    // Update menu active state
-                    updateActiveMenuLink(url);
-                } else {
-                    console.error('Error: #kt_app_main not found in the fetched content.');
-                }
-
-                setTimeout(hideLoader, 300);
-            })
-            .catch(error => {
-                console.error('Error fetching content:', error);
-                document.getElementById('kt_app_main').innerHTML = '404 Page Not Found.';
-                hideLoaderApp();
-            });
-    }
-
-    // Function to load content based on URL
-    function renderAppPage(url) {
-        const pageContent = document.getElementById('kt_app_main');
-
-        if (!pageContent) {
-            console.error('Error: Element #kt_app_main not found.');
-            return; // Stop execution if the element is missing
-        }
-
-        showLoaderApp(); // Show loader during content loading
-
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.text(); // Get the HTML content
-            })
-            .then(data => {
-                // Parse the fetched HTML
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data, 'text/html');
-                const ktAppMain = doc.getElementById('kt_app_main');
-
-                if (ktAppMain) {
-                    // Extract the title from the fetched content
-                    const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-                    document.title = titleMatch ? titleMatch[1] : 'Default Title'; // Update the document title
-
-                    // Insert the fetched content into the page
-                    pageContent.innerHTML = ktAppMain.innerHTML;
-                } 
-                // else {
-                //     console.error('Error: #kt_app_main not found in the fetched content.');
-                // }
-
-                // Hide the loader after a small delay (optional)
-                setTimeout(hideLoader, 300);
-            })
-            .catch(error => {
-                console.error('Error fetching content:', error);
-
-                if (pageContent) {
-                    pageContent.innerHTML = '404 Page Not Found.'; // Fallback content
-                }
-
-                hideLoaderApp();
-            });
-    }
-
-
-    // Handle back/forward navigation
-    window.addEventListener('popstate', (event) => {
-        if (event.state && event.state.url) {
-            renderAppPage(event.state.url); // Load the correct content
-        } else {
-            renderAppPage(window.location.pathname); // Default behavior
-        }
-    });
-
-    // Reload page especially when going to the database
-    function reloadToApp(url) {
-        window.location.href = url; // Redirect on success
-    }
-
+    // ==================== ACTIVE MENU TRACKING ====================
     function updateActiveMenuLink(url) {
-        // Remove 'active' class from all menu links
+        // Remove active class from all menu links
         document.querySelectorAll('.menu-link').forEach(link => {
             link.classList.remove('active');
         });
 
-        // Add 'active' class to the matching menu link
+        // Find and activate the matching menu link
+        let activeFound = false;
+        
         document.querySelectorAll('.menu-link').forEach(link => {
             const onclickAttr = link.getAttribute('onclick');
-            if (onclickAttr && onclickAttr.includes(url)) {
+            const href = link.getAttribute('href');
+            
+            if (onclickAttr && (onclickAttr.includes(url) || (url === '/' && onclickAttr.includes('dashboard')))) {
                 link.classList.add('active');
+                activeFound = true;
+                
+                // Open all parent accordions
+                let parent = link.closest('.menu-item.menu-accordion');
+                while (parent) {
+                    parent.classList.add('show', 'here');
+                    parent = parent.parentElement?.closest('.menu-item.menu-accordion');
+                }
             }
+            
+            if (href && (href === url || (url === '/' && href.includes('dashboard')))) {
+                link.classList.add('active');
+                activeFound = true;
+                
+                let parent = link.closest('.menu-item.menu-accordion');
+                while (parent) {
+                    parent.classList.add('show', 'here');
+                    parent = parent.parentElement?.closest('.menu-item.menu-accordion');
+                }
+            }
+        });
+
+        // Special handling for dashboard
+        if (!activeFound && (url === '/' || url === '/dashboard')) {
+            const dashboardLink = document.querySelector('[onclick*="dashboard"]');
+            if (dashboardLink) {
+                dashboardLink.classList.add('active');
+                
+                let parent = dashboardLink.closest('.menu-item.menu-accordion');
+                while (parent) {
+                    parent.classList.add('show', 'here');
+                    parent = parent.parentElement?.closest('.menu-item.menu-accordion');
+                }
+            }
+        }
+    }
+
+    // ==================== 404 HANDLING ====================
+    function show404Page() {
+        const mainContent = document.getElementById('kt_app_main');
+        if (!mainContent) return;
+
+        const currentUrl = window.location.pathname;
+        
+        mainContent.innerHTML = `
+            <div class="error-404-page">
+                <div class="error-404-content">
+                    <div class="error-404-icon">
+                        <i class="ki-duotone ki-information fs-10x"></i>
+                    </div>
+                    <h1 class="error-404-title">404</h1>
+                    <h2 class="error-404-subtitle">${errorMessages.pageNotFound}</h2>
+                    <p class="error-404-text">
+                        ${errorMessages.errorLoading}<br>
+                        <code>${currentUrl}</code>
+                    </p>
+                    <div class="error-404-actions">
+                        <a href="javascript:void(0);" onclick="window.history.back()" class="btn btn-light">
+                            <i class="ki-duotone ki-arrow-left fs-2"></i>
+                            ${errorMessages.goBack}
+                        </a>
+                        <a href="javascript:void(0);" onclick="reloadToApp('/dashboard')" class="btn btn-primary">
+                            <i class="ki-duotone ki-home fs-2"></i>
+                            ${errorMessages.goToDashboard}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.title = '404 - ' + errorMessages.pageNotFound;
+    }
+
+    // ==================== NAVIGATION FUNCTIONS ====================
+    function navigateToAppPages(url, event) {
+        // Prevent default if event exists
+        if (event) {
+            event.preventDefault();
+        }
+        
+        // Close mobile menu immediately when navigating
+        closeMobileMenu();
+        
+        // Only show loader for SPA navigation
+        if (!window.__INITIAL_LOAD__) {
+            showLoaderApp();
+        }
+
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 404) throw new Error('404');
+                throw new Error(errorMessages.networkError);
+            }
+            return response.text();
+        })
+        .then(data => {
+            history.pushState({ url: url }, null, url);
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data, 'text/html');
+            const ktAppMain = doc.getElementById('kt_app_main');
+
+            if (ktAppMain) {
+                const titleMatch = data.match(/<title>(.*?)<\/title>/i);
+                document.title = titleMatch ? titleMatch[1] : 'Default Title';
+                document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
+                
+                // Update active menu
+                setTimeout(() => {
+                    updateActiveMenuLink(url);
+                }, 100);
+            } else {
+                show404Page();
+            }
+
+            hideLoaderApp();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (error.message === '404') {
+                show404Page();
+            } else {
+                document.getElementById('kt_app_main').innerHTML = `
+                    <div class="error-404-page">
+                        <div class="error-404-content">
+                            <div class="error-404-icon">
+                                <i class="ki-duotone ki-information fs-10x text-warning"></i>
+                            </div>
+                            <h2 class="error-404-subtitle">${errorMessages.errorLoading}</h2>
+                            <p class="error-404-text">${error.message}</p>
+                            <button onclick="location.reload()" class="btn btn-primary">
+                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i>
+                                ${errorMessages.reloadPage}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            hideLoaderApp();
         });
     }
 
-    // Initial load
-    renderAppPage(window.location.pathname);
+    function renderAppPage(url) {
+        const pageContent = document.getElementById('kt_app_main');
+        if (!pageContent) return;
+
+        // Close mobile menu immediately when navigating
+        closeMobileMenu();
+
+        // Only show loader for SPA navigation
+        if (!window.__INITIAL_LOAD__) {
+            showLoaderApp();
+        }
+
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 404) throw new Error('404');
+                throw new Error(errorMessages.networkError);
+            }
+            return response.text();
+        })
+        .then(data => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data, 'text/html');
+            const ktAppMain = doc.getElementById('kt_app_main');
+
+            if (ktAppMain) {
+                const titleMatch = data.match(/<title>(.*?)<\/title>/i);
+                document.title = titleMatch ? titleMatch[1] : 'Default Title';
+                pageContent.innerHTML = ktAppMain.innerHTML;
+                
+                // Update active menu
+                setTimeout(() => {
+                    updateActiveMenuLink(url);
+                }, 100);
+            } else {
+                show404Page();
+            }
+
+            hideLoaderApp();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (error.message === '404') {
+                show404Page();
+            } else {
+                pageContent.innerHTML = `
+                    <div class="error-404-page">
+                        <div class="error-404-content">
+                            <div class="error-404-icon">
+                                <i class="ki-duotone ki-information fs-10x text-warning"></i>
+                            </div>
+                            <h2 class="error-404-subtitle">${errorMessages.errorLoading}</h2>
+                            <p class="error-404-text">${error.message}</p>
+                            <button onclick="location.reload()" class="btn btn-primary">
+                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i>
+                                ${errorMessages.reloadPage}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            hideLoaderApp();
+        });
+    }
+
+    function reloadToApp(url) {
+        window.location.href = url;
+    }
+
+    // ==================== EVENT LISTENERS ====================
+    
+    // Mark initial page load
+    window.__INITIAL_LOAD__ = true;
+
+    // Handle back/forward navigation
+    window.addEventListener('popstate', (event) => {
+        window.__INITIAL_LOAD__ = false; // This is SPA navigation
+        if (event.state && event.state.url) {
+            renderAppPage(event.state.url);
+        } else {
+            renderAppPage(window.location.pathname);
+        }
+    });
+
+    // Intercept all clicks on menu links
+    document.addEventListener('click', (e) => {
+        const menuLink = e.target.closest('.menu-link');
+        if (menuLink && menuLink.getAttribute('onclick')) {
+            // This is SPA navigation
+            window.__INITIAL_LOAD__ = false;
+            
+            // Extract URL from onclick attribute
+            const onclickAttr = menuLink.getAttribute('onclick');
+            const urlMatch = onclickAttr.match(/'([^']+)'/);
+            if (urlMatch && urlMatch[1]) {
+                e.preventDefault();
+                navigateToAppPages(urlMatch[1], e);
+            }
+        }
+    });
+
+    // Also handle submenu items
+    document.addEventListener('click', (e) => {
+        const submenuLink = e.target.closest('.menu-sub .menu-link');
+        if (submenuLink && submenuLink.getAttribute('onclick')) {
+            // This is SPA navigation from submenu
+            window.__INITIAL_LOAD__ = false;
+            
+            // Extract URL from onclick attribute
+            const onclickAttr = submenuLink.getAttribute('onclick');
+            const urlMatch = onclickAttr.match(/'([^']+)'/);
+            if (urlMatch && urlMatch[1]) {
+                e.preventDefault();
+                navigateToAppPages(urlMatch[1], e);
+            }
+        }
+    });
+
+    // Initial load - DON'T show loader
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set flag to prevent loader on initial load
+        window.__INITIAL_LOAD__ = true;
+        
+        // Load initial content without loader
+        fetch(window.location.pathname, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.text())
+        .then(data => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data, 'text/html');
+            const ktAppMain = doc.getElementById('kt_app_main');
+            
+            if (ktAppMain) {
+                document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
+                
+                // Update active menu
+                setTimeout(() => {
+                    updateActiveMenuLink(window.location.pathname);
+                }, 100);
+            }
+            
+            // Initial load complete
+            setTimeout(() => {
+                window.__INITIAL_LOAD__ = false;
+            }, 500);
+        });
+    });
 </script>
  
+
+
 
 
 

@@ -296,6 +296,9 @@ return [
     'form_errors' => 'Please fix the errors in the form',
     // Admin Users related strings
     'admin_users' => 'Admin Users',
+    'route_not_found' => 'Route not found',
+    'page_not_found' => 'Page Not Found',
+    'maximum_payment_methods_reached' => 'Maximum payment methods limit reached. You can only create up to :max payment methods.',
     'admins' => 'Admins',
     'total_admins' => 'Total Admins',
     'active_admins' => 'Active Admins',
@@ -311,6 +314,22 @@ return [
     'add_admin' => 'Add Admin',
     'pending' => 'Pending',
     'inactive' => 'Inactive',
+
+    'loading' => 'Loading...',
+    'loading_amazing' => 'Loading amazing content...',
+    'preparing_dashboard' => 'Preparing your dashboard...',
+    'fetching_data' => 'Fetching latest data...',
+    'almost_there' => 'Almost there...',
+    'making_pretty' => 'Making things pretty...',
+    'loading_magic' => 'Loading magic...',
+    'please_wait' => 'Please wait...',
+    'getting_ready' => 'Getting things ready...',
+    'network_error' => 'Network response was not ok',
+    'page_not_found' => 'Page Not Found',
+    'error_loading' => 'Error Loading Page',
+    'go_back' => 'Go Back',
+    'go_to_dashboard' => 'Go to Dashboard',
+    'reload_page' => 'Reload Page',
 
     // Add Admin related strings
     'first_name' => 'First Name',
@@ -368,4 +387,106 @@ return [
     'plans_refreshed' => 'Billing plans have been refreshed successfully',
     'refresh_failed' => 'Refresh Failed',
     'unknown_error' => 'An unknown error occurred',
+
+    
+    'active_users_list' => 'Active Users',
+    'users_logged_in_last_15_min' => 'Users logged in within the last 15 minutes',
+    'active' => 'Active',
+    'user' => 'User',
+    'location_dept' => 'Location/Dept',
+    'device_browser' => 'Device/Browser',
+    'ip_address' => 'IP Address',
+    'last_activity' => 'Last Activity',
+    'online' => 'Online',
+    'no_active_users' => 'No active users at the moment',
+    'staff' => 'Staff',
+
+    // Dashboard
+    'dashboard' => 'Dashboard',
+    'general_dashboard' => 'General Dashboard',
+    'overview_dashboard' => 'Financial Overview',
+    'financial_overview' => 'Financial Overview',
+    'financial_reports' => 'Financial Reports',
+    'back' => 'Back',
+    
+    // Stats
+    'today_sales' => "Today's Sales",
+    'today_orders' => "Today's Orders",
+    'today_profit' => "Today's Profit",
+    'active_users' => 'Active Users',
+    'currently_online' => 'Currently Online',
+    'unique_customers' => 'unique customers',
+    'vs_yesterday' => 'vs yesterday',
+    'margin' => 'margin',
+    'units' => 'units',
+    'transactions' => 'transactions',
+    'per_transaction' => 'per transaction',
+    
+    // Charts
+    'weekly_sales_trend' => 'Weekly Sales Trend',
+    'last_7_days' => 'Last 7 days',
+    'last_30_days' => 'Last 30 days',
+    'refresh' => 'Refresh',
+    'sales' => 'Sales',
+    
+    // Products
+    'best_selling_products' => 'Best Selling Products',
+    'top_categories' => 'Top Categories',
+    'by_revenue' => 'By Revenue',
+    
+    // Inventory
+    'inventory_alerts' => 'Inventory Alerts',
+    'low_stock_items' => 'Low Stock Items',
+    'out_of_stock' => 'Out of Stock',
+    'stock_left' => 'Stock left',
+    'low_stock' => 'Low Stock',
+    'no_low_stock_items' => 'No low stock items found',
+    
+    // Recent Orders
+    'recent_orders' => 'Recent Orders',
+    'last_10_orders' => 'Last 10 orders',
+    'view_all' => 'View All',
+    'walk_in_customer' => 'Walk-in Customer',
+    
+    // Financial Overview
+    'period' => 'Period',
+    'today' => 'Today',
+    'yesterday' => 'Yesterday',
+    'this_week' => 'This Week',
+    'this_month' => 'This Month',
+    'custom_range' => 'Custom Range',
+    'start_date' => 'Start Date',
+    'end_date' => 'End Date',
+    'apply_filter' => 'Apply Filter',
+    'total_sales' => 'Total Sales',
+    'gross_profit' => 'Gross Profit',
+    'average_order' => 'Average Order',
+    'tax_collected' => 'Tax Collected',
+    'net_of_discounts' => 'Net of discounts',
+    
+    // Hourly Breakdown
+    'hourly_sales_breakdown' => 'Hourly Sales Breakdown',
+    'peak_hours_analysis' => 'Peak hours analysis',
+    
+    // Payment Methods
+    'payment_methods' => 'Payment Methods',
+    'transaction_volume_by_method' => 'Transaction volume by method',
+    'total' => 'Total',
+    
+    // Expense Summary
+    'expense_summary' => 'Expense Summary',
+    'deductions_and_refunds' => 'Deductions and refunds',
+    'discounts_given' => 'Discounts Given',
+    'refunds' => 'Refunds',
+    'net_revenue' => 'Net Revenue',
+    
+    // Top Transactions
+    'top_transactions' => 'Top Transactions',
+    'highest_value_orders' => 'Highest value orders',
+    'order' => 'Order',
+    'customer' => 'Customer',
+    'amount' => 'Amount',
+    'status' => 'Status',
+    'time' => 'Time',
+
 ];

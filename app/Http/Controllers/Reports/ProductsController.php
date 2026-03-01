@@ -518,8 +518,9 @@ class ProductsController extends Controller
                     return $variant->cost_price * $variant->overal_quantity_at_hand;
                 });
             });
+            // CORRECTED: Access variants through the product relationship
             $category->total_revenue_value = $category->products->sum(function ($product) {
-                return $product->products->sum(function ($variant) {
+                return $product->variants->sum(function ($variant) {
                     return $variant->price * $variant->overal_quantity_at_hand;
                 });
             });

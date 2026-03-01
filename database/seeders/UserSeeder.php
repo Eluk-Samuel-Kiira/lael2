@@ -174,6 +174,7 @@ class UserSeeder extends Seeder
                 'complete order',
             ],
             'Purchase Order Management' => [
+                'view procurement',
                 'view purchase_orders',
                 'create purchase_orders',
                 'edit purchase_orders', 
@@ -223,11 +224,12 @@ class UserSeeder extends Seeder
                 'update role',
                 'update permission',
                 'update settings',
+                'view settings',
             ],
             'System Configuration' => [
                 'configure system',
                 'admin only',
-                'view dashboard',
+                'view financial dashboard',
             ],
         ];
 

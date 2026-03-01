@@ -130,6 +130,45 @@ class TenantController extends Controller
                 'fiscal_year_start' => $request->fiscal_year_start,
                 'tax_calculation_method' => $request->tax_calculation_method,
             ]);
+
+            // Save configuration as tenant settings
+            $tenant->settings()->createMany([
+                [
+                    'setting_key' => 'currency_code',
+                    'setting_value' => $request->currency_code,
+                    'data_type' => 'string',
+                    'category' => 'general',
+                    'updated_by' => $user->id,
+                ],
+                [
+                    'setting_key' => 'timezone',
+                    'setting_value' => $request->timezone,
+                    'data_type' => 'string',
+                    'category' => 'general',
+                    'updated_by' => $user->id,
+                ],
+                [
+                    'setting_key' => 'locale',
+                    'setting_value' => $request->locale,
+                    'data_type' => 'string',
+                    'category' => 'general',
+                    'updated_by' => $user->id,
+                ],
+                [
+                    'setting_key' => 'fiscal_year_start',
+                    'setting_value' => $request->fiscal_year_start,
+                    'data_type' => 'date',
+                    'category' => 'general',
+                    'updated_by' => $user->id,
+                ],
+                [
+                    'setting_key' => 'tax_calculation_method',
+                    'setting_value' => $request->tax_calculation_method,
+                    'data_type' => 'string',
+                    'category' => 'general',
+                    'updated_by' => $user->id,
+                ],
+            ]);
             
             // Get currency details from config
             $currencies = config('currencies.currencies');
@@ -222,7 +261,6 @@ class TenantController extends Controller
         return view('tenant.partials.edit', compact('tenant', 'plans', 'currentPlan'));
     }
 
-
     /**
      * Update the specified tenant.
      */
@@ -251,11 +289,34 @@ class TenantController extends Controller
                 'status' => $request->status,
             ]);
             
-            // Update trial_ends_at if provided
+            // Check if plan is being changed
+            if ($request->has('plan_id') && !empty($request->plan_id)) {
+                $currentPlanSetting = $tenant->settings()->where('setting_key', 'billing_plan')->first();
+                $newPlan = BillingPlan::findOrFail($request->plan_id);
+                
+                if ($request->has('plan_id') && !empty($request->plan_id)) {
+                    $newPlan = BillingPlan::findOrFail($request->plan_id);
+                    
+                    // Check if plan actually changed
+                    $currentPlan = TenantSetting::where('tenant_id', $tenant->id)
+                        ->where('setting_key', 'billing_plan')
+                        ->first();
+                    
+                    if (!$currentPlan || $currentPlan->setting_value != $newPlan->plan_code) {
+                        // Plan changed - apply new plan settings
+                        $newPlan->applyToTenant($tenant->id, $user->id);
+                    }
+                }
+            }
+            
+            // Handle trial_ends_at separately (can be updated without changing plan)
             if ($request->has('trial_ends_at')) {
                 if ($request->filled('trial_ends_at')) {
-                    $tenant->settings()->updateOrCreate(
-                        ['setting_key' => 'trial_ends_at'],
+                    TenantSetting::updateOrCreate(
+                        [
+                            'tenant_id' => $tenant->id,
+                            'setting_key' => 'trial_ends_at'
+                        ],
                         [
                             'setting_value' => $request->trial_ends_at,
                             'data_type' => 'datetime',
@@ -264,34 +325,16 @@ class TenantController extends Controller
                         ]
                     );
                 } else {
-                    // If empty, delete the trial_ends_at setting
-                    $tenant->settings()->where('setting_key', 'trial_ends_at')->delete();
-                }
-            }
-            
-            // Check if plan is being changed
-            if ($request->has('plan_id') && !empty($request->plan_id)) {
-                $currentPlanSetting = $tenant->settings()->where('setting_key', 'billing_plan')->first();
-                $newPlan = BillingPlan::findOrFail($request->plan_id);
-                
-                if (!$currentPlanSetting || $currentPlanSetting->setting_value != $newPlan->plan_code) {
-                    // Plan changed - apply new plan settings
-                    $newPlan->applyToTenant($tenant->id, $user->id);
-                    
-                    // Update billing_plan setting
-                    $tenant->settings()->updateOrCreate(
-                        ['setting_key' => 'billing_plan'],
-                        [
-                            'setting_value' => $newPlan->plan_code,
-                            'data_type' => 'string',
-                            'category' => 'billing',
-                            'updated_by' => $user->id
-                        ]
-                    );
+                    TenantSetting::where('tenant_id', $tenant->id)
+                        ->where('setting_key', 'trial_ends_at')
+                        ->delete();
                 }
             }
             
             DB::commit();
+            
+            // Clear cache
+            tenant_clear_settings_cache($tenant->id);
             
             return response()->json([
                 'success' => true,

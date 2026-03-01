@@ -9,7 +9,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta property="og:locale" content="en_US" />
         <meta property="og:type" content="LAEL POS SYSTEM" />
+        <meta property="og:type" content="Point Of Sale As A Service" />
         <meta property="og:title" content="The most advanced POS System in the world" />
+        <meta property="og:url" content="https://lael.stardena.org" />
         <meta property="og:url" content="https://lael.stardena.com" />
         <meta property="og:site_name" content="Lael by Stardena" />
         <link rel="canonical" href="https://lael.stardena.com" />

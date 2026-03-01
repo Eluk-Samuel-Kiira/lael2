@@ -77,14 +77,20 @@ class LocationController extends Controller
         ]);
 
 
+        // Clear cache to ensure fresh data
+        tenant_clear_settings_cache($tenantId);
+
         // Check maximum locations limit
         $currentLocationCount = Location::where('tenant_id', $tenantId)->count();
-        $maxLocations = tenant_setting($tenantId, 'max_locations', 1);
+        $maxLocations = tenant_limit('locations', 1, $tenantId); // Using tenant_limit instead of tenant_setting
 
         if ($currentLocationCount >= $maxLocations) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.maximum_locations_reached', ['max' => $maxLocations]),
+                'current' => $currentLocationCount,
+                'limit' => $maxLocations,
+                'remaining' => 0
             ]);
         }
 

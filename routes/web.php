@@ -446,7 +446,36 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('reports/general-ledger', [ReportController::class, 'generalLedger']);
         });
 
-});
+
+
+    });
+
+    // Fallback route - must be the LAST route
+    Route::fallback(function () {
+        // Log the 404 error for debugging
+        Log::warning('404 Not Found', [
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'user_id' => auth()->id(),
+        ]);
+        
+        // Check if it's an API request
+        if (request()->expectsJson() || request()->is('api/*')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.route_not_found'),
+                'error_code' => 'ROUTE_NOT_FOUND'
+            ], 404);
+        }
+        
+        // For web requests, show custom 404 page
+        return response()->view('errors.404', [
+            'message' => __('payments.page_not_found'),
+            'previous_url' => url()->previous() !== url()->current() ? url()->previous() : null
+        ], 404);
+    });
 
 
 require __DIR__.'/auth.php';
