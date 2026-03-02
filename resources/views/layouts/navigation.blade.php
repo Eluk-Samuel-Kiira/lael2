@@ -42,7 +42,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('auth._dashboard')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth._dashboard')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -84,7 +84,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('pagination._pos')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination._pos')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -126,7 +126,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('pagination.product_catalog')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination.product_catalog')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -182,7 +182,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('pagination.store_inventory')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination.store_inventory')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -225,7 +225,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('passwords.suppliers_purchase')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('passwords.suppliers_purchase')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -296,7 +296,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('auth.human_resource')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth.human_resource')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -374,7 +374,7 @@
                                 <span class="path3"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family: {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
                             {{__('accounting.reports')}}
                         </span>
                         <span class="menu-arrow"></span>
@@ -392,7 +392,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title" style="font-family: {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
                                     {{__('accounting.financial_reports')}}
                                 </span>
                                 <span class="menu-arrow"></span>
@@ -1071,7 +1071,7 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getMailOptions('font_family') }}; font-size: {{ getMailOptions('font_size') }}rem">{{__('auth.app_setting')}}</span>
+                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth.app_setting')}}</span>
                         <span class="menu-arrow"></span>
                     </span>
 

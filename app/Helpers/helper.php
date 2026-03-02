@@ -642,11 +642,99 @@ if (! function_exists('debug_currency_conversion')) {
 
 
 
+if (!function_exists('getSetting')) {
+    /**
+     * Get setting value for the current tenant or global
+     * 
+     * @param string|null $key Specific setting key to retrieve
+     * @param mixed $default Default value if setting not found
+     * @param int|null $tenantId Specific tenant ID (null uses current tenant)
+     * @return mixed
+     */
+    function getSetting($key = null, $default = null, $tenantId = null)
+    {
+        // Get tenant ID from authenticated user if not provided
+        $tenantId = $tenantId ?? (Auth::check() ? Auth::user()->tenant_id : null);
+        
+        // Try to get tenant-specific settings
+        if ($tenantId) {
+            $setting = Setting::where('tenant_id', $tenantId)->first();
+            
+            if ($setting) {
+                // If specific key requested
+                if ($key) {
+                    return $setting->$key ?? $default;
+                }
+                // If no specific key, return all settings as array
+                return $setting->toArray();
+            }
+        }
+        
+        // Fallback to global settings (no tenant_id)
+        $globalSetting = Setting::whereNull('tenant_id')->first();
+        
+        if ($globalSetting) {
+            if ($key) {
+                return $globalSetting->$key ?? $default;
+            }
+            return $globalSetting->toArray();
+        }
+        
+        // Final fallback
+        if ($key) {
+            return $default;
+        }
+        
+        return [];
+    }
+}
 
 
 
-
-
+if (!function_exists('getUIOptions')) {
+    /**
+     * Get UI configuration settings
+     * 
+     * @param string|null $key Specific UI setting key
+     * @param int|null $tenantId Specific tenant ID
+     * @return mixed
+     */
+    function getUIOptions($key = null, $tenantId = null)
+    {
+        $tenantId = $tenantId ?? (Auth::check() ? Auth::user()->tenant_id : null);
+        
+        // UI-specific keys
+        $uiKeys = [
+            'app_name', 'favicon', 'logo', 'menu_nav_color', 
+            'font_family', 'font_size', 'locale', 'currency'
+        ];
+        
+        // Default values for UI settings
+        $defaults = [
+            'app_name' => 'LAEL POS',
+            'font_family' => 'Inter, sans-serif',
+            'font_size' => '1',
+            'menu_nav_color' => '#1e1e2d',
+            'locale' => 'en',
+            'currency' => 'USD',
+        ];
+        
+        // If specific key requested and it's a UI key
+        if ($key && in_array($key, $uiKeys)) {
+            return getSetting($key, $defaults[$key] ?? null, $tenantId);
+        }
+        
+        // Return all UI settings
+        $settings = getSetting(null, [], $tenantId);
+        $uiSettings = [];
+        
+        foreach ($uiKeys as $uiKey) {
+            $uiSettings[$uiKey] = $settings[$uiKey] ?? $defaults[$uiKey] ?? null;
+        }
+        
+        return $uiSettings;
+    }
+}
 
 
 if (!function_exists('getMailOptions')) {
