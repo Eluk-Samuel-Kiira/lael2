@@ -25,13 +25,37 @@
     <div class="d-flex flex-column flex-column-fluid">
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
-                <div id="status"></div>
+                
+                <!-- Display validation errors -->
+                @if($errors->any())
+                    <div class="alert alert-danger">
+                        <ul class="mb-0">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                <!-- Display session messages -->
+                @if(session('success'))
+                    <div class="alert alert-success">
+                        {{ session('success') }}
+                    </div>
+                @endif
+
+                @if(session('error'))
+                    <div class="alert alert-danger">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title fw-bold">{{ __('payments.edit_tenant') }}: {{ $tenant->name }}</h2>
                     </div>
                     
-                    <form class="form" id="kt_tenant_edit_form" method="POST">
+                    <form class="form" action="{{ route('tenant.update', $tenant->id) }}" method="POST">
                         @csrf
                         @method('PUT')
                         
@@ -48,10 +72,13 @@
                                             <div class="fv-row mb-8">
                                                 <label class="required fs-6 fw-semibold mb-2">{{ __('payments.tenant_name') }}</label>
                                                 <input type="text" 
-                                                       class="form-control form-control-solid" 
+                                                       class="form-control form-control-solid @error('name') is-invalid @enderror" 
                                                        name="name"
-                                                       value="{{ $tenant->name }}"
+                                                       value="{{ old('name', $tenant->name) }}"
                                                        required />
+                                                @error('name')
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
                                             </div>
                                             
                                             <!-- Subdomain (Read-only) -->
@@ -70,11 +97,14 @@
                                             <!-- Status -->
                                             <div class="fv-row mb-8">
                                                 <label class="required fs-6 fw-semibold mb-2">{{ __('payments.status') }}</label>
-                                                <select class="form-select form-select-solid" name="status">
-                                                    <option value="active" {{ $tenant->status == 'active' ? 'selected' : '' }}>{{ __('payments.active') }}</option>
-                                                    <option value="trial" {{ $tenant->status == 'trial' ? 'selected' : '' }}>{{ __('payments.trial') }}</option>
-                                                    <option value="suspended" {{ $tenant->status == 'suspended' ? 'selected' : '' }}>{{ __('payments.suspended') }}</option>
+                                                <select class="form-select form-select-solid @error('status') is-invalid @enderror" name="status">
+                                                    <option value="active" {{ old('status', $tenant->status) == 'active' ? 'selected' : '' }}>{{ __('payments.active') }}</option>
+                                                    <option value="trial" {{ old('status', $tenant->status) == 'trial' ? 'selected' : '' }}>{{ __('payments.trial') }}</option>
+                                                    <option value="suspended" {{ old('status', $tenant->status) == 'suspended' ? 'selected' : '' }}>{{ __('payments.suspended') }}</option>
                                                 </select>
+                                                @error('status')
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
                                             </div>
                                             
                                             <!-- Created At -->
@@ -94,12 +124,14 @@
                                             <div class="fv-row mb-8">
                                                 <label class="fs-6 fw-semibold mb-2">{{ __('payments.trial_ends_at') }}</label>
                                                 <input type="date" 
-                                                    class="form-control form-control-solid" 
+                                                    class="form-control form-control-solid @error('trial_ends_at') is-invalid @enderror" 
                                                     name="trial_ends_at" 
                                                     id="trial_ends_at"
                                                     value="{{ old('trial_ends_at', $trialEndsAt ? date('Y-m-d', strtotime($trialEndsAt)) : '') }}" />
                                                 <div class="form-text text-muted">{{ __('payments.trial_ends_at_help') }}</div>
-                                                <div class="fv-plugins-message-container invalid-feedback"></div>
+                                                @error('trial_ends_at')
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
                                             </div>
                                         </div>
                                     </div>
@@ -146,24 +178,21 @@
                                 </div>
                             </div>
                             
-                            <!-- Plan Change Section (Optional) -->
+                            <!-- Plan Selection Section - Always Visible -->
                             <div class="row">
                                 <div class="col-12">
                                     <div class="card card-flush mb-8">
                                         <div class="card-header">
                                             <h3 class="card-title">{{ __('payments.change_plan') }}</h3>
                                             <div class="card-toolbar">
-                                                <div class="form-check form-switch form-check-custom form-check-solid">
-                                                    <input class="form-check-input" type="checkbox" id="change_plan_switch" />
-                                                    <label class="form-check-label" for="change_plan_switch">{{ __('Enable plan change') }}</label>
-                                                </div>
+                                                <span class="badge badge-light-info">{{ __('Select new plan below') }}</span>
                                             </div>
                                         </div>
-                                        <div class="card-body" id="plan_selection_section" style="display: none;">
+                                        <div class="card-body">
                                             <div class="row g-5 g-xl-8">
                                                 @foreach($plans as $plan)
-                                                    <div class="col-xl-3 col-md-6">
-                                                        <div class="card card-flush h-100 {{ $currentPlan && $currentPlan->plan_id == $plan->plan_id ? 'border border-primary' : '' }} plan-card" data-plan-id="{{ $plan->plan_id }}">
+                                                    <div class="col-xl-3 col-md-6 mb-5">
+                                                        <div class="card card-flush h-100 {{ $currentPlan && $currentPlan->plan_id == $plan->plan_id ? 'border border-primary' : '' }} plan-card" data-plan-id="{{ $plan->plan_id }}" style="cursor: pointer;">
                                                             <div class="card-header pt-5">
                                                                 <div class="card-title d-flex flex-column">
                                                                     <span class="fs-2hx fw-bold text-dark">{{ $plan->plan_name }}</span>
@@ -210,12 +239,8 @@
                         
                         <div class="card-footer text-end py-6">
                             <a href="{{ route('tenant.index') }}" class="btn btn-light me-3">{{ __('auth._discard') }}</a>
-                            <button type="button" class="btn btn-primary" id="updateTenantBtn">
-                                <span class="indicator-label">{{ __('auth._update') }}</span>
-                                <span class="indicator-progress" style="display: none;">
-                                    {{ __('auth.please_wait') }} 
-                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
-                                </span>
+                            <button type="submit" class="btn btn-primary">
+                                <span>{{ __('auth._update') }}</span>
                             </button>
                         </div>
                     </form>
@@ -226,116 +251,43 @@
     @endrole
  
     @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         "use strict";
         
         document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('kt_tenant_edit_form');
-            const updateBtn = document.getElementById('updateTenantBtn');
-            const changePlanSwitch = document.getElementById('change_plan_switch');
-            const planSection = document.getElementById('plan_selection_section');
-            
-            // Toggle plan selection section
-            changePlanSwitch.addEventListener('change', function() {
-                if (this.checked) {
-                    planSection.style.display = 'block';
-                } else {
-                    planSection.style.display = 'none';
-                    // Uncheck all plan radios when hiding
-                    document.querySelectorAll('input[name="plan_id"]').forEach(radio => {
-                        radio.checked = false;
-                    });
-                }
-            });
-            
-            // Highlight selected plan
+            // Plan card selection
             const planCards = document.querySelectorAll('.plan-card');
-            planCards.forEach(card => {
-                card.addEventListener('click', function() {
-                    // Remove highlight from all cards
-                    planCards.forEach(c => c.classList.remove('border', 'border-primary'));
-                    // Add highlight to selected card
-                    this.classList.add('border', 'border-primary');
-                    // Check the radio button
-                    const radio = this.querySelector('input[type="radio"]');
-                    if (radio) radio.checked = true;
-                });
-            });
             
-            // Update form submission
-            updateBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // Basic validation
-                const name = form.querySelector('[name="name"]').value;
-                
-                if (!name) {
-                    Swal.fire({
-                        text: 'Please fill in all required fields',
-                        icon: 'error',
-                        buttonsStyling: false,
-                        confirmButtonText: 'OK',
-                        customClass: { confirmButton: 'btn btn-danger' }
-                    });
-                    return;
-                }
-                
-                // Show loading
-                updateBtn.querySelector('.indicator-label').style.display = 'none';
-                updateBtn.querySelector('.indicator-progress').style.display = 'inline-block';
-                updateBtn.disabled = true;
-                
-                // Submit form
-                const formData = new FormData(form);
-                
-                fetch('{{ route("tenant.update", $tenant->id) }}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            text: data.message,
-                            icon: 'success',
-                            buttonsStyling: false,
-                            confirmButtonText: 'OK',
-                            customClass: { confirmButton: 'btn btn-primary' }
-                        }).then(() => {
-                            window.location.href = '{{ route("tenant.index") }}';
-                        });
-                    } else {
-                        Swal.fire({
-                            text: data.message || 'Update failed',
-                            icon: 'error',
-                            buttonsStyling: false,
-                            confirmButtonText: 'OK',
-                            customClass: { confirmButton: 'btn btn-danger' }
-                        });
-                        
-                        updateBtn.querySelector('.indicator-label').style.display = 'inline-block';
-                        updateBtn.querySelector('.indicator-progress').style.display = 'none';
-                        updateBtn.disabled = false;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire({
-                        text: 'An error occurred',
-                        icon: 'error',
-                        buttonsStyling: false,
-                        confirmButtonText: 'OK',
-                        customClass: { confirmButton: 'btn btn-danger' }
-                    });
+            planCards.forEach(card => {
+                // Click on card
+                card.addEventListener('click', function(e) {
+                    // Don't trigger if clicking on radio directly
+                    if (e.target.type === 'radio') return;
                     
-                    updateBtn.querySelector('.indicator-label').style.display = 'inline-block';
-                    updateBtn.querySelector('.indicator-progress').style.display = 'none';
-                    updateBtn.disabled = false;
+                    // Find the radio inside this card
+                    const radio = this.querySelector('input[type="radio"]');
+                    if (radio) {
+                        radio.checked = true;
+                        
+                        // Remove highlight from all cards
+                        planCards.forEach(c => c.classList.remove('border', 'border-primary'));
+                        // Add highlight to selected card
+                        this.classList.add('border', 'border-primary');
+                    }
                 });
+
+                // Click on radio
+                const radio = card.querySelector('input[type="radio"]');
+                if (radio) {
+                    radio.addEventListener('click', function(e) {
+                        e.stopPropagation(); // Prevent event bubbling
+                        
+                        // Remove highlight from all cards
+                        planCards.forEach(c => c.classList.remove('border', 'border-primary'));
+                        // Add highlight to parent card
+                        this.closest('.plan-card').classList.add('border', 'border-primary');
+                    });
+                }
             });
         });
     </script>

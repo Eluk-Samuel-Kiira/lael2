@@ -291,25 +291,20 @@ class TenantController extends Controller
             
             // Check if plan is being changed
             if ($request->has('plan_id') && !empty($request->plan_id)) {
-                $currentPlanSetting = $tenant->settings()->where('setting_key', 'billing_plan')->first();
                 $newPlan = BillingPlan::findOrFail($request->plan_id);
                 
-                if ($request->has('plan_id') && !empty($request->plan_id)) {
-                    $newPlan = BillingPlan::findOrFail($request->plan_id);
-                    
-                    // Check if plan actually changed
-                    $currentPlan = TenantSetting::where('tenant_id', $tenant->id)
-                        ->where('setting_key', 'billing_plan')
-                        ->first();
-                    
-                    if (!$currentPlan || $currentPlan->setting_value != $newPlan->plan_code) {
-                        // Plan changed - apply new plan settings
-                        $newPlan->applyToTenant($tenant->id, $user->id);
-                    }
+                // Check if plan actually changed
+                $currentPlan = TenantSetting::where('tenant_id', $tenant->id)
+                    ->where('setting_key', 'billing_plan')
+                    ->first();
+                
+                if (!$currentPlan || $currentPlan->setting_value != $newPlan->plan_code) {
+                    // Plan changed - apply new plan settings
+                    $newPlan->applyToTenant($tenant->id, $user->id);
                 }
             }
             
-            // Handle trial_ends_at separately (can be updated without changing plan)
+            // Handle trial_ends_at separately
             if ($request->has('trial_ends_at')) {
                 if ($request->filled('trial_ends_at')) {
                     TenantSetting::updateOrCreate(
@@ -335,19 +330,19 @@ class TenantController extends Controller
             
             // Clear cache
             tenant_clear_settings_cache($tenant->id);
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Tenant updated successfully',
-                'reload' => true
+
+            session()->flash('toast', [
+                'type' => 'success',
+                'message' => __('payments.tenant_updated'),
             ]);
+            
+            return redirect()->route('tenant.index');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error updating tenant: ' . $e->getMessage()
-            ], 500);
+            return redirect()->back()
+                ->with('error', 'Error updating tenant: ' . $e->getMessage())
+                ->withInput();
         }
     }
 
