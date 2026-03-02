@@ -314,6 +314,8 @@ return [
     'add_admin' => 'Add Admin',
     'pending' => 'Pending',
     'inactive' => 'Inactive',
+    'tenant_updated' => 'Tenant updated successfully',
+    'uom_invalid' => 'The selected weight unit is invalid.',
 
     'loading' => 'Loading...',
     'loading_amazing' => 'Loading amazing content...',

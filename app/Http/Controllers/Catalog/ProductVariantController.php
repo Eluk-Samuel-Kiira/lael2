@@ -97,10 +97,10 @@ class ProductVariantController extends Controller
         ]);
 
         // Check maximum variants limit for this product
-        $currentVariantCount = ProductVariant::where('product_id', $validated['product_id'])
-                                            ->where('tenant_id', $tenantId)
-                                            ->count();
-        $maxVariants = tenant_setting($tenantId, 'max_variants_per_product', 10); // Default to 10 if not set
+        // $currentVariantCount = ProductVariant::where('product_id', $validated['product_id'])
+        //                                     ->where('tenant_id', $tenantId)
+        //                                     ->count();
+        // $maxVariants = tenant_setting($tenantId, 'max_variants_per_product', 10); // Default to 10 if not set
 
         if (($currentVariantCount + count($validated['variants'])) > $maxVariants) {
             session()->flash('toast', [
@@ -260,7 +260,7 @@ class ProductVariantController extends Controller
                                     ->where('tenant_id', $tenantId)
                                     ->first();
                     if (!$uom) {
-                        $fail('The selected weight unit is invalid.');
+                        $fail(__('payments.uom_invalid'));
                     }
                 }
             ],
