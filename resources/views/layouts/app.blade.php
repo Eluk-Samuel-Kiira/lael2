@@ -77,7 +77,7 @@
 							<a href="{{ route('dashboard') }}">
 								<img 
 									alt="Logo" 
-									src="{{ getLogoImage() }}" 
+									src="{{ getLogoImage() }}"
 									class="h-6 w-auto object-contain app-sidebar-logo-default" 
 									style="max-height: 44px;" 
 								/>

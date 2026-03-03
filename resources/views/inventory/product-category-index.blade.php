@@ -32,10 +32,10 @@
                         onkeyup="searchTable(this.value, 'kt_table_users')">
                 </div>
                 @can('create subcategory')
-                    <a data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('product-category.create') }}')" class="btn btn-sm btn-primary">
-                        <i class="ki-duotone ki-plus fs-2"></i>{{ __('pagination.product_category_new') }}
-                    </a>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_product_category">
+                    <i class="ki-duotone ki-plus fs-2"></i>{{__('pagination.product_category_new')}}</button>
                 @endcan    
+                @include('inventory.product-category.create')  
             </div>
         </div>
     </div>

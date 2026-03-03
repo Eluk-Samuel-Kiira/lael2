@@ -60,12 +60,18 @@
                             <td>
                                 <div class="d-flex gap-2">
                                     @can('edit subcategory')
-                                        <a data-link href="javascript:void(0);" 
+                                        <!-- <a data-link href="javascript:void(0);" 
                                         onclick="reloadToApp('{{ route('product-category.edit', $category->id) }}')"
                                         class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2">
                                         <i class="bi bi-pencil-square me-1 fs-5"></i> 
                                         <span>{{ __('auth._edit') }}</span>
-                                        </a>
+                                        </a> -->
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editProductCategory{{$category->id}}">
+                                            <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
+                                        </button>
                                     @endcan
 
                                     @can('delete subcategory')
@@ -110,7 +116,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                @include('inventory.category.edit-category')
+                                @include('inventory.product-category.edit')
                                 
                             </td>
                         </tr>

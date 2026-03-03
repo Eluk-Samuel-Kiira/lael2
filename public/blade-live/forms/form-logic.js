@@ -160,7 +160,7 @@ const formLogic = {
                         icon: 'error',        // Error icon
                         title: `<span style="color: red;">${response.message}</span>`,       // The message to display
                         showConfirmButton: false,
-                        timer: 5000,          // Auto close after 5 seconds
+                        timer: 2000,          // Auto close after 5 seconds
                         timerProgressBar: true, // Show a progress bar
                         customClass: {
                             popup: 'swal2-show', // Adds a fade-in effect for the popup
@@ -214,7 +214,7 @@ const formLogic = {
                             icon: 'error',        // Error icon
                             title: `<span style="color: red;">${response.message}</span>`,       // The message to display
                             showConfirmButton: false,
-                            timer: 5000,          // Auto close after 5 seconds
+                            timer: 2000,          // Auto close after 5 seconds
                             timerProgressBar: true, // Show a progress bar
                             customClass: {
                                 popup: 'swal2-show', // Adds a fade-in effect for the popup
@@ -275,7 +275,7 @@ const formLogic = {
                             icon: 'error',     
                             title: `<span style="color: red;">${response.message}</span>`,     
                             showConfirmButton: false,
-                            timer: 5000,        
+                            timer: 2000,        
                             timerProgressBar: true, 
                             customClass: {
                                 popup: 'swal2-show', 
@@ -391,7 +391,7 @@ const formLogic = {
                     icon: 'success',
                     title: `<span style="color: green;">${data.message}</span>`, 
                     showConfirmButton: false,
-                    timer: 5000,          
+                    timer: 2000,          
                     timerProgressBar: true,
                     customClass: {
                         popup: 'swal2-show',
@@ -423,7 +423,7 @@ const formLogic = {
                     //     icon: 'success',        // Error icon
                     //     title: `<span style="color: green;">${response.message}</span>`, 
                     //     showConfirmButton: false,
-                    //     timer: 5000,          
+                    //     timer: 2000,          
                     //     timerProgressBar: true, // Show a progress bar
                     //     customClass: {
                     //         popup: 'swal2-show', // Adds a fade-in effect for the popup
@@ -439,7 +439,7 @@ const formLogic = {
                         icon: 'error',        // Error icon
                         title: `<span style="color: red;">${response.message}</span>`,       // The message to display
                         showConfirmButton: false,
-                        timer: 5000,          // Auto close after 5 seconds
+                        timer: 2000,          // Auto close after 5 seconds
                         timerProgressBar: true, // Show a progress bar
                         customClass: {
                             popup: 'swal2-show', // Adds a fade-in effect for the popup
@@ -508,7 +508,7 @@ const formLogic = {
                         icon: 'error',        // Error icon
                         title: `<span style="color: red;">${response.message}</span>`,       // The message to display
                         showConfirmButton: false,
-                        timer: 5000,          // Auto close after 5 seconds
+                        timer: 2000,          // Auto close after 5 seconds
                         timerProgressBar: true, // Show a progress bar
                         customClass: {
                             popup: 'swal2-show', // Adds a fade-in effect for the popup

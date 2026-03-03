@@ -820,6 +820,7 @@ if (!function_exists('appDefaultName')) {
             $setting = Setting::where('tenant_id', $tenantId)->first();
             
             if ($setting && !empty($setting->app_name)) {
+                \Log::info($setting->app_name);
                 // Extract the first word from the app_name
                 $firstWord = explode(' ', trim($setting->app_name))[0];
                 return $firstWord;

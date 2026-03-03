@@ -314,6 +314,7 @@ return [
     'add_admin' => 'Add Admin',
     'pending' => 'Pending',
     'inactive' => 'Inactive',
+    'selected_cat_invalid' => 'The selected parent category is invalid.',
     'tenant_updated' => 'Tenant updated successfully',
     'uom_invalid' => 'The selected weight unit is invalid.',
 
