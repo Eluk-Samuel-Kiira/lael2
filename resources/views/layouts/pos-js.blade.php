@@ -262,7 +262,10 @@
 
 
 
+
+
 <script>
+    
     function processPayment() {
         const submitButton = document.getElementById('processBill');
 
@@ -274,38 +277,43 @@
         }
 
         // --- Check Customer Selection ---
-        const existingCustomer = document.getElementById('existingCustomer'); // dropdown
-        const newCustomer = document.getElementById('newCustomer'); // input
-        const existingOption = document.getElementById('existingOption'); // radio
-        const newOption = document.getElementById('newOption'); // radio
+        const radioExisting  = document.getElementById('cust-mode-existing');
+        const radioNew       = document.getElementById('cust-mode-new');
+        const custExistSelect = document.getElementById('cust-existing-select');
+        const custNewInput   = document.getElementById('cust-new-input');
 
         let customerData = null;
 
-        if (existingOption.checked) {
-            // Existing customer chosen
-            if (existingCustomer.value === "") {
+        if (!radioExisting.checked && !radioNew.checked) {
+            toastr['warning']('{{ __("pagination.please_select_customer_type") }}');
+            return;
+        }
+
+        if (radioExisting.checked) {
+            if (custExistSelect.value === "") {
                 toastr['warning']('{{ __("pagination.please_select_existing_customer") }}');
                 return;
             }
             customerData = {
                 type: "existing",
-                id: existingCustomer.value
+                id: custExistSelect.value
             };
-        } else if (newOption.checked) {
-            // New customer chosen
-            if (newCustomer.value.trim() === "") {
+        } else if (radioNew.checked) {
+            if (custNewInput.value.trim() === "") {
                 toastr['warning']('{{ __("pagination.please_enter_customer") }}');
                 return;
             }
             customerData = {
                 type: "new",
-                name: newCustomer.value.trim()
+                name: custNewInput.value.trim()
             };
         }
 
+        // console.log(customerData);
+
         // Get selected payment method
-        const selectedMethod = document.querySelector('input[name="method"]:checked');
-        const paymentMethod = selectedMethod ? selectedMethod.value : 'cash';
+        // const selectedMethod = document.querySelector('input[name="method"]:checked');
+        // const paymentMethod = selectedMethod ? selectedMethod.value : 'cash';
 
         // console.log('Selected payment method:', paymentMethod);
 
@@ -379,7 +387,7 @@
             }),
 
             customer: customerData,
-            payment_method: paymentMethod,
+            // payment_method: paymentMethod,
 
             subtotal: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
             discount: cart.reduce((sum, item) => sum + computeItemDiscount(item), 0),
@@ -429,7 +437,7 @@
                 cartData.order_id = data.order_id; 
                 
                 // Open modal based on payment method
-                openPaymentModal(paymentMethod, cartData);
+                openPaymentModal(cartData);
                 
             } else {
                 // Show error toast from backend response
@@ -448,486 +456,42 @@
     }
 
 </script>
-
-
 <script>
-    @if(isset($active_payment_methods))
-        window.activePaymentMethods = @json($active_payment_methods ?? []);
-    @endif
-
-    // Function to open appropriate modal
-    function openPaymentModal(paymentMethod, cartData) {
-        // Set order data globally for access in modal functions
-        window.currentOrder = cartData;
-        window.currentPaymentMethodType = paymentMethod; // This is already 'cash', 'bank_account', 'card', etc.
-        
-        openCashModal(paymentMethod, cartData)
-    }
-
-    // Cash Modal Function with account dropdown
-    function openCashModal(paymentMethod, cartData) {
-        currentCartData = cartData;
-        currentPaymentMethodType = paymentMethod;
-        selectedPaymentAccountId = null;
-        
-        // Update modal title based on payment method
-        updateModalTitle(paymentMethod);
-        
-        // Update total amount
-        document.getElementById('cashTotalAmount').textContent = `${formatCurrency(cartData.total)}`;
-        document.getElementById('cashAmountInput').value = '';
-        document.getElementById('cashAmountTendered').textContent = '0.00';
-        document.getElementById('cashChangeDue').textContent = '0.00';
-        
-        // Reset account info card
-        document.getElementById('selectedAccountInfoCard').classList.add('d-none');
-        
-        // Populate accounts dropdown based on payment method
-        populateAccountsByType(currentPaymentMethodType);
-
-        
-        // Show modal
-        const cashModal = new bootstrap.Modal(document.getElementById('cashModal'));
-        cashModal.show();
-    }
-
-    // Update modal title based on payment method
-    function updateModalTitle(paymentMethod) {
-        const modalTitle = document.querySelector('#cashModal .modal-title');
-        const titles = {
-            'cash': '{{__("pagination.cash_payment")}}',
-            'mobile_money': '{{__("pagination.mobile_money_payment")}}',
-            'card': '{{__("pagination.card_payment")}}',
-            'bank_account': '{{__("pagination.bank_account_payment")}}',
-            'digital_wallet': '{{__("pagination.digital_wallet_payment")}}',
-            'check': '{{__("pagination.check_payment")}}',
-            'credit': '{{__("pagination.credit_payment")}}',
-            'other': '{{__("pagination.other_payment")}}'
+    function getPaymentTypeColor(type) {
+        const colors = {
+            'cash': 'success',
+            'card': 'primary',
+            'bank_account': 'info',
+            'mobile_money': 'warning',
+            'digital_wallet': 'danger',
+            'check': 'dark',
+            'credit': 'secondary',
+            'other': 'secondary'
         };
-        
-        modalTitle.textContent = titles[paymentMethod] || '{{__("pagination.payment")}}';
+        return colors[type] || 'primary';
     }
 
-    // Populate accounts in dropdown by payment method type
-    function populateAccountsByType(paymentMethodType) {
-        const dropdown = document.getElementById('cashAccountSelect');
-        dropdown.innerHTML = '<option value="">{{ __("pagination.select_account") }}</option>';
-        
-        if (!window.activePaymentMethods) {
-            console.error('activePaymentMethods is not defined');
-            return;
-        }
-        
-        // Filter accounts by the current payment method type
-        const filteredAccounts = window.activePaymentMethods.filter(account => 
-            account.type === paymentMethodType
-        );
-        
-        if (filteredAccounts.length === 0) {
-            const noAccountsText = {
-                'cash': '{{ __("pagination.no_cash_accounts") }}',
-                'mobile_money': '{{ __("pagination.no_mobile_money_accounts") }}',
-                'card': '{{ __("pagination.no_card_accounts") }}',
-                'bank_account': '{{ __("pagination.no_bank_accounts") }}',
-                'digital_wallet': '{{ __("pagination.no_digital_wallet_accounts") }}',
-                'check': '{{ __("pagination.no_check_accounts") }}',
-                'credit': '{{ __("pagination.no_credit_accounts") }}',
-                'other': '{{ __("pagination.no_other_accounts") }}'
-            };
-            
-            dropdown.innerHTML = `<option value="" disabled>${noAccountsText[paymentMethodType] || '{{ __("pagination.no_accounts_found") }}'}</option>`;
-            return;
-        }
-        
-        // Add filtered accounts to dropdown
-        filteredAccounts.forEach(account => {
-            const option = document.createElement('option');
-            option.value = account.id;
-            option.setAttribute('data-account', JSON.stringify(account)); // Store full account data
-            
-            // Create display text with name, account number, and account name
-            let displayText = account.name;
-            if (account.account_number) {
-                displayText += ` - ${account.account_number}`;
-            }
-            if (account.account_name) {
-                displayText += ` (${account.account_name})`;
-            }
-            
-            option.textContent = displayText;
-            dropdown.appendChild(option);
-        });
-        
-        // Remove existing event listeners and add new one
-        const newDropdown = dropdown.cloneNode(true);
-        dropdown.parentNode.replaceChild(newDropdown, dropdown);
-        
-        // Add event listener for account selection
-        newDropdown.addEventListener('change', function() {
-            selectedPaymentAccountId = this.value;
-            
-            if (this.value) {
-                // Get selected account data
-                const selectedOption = this.options[this.selectedIndex];
-                const accountData = JSON.parse(selectedOption.getAttribute('data-account') || '{}');
-                
-                // Display account information
-                displayAccountInfo(accountData);
-                
-                // Show/hide cash amount section based on payment type
-                if (currentPaymentMethodType === 'cash') {
-                    document.getElementById('cashAmountSection').classList.remove('d-none');
-                    document.getElementById('cashAmountInput').focus();
-                } else {
-                    document.getElementById('cashAmountSection').classList.add('d-none');
-                }
-                
-            } else {
-                // Hide account info card
-                document.getElementById('selectedAccountInfoCard').classList.add('d-none');
-                
-                // Hide cash amount section
-                // document.getElementById('cashAmountSection').classList.add('d-none');
-            }
-        });
-    }
-
-    // Display selected account information
-    function displayAccountInfo(account) {
-        const infoCard = document.getElementById('selectedAccountInfoCard');
-        if (!infoCard) {
-            console.error('selectedAccountInfoCard element not found');
-            return;
-        }
-        
-        // Safely update account information
-        const accountNameEl = document.getElementById('selectedAccountName');
-        const accountNumberEl = document.getElementById('selectedAccountNumber');
-        const accountHolderEl = document.getElementById('selectedAccountHolder');
-        const accountProviderEl = document.getElementById('selectedAccountProvider');
-        
-        if (accountNameEl) accountNameEl.textContent = account.name || '-';
-        if (accountNumberEl) accountNumberEl.textContent = account.account_number || '-';
-        if (accountHolderEl) accountHolderEl.textContent = account.account_name || '-';
-        if (accountProviderEl) accountProviderEl.textContent = account.provider || '-';
-        
-        // Show the info card
-        infoCard.classList.remove('d-none');
-    }
-
-    // Also update the event listener to be more robust:
-    dropdown.addEventListener('change', function() {
-        selectedPaymentAccountId = this.value;
-        
-        // Get account info card element
-        const infoCard = document.getElementById('selectedAccountInfoCard');
-        
-        if (this.value) {
-            // Get selected account data
-            try {
-                const selectedOption = this.options[this.selectedIndex];
-                const accountData = JSON.parse(selectedOption.getAttribute('data-account') || '{}');
-                
-                // Display account information
-                displayAccountInfo(accountData);
-                
-            } catch (error) {
-                console.error('Error processing account selection:', error);
-                if (infoCard) infoCard.classList.add('d-none');
-            }
-        } else {
-            // Hide account info card
-            if (infoCard) {
-                infoCard.classList.add('d-none');
-            }
-        }
-    });
-
-
-
-    // Calculate change (for cash payments)
-    document.getElementById('cashAmountInput').addEventListener('input', function() {
-        const amountTendered = parseFloat(this.value) || 0;
-        const total = parseFloat(currentCartData.total) || 0;
-        const change = amountTendered - total;
-        document.getElementById('changeDue').value = change >= 0 ? formatCurrency(change) : '0.00';
-    });
-
-
-
-    function calculateChange() {
-        const total = window.currentOrder.total;
-        const tendered = parseFloat(document.getElementById('cashAmountInput').value) || 0;
-        const change = tendered - total;
-        
-        document.getElementById('cashAmountTendered').textContent = `${formatCurrency(tendered)}`;
-        document.getElementById('cashChangeDue').textContent = `${formatCurrency(Math.max(0, change))}`;
-    }
-
-    function completeCashPayment() {
-        const submitButton = document.getElementById('cashCheckout');
-        const tendered = parseFloat(document.getElementById('cashAmountInput').value) || 0;
-        const transactionId = document.getElementById('transactionIdInput').value || '';
-
-        const accountSelect = document.getElementById('cashAccountSelect');
-        const selectedPaymentMethodId = accountSelect ? accountSelect.value : null;
-        
-        if (!selectedPaymentMethodId) {
-            toastr['error']('{{ __("pagination.select_payment_method") }}');
-            return;
-        }
-
-        if (tendered < window.currentOrder.total) {
-            toastr['error']('{{ __("pagination.insufficient_amount") }}');
-            return;
-        }
-        
-        // Spinning
-        LiveBlade.toggleButtonLoading(submitButton, true);
-        // Process cash payment
-        processFinalPayment(selectedPaymentMethodId, {
-            amount_tendered: tendered,
-            transaction_id: transactionId,
-            change_due: tendered - window.currentOrder.total
-        });
-
-    }
-
-
-    // Final Payment Processing
-    function processFinalPayment(payment_method_id, paymentDetails) {
-        const submitButton = document.getElementById('cashCheckout');
-
-        const order = window.currentOrder;
-        order.payment_method_id = payment_method_id;
-
-        order.payment_details = {
-            amount_tendered: paymentDetails.amount_tendered,
-            change_due: paymentDetails.change_due,
-            transaction_id: paymentDetails.transaction_id
+    function getPaymentTypeIcon(type) {
+        const icons = {
+            'cash': 'ki-wallet',
+            'card': 'ki-credit-cart',
+            'bank_account': 'ki-bank',
+            'mobile_money': 'ki-phone',
+            'digital_wallet': 'ki-wallet',
+            'check': 'ki-document',
+            'credit': 'ki-time',
+            'other': 'ki-add-files'
         };
-
-        fetch("/orders/checkout", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify(order)
-        })
-        .then(res => res.json().then(data => ({ status: res.status, ok: res.ok, body: data })))
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(response.body.message || '{{ __("pagination.order_saved_error") }}');
-            }
-            toastr['success']('{{ __("pagination.order_saved") }}');
-            // console.log("Order saved:", response.body);
-
-            // Close current modal
-            bootstrap.Modal.getInstance(document.getElementById('cashModal'))?.hide();
-
-            setTimeout(() => {
-                generateReceipt(order);
-                openReceiptModal(window.currentOrder);
-
-                toastr['success']('{{ __("pagination.payment_completed") }}');
-            }, 2000);
-            
-            // Clear cart after successful payment
-            clearCart();
-            LiveBlade.toggleButtonLoading(submitButton, false);
-        })
-        .catch(err => {
-            console.error("❌ Error saving order:", err);
-            toastr['error'](err.message || '{{ __("pagination.order_saved_error") }}');
-            LiveBlade.toggleButtonLoading(submitButton, false);
-        });
-
-        
+        return icons[type] || 'ki-wallet';
     }
 
-    // --- Generate Receipt ---
-    function generateReceipt(paymentDetails) {
-        const receiptContent = document.getElementById('receiptContent');
-        const order = window.currentOrder;
-        const paymentMethod = window.currentPaymentMethodType
-        // console.log(paymentMethod)
-        
-
-        // Determine customer display: use customerName if available
-        let customerInfo = '{{ __("pagination.customer") }}: N/A';
-        if (order.customerName) {
-            customerInfo = `{{ __("pagination.customer") }}: ${order.customerName}`;
-        } else if (order.customer) {
-            customerInfo = `{{ __("pagination.customer") }}: ${order.customer.name}`;
-        }
-
-        // Generate items table
-        const itemsHtml = `
-            <table style="width:100%; border-collapse: collapse; margin-bottom: 10px;">
-                <thead>
-                    <tr>
-                        <th style="border-bottom: 1px solid #ddd; text-align:left;">{{ __("pagination._item") }}</th>
-                        <th style="border-bottom: 1px solid #ddd; text-align:center;">{{ __("pagination._qty") }}</th>
-                        <th style="border-bottom: 1px solid #ddd; text-align:right;">{{ __("pagination._price") }}</th>
-                        <th style="border-bottom: 1px solid #ddd; text-align:right;">{{ __("pagination._discount") }}</th>
-                        <th style="border-bottom: 1px solid #ddd; text-align:right;">{{ __("pagination._total") }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${order.items.map(item => `
-                        <tr>
-                            <td>${item.name}</td>
-                            <td style="text-align:center;">${item.quantity}</td>
-                            <td style="text-align:right;">${formatCurrency(item.price)}</td>
-                            <td style="text-align:right;">${formatCurrency(item.discount)}</td>
-                            <td style="text-align:right;">${formatCurrency(item.price * item.quantity)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-
-        receiptContent.innerHTML = `
-            <div class="text-center mb-6">
-                <h3 class="fw-bold text-gray-800">{{ getMailOptions('app_name') }}</h3>
-                <p class="text-gray-600">Order #: ${order.order_number || 'N/A'}</p>
-                <p class="text-gray-600">Date: ${new Date().toLocaleString()}</p>
-                <p class="text-gray-600">${customerInfo}</p>
-            </div>
-
-            <div class="border-bottom mb-4 pb-4">
-                <h4 class="fw-bold text-gray-800 mb-3">{{__('pagination.order_summary')}}</h4>
-                ${itemsHtml}
-                <div class="d-flex justify-content-between mb-2">
-                    <span>{{__('pagination.subtotal')}}:</span>
-                    <span>${formatCurrency(order.subtotal)}</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>{{__('pagination.tax')}}:</span>
-                    <span>${formatCurrency(order.tax)}</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>{{__('pagination._discount')}}:</span>
-                    <span>${formatCurrency(order.discount)}</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>{{__('pagination.total')}}:</span>
-                    <span class="fw-bold">${formatCurrency(order.total)}</span>
-                </div>
-            </div>
-
-            <div class="border-bottom mb-4 pb-4">
-                <h4 class="fw-bold text-gray-800 mb-3">{{__('pagination.payment_details')}}</h4>
-                <div class="d-flex justify-content-between mb-2">
-                    <span>{{__('pagination.method')}}:</span>
-                    <span>${paymentMethod.replace('_', ' ').toUpperCase()}</span>
-                </div>
-                ${paymentMethod === 'cash' ? `
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>{{__('pagination.amount_tendered')}}:</span>
-                        <span>${formatCurrency(paymentDetails.payment_details.amount_tendered)}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>{{__('pagination.change_due')}}:</span>
-                        <span>${formatCurrency(paymentDetails.payment_details.change_due)}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>{{__('pagination._currency')}}:</span>
-                        <span>{{ currency_code() }} - {{ currency_symbol() }}</span>
-                    </div>
-                ` : ''}
-            </div>
-
-            <div class="text-center mt-6">
-                <p class="text-gray-600">{{__('pagination.thank_you_message')}}</p>
-            </div>
-        `;
+    function formatPaymentType(type) {
+        if (!type) return '';
+        return type.split('_').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
     }
-
-
-    // --- Open Receipt Modal ---
-    function openReceiptModal() {
-        const receiptModal = new bootstrap.Modal(document.getElementById('receiptModal'));
-        receiptModal.show();
-    }
-
-    // --- Print Receipt ---
-    function printReceipt() {
-        window.location.href = "{{ url()->current() }}";
-        const receiptContent = document.getElementById('receiptContent').innerHTML;
-        const printWindow = window.open('', '_blank');
-
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Receipt - ${window.currentOrder.order_number || 'N/A'}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    .text-center { text-align: center; }
-                    .fw-bold { font-weight: bold; }
-                    .border-bottom { border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 10px; }
-                    .d-flex { display: flex; justify-content: space-between; }
-                    .mb-2 { margin-bottom: 8px; }
-                    .mb-4 { margin-bottom: 16px; }
-                    .pb-4 { padding-bottom: 16px; }
-                </style>
-            </head>
-            <body>
-                ${receiptContent}
-            </body>
-            </html>
-        `);
-
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        printWindow.close();
-
-        // Close the modal after printing
-        bootstrap.Modal.getInstance(document.getElementById('receiptModal'))?.hide();
-
-    }
-
-
-    // Prevent all closing methods
-    document.addEventListener('DOMContentLoaded', function() {
-        const receiptModal = document.getElementById('receiptModal');
-        
-        // Prevent backdrop click
-        receiptModal.addEventListener('click', function(event) {
-            if (event.target === receiptModal) {
-                event.stopPropagation();
-                event.preventDefault();
-                return false;
-            }
-        });
-        
-        // Prevent ESC key
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && receiptModal.classList.contains('show')) {
-                event.preventDefault();
-                event.stopPropagation();
-                return false;
-            }
-        });
-        
-        // Prevent Bootstrap hide events
-        receiptModal.addEventListener('hide.bs.modal', function(event) {
-            event.preventDefault();
-            return false;
-        });
-        
-        // Prevent any other hide attempts
-        receiptModal.addEventListener('hidden.bs.modal', function(event) {
-            event.preventDefault();
-            return false;
-        });
-    });
-
 </script>
-
 
 
 

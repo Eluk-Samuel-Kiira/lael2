@@ -148,7 +148,7 @@ class POSController extends Controller
                         'id'   => (int)$t->id,
                         'name' => $t->name,
                         'rate'  => $t->type === 'fixed'
-                                ? formatCurrency($rate) // convert & format if fixed amount
+                                ? ($rate) // convert & format if fixed amount
                                 : $rate,
                         'type' => $t->type,
                     ];
@@ -176,7 +176,7 @@ class POSController extends Controller
                         'name'        => $p->name,
                         'type'        => $p->discount_type,   // 'percentage' | 'fixed' | 'buy_x_get_y'
                         'value'       => $p->discount_type === 'fixed'
-                                        ? formatCurrency($value)   // show in system currency convert to needed currency
+                                        ? ($value)   // show in system currency convert to needed currency
                                         : $value, 
                         'start_date'  => $p->start_date,
                         'end_date'    => $p->end_date,
@@ -348,6 +348,113 @@ class POSController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Order processing failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function processSplitPayment(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $tenantId = $user->tenant_id;
+            
+            if (!$user->hasPermissionTo('complete order')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+
+            $order = Order::findOrFail($request->order_id);
+            $payments = $request->payments;
+            $totalPaid = array_sum(array_column($payments, 'amount'));
+            
+            // Verify total matches
+            if (abs($totalPaid - $order->total) > 0.01) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.payment_total_mismatch')
+                ]);
+            }
+
+            // Process each payment
+            foreach ($payments as $payment) {
+                $paymentMethod = PaymentMethod::findForTenant($payment['payment_method_id'], $tenantId);
+                
+                if (!$paymentMethod) {
+                    continue;
+                }
+
+                // Record transaction
+                $transactionData = [
+                    'tenant_id' => $tenantId,
+                    'user_id' => $user->id,
+                    'payment_method_id' => $paymentMethod->id,
+                    'transaction_type' => 'DEPOSIT',
+                    'transaction_category' => 'ORDER',
+                    'amount' => $payment['amount'],
+                    'currency_id' => $paymentMethod->currency_id,
+                    'reference_table' => 'orders',
+                    'reference_id' => $order->id,
+                    'description' => 'Split payment for Order #' . $order->order_number,
+                    'metadata' => [
+                        'order_number' => $order->order_number,
+                        'payment_type' => $payment['type'],
+                        'transaction_reference' => $payment['transaction_reference'] ?? null,
+                        'payment_method_name' => $paymentMethod->name
+                    ],
+                ];
+
+                app('payment-transaction')->recordTransaction($transactionData);
+
+                // Create payment record
+                OrderPayment::create([
+                    'order_id' => $order->id,
+                    'amount' => $payment['amount'],
+                    'payment_method_id' => $paymentMethod->id,
+                    'transaction_id' => $payment['transaction_reference'] ?? Str::uuid(),
+                    'status' => 'completed',
+                    'processed_at' => now(),
+                    'processed_by' => $user->id,
+                ]);
+
+                // Update payment method balance
+                $paymentMethod->current_balance += $payment['amount'];
+                $paymentMethod->save();
+            }
+
+            // Update order status
+            $order->update([
+                'paid_amount' => $totalPaid,
+                'balance_due' => 0,
+                'status' => 'completed',
+                'payment_method_id' => null, // No single method anymore
+            ]);
+
+            // Update inventory (as before)
+            $isSingleShop = tenant_is_single_shop($tenantId);
+            foreach ($order->orderItems as $item) {
+                $variant = ProductVariant::find($item->variant_id);
+                if ($variant) {
+                    if ($isSingleShop) {
+                        $this->handleSingleShopInventory($variant, $item, $order);
+                    } else {
+                        $this->handleMultiShopInventory($variant, $item, $order);
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => __('pagination.payment_completed'),
+                'order' => $order
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Split payment failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment failed: ' . $e->getMessage()
             ], 500);
         }
     }

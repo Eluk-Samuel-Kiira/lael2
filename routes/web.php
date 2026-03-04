@@ -201,6 +201,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         Route::post('/orders/complete-payment', [POSController::class, 'completePayment'])
             ->name('orders.complete-payment');
+        Route::post('/orders/process-split-payment', [POSController::class, 'processSplitPayment'])
+            ->name('orders.process-split-payment');
         
         Route::post('/pos-cancel/{id}', [POSController::class, 'cancel']);
 
@@ -445,6 +447,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('reports/balance-sheet', [ReportController::class, 'balanceSheet']);
             Route::get('reports/general-ledger', [ReportController::class, 'generalLedger']);
         });
+
+        
 
 
 

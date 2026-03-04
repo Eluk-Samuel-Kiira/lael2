@@ -268,28 +268,39 @@
                 <!--begin::Customer-->
                 <div class="m-0">
                     <div class="mb-8">
-                        <h3 class="fw-bold text-gray-800 mb-5">{{__('pagination.select_customer')}}</h3>
+                        <h3 class="fw-bold text-gray-800 mb-5">{{ __('pagination.select_customer') }}</h3>
 
-                        <!-- Radio Options -->
-                        <div class="d-flex flex-column gap-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="radio" name="customerOption" id="existingOption" value="existing" checked>
-                                <label for="existingOption" class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 px-4">
-                                    {{__('pagination.existing_customer')}}
-                                </label>
+                        <!-- Toggle Buttons -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <div class="btn btn-outline btn-outline-dashed btn-outline-default d-flex flex-column align-items-center justify-content-center gap-2 py-4 w-100 cursor-pointer"
+                                    id="btn-pick-existing">
+                                    <i class="ki-duotone ki-profile-circle fs-2x text-primary">
+                                        <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                    </i>
+                                    <span class="fw-bold fs-6 text-gray-800">{{ __('pagination.existing_customer') }}</span>
+                                </div>
                             </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="radio" name="customerOption" id="newOption" value="new">
-                                <label for="newOption" class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 px-4">
-                                    {{__('pagination.new_customer')}}
-                                </label>
+                            <div class="col-6">
+                                <div class="btn btn-outline btn-outline-dashed btn-outline-default d-flex flex-column align-items-center justify-content-center gap-2 py-4 w-100 cursor-pointer"
+                                    id="btn-pick-new">
+                                    <i class="ki-duotone ki-user-edit fs-2x text-primary">
+                                        <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                    </i>
+                                    <span class="fw-bold fs-6 text-gray-800">{{ __('pagination.new_customer') }}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Existing Customer -->
-                        <div id="existingCustomerWrapper" class="mt-4">
-                            <select class="form-select form-select-lg" id="existingCustomer">
-                                <option value="">{{__('pagination.choose_customer')}}</option>
+                        <!-- Hidden radio inputs -->
+                        <input type="radio" name="cust_mode" id="cust-mode-existing" value="existing" class="d-none">
+                        <input type="radio" name="cust_mode" id="cust-mode-new" value="new" class="d-none">
+
+                        <!-- Panel: Existing Customer -->
+                        <div id="panel-existing-cust" class="d-none">
+                            <label class="form-label fw-semibold text-gray-700">{{ __('pagination.choose_customer') }}</label>
+                            <select class="form-select form-select-lg" id="cust-existing-select">
+                                <option value="">— {{ __('pagination.choose_customer') }} —</option>
                                 @foreach ($customers as $customer)
                                     <option value="{{ $customer->id }}">
                                         {{ $customer->first_name }} {{ $customer->last_name }}
@@ -298,122 +309,74 @@
                             </select>
                         </div>
 
-                        <!-- New Customer -->
-                        <div id="newCustomerWrapper" class="mt-4 d-none">
-                            <input type="text" class="form-control form-control-lg" 
-                                placeholder="{{__('pagination.customer_name_placeholder')}}" 
-                                id="newCustomer">
+                        <!-- Panel: New Customer -->
+                        <div id="panel-new-cust" class="d-none">
+                            <label class="form-label fw-semibold text-gray-700">{{ __('pagination.customer_name_placeholder') }}</label>
+                            <input type="text"
+                                class="form-control form-control-lg"
+                                id="cust-new-input"
+                                placeholder="{{ __('pagination.customer_name_placeholder') }}">
                         </div>
+
                     </div>
                 </div>
+
+                <script>
+                    document.addEventListener('click', function (e) {
+                        const btnExisting = document.getElementById('btn-pick-existing');
+                        const btnNew      = document.getElementById('btn-pick-new');
+
+                        const clickedExisting = btnExisting && (e.target === btnExisting || btnExisting.contains(e.target));
+                        const clickedNew      = btnNew      && (e.target === btnNew      || btnNew.contains(e.target));
+
+                        if (!clickedExisting && !clickedNew) return;
+
+                        const mode = clickedExisting ? 'existing' : 'new';
+
+                        const radioExisting  = document.getElementById('cust-mode-existing');
+                        const radioNew       = document.getElementById('cust-mode-new');
+                        const panelExisting  = document.getElementById('panel-existing-cust');
+                        const panelNew       = document.getElementById('panel-new-cust');
+                        const selectExisting = document.getElementById('cust-existing-select');
+                        const inputNew       = document.getElementById('cust-new-input');
+
+                        // Reset BOTH buttons to unselected state
+                        [btnExisting, btnNew].forEach(btn => {
+                            btn.classList.remove('btn-light-primary', 'border-primary');
+                            btn.classList.add('btn-outline-default');
+                            // Reset icon and text color back to default
+                            btn.querySelector('i').classList.remove('text-primary');
+                            btn.querySelector('i').classList.add('text-muted');
+                            btn.querySelector('span').classList.remove('text-primary');
+                            btn.querySelector('span').classList.add('text-gray-800');
+                        });
+
+                        // Hide both panels
+                        panelExisting.classList.add('d-none');
+                        panelNew.classList.add('d-none');
+
+                        // Activate selected button — Metronic pale blue = btn-light-primary + border-primary
+                        const activeBtn = mode === 'existing' ? btnExisting : btnNew;
+                        activeBtn.classList.remove('btn-outline-default');
+                        activeBtn.classList.add('btn-light-primary', 'border-primary');
+                        activeBtn.querySelector('i').classList.remove('text-muted');
+                        activeBtn.querySelector('i').classList.add('text-primary');
+                        activeBtn.querySelector('span').classList.remove('text-gray-800');
+                        activeBtn.querySelector('span').classList.add('text-primary');
+
+                        if (mode === 'existing') {
+                            radioExisting.checked = true;
+                            panelExisting.classList.remove('d-none');
+                            setTimeout(() => selectExisting.focus(), 100);
+                        } else {
+                            radioNew.checked = true;
+                            panelNew.classList.remove('d-none');
+                            setTimeout(() => { inputNew.focus(); inputNew.select(); }, 100);
+                        }
+                    });
+                </script>
                 
-                <!--begin::Payment Method-->
                 <div class="m-0">
-                    <h3 class="fw-bold text-gray-800 mb-5">{{__('pagination.payment_method')}}</h3>
-                    
-                    <!--begin::Radio group - Row 1 (3 items)-->
-                    <div class="row g-4 mb-8">
-                        <!-- Mobile Money -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="mobile_money" />
-                                <i class="ki-duotone ki-finance-calculator fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('pagination.mobile_money')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Cash (Default) -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4 active">
-                                <input class="btn-check" type="radio" name="method" value="cash" checked="checked"/>
-                                <i class="ki-duotone ki-dollar fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                    <span class="path3"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('pagination._cash')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Card -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="card" />
-                                <i class="ki-duotone ki-credit-cart fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('pagination._card')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Bank Account -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="bank_account" />
-                                <i class="ki-duotone ki-bank fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('payments.bank_account')}}</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!--begin::Radio group - Row 2 (3 items)-->
-                    <div class="row g-4 mb-8">
-                        <!-- Digital Wallet -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="digital_wallet" />
-                                <i class="ki-duotone ki-wallet fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('payments.digital_wallet')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Check -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="check" />
-                                <i class="ki-duotone ki-document fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('payments.check')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Credit -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="credit" />
-                                <i class="ki-duotone ki-time fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('payments.credit')}}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Other -->
-                        <div class="col-lg-4 col-xxl-3">
-                            <label class="btn bg-light btn-color-gray-600 btn-active-text-gray-800 border border-3 border-gray-100 border-active-primary btn-active-light-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
-                                <input class="btn-check" type="radio" name="method" value="other" />
-                                <i class="ki-duotone ki-add-files fs-2hx mb-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="fs-7 fw-bold text-center">{{__('payments.other')}}</span>
-                            </label>
-                        </div>
-                    </div>
-                    
                     <!-- Process Bill Button -->
                     @can('create order')
                     <div class="mt-8">
@@ -431,120 +394,12 @@
                     @endcan
                 </div>
 
-                <style>
-                    /* Custom styles for payment method buttons */
-                    .btn-check:checked + .btn {
-                        background-color: var(--kt-primary-light) !important;
-                        border-color: var(--kt-primary) !important;
-                        color: var(--kt-primary) !important;
-                    }
-
-                    .btn-check:focus + .btn {
-                        box-shadow: 0 0 0 0.25rem rgba(0, 158, 247, 0.25);
-                    }
-
-                    /* Ensure consistent button height */
-                    .btn.h-100 {
-                        min-height: 120px;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        transition: all 0.2s ease;
-                    }
-
-                    .btn.h-100:hover {
-                        transform: translateY(-2px);
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-                    }
-
-                    /* Responsive adjustments */
-                    @media (max-width: 768px) {
-                        .btn.h-100 {
-                            min-height: 100px;
-                        }
-                        
-                        .row.g-4 > div {
-                            margin-bottom: 1rem;
-                        }
-                    }
-
-                    @media (max-width: 576px) {
-                        .row.g-4 {
-                            --bs-gutter-x: 0.5rem;
-                            --bs-gutter-y: 0.5rem;
-                        }
-                        
-                        .btn.h-100 {
-                            min-height: 90px;
-                            padding: 1rem !important;
-                        }
-                        
-                        .fs-2hx {
-                            font-size: 1.75rem !important;
-                        }
-                    }
-                </style>
-
-                <script>
-                    // Ensure only one payment method can be selected at a time
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const paymentRadios = document.querySelectorAll('input[name="method"]');
-                        
-                        // Set cash as default
-                        const cashRadio = document.querySelector('input[value="cash"]');
-                        if (cashRadio) {
-                            cashRadio.checked = true;
-                        }
-                        
-                        // Handle radio button changes
-                        paymentRadios.forEach(radio => {
-                            radio.addEventListener('change', function() {
-                                // Remove active class from all labels
-                                document.querySelectorAll('label.btn').forEach(label => {
-                                    label.classList.remove('active');
-                                });
-                                
-                                // Add active class to parent label of selected radio
-                                if (this.checked) {
-                                    this.closest('label').classList.add('active');
-                                }
-                                
-                                // Log selected method (for debugging)
-                                console.log('Selected payment method:', this.value);
-                            });
-                        });
-                    });
-                </script>
             </div>
         </div>
     </div>
     <!--end::Sidebar-->
 </div>
 
-<script>
-    const existingOption = document.getElementById('existingOption');
-    const newOption = document.getElementById('newOption');
-    const existingWrapper = document.getElementById('existingCustomerWrapper');
-    const newWrapper = document.getElementById('newCustomerWrapper');
-
-    function toggleCustomerFields() {
-        if (existingOption.checked) {
-            existingWrapper.classList.remove('d-none');
-            newWrapper.classList.add('d-none');
-        } else {
-            existingWrapper.classList.add('d-none');
-            newWrapper.classList.remove('d-none');
-        }
-    }
-
-    // Init state
-    toggleCustomerFields();
-
-    // Listen for changes
-    existingOption.addEventListener('change', toggleCustomerFields);
-    newOption.addEventListener('change', toggleCustomerFields);
-</script>
 @include('orders.pos.payment-mode')
 @endcan
 

@@ -152,75 +152,48 @@
         </div>
     </div>
 
-    
+
+
+    <!-- Ensure the main button has the correct type -->
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const addVariantBtn = document.getElementById('addVariantBtn');
-            const variantsTableBody = document.querySelector('#variantsTable tbody');
-
-            // Add new variant row
-            addVariantBtn.addEventListener('click', () => {
-                const rowCount = variantsTableBody.rows.length;
-                const newRow = document.createElement('tr');
-
-                newRow.innerHTML = `
-                    <td><input type="file" name="variants[${rowCount}][image]" class="form-control" accept="image/*" required></td>
-                    <td><input type="text" name="variants[${rowCount}][name]" class="form-control" required></td>
-                    <td><input type="text" name="variants[${rowCount}][sku]" class="form-control"></td>
-                    <td><input type="text" name="variants[${rowCount}][barcode]" class="form-control"></td>
-                    <td><input type="number" name="variants[${rowCount}][price]" class="form-control" step="0.01" required></td>
-                    <td><input type="number" name="variants[${rowCount}][cost_price]" class="form-control" step="0.01" required></td>
-                    <td><input type="number" name="variants[${rowCount}][weight]" class="form-control" min="0" required></td>
-                    <td>
-                        <select name="variants[${rowCount}][weight_unit]" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                            <option></option>
-                            @foreach ($uoms as $umo)
-                                <option value="{{ $umo->id }}">{{ $umo->name }}</option>
-                            @endforeach
-                        </select>
-                    </td>
-                    <td><button type="button" class="btn btn-sm btn-danger removeVariantBtn">&times;</button></td>
-                `;
-
-                variantsTableBody.appendChild(newRow);
-
-                // Reinitialize Select2 for new row (if using it)
-                if (window.jQuery && $.fn.select2) {
-                    $(newRow).find('select').select2();
+        // One more direct approach
+        document.addEventListener('click', function(e) {
+            if (e.target && (e.target.id === 'addVariantBtn' || e.target.closest('#addVariantBtn'))) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const btn = document.getElementById('addVariantBtn');
+                if (btn) {
+                    console.log('Global click handler - button clicked');
+                    
+                    const tableBody = document.querySelector('#variantsTable tbody');
+                    if (tableBody) {
+                        const index = tableBody.rows.length;
+                        const newRow = document.createElement('tr');
+                        newRow.innerHTML = `
+                            <td><input type="file" name="variants[${index}][image]" class="form-control" accept="image/*"></td>
+                            <td><input type="text" name="variants[${index}][name]" class="form-control" required></td>
+                            <td><input type="text" name="variants[${index}][sku]" class="form-control"></td>
+                            <td><input type="text" name="variants[${index}][barcode]" class="form-control"></td>
+                            <td><input type="number" name="variants[${index}][price]" class="form-control" step="0.01" required></td>
+                            <td><input type="number" name="variants[${index}][cost_price]" class="form-control" step="0.01" required></td>
+                            <td><input type="number" name="variants[${index}][weight]" class="form-control" min="0" required></td>
+                            <td>
+                                <select name="variants[${index}][weight_unit]" class="form-control" required>
+                                    <option value="">Select unit</option>
+                                    @foreach($uoms as $umo)
+                                        <option value="{{ $umo->id }}">{{ $umo->name }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td><button type="button" class="btn btn-sm btn-danger removeVariantBtn" onclick="this.closest('tr').remove(); updateRowIndices();">×</button></td>
+                        `;
+                        tableBody.appendChild(newRow);
+                    }
                 }
-
-                updateRemoveButtons();
-            });
-
-            // Remove variant row
-            variantsTableBody.addEventListener('click', function (e) {
-                if (e.target.classList.contains('removeVariantBtn')) {
-                    const row = e.target.closest('tr');
-                    row.remove();
-                    updateRemoveButtons();
-                    updateInputNames();
-                }
-            });
-
-            // Enable/disable remove buttons
-            function updateRemoveButtons() {
-                const removeBtns = variantsTableBody.querySelectorAll('.removeVariantBtn');
-                removeBtns.forEach(btn => btn.disabled = variantsTableBody.rows.length === 1);
             }
-
-            // Fix input names after removing a row
-            function updateInputNames() {
-                Array.from(variantsTableBody.rows).forEach((row, index) => {
-                    row.querySelectorAll('input, select').forEach(input => {
-                        input.name = input.name.replace(/variants\[\d+\]/, `variants[${index}]`);
-                    });
-                });
-            }
-
-            updateRemoveButtons();
         });
     </script>
-
        
     @endsection
 </x-app-layout>
