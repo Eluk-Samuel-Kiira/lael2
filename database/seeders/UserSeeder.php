@@ -171,6 +171,7 @@ class UserSeeder extends Seeder
                 'update order',
                 'cancel order',
                 'print order',
+                'refund order',
                 'complete order',
             ],
             'Purchase Order Management' => [

@@ -137,11 +137,6 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
-    public function payments()
-    {
-        return $this->hasOne(OrderPayment::class);
-    }
-
     // Alias for orderItems
     public function items()
     {

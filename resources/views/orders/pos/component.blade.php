@@ -238,7 +238,7 @@
                                 <th class="w-60px">{{__('pagination._total')}}</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="pos-cart-tbody">
                             <!-- Cart items will be dynamically inserted here -->
                         </tbody>
                     </table>

@@ -312,6 +312,7 @@ return [
     'never' => 'Never',
     'no_admin_users' => 'No admin users found for this tenant.',
     'add_admin' => 'Add Admin',
+    'payments' => 'Payments',
     'pending' => 'Pending',
     'inactive' => 'Inactive',
     'selected_cat_invalid' => 'The selected parent category is invalid.',
@@ -319,14 +320,6 @@ return [
     'uom_invalid' => 'The selected weight unit is invalid.',
 
     'loading' => 'Loading...',
-    'loading_amazing' => 'Loading amazing content...',
-    'preparing_dashboard' => 'Preparing your dashboard...',
-    'fetching_data' => 'Fetching latest data...',
-    'almost_there' => 'Almost there...',
-    'making_pretty' => 'Making things pretty...',
-    'loading_magic' => 'Loading magic...',
-    'please_wait' => 'Please wait...',
-    'getting_ready' => 'Getting things ready...',
     'network_error' => 'Network response was not ok',
     'page_not_found' => 'Page Not Found',
     'error_loading' => 'Error Loading Page',
@@ -481,6 +474,7 @@ return [
     'deductions_and_refunds' => 'Deductions and refunds',
     'discounts_given' => 'Discounts Given',
     'refunds' => 'Refunds',
+    'refund' => 'Refund',
     'net_revenue' => 'Net Revenue',
     
     // Top Transactions

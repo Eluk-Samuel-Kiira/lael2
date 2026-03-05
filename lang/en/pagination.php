@@ -32,6 +32,7 @@ return [
     'add_payment' => 'Add Payment',
     'payment_type' => 'Payment Type',
     'totals' => 'Totals',
+    'no_order_found' => 'No Order Found',
     'account' => 'Account',
     'payments' => 'Payments',
     'give_change_to_customer' => 'Give change to Customer',
@@ -199,6 +200,65 @@ return [
     'locations_index' => 'Locations Index',
 
     // POS
+    // Receipt Modal
+    'receipt' => 'RECEIPT',
+    'print' => 'Print',
+    'close' => 'Close',
+    
+    'no_products_match_search' => 'No products or variants match your search.',
+    'no_products_in_department' => 'No products in this department.',
+    'loading_amazing_things' => 'Loading amazing things...',
+    'preparing_dashboard' => 'Preparing dashboard...',
+    'fetching_data' => 'Fetching data...',
+    'almost_there' => 'Almost there...',
+    'making_it_pretty' => 'Making it pretty...',
+    'loading_magic' => 'Loading magic...',
+    'please_wait' => 'Please wait...',
+    'getting_ready' => 'Getting ready...',
+    
+    'network_error' => 'Network error occurred',
+    'page_not_found' => 'Page not found',
+    'error_loading_page' => 'Error loading page',
+    'go_back' => 'Go back',
+    'go_to_dashboard' => 'Go to dashboard',
+    'reload_page' => 'Reload page',
+    
+    // Store Info
+    'receipt_tagline' => 'YOUR SATISFACTION IS OUR PRIORITY',
+    
+    // Order Meta
+    'order' => 'Order',
+    'date' => 'Date',
+    'time' => 'Time',
+    'cashier' => 'Cashier',
+    'customer' => 'Customer',
+    'sale' => 'SALE',
+    
+    // Items Table
+    'qty' => 'Qty',
+    'item' => 'Item',
+    'price' => 'Price',
+    
+    // Totals
+    'subtotal' => 'Subtotal',
+    'discount' => 'Discount',
+    'tax' => 'Tax',
+    'total' => 'TOTAL',
+    
+    // Payment
+    'payment_methods' => 'Payment Methods',
+    'paid' => 'Paid',
+    'change_due' => 'CHANGE DUE',
+    
+    // Footer
+    'total_items' => 'Total Items',
+    'thank_you' => 'THANK YOU!',
+    'receipt_footer_message' => 'Please come again',
+    
+    // Additional
+    'walk_in_customer' => 'Walk-in Customer',
+    'order_number' => 'Order Number',
+
     'pos_index' => 'POS Index',
     '_pos' => 'Point Of Sale',
     '_orders' => 'Sale Orders',
@@ -219,6 +279,13 @@ return [
     'max_quantity_reached' => 'Maximum quantity reached',
     'sub_total' => 'Sub Total',
     '_discount' => 'Discount',
+    'payment_validation_failed' => 'Payment validation failed',
+    'payment_error' => 'Payment processing error',
+    'walk_in_customer' => 'Walk-in Customer',
+    'payment_method_not_found' => 'Payment method not found',
+    'payment_total_mismatch' => 'Payment total does not match order total',
+    'payment_completed' => 'Payment completed successfully',
+    'payment_failed' => 'Payment failed',
     'cart_cleared' => 'Cart Cleared',
     '_tax' => 'Tax',
     'grant_total' => 'Grand Total',
@@ -238,7 +305,6 @@ return [
     'cash_payment' => 'Cash Payment',
     'mobile_money_payment' => 'Mobile Money Payment',
     'card_payment' => 'Card Payment',
-    'payment_receipt' => 'Payment Receipt',
     'order_summary' => 'Order Summary',
     'total_amount' => 'Total Amount',
     'fully_paid' => 'Fully Paid',

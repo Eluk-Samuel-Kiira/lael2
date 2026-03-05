@@ -82,7 +82,7 @@
 									style="max-height: 44px;" 
 								/>
 
-								<img alt="Logo" src="assets/media/logos/default-small.svg" class="h-20px app-sidebar-logo-minimize" />
+								<img alt="Logo" src="{{ getFaviconImage() }}" class="h-30px app-sidebar-logo-minimize" />
 							</a>
 							{{-- 	
 							<h1 class="text-white font-bold text-lg app-sidebar-logo-default" style="font-size: 50px">

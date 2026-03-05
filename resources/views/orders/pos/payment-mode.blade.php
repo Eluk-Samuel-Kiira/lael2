@@ -1,156 +1,97 @@
+{{--
+════════════════════════════════════════════════════════════════
+  payment-modals.blade.php  —  HTML + CSS only, zero JavaScript
+  Include order in your layout:
+
+    @include('partials.payment-modals')   ← HTML structures
+    @include('partials.payment-scripts')  ← all JavaScript
+════════════════════════════════════════════════════════════════
+--}}
+
+{{-- Barcode font --}}
+<link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap" rel="stylesheet">
 
 <style>
-    /* ── Large POS Amount Input ────────────────────────────── */
-    .pm-amount-display {
-        font-size: 2.6rem;
-        font-weight: 800;
-        letter-spacing: -1px;
-        border: 2.5px solid #e4e6ef;
-        border-radius: 12px;
-        background: #f8f9ff;
-        color: #1a1a2e;
-        text-align: right;
-        padding: 14px 20px 14px 52px;
-        width: 100%;
-        transition: border-color .2s, box-shadow .2s, background .2s;
-        -moz-appearance: textfield;
-    }
-    .pm-amount-display::-webkit-inner-spin-button,
-    .pm-amount-display::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    .pm-amount-display:focus {
-        outline: none;
-        border-color: var(--bs-primary);
-        box-shadow: 0 0 0 4px rgba(var(--bs-primary-rgb), .12);
-        background: #fff;
-    }
-    .pm-amount-display::placeholder { color: #c5cae0; }
-    .pm-currency-prefix {
-        position: absolute;
-        top: 50%; left: 16px;
-        transform: translateY(-50%);
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: var(--bs-primary);
-        pointer-events: none;
-        z-index: 2;
-    }
+/* ═══════════════════════════════════════════════════════════
+   PAYMENT MODAL STYLES
+═══════════════════════════════════════════════════════════ */
+.pm-amount-display {
+    font-size: 2.6rem; font-weight: 800; letter-spacing: -1px;
+    border: 2.5px solid #e4e6ef; border-radius: 12px;
+    background: #f8f9ff; color: #1a1a2e; text-align: right;
+    padding: 14px 20px 14px 52px; width: 100%;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    -moz-appearance: textfield;
+}
+.pm-amount-display::-webkit-inner-spin-button,
+.pm-amount-display::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.pm-amount-display:focus {
+    outline: none; border-color: var(--bs-primary);
+    box-shadow: 0 0 0 4px rgba(var(--bs-primary-rgb), .12); background: #fff;
+}
+.pm-amount-display::placeholder { color: #c5cae0; }
 
-    /* ── Quick preset buttons ──────────────────────────────── */
-    .pm-quick-btn {
-        font-size: .82rem;
-        font-weight: 700;
-        padding: 7px 13px;
-        border-radius: 8px;
-        border: 2px solid #e4e6ef;
-        background: #fff;
-        color: #3f4254;
-        cursor: pointer;
-        transition: all .15s;
-        white-space: nowrap;
-        line-height: 1.3;
-    }
-    .pm-quick-btn:hover {
-        border-color: var(--bs-primary);
-        color: var(--bs-primary);
-        background: #eef3ff;
-        transform: translateY(-1px);
-    }
-    .pm-quick-btn.pm-exact {
-        border-color: #50cd89;
-        color: #50cd89;
-        background: #e8fff3;
-    }
-    .pm-quick-btn.pm-exact:hover {
-        background: #50cd89;
-        color: #fff;
-        border-color: #50cd89;
-    }
+.pm-currency-prefix {
+    position: absolute; top: 50%; left: 16px; transform: translateY(-50%);
+    font-size: 1.5rem; font-weight: 800; color: var(--bs-primary);
+    pointer-events: none; z-index: 2;
+}
 
-    /* ── Change / Tendered banners ─────────────────────────── */
-    .pm-calc-box {
-        border-radius: 12px;
-        padding: 14px 18px;
-    }
-    .pm-calc-box .pm-calc-label {
-        font-size: .68rem;
-        font-weight: 700;
-        letter-spacing: .09em;
-        text-transform: uppercase;
-        margin-bottom: 3px;
-    }
-    .pm-calc-box .pm-calc-value {
-        font-size: 1.9rem;
-        font-weight: 800;
-        line-height: 1;
-    }
-    .pm-tendered-box {
-        background: #f0f4ff;
-        border: 1.5px solid #d0d8ff;
-    }
-    .pm-tendered-box .pm-calc-label { color: #7e8299; }
-    .pm-tendered-box .pm-calc-value { color: #1a1a2e; }
-    .pm-change-box {
-        background: linear-gradient(135deg, #1bc5bd, #0bb7af);
-    }
-    .pm-change-box .pm-calc-label { color: rgba(255,255,255,.8); }
-    .pm-change-box .pm-calc-value { color: #fff; }
-    .pm-change-box.pm-underpaid {
-        background: linear-gradient(135deg, #f64e60, #ee2d41);
-    }
+.pm-quick-btn {
+    font-size: .82rem; font-weight: 700; padding: 7px 13px; border-radius: 8px;
+    border: 2px solid #e4e6ef; background: #fff; color: #3f4254;
+    cursor: pointer; transition: all .15s; white-space: nowrap; line-height: 1.3;
+}
+.pm-quick-btn:hover { border-color: var(--bs-primary); color: var(--bs-primary); background: #eef3ff; transform: translateY(-1px); }
+.pm-quick-btn.pm-exact { border-color: #50cd89; color: #50cd89; background: #e8fff3; }
+.pm-quick-btn.pm-exact:hover { background: #50cd89; color: #fff; }
 
-    /* ── Summary strip ─────────────────────────────────────── */
-    .pm-summary-tile {
-        border-radius: 14px;
-        padding: 16px 18px;
-        text-align: center;
-    }
-    .pm-summary-tile .pm-tile-label {
-        font-size: .68rem;
-        font-weight: 700;
-        letter-spacing: .08em;
-        text-transform: uppercase;
-        color: #7e8299;
-        margin-bottom: 5px;
-    }
-    .pm-summary-tile .pm-tile-value {
-        font-size: 1.8rem;
-        font-weight: 800;
-        line-height: 1;
-    }
+.pm-calc-box { border-radius: 12px; padding: 14px 18px; }
+.pm-calc-box .pm-calc-label { font-size: .68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 3px; }
+.pm-calc-box .pm-calc-value { font-size: 1.9rem; font-weight: 800; line-height: 1; }
+.pm-tendered-box { background: #f0f4ff; border: 1.5px solid #d0d8ff; }
+.pm-tendered-box .pm-calc-label { color: #7e8299; }
+.pm-tendered-box .pm-calc-value { color: #1a1a2e; }
+.pm-change-box { background: linear-gradient(135deg, #1bc5bd, #0bb7af); }
+.pm-change-box .pm-calc-label { color: rgba(255,255,255,.8); }
+.pm-change-box .pm-calc-value { color: #fff; }
+.pm-change-box.pm-underpaid { background: linear-gradient(135deg, #f64e60, #ee2d41); }
+
+.pm-summary-tile { border-radius: 14px; padding: 16px 18px; text-align: center; }
+.pm-summary-tile .pm-tile-label { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7e8299; margin-bottom: 5px; }
+.pm-summary-tile .pm-tile-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+
 </style>
 
-<!-- ═══════════════════════════════════════════════════════════
-     MULTI-PAYMENT MODAL
-═══════════════════════════════════════════════════════════ -->
+
+{{-- ═══════════════════════════════════════════════════════
+     MODAL 1 — PAYMENT
+═══════════════════════════════════════════════════════ --}}
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true"
      data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered mw-1000px">
         <div class="modal-content shadow-lg">
 
-            {{-- ── HEADER ──────────────────────────────────────── --}}
+            {{-- Header --}}
             <div class="modal-header bg-primary px-7 py-5">
                 <div class="d-flex align-items-center gap-3">
                     <div class="symbol symbol-45px symbol-circle bg-white bg-opacity-20">
                         <span class="symbol-label">
-                            <i class="ki-duotone ki-wallet fs-2 text-white">
-                                <span class="path1"></span><span class="path2"></span>
-                            </i>
+                            <i class="ki-duotone ki-wallet fs-2 text-white"><span class="path1"></span><span class="path2"></span></i>
                         </span>
                     </div>
                     <div>
-                        <h2 class="modal-title fw-bold text-white fs-2 mb-0">
-                            {{ __('pagination.process_payment') }}
-                        </h2>
+                        <h2 class="modal-title fw-bold text-white fs-2 mb-0">{{ __('pagination.process_payment') }}</h2>
                         <span class="text-white opacity-75 fs-7" id="pm-order-ref">—</span>
                     </div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
 
-            {{-- ── BODY ─────────────────────────────────────────── --}}
+            {{-- Body --}}
             <div class="modal-body p-7">
 
-                {{-- ORDER SUMMARY STRIP --}}
+                {{-- Order summary strip --}}
                 <div class="row g-4 mb-7">
                     <div class="col-4">
                         <div class="pm-summary-tile bg-light-primary">
@@ -172,19 +113,17 @@
                     </div>
                 </div>
 
-                {{-- ADD PAYMENT CARD --}}
+                {{-- Add payment card --}}
                 <div class="card card-flush border border-primary border-dashed mb-7">
                     <div class="card-header min-h-50px px-6 pt-5 pb-0 border-0">
                         <h4 class="card-title fw-bold text-gray-800">
-                            <i class="ki-duotone ki-plus-circle fs-3 text-primary me-2">
-                                <span class="path1"></span><span class="path2"></span>
-                            </i>
+                            <i class="ki-duotone ki-plus-circle fs-3 text-primary me-2"><span class="path1"></span><span class="path2"></span></i>
                             {{ __('pagination.add_payment') }}
                         </h4>
                     </div>
                     <div class="card-body pt-4 px-6 pb-6">
 
-                        {{-- PAYMENT TYPE TABS --}}
+                        {{-- Payment type tabs --}}
                         <ul class="nav nav-stretch nav-line-tabs nav-line-tabs-2x border-transparent fs-6 fw-bold mb-5"
                             id="pm-type-tabs" role="tablist">
                             @foreach(getUniquePaymentTypes() as $type)
@@ -205,29 +144,22 @@
                             @endforeach
                         </ul>
 
-                        {{-- TAB PANES --}}
+                        {{-- Tab panes --}}
                         <div class="tab-content" id="pm-tab-content">
                             @foreach(getUniquePaymentTypes() as $type)
                             <div class="tab-pane fade {{ $loop->first ? 'show active' : '' }}"
-                                 id="pm-pane-{{ $type }}"
-                                 role="tabpanel"
-                                 data-payment-type="{{ $type }}">
+                                 id="pm-pane-{{ $type }}" role="tabpanel" data-payment-type="{{ $type }}">
 
-                                {{-- Account + Add button --}}
+                                {{-- Account select + Add button --}}
                                 <div class="row g-4 mb-5 align-items-end">
                                     <div class="col-md-8">
-                                        <label class="form-label fw-semibold required">
-                                            {{ __('pagination.select_account') }}
-                                        </label>
+                                        <label class="form-label fw-semibold required">{{ __('pagination.select_account') }}</label>
                                         <select class="form-select form-select-solid pm-account-select"
-                                                id="pm-account-{{ $type }}"
-                                                data-payment-type="{{ $type }}">
+                                                id="pm-account-{{ $type }}" data-payment-type="{{ $type }}">
                                             <option value="">{{ __('pagination.select_account') }}</option>
                                             @foreach(getPaymentMethodsByType($type) as $method)
-                                            <option value="{{ $method->id }}"
-                                                    data-account="{{ json_encode($method) }}">
-                                                {{ $method->name }}
-                                                @if($method->account_number) — {{ $method->account_number }} @endif
+                                            <option value="{{ $method->id }}" data-account="{{ json_encode($method) }}">
+                                                {{ $method->name }}@if($method->account_number) — {{ $method->account_number }}@endif
                                             </option>
                                             @endforeach
                                         </select>
@@ -238,63 +170,53 @@
                                                 id="pm-add-btn-{{ $type }}"
                                                 data-payment-type="{{ $type }}"
                                                 disabled>
-                                            <i class="ki-duotone ki-plus fs-3">
-                                                <span class="path1"></span><span class="path2"></span>
-                                            </i>
+                                            <i class="ki-duotone ki-plus fs-3"><span class="path1"></span><span class="path2"></span></i>
                                             {{ __('pagination.add_payment') }}
                                         </button>
                                     </div>
                                 </div>
 
-                                {{-- BIG Amount Input --}}
+                                {{-- Amount input --}}
                                 <div class="mb-4">
                                     <div class="d-flex align-items-center justify-content-between mb-2">
-                                        <label class="form-label fw-bold fs-6 mb-0 required">
-                                            {{ __('pagination.amount_tendered') }}
-                                        </label>
+                                        <label class="form-label fw-bold fs-6 mb-0 required">{{ __('pagination.amount_tendered') }}</label>
                                         <span class="badge badge-light-primary fs-8 fw-semibold" id="pm-remaining-hint-{{ $type }}">
                                             {{ __('pagination.remaining') }}: —
                                         </span>
                                     </div>
                                     <div class="position-relative">
-                                        <span class="pm-currency-prefix">{{ config('app.currency_symbol', '$') }}</span>
+                                        <span class="pm-currency-prefix">{{ currency_symbol() }}</span>
                                         <input type="number"
                                                class="pm-amount-display pm-amount-input"
                                                id="pm-amount-{{ $type }}"
                                                placeholder="0.00"
-                                               step="0.01"
-                                               min="0.01"
-                                               autocomplete="off"
+                                               step="0.01" min="0.01" autocomplete="off"
                                                data-payment-type="{{ $type }}">
                                     </div>
                                 </div>
 
-                                {{-- Quick preset amounts --}}
+                                {{-- Quick amount presets --}}
                                 <div class="d-flex flex-wrap gap-2 mb-4" id="pm-quick-{{ $type }}"></div>
 
-                                {{-- Live cash calc (cash type only) --}}
+                                {{-- Cash change calculator --}}
                                 <div class="d-none" id="pm-cash-calc-{{ $type }}">
                                     <div class="row g-3">
                                         <div class="col-6">
                                             <div class="pm-calc-box pm-tendered-box">
                                                 <div class="pm-calc-label">{{ __('pagination.cash_tendered') }}</div>
-                                                <div class="pm-calc-value" id="pm-tendered-{{ $type }}">
-                                                    {{ config('app.currency_symbol', '$') }}0.00
-                                                </div>
+                                                <div class="pm-calc-value" id="pm-tendered-{{ $type }}">{{ currency_symbol() }}0.00</div>
                                             </div>
                                         </div>
                                         <div class="col-6">
                                             <div class="pm-calc-box pm-change-box" id="pm-change-banner-{{ $type }}">
                                                 <div class="pm-calc-label">{{ __('pagination.change_due') }}</div>
-                                                <div class="pm-calc-value" id="pm-change-{{ $type }}">
-                                                    {{ config('app.currency_symbol', '$') }}0.00
-                                                </div>
+                                                <div class="pm-calc-value" id="pm-change-{{ $type }}">{{ currency_symbol() }}0.00</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {{-- Transaction Reference --}}
+                                {{-- Transaction reference --}}
                                 <div class="mt-4 d-none pm-ref-row" id="pm-ref-row-{{ $type }}">
                                     <label class="form-label fw-semibold">
                                         {{ __('pagination.transaction_reference') }}
@@ -315,13 +237,12 @@
                     </div>
                 </div>
 
-                {{-- SPLITS TABLE --}}
+                {{-- Payment splits table --}}
                 <div class="card card-flush">
                     <div class="card-header min-h-50px px-6">
                         <h4 class="card-title fw-bold text-gray-800">
                             <i class="ki-duotone ki-bill fs-3 text-success me-2">
-                                <span class="path1"></span><span class="path2"></span>
-                                <span class="path3"></span><span class="path4"></span>
+                                <span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span>
                             </i>
                             {{ __('pagination.payment_splits') }}
                         </h4>
@@ -347,19 +268,14 @@
                                 <tbody id="pm-splits-body">
                                     <tr>
                                         <td colspan="6" class="text-center py-12 text-muted">
-                                            <i class="ki-duotone ki-wallet fs-3x mb-3 d-block opacity-20">
-                                                <span class="path1"></span><span class="path2"></span>
-                                            </i>
+                                            <i class="ki-duotone ki-wallet fs-3x mb-3 d-block opacity-20"><span class="path1"></span><span class="path2"></span></i>
                                             <div class="fs-6 fw-semibold">{{ __('pagination.no_payments_added') }}</div>
-                                            <div class="fs-7 opacity-60 mt-1">{{ __('pagination.use_form_above_to_add') }}</div>
                                         </td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
                                     <tr class="bg-light-primary fw-bolder">
-                                        <td colspan="2" class="text-end fs-6 ps-6 py-4 text-gray-700">
-                                            {{ __('pagination.totals') }}:
-                                        </td>
+                                        <td colspan="2" class="text-end fs-6 ps-6 py-4 text-gray-700">{{ __('pagination.totals') }}:</td>
                                         <td class="text-end py-4 text-gray-600" id="pm-total-tendered">—</td>
                                         <td class="text-end fs-4 py-4 text-primary" id="pm-splits-total">0.00</td>
                                         <td class="text-end py-4 text-success" id="pm-total-change">—</td>
@@ -373,19 +289,15 @@
 
             </div>{{-- /modal-body --}}
 
-            {{-- ── FOOTER ──────────────────────────────────────── --}}
+            {{-- Footer --}}
             <div class="modal-footer px-7 py-5">
                 <button type="button" class="btn btn-light btn-lg me-3" data-bs-dismiss="modal">
-                    <i class="ki-duotone ki-cross fs-2 me-1">
-                        <span class="path1"></span><span class="path2"></span>
-                    </i>
+                    <i class="ki-duotone ki-cross fs-2 me-1"><span class="path1"></span><span class="path2"></span></i>
                     {{ __('pagination.cancel') }}
                 </button>
                 <button type="button" class="btn btn-success btn-lg" id="pm-process-btn" disabled>
                     <span class="indicator-label">
-                        <i class="ki-duotone ki-check fs-2 me-1">
-                            <span class="path1"></span><span class="path2"></span>
-                        </i>
+                        <i class="ki-duotone ki-check fs-2 me-1"><span class="path1"></span><span class="path2"></span></i>
                         {{ __('pagination.complete_payment') }}
                     </span>
                     <span class="indicator-progress">
@@ -399,514 +311,615 @@
     </div>
 </div>
 
-{{-- Receipt Modal --}}
-<div class="modal fade" id="receiptModal" tabindex="-1"
-     aria-labelledby="receiptModalLabel" aria-hidden="true"
+
+
+
+
+{{-- ═══════════════════════════════════════════════════════
+     MODAL 2 — RECEIPT (METRONIC STYLE)
+═══════════════════════════════════════════════════════ --}}
+<style>
+    /* ── Receipt Modal (Metronic Style) ───────────────────────── */
+    #receiptModal .modal-dialog { 
+        max-width: 450px; 
+        margin: 1.75rem auto;
+    }
+    #receiptModal .modal-content { 
+        border-radius: 0.85rem; 
+        border: none; 
+        box-shadow: var(--bs-box-shadow-lg);
+        overflow: hidden;
+    }
+
+    /* ── Receipt Paper Style ──────────────────────────────────── */
+    #receipt-paper {
+        background: #ffffff;
+        font-family: 'Inter', 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px; 
+        color: #1e2129;
+        padding: 25px 25px 20px;
+        position: relative;
+        max-height: 80vh; 
+        overflow-y: auto;
+    }
+
+    /* ── Store Header ─────────────────────────────────────────── */
+    .rcpt-store-name { 
+        font-size: 22px; 
+        font-weight: 700; 
+        letter-spacing: -0.3px; 
+        text-align: center; 
+        color: var(--bs-gray-900);
+        margin-bottom: 2px;
+    }
+    .rcpt-store-tagline { 
+        font-size: 11px; 
+        text-align: center; 
+        color: var(--bs-gray-600);
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    .rcpt-store-address { 
+        font-size: 11px; 
+        text-align: center; 
+        color: var(--bs-gray-600); 
+        line-height: 1.5; 
+        font-weight: 400;
+    }
+    
+    /* ── Dividers ─────────────────────────────────────────────── */
+    .rcpt-divider-solid { 
+        border-top: 1px solid var(--bs-gray-300); 
+        margin: 15px 0; 
+    }
+    .rcpt-divider-dash  { 
+        border-top: 1px dashed var(--bs-gray-400); 
+        margin: 15px 0; 
+    }
+    .rcpt-divider-dot  { 
+        border-top: 1px dotted var(--bs-gray-400); 
+        margin: 12px 0; 
+    }
+    .rcpt-divider-star  { 
+        text-align: center; 
+        font-size: 12px; 
+        color: var(--bs-gray-500); 
+        margin: 12px 0; 
+        letter-spacing: 2px; 
+    }
+
+    /* ── Meta Information ─────────────────────────────────────── */
+    .rcpt-meta { 
+        font-size: 12px; 
+        color: var(--bs-gray-700); 
+        line-height: 1.8; 
+    }
+    .rcpt-meta-row { 
+        display: flex; 
+        justify-content: space-between; 
+        padding: 2px 0;
+    }
+    .rcpt-meta-row span:last-child { 
+        font-weight: 600; 
+        color: var(--bs-gray-900); 
+    }
+
+    /* ── Customer Banner ──────────────────────────────────────── */
+    .rcpt-customer { 
+        background: var(--bs-primary-light); 
+        color: var(--bs-primary); 
+        text-align: center; 
+        padding: 8px 12px; 
+        margin: 12px 0; 
+        font-size: 13px; 
+        font-weight: 600; 
+        border-radius: 0.475rem;
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    /* ── Order Type Badge ─────────────────────────────────────── */
+    .rcpt-order-type { 
+        font-size: 11px; 
+        font-weight: 600; 
+        letter-spacing: 0.5px; 
+        text-transform: uppercase; 
+        background: var(--bs-light);
+        padding: 4px 12px; 
+        display: inline-block;
+        color: var(--bs-gray-800);
+        border-radius: 30px;
+    }
+
+    /* ── Items Table ──────────────────────────────────────────── */
+    .rcpt-items { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 10px 0;
+    }
+    .rcpt-items th { 
+        font-size: 11px; 
+        font-weight: 600; 
+        color: var(--bs-gray-600); 
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--bs-gray-300);
+    }
+    .rcpt-items td { 
+        padding: 6px 0; 
+        vertical-align: top; 
+        font-size: 13px; 
+        border-bottom: 1px dashed var(--bs-gray-200);
+    }
+    .rcpt-item-qty { 
+        width: 35px; 
+        color: var(--bs-gray-700); 
+        font-weight: 500;
+    }
+    .rcpt-item-name { 
+        font-weight: 500;
+        color: var(--bs-gray-900);
+    }
+    .rcpt-item-price { 
+        text-align: right; 
+        font-weight: 600; 
+        white-space: nowrap; 
+        padding-left: 10px; 
+        color: var(--bs-gray-900);
+    }
+    .rcpt-item-sub { 
+        font-size: 11px; 
+        color: var(--bs-gray-600); 
+        padding-left: 35px; 
+        font-style: italic;
+        border-bottom: none !important;
+    }
+
+    /* ── Totals Table ─────────────────────────────────────────── */
+    .rcpt-totals { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 10px 0;
+    }
+    .rcpt-totals td { 
+        padding: 4px 0; 
+        font-size: 13px; 
+    }
+    .rcpt-total-label { 
+        color: var(--bs-gray-700); 
+        font-weight: 500;
+    }
+    .rcpt-total-value { 
+        text-align: right; 
+        font-weight: 600; 
+        color: var(--bs-gray-900);
+    }
+    .rcpt-grand-row td { 
+        font-size: 18px; 
+        font-weight: 700; 
+        padding-top: 8px; 
+        padding-bottom: 4px; 
+        color: var(--bs-primary);
+        border-top: 1px solid var(--bs-gray-300);
+    }
+    .rcpt-grand-value { 
+        text-align: right; 
+        color: var(--bs-primary);
+        font-weight: 700;
+    }
+
+    /* ── Payments Table ───────────────────────────────────────── */
+    .rcpt-payments { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin: 8px 0;
+    }
+    .rcpt-payments td { 
+        padding: 4px 0; 
+        font-size: 12px; 
+        border-bottom: 1px dashed var(--bs-gray-200);
+    }
+    .rcpt-pay-label { 
+        color: var(--bs-gray-700); 
+        font-weight: 500;
+    }
+    .rcpt-pay-value { 
+        text-align: right; 
+        font-weight: 600; 
+        color: var(--bs-gray-900);
+    }
+
+    /* ── Change Box ───────────────────────────────────────────── */
+    .rcpt-change-box { 
+        background: var(--bs-success-light); 
+        text-align: center; 
+        padding: 12px 15px; 
+        margin: 15px 0; 
+        border-radius: 0.625rem;
+        border-left: 4px solid var(--bs-success);
+    }
+    .rcpt-change-label { 
+        font-size: 11px; 
+        letter-spacing: 0.5px; 
+        text-transform: uppercase; 
+        color: var(--bs-success); 
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .rcpt-change-value { 
+        font-size: 28px; 
+        font-weight: 700; 
+        color: var(--bs-success);
+        line-height: 1.2;
+    }
+
+    /* ── Thank You Section ────────────────────────────────────── */
+    .rcpt-thankyou { 
+        text-align: center; 
+        font-size: 15px; 
+        font-weight: 600; 
+        letter-spacing: 0.3px; 
+        margin: 15px 0 5px; 
+        color: var(--bs-gray-900);
+    }
+    .rcpt-survey { 
+        text-align: center; 
+        font-size: 10px; 
+        color: var(--bs-gray-600); 
+        line-height: 1.5; 
+    }
+
+    /* ── Barcode ──────────────────────────────────────────────── */
+    .rcpt-barcode { 
+        text-align: center; 
+        font-family: 'Libre Barcode 128', monospace; 
+        font-size: 48px; 
+        line-height: 1; 
+        margin: 8px 0 2px; 
+        color: var(--bs-gray-900); 
+        overflow: hidden; 
+        letter-spacing: 1px;
+    }
+    .rcpt-barcode-num { 
+        text-align: center; 
+        font-size: 10px; 
+        letter-spacing: 2px; 
+        color: var(--bs-gray-600); 
+        margin-top: -5px; 
+        font-weight: 500;
+    }
+
+    /* ── Print Styles ─────────────────────────────────────────── */
+    @media print {
+        body * { visibility: hidden !important; }
+        #receipt-print-area, #receipt-print-area * { visibility: visible !important; }
+        #receipt-print-area { 
+            position: fixed !important; 
+            top: 0 !important; 
+            left: 0 !important; 
+            width: 80mm !important; 
+            background: #fff !important; 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            box-shadow: none !important;
+        }
+        #receipt-paper { 
+            max-height: none !important; 
+            overflow: visible !important; 
+            border: none !important; 
+            padding: 8px 12px !important; 
+            background: white !important;
+        }
+        .modal-header, .modal-footer { 
+            display: none !important; 
+        }
+    }
+</style>
+
+
+<div class="modal fade" id="receiptModal" tabindex="-1" aria-hidden="true"
      data-bs-backdrop="static" data-bs-keyboard="false">
-</div>
-<div id="printReceiptContainer" style="display:none;"></div>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
 
-
-{{-- ═══════════════════════════════════════════════════════════
-     JAVASCRIPT
-     Fully IIFE-scoped. All DOM lookups inside handlers = always live.
-═══════════════════════════════════════════════════════════ --}}
-<script>
-(function () {
-
-    // ── BOOTSTRAP CONFIG ─────────────────────────────────────
-    @if(isset($active_payment_methods))
-        window.activePaymentMethods = @json($globalPaymentMethods ?? []);
-    @endif
-
-    const SYM            = '{{ config('app.currency_symbol', '$') }}';
-    const TYPES_WITH_REF = ['card', 'bank_account', 'mobile_money', 'digital_wallet', 'check'];
-    const CASH_TYPES     = ['cash'];
-
-    // ── STATE ────────────────────────────────────────────────
-    let splitPayments = [];
-    let currentOrder  = null;
-
-    // ── TINY HELPERS ─────────────────────────────────────────
-    const g   = id  => document.getElementById(id);
-    const qs  = sel => document.querySelector(sel);
-
-    function fmt(n) {
-        return SYM + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
-
-    function getRemainingRaw() {
-        const el = g('pm-remaining');
-        return el ? parseFloat(el.textContent.replace(/[^0-9.-]+/g, '')) || 0 : 0;
-    }
-
-    // ── REMAINING HINT ───────────────────────────────────────
-    function updateRemainingHint(type) {
-        const hint = g(`pm-remaining-hint-${type}`);
-        if (hint) hint.textContent = `{{ __('pagination.remaining') }}: ${fmt(getRemainingRaw())}`;
-    }
-
-    // ── QUICK AMOUNT PRESETS ─────────────────────────────────
-    function buildQuickAmounts(type) {
-        const container = g(`pm-quick-${type}`);
-        if (!container) return;
-
-        const remaining = getRemainingRaw();
-
-        if (remaining <= 0) {
-            container.innerHTML = `<span class="text-success fw-semibold fs-7">
-                <i class="ki-duotone ki-check-circle fs-4 me-1 text-success"><span class="path1"></span><span class="path2"></span></i>
-                {{ __('pagination.fully_paid') }}
-            </span>`;
-            return;
-        }
-
-        // Build smart preset list
-        const presets = new Set([parseFloat(remaining.toFixed(2))]);
-        const rounds  = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-        for (const r of rounds) {
-            const rounded = Math.ceil(remaining / r) * r;
-            if (rounded > remaining && rounded <= remaining * 5) presets.add(rounded);
-            if (presets.size >= 7) break;
-        }
-
-        const sorted = [...presets].sort((a, b) => a - b).slice(0, 7);
-
-        container.innerHTML = sorted.map(v => {
-            const isExact = Math.abs(v - remaining) < 0.005;
-            return `<button type="button"
-                        class="pm-quick-btn ${isExact ? 'pm-exact' : ''}"
-                        data-payment-type="${type}"
-                        data-quick-amount="${v}">
-                        ${isExact ? '<span style="font-size:.7rem">✓ EXACT</span><br>' : ''}${fmt(v)}
-                    </button>`;
-        }).join('');
-    }
-
-    // ── LIVE CASH CHANGE CALCULATOR ──────────────────────────
-    function updateCashCalc(type) {
-        const amountEl = g(`pm-amount-${type}`);
-        const calcWrap = g(`pm-cash-calc-${type}`);
-        if (!amountEl || !calcWrap) return;
-
-        const isCash   = CASH_TYPES.includes(type);
-        const tendered = parseFloat(amountEl.value) || 0;
-        const remaining = getRemainingRaw();
-
-        if (!isCash || tendered <= 0) {
-            calcWrap.classList.add('d-none');
-            return;
-        }
-
-        calcWrap.classList.remove('d-none');
-
-        const change      = Math.max(0, tendered - remaining);
-        const isUnderpaid = tendered < remaining - 0.005;
-        const banner      = g(`pm-change-banner-${type}`);
-        const tenderedEl  = g(`pm-tendered-${type}`);
-        const changeEl    = g(`pm-change-${type}`);
-
-        if (tenderedEl) tenderedEl.textContent = fmt(tendered);
-
-        if (banner) {
-            banner.classList.toggle('pm-underpaid', isUnderpaid);
-        }
-
-        if (changeEl) {
-            changeEl.textContent = isUnderpaid
-                ? `Short ${fmt(remaining - tendered)}`
-                : fmt(change);
-        }
-    }
-
-    // ── VALIDATE ADD BUTTON ──────────────────────────────────
-    function validateBtn(type) {
-        const account = g(`pm-account-${type}`);
-        const amount  = g(`pm-amount-${type}`);
-        const btn     = g(`pm-add-btn-${type}`);
-        if (!account || !amount || !btn) return;
-
-        const tendered  = parseFloat(amount.value) || 0;
-        const remaining = getRemainingRaw();
-        const isCash    = CASH_TYPES.includes(type);
-
-        // Cash allows overpayment (change returned); all others must be <= remaining
-        const ok = account.value !== ''
-                && tendered > 0
-                && (isCash ? remaining > 0 : tendered <= remaining + 0.005);
-
-        btn.disabled = !ok;
-        btn.classList.toggle('btn-primary',   ok);
-        btn.classList.toggle('btn-secondary', !ok);
-    }
-
-    // ── TOGGLE TRANSACTION REF ───────────────────────────────
-    function toggleRef(type) {
-        const row = g(`pm-ref-row-${type}`);
-        if (!row) return;
-        const show = TYPES_WITH_REF.includes(type);
-        row.classList.toggle('d-none', !show);
-        if (!show) { const inp = g(`pm-ref-${type}`); if (inp) inp.value = ''; }
-    }
-
-    // ── RESET A TAB'S INPUTS ─────────────────────────────────
-    function resetTab(type) {
-        const els = [
-            g(`pm-account-${type}`),
-            g(`pm-amount-${type}`),
-            g(`pm-ref-${type}`)
-        ];
-        els.forEach(el => { if (el) el.value = ''; });
-        const calc = g(`pm-cash-calc-${type}`);
-        if (calc) calc.classList.add('d-none');
-        validateBtn(type);
-        buildQuickAmounts(type);
-        updateRemainingHint(type);
-    }
-
-    // ── RENDER SPLITS TABLE ──────────────────────────────────
-    function renderTable() {
-        const tbody = g('pm-splits-body');
-        if (!tbody) return;
-
-        if (!splitPayments.length) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="text-center py-12 text-muted">
-                        <i class="ki-duotone ki-wallet fs-3x mb-3 d-block opacity-20">
-                            <span class="path1"></span><span class="path2"></span>
+            {{-- Modal Header (Metronic Style) --}}
+            <div class="modal-header bg-primary py-3 px-6">
+                <div class="d-flex align-items-center">
+                    <i class="ki-duotone ki-receipt-2 fs-2x text-white me-3">
+                        <span class="path1"></span>
+                        <span class="path2"></span>
+                        <span class="path3"></span>
+                        <span class="path4"></span>
+                        <span class="path5"></span>
+                    </i>
+                    <div>
+                        <h5 class="modal-title text-white fw-bold mb-0">{{ __('pagination.payment_receipt') }}</h5>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light fw-bold px-4" id="rcpt-print-btn">
+                        <i class="ki-duotone ki-printer fs-4 me-1">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                            <span class="path3"></span>
                         </i>
-                        <div class="fs-6 fw-semibold">{{ __('pagination.no_payments_added') }}</div>
-                        <div class="fs-7 opacity-60 mt-1">{{ __('pagination.use_form_above_to_add') }}</div>
-                    </td>
-                </tr>`;
-        } else {
-            tbody.innerHTML = splitPayments.map((p, i) => `
-                <tr>
-                    <td class="ps-6">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="symbol symbol-35px symbol-circle">
-                                <span class="symbol-label bg-light-primary">
-                                    <i class="ki-duotone ${getPaymentTypeIcon(p.type)} fs-3 text-primary">
-                                        <span class="path1"></span><span class="path2"></span><span class="path3"></span>
-                                    </i>
-                                </span>
-                            </span>
-                            <div>
-                                <div class="fw-bold text-gray-800">${formatPaymentType(p.type)}</div>
-                                <small class="text-muted">${p.method_name}</small>
-                            </div>
+                        {{ __('pagination.print') }}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-icon btn-light" onclick="window.location.reload();">
+                        <i class="fas fa-times fs-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            {{-- Receipt Content --}}
+            <div id="receipt-print-area" style="background:#ffffff;">
+                <div id="receipt-paper">
+
+                    {{-- Store Header --}}
+                    <div class="rcpt-store-name">{{ getUIOptions('app_name') }}</div>
+                    <div class="rcpt-store-tagline">{{ __('pagination.receipt_tagline') }}</div>
+                    <div class="rcpt-store-address">
+                        {{ getUIOptions('app_email') }}<br>
+                        {{ getUIOptions('app_contact') }}
+                    </div>
+
+                    <div class="rcpt-divider-solid"></div>
+
+                    {{-- Order Meta --}}
+                    <div class="rcpt-meta">
+                        <div class="rcpt-meta-row">
+                            <span>{{ __('pagination.order') }} #:</span>
+                            <span id="rcpt-order-no">—</span>
                         </div>
-                    </td>
-                    <td>
-                        <span class="badge badge-light-primary fs-8">${p.account_number || 'N/A'}</span>
-                        ${p.transaction_ref
-                            ? `<small class="d-block text-muted mt-1">Ref: ${p.transaction_ref}</small>`
-                            : ''}
-                    </td>
-                    <td class="text-end fw-bold text-gray-600">${fmt(p.tendered)}</td>
-                    <td class="text-end fw-bolder fs-5 text-gray-900">${fmt(p.amount)}</td>
-                    <td class="text-end">
-                        ${p.change > 0.005
-                            ? `<span class="badge badge-light-success fw-bold fs-7">${fmt(p.change)}</span>`
-                            : '<span class="text-muted fs-7">—</span>'}
-                    </td>
-                    <td class="text-end pe-6">
-                        <button type="button"
-                                class="btn btn-sm btn-icon btn-light-danger pm-remove-btn"
-                                data-index="${i}">
-                            <i class="ki-duotone ki-trash fs-3">
-                                <span class="path1"></span><span class="path2"></span>
-                                <span class="path3"></span><span class="path4"></span><span class="path5"></span>
-                            </i>
-                        </button>
-                    </td>
-                </tr>`).join('');
-        }
+                        <div class="rcpt-meta-row">
+                            <span>{{ __('pagination.date') }}:</span>
+                            <span id="rcpt-date">—</span>
+                        </div>
+                        <div class="rcpt-meta-row">
+                            <span>{{ __('pagination.time') }}:</span>
+                            <span id="rcpt-time">—</span>
+                        </div>
+                        <div class="rcpt-meta-row">
+                            <span>{{ __('pagination.cashier') }}:</span>
+                            <span id="rcpt-cashier">{{ auth()->user()->name ?? 'STAFF' }}</span>
+                        </div>
+                    </div>
 
-        // Foot counts
-        const count = g('pm-splits-count');
-        if (count) count.textContent = `${splitPayments.length} {{ __('pagination.payments') }}`;
-    }
+                    {{-- Customer Banner --}}
+                    <div class="rcpt-customer" id="rcpt-customer-banner">
+                        <i class="ki-duotone ki-user fs-4 me-2"></i>
+                        <span id="rcpt-customer-name">{{ __('pagination.customer') }}: GUEST</span>
+                    </div>
 
-    // ── UPDATE SUMMARY ───────────────────────────────────────
-    function updateSummary() {
-        if (!currentOrder) return;
+                    {{-- Order Type --}}
+                    <div style="text-align:center; margin:8px 0;">
+                        <span class="rcpt-order-type" id="rcpt-order-type">{{ __('pagination.sale') }}</span>
+                    </div>
 
-        const totalApplied  = splitPayments.reduce((s, p) => s + p.amount,   0);
-        const totalTendered = splitPayments.reduce((s, p) => s + p.tendered, 0);
-        const totalChange   = splitPayments.reduce((s, p) => s + p.change,   0);
-        const remaining     = Math.max(0, currentOrder.total - totalApplied);
+                    <div class="rcpt-divider-dash"></div>
 
-        // Summary strip
-        g('pm-paid-amount').textContent = fmt(totalApplied);
-        g('pm-remaining').textContent   = fmt(remaining);
+                    {{-- Items Table --}}
+                    <table class="rcpt-items">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">{{ __('pagination.qty') }}</th>
+                                <th style="text-align:left;">{{ __('pagination.item') }}</th>
+                                <th style="text-align:right;">{{ __('pagination.price') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rcpt-items-body"></tbody>
+                    </table>
 
-        // Remaining tile colour
-        const wrap  = g('pm-remaining-wrap');
-        const remEl = g('pm-remaining');
-        if (wrap) {
-            wrap.classList.toggle('bg-light-danger',  remaining > 0.005);
-            wrap.classList.toggle('bg-light-success', remaining <= 0.005);
-        }
-        if (remEl) {
-            remEl.classList.toggle('text-danger',  remaining > 0.005);
-            remEl.classList.toggle('text-success', remaining <= 0.005);
-        }
+                    <div class="rcpt-divider-dash"></div>
 
-        // Table foot
-        const totTen = g('pm-total-tendered');
-        const totApp = g('pm-splits-total');
-        const totChg = g('pm-total-change');
-        if (totTen) totTen.textContent = totalTendered > 0 ? fmt(totalTendered) : '—';
-        if (totApp) totApp.textContent = fmt(totalApplied);
-        if (totChg) totChg.textContent = totalChange > 0.005 ? fmt(totalChange) : '—';
+                    {{-- Totals --}}
+                    <table class="rcpt-totals">
+                        <tbody>
+                            <tr>
+                                <td class="rcpt-total-label">{{ __('pagination.subtotal') }}</td>
+                                <td class="rcpt-total-value" id="rcpt-subtotal">—</td>
+                            </tr>
+                            <tr class="d-none" id="rcpt-discount-row">
+                                <td class="rcpt-total-label">{{ __('pagination.discount') }}</td>
+                                <td class="rcpt-total-value" id="rcpt-discount" style="color: var(--bs-danger);">—</td>
+                            </tr>
+                            <tr class="d-none" id="rcpt-tax-row">
+                                <td class="rcpt-total-label">{{ __('pagination.tax') }}</td>
+                                <td class="rcpt-total-value" id="rcpt-tax">—</td>
+                            </tr>
+                            <tr class="rcpt-grand-row">
+                                <td class="rcpt-total-label">{{ __('pagination.total') }}</td>
+                                <td class="rcpt-grand-value" id="rcpt-grand-total">—</td>
+                            </tr>
+                        </tbody>
+                    </table>
 
-        // Process button
-        const pb = g('pm-process-btn');
-        if (pb) pb.disabled = !(splitPayments.length > 0 && remaining <= 0.005);
+                    <div class="rcpt-divider-solid"></div>
 
-        // Refresh active tab
-        const activePane = qs('.tab-pane.active[data-payment-type]');
-        if (activePane) {
-            const t = activePane.dataset.paymentType;
-            validateBtn(t);
-            buildQuickAmounts(t);
-            updateRemainingHint(t);
-        }
-    }
+                    {{-- Payment Breakdown --}}
+                    <div style="font-size:12px; font-weight:600; color: var(--bs-gray-800); margin-bottom:6px;">
+                        {{ __('pagination.payment_methods') }}
+                    </div>
+                    <table class="rcpt-payments">
+                        <tbody id="rcpt-payments-body"></tbody>
+                    </table>
 
-    // ── ADD PAYMENT ──────────────────────────────────────────
-    function addPayment(type) {
-        const accountEl = g(`pm-account-${type}`);
-        const amountEl  = g(`pm-amount-${type}`);
-        const refEl     = g(`pm-ref-${type}`);
-        if (!accountEl || !amountEl) return;
+                    {{-- Change Due --}}
+                    <div class="rcpt-change-box d-none" id="rcpt-change-box">
+                        <div class="rcpt-change-label">{{ __('pagination.change_due') }}</div>
+                        <div class="rcpt-change-value" id="rcpt-change-value">0.00</div>
+                    </div>
 
-        const accountId = accountEl.value;
-        const tendered  = parseFloat(amountEl.value);
-        const ref       = refEl ? refEl.value.trim() : '';
-        const remaining = getRemainingRaw();
-        const isCash    = CASH_TYPES.includes(type);
+                    <div class="rcpt-divider-star">• • • • • • • • • • • • • • • •</div>
 
-        if (!accountId) { toastr.warning('{{ __("pagination.please_select_account") }}'); return; }
-        if (!tendered || tendered <= 0) { toastr.warning('{{ __("pagination.please_enter_valid_amount") }}'); return; }
-        if (!isCash && tendered > remaining + 0.005) { toastr.warning('{{ __("pagination.amount_exceeds_remaining") }}'); return; }
-        if (remaining <= 0) { toastr.warning('{{ __("pagination.order_already_paid") }}'); return; }
+                    {{-- Item Count --}}
+                    <div class="rcpt-meta">
+                        <div class="rcpt-meta-row">
+                            <span>{{ __('pagination.total_items') }}:</span>
+                            <span id="rcpt-item-count">0</span>
+                        </div>
+                    </div>
 
-        const applied = isCash ? Math.min(tendered, remaining) : tendered;
-        const change  = isCash ? Math.max(0, tendered - remaining) : 0;
+                    {{-- Thank You Message --}}
+                    <div class="rcpt-thankyou">{{ __('pagination.thank_you') }}</div>
+                    <div class="rcpt-survey">
+                        {{ __('pagination.receipt_footer_message') }}<br>
+                        <span style="color: var(--bs-primary);">{{ __('stardena.com') }}</span>
+                    </div>
 
-        const opt = accountEl.options[accountEl.selectedIndex];
-        let accountData = {};
-        try { accountData = JSON.parse(opt.dataset.account || '{}'); } catch(e) {}
+                    {{-- Barcode --}}
+                    <div class="rcpt-barcode" id="rcpt-barcode">000000000000</div>
+                    <div class="rcpt-barcode-num" id="rcpt-barcode-num">000000000000</div>
+                    <div style="height:10px;"></div>
 
-        splitPayments.push({
-            id:             Date.now() + Math.random(),
-            type,
-            method_id:      accountId,
-            method_name:    accountData.name            || 'Unknown',
-            account_number: accountData.account_number  || '',
-            tendered,
-            amount:         applied,
-            change,
-            transaction_ref: ref,
-            account_data:   accountData
+                </div>{{-- /receipt-paper --}}
+            </div>{{-- /receipt-print-area --}}
+
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // Print button handler
+        document.getElementById('rcpt-print-btn')?.addEventListener('click', function() {
+            window.print();
         });
 
-        renderTable();
-        updateSummary();
-        resetTab(type);
-
-        if (change > 0.005) {
-            toastr.info(
-                `<strong>{{ __('pagination.change_due') }}: ${fmt(change)}</strong>`,
-                '{{ __("pagination.give_change_to_customer") }}',
-                { timeOut: 6000, extendedTimeOut: 3000 }
-            );
+        // Initialize tooltips
+        if (typeof tippy !== 'undefined') {
+            tippy('[data-bs-toggle="tooltip"]');
         }
 
-        if (getRemainingRaw() <= 0.005) {
-            toastr.success('{{ __("pagination.payment_complete") }}');
-        }
-    }
+        // Receipt generation function
+        window.generateMultiPaymentReceipt = function(order) {
+            // console.log('Generating receipt:', order);
 
-    // ── REMOVE PAYMENT ───────────────────────────────────────
-    function removePayment(index) {
-        splitPayments.splice(index, 1);
-        renderTable();
-        updateSummary();
-    }
-
-    // ── OPEN MODAL ───────────────────────────────────────────
-    window.openPaymentModal = function (cartData) {
-        currentOrder        = cartData;
-        window.currentOrder = cartData;
-        splitPayments       = [];
-
-        g('pm-order-total').textContent = fmt(cartData.total);
-        g('pm-paid-amount').textContent = fmt(0);
-        g('pm-remaining').textContent   = fmt(cartData.total);
-
-        const refEl = g('pm-order-ref');
-        if (refEl) refEl.textContent = cartData.ref ? `#${cartData.ref}` : '—';
-
-        // Full reset
-        document.querySelectorAll('.pm-account-select').forEach(s => s.value = '');
-        document.querySelectorAll('.pm-amount-input').forEach(i => i.value = '');
-        document.querySelectorAll('.pm-ref-input').forEach(i => i.value = '');
-        document.querySelectorAll('.pm-add-btn').forEach(b => {
-            b.disabled = true;
-            b.classList.remove('btn-primary');
-            b.classList.add('btn-secondary');
-        });
-        document.querySelectorAll('[id^="pm-cash-calc-"]').forEach(el => el.classList.add('d-none'));
-
-        const pb = g('pm-process-btn');
-        if (pb) pb.disabled = true;
-
-        const wrap  = g('pm-remaining-wrap');
-        const remEl = g('pm-remaining');
-        if (wrap)  { wrap.classList.add('bg-light-danger');  wrap.classList.remove('bg-light-success'); }
-        if (remEl) { remEl.classList.add('text-danger');     remEl.classList.remove('text-success'); }
-
-        renderTable();
-
-        setTimeout(() => {
-            const activePane = qs('.tab-pane.active[data-payment-type]');
-            if (activePane) {
-                const t = activePane.dataset.paymentType;
-                toggleRef(t);
-                buildQuickAmounts(t);
-                updateRemainingHint(t);
+            const SYM = '{{ currency_symbol() }}';
+            
+            function fmt(n) {
+                return SYM + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             }
-        }, 150);
 
-        bootstrap.Modal.getOrCreateInstance(g('paymentModal')).show();
-    };
+            function pad(n) { return String(n).padStart(2, '0'); }
 
-    // ── PROCESS PAYMENT ──────────────────────────────────────
-    window.processSplitPayments = function () {
-        if (!currentOrder)        { toastr.error('{{ __("pagination.no_order_found") }}');   return; }
-        if (!splitPayments.length){ toastr.warning('{{ __("pagination.no_payments_added") }}'); return; }
+            // Get current date/time if not provided
+            const now = new Date();
+            const date = order.date || `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
+            const time = order.time || `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-        const totalApplied = splitPayments.reduce((s, p) => s + p.amount, 0);
-        if (Math.abs(currentOrder.total - totalApplied) > 0.01) {
-            toastr.warning('{{ __("pagination.payment_total_mismatch") }}');
-            return;
-        }
+            // Set meta
+            document.getElementById('rcpt-order-no').textContent = order.order_number || order.ref || 'N/A';
+            document.getElementById('rcpt-date').textContent = date;
+            document.getElementById('rcpt-time').textContent = time;
+            document.getElementById('rcpt-cashier').textContent = order.cashier || '{{ auth()->user()->name ?? "STAFF" }}';
+            
+            // Customer name
+            const customerName = order.customer_name || order.customer?.name || 'GUEST';
+            document.getElementById('rcpt-customer-name').textContent = '{{ __("pagination.customer") }}: ' + customerName.toUpperCase();
+            
+            // Order type
+            document.getElementById('rcpt-order-type').textContent = (order.order_type || order.type || 'SALE').toUpperCase();
 
-        const btn = g('pm-process-btn');
-        btn.setAttribute('data-kt-indicator', 'on');
-        btn.disabled = true;
-
-        const payload = {
-            ...currentOrder,
-            payments: splitPayments.map(p => ({
-                payment_method_id:     p.method_id,
-                amount:                p.amount,
-                tendered:              p.tendered,
-                change:                p.change,
-                transaction_reference: p.transaction_ref,
-                type:                  p.type,
-                method_name:           p.method_name,
-                account_number:        p.account_number
-            })),
-            total_paid:      totalApplied,
-            total_tendered:  splitPayments.reduce((s, p) => s + p.tendered, 0),
-            total_change:    splitPayments.reduce((s, p) => s + p.change,   0),
-            payment_methods: splitPayments.map(p => p.type).join(', ')
-        };
-
-        fetch('/orders/process-split-payment', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(r => r.json())
-        .then(data => {
-            btn.removeAttribute('data-kt-indicator');
-            btn.disabled = false;
-            if (data.success) {
-                toastr.success('{{ __("pagination.payment_completed") }}');
-                bootstrap.Modal.getInstance(g('paymentModal')).hide();
-                if (typeof generateMultiPaymentReceipt === 'function') generateMultiPaymentReceipt(payload);
-                if (typeof clearCart === 'function') clearCart();
+            // Items
+            const items = order.items || [];
+            const itemsBody = document.getElementById('rcpt-items-body');
+            let itemCount = 0;
+            
+            if (items.length) {
+                itemsBody.innerHTML = items.map(item => {
+                    const qty = parseInt(item.quantity || item.qty || 1);
+                    const price = parseFloat(item.price || item.unit_price || 0);
+                    const total = parseFloat(item.total || (qty * price));
+                    itemCount += qty;
+                    
+                    return `
+                        <tr>
+                            <td class="rcpt-item-qty">${qty}</td>
+                            <td class="rcpt-item-name">${item.name || item.item_name || 'Item'}</td>
+                            <td class="rcpt-item-price">${fmt(total)}</td>
+                        </tr>
+                        ${item.note ? `<tr><td></td><td colspan="2" class="rcpt-item-sub">↳ ${item.note}</td></tr>` : ''}
+                    `;
+                }).join('');
             } else {
-                toastr.error(data.message || '{{ __("pagination.payment_failed") }}');
+                itemsBody.innerHTML = '<tr><td colspan="3" style="color: var(--bs-gray-500); text-align:center;">No items</td></tr>';
             }
-        })
-        .catch(err => {
-            btn.removeAttribute('data-kt-indicator');
-            btn.disabled = false;
-            toastr.error('{{ __("pagination.payment_error") }}');
-            console.error('Payment error:', err);
-        });
-    };
+            document.getElementById('rcpt-item-count').textContent = itemCount;
 
-    // ══════════════════════════════════════════════════════════
-    // DELEGATED EVENT LISTENERS
-    // All bound on document — survives any modal re-render
-    // ══════════════════════════════════════════════════════════
+            // Totals
+            const subtotal = parseFloat(order.subtotal || order.total || 0);
+            const discount = parseFloat(order.discount || 0);
+            const tax = parseFloat(order.tax || 0);
+            const total = parseFloat(order.total || 0);
 
-    document.addEventListener('click', function (e) {
-        // Quick preset
-        const qb = e.target.closest('.pm-quick-btn');
-        if (qb) {
-            const type = qb.dataset.paymentType;
-            const inp  = g(`pm-amount-${type}`);
-            if (inp) {
-                inp.value = qb.dataset.quickAmount;
-                inp.dispatchEvent(new Event('input', { bubbles: true }));
-                inp.focus();
+            document.getElementById('rcpt-subtotal').textContent = fmt(subtotal);
+            
+            if (discount > 0) {
+                document.getElementById('rcpt-discount-row').classList.remove('d-none');
+                document.getElementById('rcpt-discount').textContent = '-' + fmt(discount);
+            } else {
+                document.getElementById('rcpt-discount-row').classList.add('d-none');
             }
-            return;
-        }
+            
+            if (tax > 0) {
+                document.getElementById('rcpt-tax-row').classList.remove('d-none');
+                document.getElementById('rcpt-tax').textContent = fmt(tax);
+            } else {
+                document.getElementById('rcpt-tax-row').classList.add('d-none');
+            }
+            
+            document.getElementById('rcpt-grand-total').textContent = fmt(total);
 
-        // Add payment
-        const addBtn = e.target.closest('.pm-add-btn');
-        if (addBtn && !addBtn.disabled) {
-            addPayment(addBtn.dataset.paymentType);
-            return;
-        }
+            // Payments
+            const payments = order.payments || [];
+            const paymentsBody = document.getElementById('rcpt-payments-body');
+            let totalChange = 0;
+            
+            if (payments.length) {
+                paymentsBody.innerHTML = payments.map(p => {
+                    const change = parseFloat(p.change || 0);
+                    totalChange += change;
+                    
+                    let methodLabel = p.method_name || p.type || 'Payment';
+                    methodLabel = methodLabel.charAt(0).toUpperCase() + methodLabel.slice(1).replace('_', ' ');
+                    
+                    return `
+                        <tr>
+                            <td class="rcpt-pay-label">${methodLabel}</td>
+                            <td class="rcpt-pay-value">${fmt(p.amount || p.tendered || 0)}</td>
+                        </tr>
+                        ${p.transaction_reference ? `
+                        <tr>
+                            <td colspan="2" style="font-size:10px; color: var(--bs-gray-600); padding-left:12px;">
+                                Ref: ${p.transaction_reference}
+                            </td>
+                        </tr>` : ''}
+                    `;
+                }).join('');
+            } else {
+                paymentsBody.innerHTML = `
+                    <tr>
+                        <td class="rcpt-pay-label">{{ __('pagination.paid') }}</td>
+                        <td class="rcpt-pay-value">${fmt(total)}</td>
+                    </tr>`;
+            }
 
-        // Remove payment
-        const remBtn = e.target.closest('.pm-remove-btn');
-        if (remBtn) {
-            removePayment(parseInt(remBtn.dataset.index, 10));
-            return;
-        }
+            // Change due
+            if (totalChange > 0.005) {
+                document.getElementById('rcpt-change-box').classList.remove('d-none');
+                document.getElementById('rcpt-change-value').textContent = fmt(totalChange);
+            } else {
+                document.getElementById('rcpt-change-box').classList.add('d-none');
+            }
 
-        // Process button
-        if (e.target.closest('#pm-process-btn')) {
-            window.processSplitPayments();
-        }
-    });
+            // Barcode (order number)
+            const barcodeVal = String(order.order_number || order.ref || order.order_ref || '0').replace(/\D/g, '').padEnd(12, '0').slice(0, 12);
+            document.getElementById('rcpt-barcode').textContent = barcodeVal;
+            document.getElementById('rcpt-barcode-num').textContent = barcodeVal;
 
-    document.addEventListener('change', function (e) {
-        const sel = e.target.closest('.pm-account-select');
-        if (sel) validateBtn(sel.dataset.paymentType);
-    });
-
-    document.addEventListener('input', function (e) {
-        const inp = e.target.closest('.pm-amount-input');
-        if (!inp) return;
-        const type = inp.dataset.paymentType;
-        validateBtn(type);
-        updateCashCalc(type);
-    });
-
-    document.addEventListener('shown.bs.tab', function (e) {
-        const type = e.target.dataset.paymentType;
-        if (!type) return;
-        toggleRef(type);
-        buildQuickAmounts(type);
-        validateBtn(type);
-        updateRemainingHint(type);
-    });
-
-})();
+            // Show modal
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('receiptModal')).show();
+        };
+    })();
 </script>

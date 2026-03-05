@@ -3,9 +3,12 @@
     @section('content')
     
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('accounting.monthly_report')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                    {{__('accounting.monthly_report')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         <a href="{{ route('accounting.monthly-report') }}" class="text-muted text-hover-primary">
@@ -18,74 +21,86 @@
                     <li class="breadcrumb-item text-muted">{{__('accounting.monthly_report')}}</li>
                 </ul>
             </div>
-            <div class="d-flex align-items-center gap-2 gap-lg-3">
-                <!-- Month Selector -->
-                <div class="d-flex align-items-center">
-                    <select id="monthSelect" class="form-select form-select-solid w-150px me-2" onchange="changeMonth()">
-                        @php
-                            $currentMonth = (int)$month;
-                        @endphp
-                        @for($i = 1; $i <= 12; $i++)
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-lg-auto">
+                <!-- Month/Year Selectors -->
+                <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-sm-auto">
+                    <div class="d-flex flex-row gap-2 w-100">
+                        <select id="monthSelect" class="form-select form-select-solid w-100 w-sm-150px" onchange="changeMonth()">
                             @php
-                                $monthNames = [
-                                    1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-                                    5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-                                    9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
-                                ];
+                                $currentMonth = (int)$month;
                             @endphp
-                            <option value="{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}" {{ $currentMonth == $i ? 'selected' : '' }}>
-                                {{ $monthNames[$i] }}
-                            </option>
-                        @endfor
-                    </select>
-                    <select id="yearSelect" class="form-select form-select-solid w-120px" onchange="changeMonth()">
-                        @for($i = date('Y') - 2; $i <= date('Y'); $i++)
-                            <option value="{{ $i }}" {{ (int)$year == $i ? 'selected' : '' }}>{{ $i }}</option>
-                        @endfor
-                    </select>
+                            @for($i = 1; $i <= 12; $i++)
+                                @php
+                                    $monthNames = [
+                                        1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+                                        5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+                                        9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+                                    ];
+                                @endphp
+                                <option value="{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}" {{ $currentMonth == $i ? 'selected' : '' }}>
+                                    {{ $monthNames[$i] }}
+                                </option>
+                            @endfor
+                        </select>
+                        <select id="yearSelect" class="form-select form-select-solid w-100 w-sm-120px" onchange="changeMonth()">
+                            @for($i = date('Y') - 2; $i <= date('Y'); $i++)
+                                <option value="{{ $i }}" {{ (int)$year == $i ? 'selected' : '' }}>{{ $i }}</option>
+                            @endfor
+                        </select>
+                    </div>
                 </div>
                 
-                <!-- Export Dropdown -->
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                <!-- Action Buttons Group -->
+                <div class="d-flex flex-row gap-2 w-100 w-sm-auto">
+                    <!-- Export Dropdown -->
+                    <div class="dropdown flex-grow-1 flex-sm-grow-0">
+                        <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                            <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                            <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'dailyBreakdownTable', filename: 'monthly_report_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Daily Breakdown'})">
+                                    <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
+                                    {{ __('accounting.export_to_excel') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'dailyBreakdownTable', filename: 'monthly_report_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', format: 'csv'})">
+                                    <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
+                                    {{ __('accounting.export_to_csv') }}
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'categoryBreakdownTable', filename: 'monthly_categories_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Category Breakdown'})">
+                                    <i class="ki-duotone ki-category fs-2 me-2 text-info"></i>
+                                    {{ __('Export Category Breakdown') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'methodBreakdownTable', filename: 'monthly_methods_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Payment Methods'})">
+                                    <i class="ki-duotone ki-wallet fs-2 me-2 text-warning"></i>
+                                    {{ __('Export Payment Methods') }}
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Print Button -->
+                    <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
+                        <i class="ki-duotone ki-printer fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.print') }}</span>
                     </button>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'dailyBreakdownTable', filename: 'monthly_report_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Daily Breakdown'})">
-                                <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                {{ __('accounting.export_to_excel') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'dailyBreakdownTable', filename: 'monthly_report_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', format: 'csv'})">
-                                <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                {{ __('accounting.export_to_csv') }}
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'categoryBreakdownTable', filename: 'monthly_categories_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Category Breakdown'})">
-                                <i class="ki-duotone ki-category fs-2 me-2 text-info"></i>
-                                {{ __('Export Category Breakdown') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'methodBreakdownTable', filename: 'monthly_methods_{{ $year }}_{{ str_pad($month, 2, '0', STR_PAD_LEFT) }}', sheetName: 'Payment Methods'})">
-                                <i class="ki-duotone ki-wallet fs-2 me-2 text-warning"></i>
-                                {{ __('Export Payment Methods') }}
-                            </a>
-                        </li>
-                    </ul>
                 </div>
-                
-                <button class="btn btn-sm btn-light" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
-                </button>
             </div>
         </div>
     </div>

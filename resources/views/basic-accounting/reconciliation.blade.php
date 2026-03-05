@@ -3,9 +3,12 @@
     @section('content')
     
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('accounting.reconciliation')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                    {{__('accounting.reconciliation')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         <a href="{{ route('accounting.reconciliation') }}" class="text-muted text-hover-primary">
@@ -18,18 +21,28 @@
                     <li class="breadcrumb-item text-muted">{{__('accounting.reconciliation')}}</li>
                 </ul>
             </div>
-            <div class="d-flex align-items-center gap-2 gap-lg-3">
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-lg-auto">
                 <!-- Date Selector -->
-                <div class="d-flex align-items-center">
-                    <input type="date" id="dateSelector" class="form-control form-control-solid w-200px" 
-                           value="{{ $date }}" onchange="changeDate()">
+                <div class="w-100 w-sm-auto">
+                    <input type="date" id="dateSelector" class="form-control form-control-solid w-100 w-sm-200px" 
+                        value="{{ $date }}" onchange="changeDate()">
                 </div>
-                <button class="btn btn-sm btn-success" onclick="reconcileAll()">
-                    <i class="ki-duotone ki-check fs-2"></i> {{ __('accounting.reconcile_all') }}
-                </button>
-                <button class="btn btn-sm btn-light" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
-                </button>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex flex-row gap-2 w-100 w-sm-auto">
+                    <button class="btn btn-sm btn-success flex-grow-1 flex-sm-grow-0" onclick="reconcileAll()">
+                        <i class="ki-duotone ki-check fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.reconcile_all') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.reconcile') }}</span>
+                    </button>
+                    <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
+                        <i class="ki-duotone ki-printer fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.print') }}</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

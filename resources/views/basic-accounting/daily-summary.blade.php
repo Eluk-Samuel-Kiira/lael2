@@ -3,9 +3,12 @@
     @section('content')
     
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('accounting.daily_summary')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                    {{__('accounting.daily_summary')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         <a href="{{ route('accounting.daily-summary') }}" class="text-muted text-hover-primary">
@@ -18,58 +21,64 @@
                     <li class="breadcrumb-item text-muted">{{__('accounting.daily_summary')}}</li>
                 </ul>
             </div>
-            <div class="d-flex align-items-center gap-2 gap-lg-3">
-                <!-- Date Selector -->
-                <div class="d-flex align-items-center">
-                    <input type="date" id="dateSelector" class="form-control form-control-solid w-200px" 
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-lg-auto">
+                <!-- Date Selectors - Fixed duplicate ID issue -->
+                <div class="d-flex flex-column flex-sm-row gap-2 w-100 w-sm-auto">
+                    <input type="date" id="dateSelector" class="form-control form-control-solid w-100 w-sm-200px" 
                         value="{{ $date }}" onchange="changeDate()">
                 </div>
-                <div class="d-flex align-items-center">
-                    <input type="date" id="dateSelector" class="form-control form-control-solid w-200px" 
-                           value="{{ $date }}" onchange="changeDate()">
-                </div>
                 
-                <!-- Export Dropdown -->
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                <!-- Action Buttons Group -->
+                <div class="d-flex flex-row gap-2 w-100 w-sm-auto">
+                    <!-- Export Dropdown -->
+                    <div class="dropdown flex-grow-1 flex-sm-grow-0">
+                        <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                            <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                            <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'dailyTransactionsTable', filename: 'daily_summary_{{ $date }}', sheetName: 'Daily Transactions'})">
+                                    <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
+                                    {{ __('accounting.export_to_excel') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'dailyTransactionsTable', filename: 'daily_summary_{{ $date }}', format: 'csv'})">
+                                    <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
+                                    {{ __('accounting.export_to_csv') }}
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'balanceChangesTable', filename: 'balance_changes_{{ $date }}', sheetName: 'Balance Changes'})">
+                                    <i class="ki-duotone ki-wallet fs-2 me-2 text-info"></i>
+                                    {{ __('Export Balance Changes') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0)" 
+                                onclick="exportCurrentPage({tableId: 'transactionsByTypeTable', filename: 'transactions_by_type_{{ $date }}', sheetName: 'By Type'})">
+                                    <i class="ki-duotone ki-category fs-2 me-2 text-warning"></i>
+                                    {{ __('Export by Type') }}
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Print Button -->
+                    <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
+                        <i class="ki-duotone ki-printer fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.print') }}</span>
                     </button>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'dailyTransactionsTable', filename: 'daily_summary_{{ $date }}', sheetName: 'Daily Transactions'})">
-                                <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                {{ __('accounting.export_to_excel') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'dailyTransactionsTable', filename: 'daily_summary_{{ $date }}', format: 'csv'})">
-                                <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                {{ __('accounting.export_to_csv') }}
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'balanceChangesTable', filename: 'balance_changes_{{ $date }}', sheetName: 'Balance Changes'})">
-                                <i class="ki-duotone ki-wallet fs-2 me-2 text-info"></i>
-                                {{ __('Export Balance Changes') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'transactionsByTypeTable', filename: 'transactions_by_type_{{ $date }}', sheetName: 'By Type'})">
-                                <i class="ki-duotone ki-category fs-2 me-2 text-warning"></i>
-                                {{ __('Export by Type') }}
-                            </a>
-                        </li>
-                    </ul>
                 </div>
-                
-                <button class="btn btn-sm btn-light" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
-                </button>
             </div>
         </div>
     </div>

@@ -3,9 +3,12 @@
     @section('content')
     
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('accounting.cash_flow')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
+                    {{__('accounting.cash_flow')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         <a href="{{ route('accounting.cash-flow') }}" class="text-muted text-hover-primary">
@@ -18,21 +21,32 @@
                     <li class="breadcrumb-item text-muted">{{__('accounting.cash_flow')}}</li>
                 </ul>
             </div>
-            <div class="d-flex align-items-center gap-2 gap-lg-3">
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
                 <!-- Date Filter -->
-                <div class="d-flex align-items-center">
-                    <input type="date" id="startDate" class="form-control form-control-solid w-150px" 
-                           value="{{ $startDate }}" onchange="updateFilters()">
-                    <span class="mx-2">to</span>
-                    <input type="date" id="endDate" class="form-control form-control-solid w-150px" 
-                           value="{{ $endDate }}" onchange="updateFilters()">
+                <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
+                    <input type="date" id="startDate" class="form-control form-control-solid w-100 w-sm-150px" 
+                        value="{{ $startDate }}" onchange="updateFilters()">
+                    <span class="d-none d-sm-inline text-gray-500 align-self-center">to</span>
+                    <span class="d-inline d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
+                    <input type="date" id="endDate" class="form-control form-control-solid w-100 w-sm-150px" 
+                        value="{{ $endDate }}" onchange="updateFilters()">
                 </div>
-                <button class="btn btn-sm btn-primary" onclick="applyFilters()">
-                    <i class="ki-duotone ki-filter fs-2"></i> {{ __('accounting.apply_filters') }}
-                </button>
-                <button class="btn btn-sm btn-light" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
-                </button>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex flex-row gap-2">
+                    <button class="btn btn-sm btn-primary flex-grow-1 flex-sm-grow-0" onclick="applyFilters()">
+                        <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
+                    </button>
+                    <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
+                        <i class="ki-duotone ki-printer fs-2 me-1 me-sm-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('accounting.print') }}</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

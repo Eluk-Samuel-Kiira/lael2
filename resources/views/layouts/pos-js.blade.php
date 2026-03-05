@@ -1,4 +1,3 @@
-
 <script>
     function formatCurrency(value) {
         return Number(value).toLocaleString('en-US', { 
@@ -7,8 +6,12 @@
         });
     }
 
-
     let cart = [];
+
+    // ─── Single, guaranteed reference to the cart tbody ───────────────────────
+    function getCartTbody() {
+        return document.getElementById('pos-cart-tbody');
+    }
 
     function addToCart(variant) {
         if (variant.quantity_available <= 0) {
@@ -35,79 +38,97 @@
                 quantity_available: variant.quantity_available,
                 taxes: Array.isArray(variant.taxes) ? variant.taxes : [],
                 promotions: Array.isArray(variant.promotions) ? variant.promotions : []
-
             };
             cart.push(cartItem);
-            renderCartItem(cartItem);
+            renderCartItem(cartItem);  // renders + calls updateItemExtraLines internally
             toastr['success']('{{ __("pagination.item_added") }}');
         }
 
-        updateCartTotal();
-        calculateCartSummary();
     }
 
     function renderCartItem(item) {
-        const cartTable = document.querySelector('#kt_pos_form tbody');
+        const cartTbody = getCartTbody();
+        if (!cartTbody) {
+            console.error('[POS] #pos-cart-tbody not found – check your HTML.');
+            return;
+        }
+
+        const lineSubtotal = item.price * item.quantity;
         const newRow = document.createElement('tr');
-        newRow.setAttribute('data-kt-pos-element', '{{ __("pagination._item") }}');
-        newRow.setAttribute('data-kt-pos-item-price', formatCurrency(item.price));
         newRow.setAttribute('data-item-id', item.id);
 
-        const lineSubtotal = (item.price * item.quantity);
         newRow.innerHTML = `
             <td class="pe-0">
-                <div class="d-flex align-items-center">
-                    <img src="${item.image}" class="w-50px h-50px rounded-3 me-3" alt="${item.name}" />
-                    <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-6 me-1">${item.name}</span>
+                <div class="d-flex align-items-center gap-3">
+                    <img src="${item.image}"
+                         class="w-50px h-50px rounded-3 object-fit-cover border"
+                         alt="${item.name}" />
+                    <div class="d-flex flex-column">
+                        <span class="fw-bold text-gray-800 text-hover-primary fs-6">${item.name}</span>
+                    </div>
                 </div>
             </td>
             <td class="pe-0">
-                <div class="position-relative d-flex align-items-center" data-kt-dialer="true" data-kt-dialer-min="1" data-kt-dialer-max="${item.quantity_available}" data-kt-dialer-step="1" data-kt-dialer-decimals="0">
-                    <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500" onclick="decreaseQuantity(${item.id})">
-                        <i class="ki-duotone ki-minus fs-3x"></i>
+                <div class="d-flex align-items-center gap-1">
+                    <button type="button"
+                            class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px"
+                            onclick="decreaseQuantity(${item.id})">
+                        <i class="ki-duotone ki-minus fs-4"></i>
                     </button>
-                    <input type="text" class="form-control border-0 text-center px-0 fs-3 fw-bold text-gray-800 w-30px quantity-input"
-                        placeholder="Amount" name="quantity_${item.id}"
-                        value="${item.quantity}" onchange="updateQuantity(${item.id}, this.value)" />
-                    <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500" onclick="increaseQuantity(${item.id})">
-                        <i class="ki-duotone ki-plus fs-3x"></i>
+                    <input type="text"
+                           class="form-control border-0 text-center px-0 fs-5 fw-bold text-gray-800 w-35px quantity-input"
+                           name="quantity_${item.id}"
+                           value="${item.quantity}"
+                           onchange="updateQuantity(${item.id}, this.value)" />
+                    <button type="button"
+                            class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px"
+                            onclick="increaseQuantity(${item.id})">
+                        <i class="ki-duotone ki-plus fs-4"></i>
                     </button>
                 </div>
             </td>
             <td class="text-end">
-                <div class="d-flex align-items-center justify-content-end">
+                <div class="d-flex align-items-center justify-content-end gap-2">
                     <div class="d-flex flex-column text-end">
-                        <span class="fw-bold text-primary fs-2 item-total">${formatCurrency(lineSubtotal)}</span>
+                        <span class="fw-bold text-primary fs-4 item-total">${formatCurrency(lineSubtotal)}</span>
                         <small class="text-muted item-tax-line" style="display:none;"></small>
                         <small class="text-success item-discount-line" style="display:none;"></small>
                     </div>
-                    <button type="button" class="btn btn-icon btn-sm btn-danger ms-2" onclick="removeFromCart(${item.id})">
-                        <i class="bi bi-trash fs-2"></i>
+                    <button type="button"
+                            class="btn btn-icon btn-sm btn-light-danger"
+                            onclick="removeFromCart(${item.id})">
+                        <i class="bi bi-trash fs-5"></i>
                     </button>
                 </div>
             </td>
         `;
-        cartTable.appendChild(newRow);
+
+        cartTbody.appendChild(newRow);
+
+        // Update tax/discount lines AFTER the row is in the DOM
         updateItemExtraLines(item.id);
     }
 
     function updateItemExtraLines(itemId) {
         const item = cart.find(i => i.id === itemId);
-        const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+        const row  = document.querySelector(`tr[data-item-id="${itemId}"]`);
         if (!item || !row) return;
 
-        const tax = computeItemTax(item);
+        const tax      = computeItemTax(item);
         const discount = computeItemDiscount(item);
+        const taxEl    = row.querySelector('.item-tax-line');
+        const discEl   = row.querySelector('.item-discount-line');
+        const totalEl  = row.querySelector('.item-total');
 
-        const taxEl = row.querySelector('.item-tax-line');
-        const discEl = row.querySelector('.item-discount-line');
+        // Base subtotal (always shown)
+        totalEl.textContent = formatCurrency(item.price * item.quantity);
 
         if (tax > 0) {
             taxEl.style.display = '';
             taxEl.textContent = `+ {{ __("pagination._tax") }} ${formatCurrency(tax)}`;
         } else {
             taxEl.style.display = 'none';
-            taxEl.textContent = '';
+            taxEl.textContent   = '';
         }
 
         if (discount > 0) {
@@ -115,13 +136,8 @@
             discEl.textContent = `- {{ __("pagination._disc") }} ${formatCurrency(discount)}`;
         } else {
             discEl.style.display = 'none';
-            discEl.textContent = '';
+            discEl.textContent   = '';
         }
-
-        // refresh subtotal display (base only)
-        const itemTotalEl = row.querySelector('.item-total');
-        const lineSubtotal = item.price * item.quantity;
-        itemTotalEl.textContent = `${formatCurrency(lineSubtotal)}`;
 
         calculateCartSummary();
     }
@@ -130,46 +146,29 @@
         const base = item.price * item.quantity;
         let taxTotal = 0;
         if (!item.taxes || !item.taxes.length) return 0;
-
         item.taxes.forEach(t => {
             const rate = parseFloat(t.rate || 0);
-            if (t.type === 'percentage') {
-                taxTotal += base * rate;
-            } else {
-                taxTotal += rate * item.quantity;
-            }
+            taxTotal += (t.type === 'percentage') ? base * (rate / 100) : rate * item.quantity;
         });
         return taxTotal;
     }
 
     function computeItemDiscount(item) {
-        let discountTotal = 0;
+        let total = 0;
         const subtotal = item.price * item.quantity;
-
         (item.promotions || []).forEach(promo => {
-            if (promo.type === 'percentage') {
-                discountTotal += subtotal * (promo.value / 100);
-            } else if (promo.type === 'fixed_amount') {
-                discountTotal += promo.value * item.quantity;
-            } else if (promo.type === 'buy_x_get_y') {
-                // Implement your custom logic if needed
-                discountTotal += 0; 
-            }
+            if (promo.type === 'percentage')        total += subtotal * (promo.value / 100);
+            else if (promo.type === 'fixed_amount') total += promo.value * item.quantity;
         });
-
-        // console.log(discountTotal);
-
-        return discountTotal;
+        return total;
     }
 
     function updateCartItem(itemIndex) {
         const item = cart[itemIndex];
-        const row = document.querySelector(`tr[data-item-id="${item.id}"]`);
+        const row  = document.querySelector(`tr[data-item-id="${item.id}"]`);
         if (!row) return;
 
-        const quantityInput = row.querySelector('.quantity-input');
-        quantityInput.value = item.quantity;
-
+        row.querySelector('.quantity-input').value = item.quantity;
         updateItemExtraLines(item.id);
     }
 
@@ -179,7 +178,6 @@
             if (cart[idx].quantity < cart[idx].quantity_available) {
                 cart[idx].quantity += 1;
                 updateCartItem(idx);
-                updateCartTotal();
             } else {
                 toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
             }
@@ -191,25 +189,21 @@
         if (idx > -1 && cart[idx].quantity > 1) {
             cart[idx].quantity -= 1;
             updateCartItem(idx);
-            updateCartTotal();
         }
     }
 
     function updateQuantity(itemId, newQuantity) {
         const qty = parseInt(newQuantity);
         const idx = cart.findIndex(i => i.id === itemId);
-        if (idx > -1 && !isNaN(qty)) {
-            if (qty > 0 && qty <= cart[idx].quantity_available) {
-                cart[idx].quantity = qty;
-                updateCartItem(idx);
-                updateCartTotal();
-            } else if (qty > cart[idx].quantity_available) {
-                toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
-                cart[idx].quantity = cart[idx].quantity_available;
-                updateCartItem(idx);
-                updateCartTotal();
-            }
+        if (idx === -1 || isNaN(qty)) return;
+
+        if (qty > 0 && qty <= cart[idx].quantity_available) {
+            cart[idx].quantity = qty;
+        } else if (qty > cart[idx].quantity_available) {
+            toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
+            cart[idx].quantity = cart[idx].quantity_available;
         }
+        updateCartItem(idx);
     }
 
     function removeFromCart(itemId) {
@@ -218,43 +212,233 @@
             cart.splice(idx, 1);
             const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
             if (row) row.remove();
-            updateCartTotal();
+            calculateCartSummary();
             toastr['success']('{{ __("pagination.item_removed") }}');
         }
     }
 
     function clearCart() {
         cart = [];
-        const cartTable = document.querySelector('#kt_pos_form tbody');
-        cartTable.innerHTML = '';
-        updateCartTotal();
+        const tbody = getCartTbody();
+        if (tbody) tbody.innerHTML = '';
+        calculateCartSummary();
         toastr['success']('{{ __("pagination.cart_cleared") }}');
     }
 
-    // === Totals ===
     function calculateCartSummary() {
-        const subtotal = cart.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-        const tax = cart.reduce((sum, i) => sum + computeItemTax(i), 0);
-        const discount = cart.reduce((sum, i) => sum + computeItemDiscount(i), 0);
+        const subtotal   = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+        const tax        = cart.reduce((s, i) => s + computeItemTax(i), 0);
+        const discount   = cart.reduce((s, i) => s + computeItemDiscount(i), 0);
         const grandTotal = subtotal - discount + tax;
 
-        document.querySelector('[data-kt-pos-element="total"]').textContent = `${formatCurrency(subtotal)}`;
-        document.querySelector('[data-kt-pos-element="discount"]').textContent = `-${formatCurrency(discount)}`;
-        document.querySelector('[data-kt-pos-element="tax"]').textContent = `${formatCurrency(tax)}`;
-        document.querySelector('[data-kt-pos-element="grant-total"]').textContent = `${formatCurrency(grandTotal)}`;
-    }
-
-    function updateCartTotal() {
-        calculateCartSummary();
+        document.querySelector('[data-kt-pos-element="total"]').textContent       = formatCurrency(subtotal);
+        document.querySelector('[data-kt-pos-element="discount"]').textContent    = `-${formatCurrency(discount)}`;
+        document.querySelector('[data-kt-pos-element="tax"]').textContent         = formatCurrency(tax);
+        document.querySelector('[data-kt-pos-element="grant-total"]').textContent = formatCurrency(grandTotal);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        updateCartTotal();
-        const clearBtn = document.querySelector('[onclick="clearCart()"]');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                clearCart();
+        calculateCartSummary();
+    });
+</script>
+
+<script>
+    /**
+     * POS Unified Search
+     * Searches both product pills (nav) AND variant cards simultaneously.
+     * - Typing filters product pills by name
+     * - If only one product matches, auto-switches to its tab
+     * - Variant cards within each tab are also filtered by name
+     */
+    function filterProductsAndVariants(searchTerm) {
+        const searchValue = searchTerm.toLowerCase().trim();
+        const productItems = document.querySelectorAll('.product-item');
+        const allVariantItems = document.querySelectorAll('.variant-item');
+
+        // ── Empty search: show everything ──────────────────────────────────────
+        if (searchValue === '') {
+            productItems.forEach(item => item.style.display = '');
+            allVariantItems.forEach(item => item.style.display = '');
+            clearSearchMessage();
+            return;
+        }
+
+        // ── Step 1: Filter product pills by name ───────────────────────────────
+        let visibleProductCount = 0;
+        let lastVisiblePill = null;
+
+        productItems.forEach(item => {
+            // Product name lives inside the pill's span.fw-bold
+            const nameEl = item.querySelector('span.fw-bold, span.text-gray-800');
+            const productName = (nameEl ? nameEl.getAttribute('title') || nameEl.textContent : '').toLowerCase();
+
+            // Also check if any variant inside this product's tab matches
+            const tabHref = item.querySelector('a[href]')?.getAttribute('href'); // e.g. #kt_pos_5
+            const tabId   = tabHref ? tabHref.replace('#', '') : null;
+            const tabPane = tabId ? document.getElementById(tabId) : null;
+            const variantsInTab = tabPane ? tabPane.querySelectorAll('.variant-item') : [];
+            const anyVariantMatches = Array.from(variantsInTab).some(v =>
+                (v.getAttribute('data-name') || '').includes(searchValue)
+            );
+
+            if (productName.includes(searchValue) || anyVariantMatches) {
+                item.style.display = '';
+                visibleProductCount++;
+                lastVisiblePill = item;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        // ── Step 2: Filter variant cards ───────────────────────────────────────
+        allVariantItems.forEach(item => {
+            const variantName = (item.getAttribute('data-name') || '').toLowerCase();
+            item.style.display = variantName.includes(searchValue) ? '' : 'none';
+        });
+
+        // ── Step 3: Auto-switch tab if only one product pill is visible ────────
+        if (visibleProductCount === 1 && lastVisiblePill) {
+            const pillLink = lastVisiblePill.querySelector('a[data-bs-toggle="pill"]');
+            if (pillLink) {
+                // Use Bootstrap's Tab API if available, otherwise simulate click
+                if (window.bootstrap && window.bootstrap.Tab) {
+                    bootstrap.Tab.getOrCreateInstance(pillLink).show();
+                } else {
+                    pillLink.click();
+                }
+            }
+        }
+
+        // ── Step 4: Show "no results" if nothing matched ───────────────────────
+        showSearchMessage(visibleProductCount === 0);
+    }
+
+    function clearSearchMessage() {
+        const msg = document.getElementById('pos-search-no-results');
+        if (msg) msg.remove();
+    }
+
+    function showSearchMessage(show) {
+        clearSearchMessage();
+        if (!show) return;
+        const container = document.getElementById('variantTabContent');
+        if (!container) return;
+        const div = document.createElement('div');
+        div.id = 'pos-search-no-results';
+        div.className = 'text-center py-10';
+        div.innerHTML = `
+            <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block"></i>
+            <span class="text-gray-500 fw-semibold fs-5">{{ __('pagination.no_products_match_search') }}</span>
+        `;
+        container.appendChild(div);
+    }
+
+    // Re-apply search when switching tabs (so variant filter stays consistent)
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.tab-pane').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function () {
+                const searchInput = document.getElementById('variantSearchInput');
+                if (searchInput && searchInput.value.trim()) {
+                    filterVariants(searchInput.value);
+                }
+            });
+        });
+
+        // Department filter
+        const departmentFilter = document.getElementById('departmentFilter');
+        if (departmentFilter) {
+            departmentFilter.addEventListener('change', function () {
+                const selectedDepartment = this.value;
+                let hasVisibleProducts = false;
+                const productList = document.getElementById('productList');
+                const tabContent  = document.getElementById('variantTabContent');
+                const searchInput = document.getElementById('variantSearchInput');
+
+                document.querySelectorAll('.product-item').forEach(function (item) {
+                    const itemDepartments = item.getAttribute('data-department').split(',');
+                    const matches = selectedDepartment === '' || itemDepartments.includes(selectedDepartment);
+
+                    item.style.display = matches ? '' : 'none';
+                    if (matches) hasVisibleProducts = true;
+
+                    // Also hide/show the corresponding tab pane and its variants
+                    const pillLink = item.querySelector('a[href]');
+                    const tabId   = pillLink ? pillLink.getAttribute('href').replace('#', '') : null;
+                    const tabPane = tabId ? document.getElementById(tabId) : null;
+                    if (tabPane) {
+                        tabPane.querySelectorAll('.variant-item').forEach(v => {
+                            v.style.display = matches ? '' : 'none';
+                        });
+                    }
+                });
+
+                // Remove old messages
+                productList.querySelector('.no-products-message')?.remove();
+                document.getElementById('pos-dept-no-variants')?.remove();
+
+                if (!hasVisibleProducts && selectedDepartment !== '') {
+                    // Lock and clear the search input
+                    if (searchInput) {
+                        searchInput.value = '';
+                        searchInput.disabled = true;
+                        searchInput.placeholder = '{{ __("pagination.no_products_in_department") }}';
+                    }
+
+                    // Message in pill list
+                    const msgPill = document.createElement('div');
+                    msgPill.className = 'card-header pt-5 no-products-message';
+                    msgPill.innerHTML = '<h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ __("pagination.no_products_in_department") }}</h3>';
+                    productList.appendChild(msgPill);
+
+                    // Message in tab content area
+                    if (tabContent) {
+                        const msgTab = document.createElement('div');
+                        msgTab.id = 'pos-dept-no-variants';
+                        msgTab.className = 'text-center py-10';
+                        msgTab.innerHTML = `
+                            <i class="ki-duotone ki-category fs-3x text-gray-400 mb-3 d-block">
+                                <span class="path1"></span><span class="path2"></span>
+                            </i>
+                            <span class="text-gray-500 fw-semibold fs-5">{{ __("pagination.no_products_in_department") }}</span>
+                        `;
+                        tabContent.appendChild(msgTab);
+                    }
+
+                    // Hide all tab panes so nothing bleeds through
+                    document.querySelectorAll('#variantTabContent .tab-pane').forEach(pane => {
+                        pane.style.display = 'none';
+                    });
+
+                } else {
+                    // Unlock search input and restore its placeholder
+                    if (searchInput) {
+                        searchInput.disabled = false;
+                        searchInput.placeholder = '{{ __("auth._search") }} {{ __("pagination._variants") }}';
+                        // If there was a live search term, re-apply it for the new department
+                        if (searchInput.value.trim()) {
+                            filterVariants(searchInput.value);
+                        }
+                    }
+
+                    // Restore tab pane visibility
+                    document.querySelectorAll('#variantTabContent .tab-pane').forEach(pane => {
+                        pane.style.display = '';
+                    });
+
+                    // If the currently active pill is now hidden, activate the first visible one
+                    const activePill = document.querySelector('.product-item a.active');
+                    const activeParent = activePill?.closest('.product-item');
+                    if (activeParent && activeParent.style.display === 'none') {
+                        const firstVisible = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
+                        if (firstVisible) {
+                            if (window.bootstrap && window.bootstrap.Tab) {
+                                bootstrap.Tab.getOrCreateInstance(firstVisible).show();
+                            } else {
+                                firstVisible.click();
+                            }
+                        }
+                    }
+                }
             });
         }
     });
@@ -328,7 +512,8 @@
                     const rate = parseFloat(tax.rate || 0);
 
                     if (tax.type === 'percentage') {
-                        taxAmount = itemSubtotal * rate;
+                        // Fix: Convert percentage to decimal
+                        taxAmount = itemSubtotal * (rate / 100);
                     } else {
                         taxAmount = rate * item.quantity;
                     }
@@ -351,12 +536,11 @@
                 (item.promotions || []).forEach(promo => {
                     let promoDiscount = 0;
                     if (promo.type === 'percentage') {
+                        // Fix: Convert percentage to decimal
                         promoDiscount = itemSubtotal * (promo.value / 100);
                     } else if (promo.type === 'fixed_amount') {
-                        // fixed per item = (price - value) * qty  (if value is a price override)
                         promoDiscount = (item.price - promo.value) * item.quantity;
                     } else if (promo.type === 'buy_x_get_y') {
-                        // Example: buy 2 get 1 free
                         promoDiscount = 0;
                     }
 
@@ -437,7 +621,11 @@
                 cartData.order_id = data.order_id; 
                 
                 // Open modal based on payment method
-                openPaymentModal(cartData);
+                if (typeof window.openPaymentModal === 'function') {
+                    window.openPaymentModal(cartData);
+                } else {
+                    console.error('openPaymentModal not found — check payment-scripts.blade.php is included');
+                }
                 
             } else {
                 // Show error toast from backend response
@@ -456,6 +644,672 @@
     }
 
 </script>
+
+
+{{--
+════════════════════════════════════════════════════════════════
+  payment-scripts.blade.php  —  JavaScript only, zero HTML
+  Must be included AFTER payment-modals.blade.php:
+
+    @include('partials.payment-modals')   ← HTML structures first
+    @include('partials.payment-scripts')  ← JS last
+════════════════════════════════════════════════════════════════
+--}}
+<script>
+    // ═══════════════════════════════════════════════════════════
+    // SHARED HELPERS
+    // currency_symbol() is a PHP helper — output once here as a
+    // JS string. Never call it as a JS function.
+    // ═══════════════════════════════════════════════════════════
+    var POS_CURRENCY_SYM = '{{ currency_symbol() }}';
+
+    function posFmt(n) {
+        return POS_CURRENCY_SYM + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+
+    // ═══════════════════════════════════════════════════════════
+    // RECEIPT GENERATOR
+    // Defined on window at the top level — NOT inside any IIFE —
+    // so processSplitPayments() can always call it after the
+    // hidden.bs.modal event fires.
+    // ═══════════════════════════════════════════════════════════
+    window.generateMultiPaymentReceipt = function (order) {
+        console.log('[Receipt] triggered ✓', order);
+
+        var g   = function (id) { return document.getElementById(id); };
+        var now = new Date();
+        var p2  = function (n) { return String(n).padStart(2, '0'); };
+
+        var date = p2(now.getDate()) + '/' + p2(now.getMonth() + 1) + '/' + now.getFullYear();
+        var time = p2(now.getHours()) + ':' + p2(now.getMinutes()) + ':' + p2(now.getSeconds());
+
+        var orderNo = order.ref || order.id || Math.floor(Math.random() * 900000 + 100000);
+
+        // ── Meta ─────────────────────────────────────────────
+        g('rcpt-order-no').textContent = '#' + orderNo;
+        g('rcpt-date').textContent     = date;
+        g('rcpt-time').textContent     = time;
+
+        // ── Customer ──────────────────────────────────────────
+        var custName = order.customer_name || (order.customer && order.customer.name) || 'GUEST';
+        g('rcpt-customer-banner').textContent = '👤 ' + String(custName).toUpperCase();
+
+        // ── Order type ────────────────────────────────────────
+        g('rcpt-order-type').textContent = String(order.order_type || order.type || 'SALE').toUpperCase();
+
+        // ── Table (optional) ──────────────────────────────────
+        if (order.table) {
+            g('rcpt-table-row').classList.remove('d-none');
+            g('rcpt-table').textContent = order.table;
+        } else {
+            g('rcpt-table-row').classList.add('d-none');
+        }
+
+        // ── Items ─────────────────────────────────────────────
+        var items     = order.items || order.cart_items || [];
+        var itemBody  = g('rcpt-items-body');
+        var itemCount = 0;
+
+        if (items.length) {
+            itemBody.innerHTML = items.map(function (item) {
+                var qty   = parseInt(item.quantity || item.qty || 1);
+                var price = parseFloat(item.price || item.unit_price || 0);
+                var total = parseFloat(item.total || item.subtotal || (qty * price));
+                itemCount += qty;
+                return '<tr>' +
+                    '<td class="rcpt-item-qty">' + qty + 'x</td>' +
+                    '<td class="rcpt-item-name">' + (item.name || item.product_name || 'Item') + '</td>' +
+                    '<td class="rcpt-item-price">' + posFmt(total) + '</td>' +
+                    '</tr>' +
+                    (item.note ? '<tr><td></td><td colspan="2" class="rcpt-item-sub">↳ ' + item.note + '</td></tr>' : '');
+            }).join('');
+        } else {
+            itemBody.innerHTML = '<tr><td colspan="3" style="color:#999;font-size:11px;text-align:center;">—</td></tr>';
+        }
+        g('rcpt-item-count').textContent = itemCount;
+
+        // ── Totals ────────────────────────────────────────────
+        var subtotal   = parseFloat(order.subtotal || order.total || 0);
+        var discount   = parseFloat(order.discount || 0);
+        var tax        = parseFloat(order.tax || 0);
+        var grandTotal = parseFloat(order.total || 0);
+
+        g('rcpt-subtotal').textContent    = posFmt(subtotal);
+        g('rcpt-grand-total').textContent = posFmt(grandTotal);
+
+        if (discount > 0) {
+            g('rcpt-discount-row').classList.remove('d-none');
+            g('rcpt-discount').textContent = '-' + posFmt(discount);
+        } else {
+            g('rcpt-discount-row').classList.add('d-none');
+        }
+
+        if (tax > 0) {
+            g('rcpt-tax-row').classList.remove('d-none');
+            g('rcpt-tax').textContent = posFmt(tax);
+        } else {
+            g('rcpt-tax-row').classList.add('d-none');
+        }
+
+        // ── Payment splits ────────────────────────────────────
+        var payments    = order.payments || [];
+        var payBody     = g('rcpt-payments-body');
+        var totalChange = parseFloat(order.total_change || 0);
+
+        if (payments.length) {
+            payBody.innerHTML = payments.map(function (p) {
+                var label = (p.method_name || p.type || 'Payment').toUpperCase();
+                var acct  = p.account_number ? ' (****' + String(p.account_number).slice(-4) + ')' : '';
+                var rows  = '<tr>' +
+                    '<td class="rcpt-pay-label">' + label + acct + '</td>' +
+                    '<td class="rcpt-pay-value">' + posFmt(p.tendered || p.amount) + '</td>' +
+                    '</tr>';
+                if (parseFloat(p.change || 0) > 0.005) {
+                    rows += '<tr>' +
+                        '<td class="rcpt-pay-label" style="padding-left:12px;color:#888;">↳ Applied</td>' +
+                        '<td class="rcpt-pay-value" style="color:#888;">' + posFmt(p.amount) + '</td>' +
+                        '</tr>';
+                }
+                if (p.transaction_reference) {
+                    rows += '<tr><td colspan="2" style="font-size:10px;color:#888;padding-left:12px;">Ref: ' + p.transaction_reference + '</td></tr>';
+                }
+                return rows;
+            }).join('');
+        } else {
+            payBody.innerHTML = '<tr>' +
+                '<td class="rcpt-pay-label">{{ strtoupper(__("pagination.paid")) }}</td>' +
+                '<td class="rcpt-pay-value">' + posFmt(grandTotal) + '</td>' +
+                '</tr>';
+        }
+
+        // ── Change due ────────────────────────────────────────
+        var changeBox = g('rcpt-change-box');
+        if (totalChange > 0.005) {
+            changeBox.classList.remove('d-none');
+            g('rcpt-change-value').textContent = posFmt(totalChange);
+        } else {
+            changeBox.classList.add('d-none');
+        }
+
+        // ── Barcode ───────────────────────────────────────────
+        var barcodeVal = String(orderNo).replace(/\D/g, '').padEnd(8, '0').slice(0, 12);
+        g('rcpt-barcode').textContent     = barcodeVal;
+        g('rcpt-barcode-num').textContent = barcodeVal;
+
+        // ── Open modal ────────────────────────────────────────
+        var receiptEl = document.getElementById('receiptModal');
+        if (!receiptEl) { console.error('[Receipt] #receiptModal not found in DOM'); return; }
+        bootstrap.Modal.getOrCreateInstance(receiptEl).show();
+    };
+
+    // Print button (delegated — safe if modal rerenders)
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('#rcpt-print-btn')) window.print();
+    });
+
+
+    // ═══════════════════════════════════════════════════════════
+    // PAYMENT MODAL LOGIC
+    // State (splitPayments, currentOrder) kept private via IIFE.
+    // Public API exposed on window: openPaymentModal, processSplitPayments
+    // ═══════════════════════════════════════════════════════════
+    (function () {
+
+        @if(isset($active_payment_methods))
+            window.activePaymentMethods = @json($globalPaymentMethods ?? []);
+        @endif
+
+        var SYM            = POS_CURRENCY_SYM;
+        var TYPES_WITH_REF = ['card', 'bank_account', 'mobile_money', 'digital_wallet', 'check', 'credit'];
+        var CASH_TYPES     = ['cash'];
+
+        var splitPayments = [];
+        var currentOrder  = null;
+
+        var g  = function (id)  { return document.getElementById(id); };
+        var qs = function (sel) { return document.querySelector(sel); };
+
+        function fmt(n) { return posFmt(n); }
+
+        // ── Helpers ───────────────────────────────────────────
+
+        function getRemainingRaw() {
+            var el = g('pm-remaining');
+            return el ? parseFloat(el.textContent.replace(/[^0-9.-]+/g, '')) || 0 : 0;
+        }
+
+        function updateRemainingHint(type) {
+            var hint = g('pm-remaining-hint-' + type);
+            if (hint) hint.textContent = '{{ __("pagination.remaining") }}: ' + fmt(getRemainingRaw());
+        }
+
+        function buildQuickAmounts(type) {
+            var container = g('pm-quick-' + type);
+            if (!container) return;
+            var remaining = getRemainingRaw();
+            if (remaining <= 0) {
+                container.innerHTML = '<span class="text-success fw-semibold fs-7">' +
+                    '<i class="ki-duotone ki-check-circle fs-4 me-1 text-success"><span class="path1"></span><span class="path2"></span></i>' +
+                    '{{ __("pagination.fully_paid") }}</span>';
+                return;
+            }
+            var presets = [parseFloat(remaining.toFixed(2))];
+            var rounds  = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+            for (var i = 0; i < rounds.length && presets.length < 7; i++) {
+                var rounded = Math.ceil(remaining / rounds[i]) * rounds[i];
+                if (rounded > remaining && rounded <= remaining * 5 && presets.indexOf(rounded) === -1) {
+                    presets.push(rounded);
+                }
+            }
+            presets.sort(function (a, b) { return a - b; });
+            container.innerHTML = presets.map(function (v) {
+                var isExact = Math.abs(v - remaining) < 0.005;
+                return '<button type="button" class="pm-quick-btn' + (isExact ? ' pm-exact' : '') + '"' +
+                    ' data-payment-type="' + type + '" data-quick-amount="' + v + '">' +
+                    (isExact ? '<span style="font-size:.7rem">✓ EXACT</span><br>' : '') +
+                    fmt(v) + '</button>';
+            }).join('');
+        }
+
+        function updateCashCalc(type) {
+            var amountEl  = g('pm-amount-' + type);
+            var calcWrap  = g('pm-cash-calc-' + type);
+            if (!amountEl || !calcWrap) return;
+            var isCash    = CASH_TYPES.indexOf(type) !== -1;
+            var tendered  = parseFloat(amountEl.value) || 0;
+            var remaining = getRemainingRaw();
+            if (!isCash || tendered <= 0) { calcWrap.classList.add('d-none'); return; }
+            calcWrap.classList.remove('d-none');
+            var change      = Math.max(0, tendered - remaining);
+            var isUnderpaid = tendered < remaining - 0.005;
+            var banner      = g('pm-change-banner-' + type);
+            var tenderedEl  = g('pm-tendered-' + type);
+            var changeEl    = g('pm-change-' + type);
+            if (tenderedEl) tenderedEl.textContent = fmt(tendered);
+            if (banner)     banner.classList.toggle('pm-underpaid', isUnderpaid);
+            if (changeEl)   changeEl.textContent   = isUnderpaid ? 'Short ' + fmt(remaining - tendered) : fmt(change);
+        }
+
+        function validateBtn(type) {
+            var account   = g('pm-account-' + type);
+            var amount    = g('pm-amount-' + type);
+            var btn       = g('pm-add-btn-' + type);
+            if (!account || !amount || !btn) return;
+            var tendered  = parseFloat(amount.value) || 0;
+            var remaining = getRemainingRaw();
+            var isCash    = CASH_TYPES.indexOf(type) !== -1;
+            var ok = account.value !== '' && tendered > 0 &&
+                    (isCash ? remaining > 0 : tendered <= remaining + 0.005);
+            btn.disabled = !ok;
+            btn.classList.toggle('btn-primary',   ok);
+            btn.classList.toggle('btn-secondary', !ok);
+        }
+
+        function toggleRef(type) {
+            var row = g('pm-ref-row-' + type);
+            if (!row) return;
+            var show = TYPES_WITH_REF.indexOf(type) !== -1;
+            row.classList.toggle('d-none', !show);
+            if (!show) { var inp = g('pm-ref-' + type); if (inp) inp.value = ''; }
+        }
+
+        function resetTab(type) {
+            [g('pm-account-' + type), g('pm-amount-' + type), g('pm-ref-' + type)]
+                .forEach(function (el) { if (el) el.value = ''; });
+            var calc = g('pm-cash-calc-' + type);
+            if (calc) calc.classList.add('d-none');
+            validateBtn(type);
+            buildQuickAmounts(type);
+            updateRemainingHint(type);
+        }
+
+        // ── Render splits table ───────────────────────────────
+
+        function renderTable() {
+            var tbody = g('pm-splits-body');
+            if (!tbody) return;
+            if (!splitPayments.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-12 text-muted">' +
+                    '<i class="ki-duotone ki-wallet fs-3x mb-3 d-block opacity-20"><span class="path1"></span><span class="path2"></span></i>' +
+                    '<div class="fs-6 fw-semibold">{{ __("pagination.no_payments_added") }}</div>' +
+                    '</td></tr>';
+                return;
+            }
+            tbody.innerHTML = splitPayments.map(function (p, i) {
+                return '<tr>' +
+                    '<td class="ps-6"><div class="d-flex align-items-center gap-3">' +
+                        '<span class="symbol symbol-35px symbol-circle"><span class="symbol-label bg-light-primary">' +
+                            '<i class="ki-duotone ' + getPaymentTypeIcon(p.type) + ' fs-3 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>' +
+                        '</span></span>' +
+                        '<div><div class="fw-bold text-gray-800">' + formatPaymentType(p.type) + '</div>' +
+                        '<small class="text-muted">' + p.method_name + '</small></div>' +
+                    '</div></td>' +
+                    '<td><span class="badge badge-light-primary fs-8">' + (p.account_number || 'N/A') + '</span>' +
+                        (p.transaction_ref ? '<small class="d-block text-muted mt-1">Ref: ' + p.transaction_ref + '</small>' : '') +
+                    '</td>' +
+                    '<td class="text-end fw-bold text-gray-600">' + fmt(p.tendered) + '</td>' +
+                    '<td class="text-end fw-bolder fs-5 text-gray-900">' + fmt(p.amount) + '</td>' +
+                    '<td class="text-end">' +
+                        (p.change > 0.005
+                            ? '<span class="badge badge-light-success fw-bold fs-7">' + fmt(p.change) + '</span>'
+                            : '<span class="text-muted fs-7">—</span>') +
+                    '</td>' +
+                    '<td class="text-end pe-6">' +
+                        '<button type="button" class="btn btn-sm btn-icon btn-light-danger pm-remove-btn" data-index="' + i + '">' +
+                            '<i class="ki-duotone ki-trash fs-3"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>' +
+                        '</button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+
+            var count = g('pm-splits-count');
+            if (count) count.textContent = splitPayments.length + ' {{ __("pagination.payments") }}';
+        }
+
+        // ── Update summary strip + footer totals ──────────────
+
+        function updateSummary() {
+            if (!currentOrder) return;
+            var totalApplied  = splitPayments.reduce(function (s, p) { return s + p.amount;   }, 0);
+            var totalTendered = splitPayments.reduce(function (s, p) { return s + p.tendered; }, 0);
+            var totalChange   = splitPayments.reduce(function (s, p) { return s + p.change;   }, 0);
+            var remaining     = Math.max(0, currentOrder.total - totalApplied);
+
+            g('pm-paid-amount').textContent = fmt(totalApplied);
+            g('pm-remaining').textContent   = fmt(remaining);
+
+            var wrap = g('pm-remaining-wrap'), remEl = g('pm-remaining');
+            if (wrap)  { wrap.classList.toggle('bg-light-danger',  remaining > 0.005); wrap.classList.toggle('bg-light-success', remaining <= 0.005); }
+            if (remEl) { remEl.classList.toggle('text-danger',     remaining > 0.005); remEl.classList.toggle('text-success',    remaining <= 0.005); }
+
+            var totTen = g('pm-total-tendered'), totApp = g('pm-splits-total'), totChg = g('pm-total-change');
+            if (totTen) totTen.textContent = totalTendered > 0 ? fmt(totalTendered) : '—';
+            if (totApp) totApp.textContent = fmt(totalApplied);
+            if (totChg) totChg.textContent = totalChange > 0.005 ? fmt(totalChange) : '—';
+
+            var pb = g('pm-process-btn');
+            if (pb) pb.disabled = !(splitPayments.length > 0 && remaining <= 0.005);
+
+            var activePane = qs('.tab-pane.active[data-payment-type]');
+            if (activePane) {
+                var t = activePane.dataset.paymentType;
+                validateBtn(t); buildQuickAmounts(t); updateRemainingHint(t);
+            }
+        }
+
+        // ── Add / remove payment ──────────────────────────────
+
+        function addPayment(type) {
+            var accountEl = g('pm-account-' + type);
+            var amountEl  = g('pm-amount-'  + type);
+            var refEl     = g('pm-ref-'     + type);
+            if (!accountEl || !amountEl) return;
+
+            var accountId = accountEl.value;
+            var tendered  = parseFloat(amountEl.value);
+            var ref       = refEl ? refEl.value.trim() : '';
+            var remaining = getRemainingRaw();
+            var isCash    = CASH_TYPES.indexOf(type) !== -1;
+
+            if (!accountId)                            { toastr.warning('{{ __("pagination.please_select_account") }}');      return; }
+            if (!tendered || tendered <= 0)            { toastr.warning('{{ __("pagination.please_enter_valid_amount") }}'); return; }
+            if (!isCash && tendered > remaining+0.005) { toastr.warning('{{ __("pagination.amount_exceeds_remaining") }}');  return; }
+            if (remaining <= 0)                        { toastr.warning('{{ __("pagination.order_already_paid") }}');         return; }
+
+            var applied = isCash ? Math.min(tendered, remaining) : tendered;
+            var change  = isCash ? Math.max(0, tendered - remaining) : 0;
+
+            var opt = accountEl.options[accountEl.selectedIndex];
+            var accountData = {};
+            try { accountData = JSON.parse(opt.dataset.account || '{}'); } catch (e) {}
+
+            splitPayments.push({
+                id:             Date.now() + Math.random(),
+                type:           type,
+                method_id:      accountId,
+                method_name:    accountData.name           || 'Unknown',
+                account_number: accountData.account_number || '',
+                tendered:       tendered,
+                amount:         applied,
+                change:         change,
+                transaction_ref: ref,
+                account_data:   accountData
+            });
+
+            renderTable();
+            updateSummary();
+            resetTab(type);
+
+            if (change > 0.005) {
+                toastr.info(
+                    '<strong>{{ __("pagination.change_due") }}: ' + fmt(change) + '</strong>',
+                    '{{ __("pagination.give_change_to_customer") }}',
+                    { timeOut: 6000 }
+                );
+            }
+            if (getRemainingRaw() <= 0.005) toastr.success('{{ __("pagination.payment_complete") }}');
+        }
+
+        function removePayment(index) {
+            splitPayments.splice(index, 1);
+            renderTable();
+            updateSummary();
+        }
+
+        // ── Public: open payment modal ────────────────────────
+
+        window.openPaymentModal = function (cartData) {
+            currentOrder        = cartData;
+            window.currentOrder = cartData;
+            splitPayments       = [];
+
+            g('pm-order-total').textContent = fmt(cartData.total);
+            g('pm-paid-amount').textContent = fmt(0);
+            g('pm-remaining').textContent   = fmt(cartData.total);
+
+            var refEl = g('pm-order-ref');
+            if (refEl) refEl.textContent = cartData.ref ? '#' + cartData.ref : '—';
+
+            // Reset all inputs
+            document.querySelectorAll('.pm-account-select').forEach(function (s) { s.value = ''; });
+            document.querySelectorAll('.pm-amount-input').forEach(function (i)   { i.value = ''; });
+            document.querySelectorAll('.pm-ref-input').forEach(function (i)      { i.value = ''; });
+            document.querySelectorAll('.pm-add-btn').forEach(function (b) {
+                b.disabled = true;
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-secondary');
+            });
+            document.querySelectorAll('[id^="pm-cash-calc-"]').forEach(function (el) { el.classList.add('d-none'); });
+
+            var pb = g('pm-process-btn'); if (pb) pb.disabled = true;
+
+            var wrap = g('pm-remaining-wrap'), remEl = g('pm-remaining');
+            if (wrap)  { wrap.classList.add('bg-light-danger');  wrap.classList.remove('bg-light-success'); }
+            if (remEl) { remEl.classList.add('text-danger');     remEl.classList.remove('text-success'); }
+
+            renderTable();
+
+            // AUTO-SELECT CASH TAB - Add this code
+            setTimeout(function() {
+                // Find the cash tab button
+                const cashTabButton = document.querySelector('#pm-tab-cash');
+                
+                if (cashTabButton) {
+                    // Method 1: Use Bootstrap's Tab API
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+                        const tab = new bootstrap.Tab(cashTabButton);
+                        tab.show();
+                    } 
+                    // Method 2: Manual activation if Bootstrap Tab API is not available
+                    else {
+                        // Remove active class from all tab buttons
+                        document.querySelectorAll('#pm-type-tabs .nav-link').forEach(tab => {
+                            tab.classList.remove('active');
+                        });
+                        
+                        // Remove active class from all panes
+                        document.querySelectorAll('.tab-pane').forEach(pane => {
+                            pane.classList.remove('show', 'active');
+                        });
+                        
+                        // Activate cash tab button
+                        cashTabButton.classList.add('active');
+                        
+                        // Activate cash pane
+                        const cashPane = document.getElementById('pm-pane-cash');
+                        if (cashPane) {
+                            cashPane.classList.add('show', 'active');
+                        }
+                        
+                        // Trigger custom event
+                        var event = new CustomEvent('shown.bs.tab', {
+                            detail: { target: cashTabButton }
+                        });
+                        document.dispatchEvent(event);
+                    }
+                    
+                    // Auto-focus the amount input and pre-fill with total
+                    setTimeout(function() {
+                        var amountInput = g('pm-amount-cash');
+                        if (amountInput && currentOrder && currentOrder.total) {
+                            // Pre-fill with the total amount
+                            // amountInput.value = currentOrder.total;
+                            // Trigger input event to update calculations
+                            amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            // Focus the input
+                            amountInput.focus();
+                            // Select all text for easy replacement
+                            amountInput.select();
+                        }
+                        
+                        // Also pre-select the first cash account if available
+                        // var cashSelect = g('pm-account-cash');
+                        // if (cashSelect && cashSelect.options.length > 1) {
+                        //     // Select the first non-empty option
+                        //     for (let i = 0; i < cashSelect.options.length; i++) {
+                        //         if (cashSelect.options[i].value) {
+                        //             cashSelect.selectedIndex = i;
+                        //             break;
+                        //         }
+                        //     }
+                        //     // Trigger change event to validate button
+                        //     cashSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        // }
+                    }, 300);
+                }
+                
+                // Set up the active tab for our custom functions
+                var ap = qs('.tab-pane.active[data-payment-type]');
+                if (ap) { 
+                    var t = ap.dataset.paymentType; 
+                    toggleRef(t); 
+                    buildQuickAmounts(t); 
+                    updateRemainingHint(t); 
+                    
+                    // Enable the add button if amount is filled
+                    if (t === 'cash') {
+                        setTimeout(function() {
+                            validateBtn('cash');
+                        }, 350);
+                    }
+                }
+            }, 150);
+
+            bootstrap.Modal.getOrCreateInstance(g('paymentModal')).show();
+        };
+
+        // ── Public: process payment ───────────────────────────
+
+        window.processSplitPayments = function () {
+            if (!currentOrder)         { toastr.error('{{ __("pagination.no_order_found") }}');      return; }
+            if (!splitPayments.length) { toastr.warning('{{ __("pagination.no_payments_added") }}'); return; }
+
+            var totalApplied = splitPayments.reduce(function (s, p) { return s + p.amount; }, 0);
+            if (Math.abs(currentOrder.total - totalApplied) > 0.01) {
+                toastr.warning('{{ __("pagination.payment_total_mismatch") }}');
+                return;
+            }
+
+            var btn = g('pm-process-btn');
+            btn.setAttribute('data-kt-indicator', 'on');
+            btn.disabled = true;
+
+            var payload = Object.assign({}, currentOrder, {
+                payments: splitPayments.map(function (p) {
+                    return {
+                        payment_method_id:     p.method_id,
+                        amount:                p.amount,
+                        tendered:              p.tendered,
+                        change:                p.change,
+                        transaction_reference: p.transaction_ref,
+                        type:                  p.type,
+                        method_name:           p.method_name,
+                        account_number:        p.account_number
+                    };
+                }),
+                total_paid:      totalApplied,
+                total_tendered:  splitPayments.reduce(function (s, p) { return s + p.tendered; }, 0),
+                total_change:    splitPayments.reduce(function (s, p) { return s + p.change;   }, 0),
+                payment_methods: splitPayments.map(function (p) { return p.type; }).join(', ')
+            });
+
+            fetch('/orders/process-split-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.removeAttribute('data-kt-indicator');
+                btn.disabled = false;
+
+                if (data.success) {
+                    toastr.success(data.message || '{{ __("pagination.payment_completed") }}');
+
+                    // Store receipt data
+                    const receiptData = data.order;
+
+                    // 1. Grab the payment modal instance
+                    const payModal = bootstrap.Modal.getInstance(g('paymentModal'));
+
+                    // 2. Listen for when it FULLY finishes hiding, THEN open receipt
+                    g('paymentModal').addEventListener('hidden.bs.modal', function onHidden() {
+                        // Remove listener so it doesn't fire again next time
+                        g('paymentModal').removeEventListener('hidden.bs.modal', onHidden);
+
+                        // 3. Now safe to open receipt with the full data
+                        if (typeof window.generateMultiPaymentReceipt === 'function') {
+                            window.generateMultiPaymentReceipt(receiptData);
+                        } else {
+                            console.error('generateMultiPaymentReceipt function not found');
+                            // Fallback
+                            generateMultiPaymentReceipt(receiptData);
+                        }
+                    });
+
+                    // 4. Hide payment modal (triggers the listener above)
+                    payModal.hide();
+
+                    // 5. Clear cart immediately
+                    if (typeof clearCart === 'function') clearCart();
+
+                } else {
+                    toastr.error(data.message || '{{ __("pagination.payment_failed") }}');
+                }
+            })
+            .catch(function (err) {
+                btn.removeAttribute('data-kt-indicator');
+                btn.disabled = false;
+                toastr.error('{{ __("pagination.payment_error") }}');
+                console.error('Payment error:', err);
+            });
+        };
+
+        // ── Delegated event listeners ─────────────────────────
+
+        document.addEventListener('click', function (e) {
+            // Quick preset button
+            var qb = e.target.closest('.pm-quick-btn');
+            if (qb) {
+                var inp = g('pm-amount-' + qb.dataset.paymentType);
+                if (inp) { inp.value = qb.dataset.quickAmount; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.focus(); }
+                return;
+            }
+            // Add payment
+            var addBtn = e.target.closest('.pm-add-btn');
+            if (addBtn && !addBtn.disabled) { addPayment(addBtn.dataset.paymentType); return; }
+            // Remove payment
+            var remBtn = e.target.closest('.pm-remove-btn');
+            if (remBtn) { removePayment(parseInt(remBtn.dataset.index, 10)); return; }
+            // Process button
+            if (e.target.closest('#pm-process-btn')) window.processSplitPayments();
+        });
+
+        document.addEventListener('change', function (e) {
+            var sel = e.target.closest('.pm-account-select');
+            if (sel) validateBtn(sel.dataset.paymentType);
+        });
+
+        document.addEventListener('input', function (e) {
+            var inp = e.target.closest('.pm-amount-input');
+            if (!inp) return;
+            validateBtn(inp.dataset.paymentType);
+            updateCashCalc(inp.dataset.paymentType);
+        });
+
+        document.addEventListener('shown.bs.tab', function (e) {
+            var type = e.target.dataset.paymentType;
+            if (!type) return;
+            toggleRef(type); buildQuickAmounts(type); validateBtn(type); updateRemainingHint(type);
+        });
+
+    })();
+</script>
+
 <script>
     function getPaymentTypeColor(type) {
         const colors = {
@@ -495,526 +1349,6 @@
 
 
 
-
-
-<!-- Complete Orders -->
-
-
-<script>
-
-    function printOrder(orderId) {
-        console.log('Printing order:', orderId);
-        
-        const printElement = document.getElementById('printableOrder' + orderId);
-        
-        if (!printElement) {
-            console.error('Print element not found for order ID:', orderId);
-            toastr.error('Print content not found for this order.');
-            return;
-        }
-        
-        const printContent = printElement.innerHTML;
-        const printWindow = window.open('', '_blank', 'width=1000,height=800,scrollbars=yes');
-        
-        if (!printWindow) {
-            toastr.warning('Please allow popups to print this order.');
-            return;
-        }
-        
-        // Create an enhanced print document with Metronic-inspired styling
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <title>Invoice - Order #${orderId}</title>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    /* Metronic Color Palette */
-                    :root {
-                        --kt-primary: #009ef7;
-                        --kt-primary-light: #f1faff;
-                        --kt-success: #50cd89;
-                        --kt-success-light: #e8fff3;
-                        --kt-danger: #f1416c;
-                        --kt-danger-light: #fff5f8;
-                        --kt-warning: #ffc700;
-                        --kt-info: #7239ea;
-                        --kt-dark: #181c32;
-                        --kt-gray-100: #f9f9f9;
-                        --kt-gray-200: #f1f1f2;
-                        --kt-gray-300: #e4e6ef;
-                        --kt-gray-400: #b5b5c3;
-                        --kt-gray-500: #a1a5b7;
-                        --kt-gray-600: #7e8299;
-                        --kt-gray-700: #5e6278;
-                        --kt-gray-800: #3f4254;
-                    }
-                    
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    body {
-                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        line-height: 1.6;
-                        color: var(--kt-dark);
-                        background: #ffffff;
-                        padding: 30px 20px;
-                    }
-                    
-                    .invoice-container {
-                        max-width: 900px;
-                        margin: 0 auto;
-                        background: white;
-                        box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
-                        border-radius: 12px;
-                        overflow: hidden;
-                    }
-                    
-                    /* Header Section */
-                    .invoice-header {
-                        background: linear-gradient(135deg, var(--kt-primary) 0%, #0095e8 100%);
-                        color: white;
-                        padding: 40px;
-                        position: relative;
-                        overflow: hidden;
-                    }
-                    
-                    .invoice-header::before {
-                        content: '';
-                        position: absolute;
-                        top: -50%;
-                        right: -10%;
-                        width: 400px;
-                        height: 400px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 50%;
-                    }
-                    
-                    .header-content {
-                        position: relative;
-                        z-index: 1;
-                    }
-                    
-                    .invoice-title {
-                        font-size: 32px;
-                        font-weight: 700;
-                        margin-bottom: 8px;
-                        letter-spacing: -0.5px;
-                    }
-                    
-                    .invoice-subtitle {
-                        font-size: 18px;
-                        font-weight: 500;
-                        opacity: 0.95;
-                    }
-                    
-                    /* Main Content */
-                    .invoice-body {
-                        padding: 40px;
-                    }
-                    
-                    /* Info Grid */
-                    .info-grid {
-                        display: grid;
-                        grid-template-columns: repeat(2, 1fr);
-                        gap: 30px;
-                        margin-bottom: 35px;
-                        padding-bottom: 30px;
-                        border-bottom: 2px dashed var(--kt-gray-300);
-                    }
-                    
-                    .info-card {
-                        background: var(--kt-gray-100);
-                        border-radius: 8px;
-                        padding: 20px;
-                        border-left: 4px solid var(--kt-primary);
-                    }
-                    
-                    .info-label {
-                        color: var(--kt-gray-600);
-                        font-size: 12px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        margin-bottom: 6px;
-                    }
-                    
-                    .info-value {
-                        color: var(--kt-dark);
-                        font-size: 15px;
-                        font-weight: 600;
-                        margin-bottom: 12px;
-                    }
-                    
-                    .info-value:last-child {
-                        margin-bottom: 0;
-                    }
-                    
-                    /* Payment Section */
-                    .payment-section {
-                        background: linear-gradient(135deg, var(--kt-success-light) 0%, #d4f8e8 100%);
-                        border: 1px solid rgba(80, 205, 137, 0.3);
-                        border-radius: 10px;
-                        padding: 25px;
-                        margin-bottom: 35px;
-                    }
-                    
-                    .payment-header {
-                        display: flex;
-                        align-items: center;
-                        margin-bottom: 20px;
-                        padding-bottom: 15px;
-                        border-bottom: 1px dashed rgba(80, 205, 137, 0.3);
-                    }
-                    
-                    .payment-icon {
-                        width: 40px;
-                        height: 40px;
-                        background: var(--kt-success);
-                        border-radius: 8px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        margin-right: 12px;
-                        color: white;
-                        font-weight: 700;
-                        font-size: 18px;
-                    }
-                    
-                    .payment-title {
-                        color: var(--kt-dark);
-                        font-size: 18px;
-                        font-weight: 700;
-                    }
-                    
-                    .payment-grid {
-                        display: grid;
-                        grid-template-columns: repeat(3, 1fr);
-                        gap: 20px;
-                    }
-                    
-                    .payment-item {
-                        background: white;
-                        border-radius: 6px;
-                        padding: 15px;
-                    }
-                    
-                    .payment-label {
-                        color: var(--kt-gray-600);
-                        font-size: 11px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                        margin-bottom: 4px;
-                    }
-                    
-                    .payment-value {
-                        color: var(--kt-dark);
-                        font-size: 14px;
-                        font-weight: 700;
-                    }
-                    
-                    .payment-type-badge {
-                        display: inline-block;
-                        background: var(--kt-success);
-                        color: white;
-                        padding: 4px 10px;
-                        border-radius: 4px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                    }
-                    
-                    /* Items Table */
-                    .items-section {
-                        margin-bottom: 35px;
-                    }
-                    
-                    .section-title {
-                        color: var(--kt-dark);
-                        font-size: 18px;
-                        font-weight: 700;
-                        margin-bottom: 20px;
-                        display: flex;
-                        align-items: center;
-                    }
-                    
-                    .section-title::before {
-                        content: '';
-                        width: 4px;
-                        height: 24px;
-                        background: var(--kt-primary);
-                        border-radius: 2px;
-                        margin-right: 12px;
-                    }
-                    
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        background: white;
-                        border-radius: 8px;
-                        overflow: hidden;
-                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-                    }
-                    
-                    thead {
-                        background: var(--kt-gray-100);
-                    }
-                    
-                    th {
-                        padding: 14px 12px;
-                        text-align: left;
-                        color: var(--kt-gray-700);
-                        font-weight: 700;
-                        font-size: 11px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        border-bottom: 2px solid var(--kt-gray-300);
-                    }
-                    
-                    td {
-                        padding: 14px 12px;
-                        color: var(--kt-dark);
-                        font-size: 13px;
-                        border-bottom: 1px solid var(--kt-gray-200);
-                    }
-                    
-                    tbody tr:last-child td {
-                        border-bottom: none;
-                    }
-                    
-                    tbody tr:hover {
-                        background: var(--kt-gray-100);
-                    }
-                    
-                    .text-center {
-                        text-align: center;
-                    }
-                    
-                    .text-right {
-                        text-align: right;
-                    }
-                    
-                    .item-name {
-                        font-weight: 600;
-                        color: var(--kt-dark);
-                    }
-                    
-                    .item-sku {
-                        background: var(--kt-primary-light);
-                        color: var(--kt-primary);
-                        padding: 3px 8px;
-                        border-radius: 4px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        display: inline-block;
-                    }
-                    
-                    /* Summary Section */
-                    .summary-section {
-                        display: flex;
-                        justify-content: flex-end;
-                    }
-                    
-                    .summary-box {
-                        width: 380px;
-                        background: var(--kt-gray-100);
-                        border-radius: 10px;
-                        padding: 25px;
-                        border: 1px solid var(--kt-gray-300);
-                    }
-                    
-                    .summary-row {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        padding: 10px 0;
-                    }
-                    
-                    .summary-row.total {
-                        border-top: 2px dashed var(--kt-gray-400);
-                        margin-top: 10px;
-                        padding-top: 15px;
-                    }
-                    
-                    .summary-label {
-                        color: var(--kt-gray-700);
-                        font-size: 13px;
-                        font-weight: 500;
-                    }
-                    
-                    .summary-value {
-                        font-weight: 700;
-                        font-size: 14px;
-                        color: var(--kt-dark);
-                    }
-                    
-                    .total .summary-label {
-                        font-size: 16px;
-                        font-weight: 700;
-                        color: var(--kt-dark);
-                    }
-                    
-                    .total .summary-value {
-                        font-size: 24px;
-                        color: var(--kt-primary);
-                    }
-                    
-                    .text-danger {
-                        color: var(--kt-danger) !important;
-                    }
-                    
-                    .text-success {
-                        color: var(--kt-success) !important;
-                    }
-                    
-                    /* Footer */
-                    .invoice-footer {
-                        background: var(--kt-gray-100);
-                        padding: 25px 40px;
-                        margin-top: 40px;
-                        text-align: center;
-                        color: var(--kt-gray-600);
-                        font-size: 13px;
-                    }
-                    
-                    .footer-thank-you {
-                        font-size: 16px;
-                        font-weight: 600;
-                        color: var(--kt-dark);
-                        margin-bottom: 8px;
-                    }
-                    
-                    /* Print Buttons */
-                    .print-actions {
-                        text-align: center;
-                        margin: 30px 0;
-                        padding: 0 40px;
-                    }
-                    
-                    .btn {
-                        display: inline-block;
-                        padding: 12px 28px;
-                        border: none;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        font-size: 14px;
-                        cursor: pointer;
-                        transition: all 0.3s ease;
-                        text-decoration: none;
-                        margin: 0 6px;
-                    }
-                    
-                    .btn-primary {
-                        background: var(--kt-primary);
-                        color: white;
-                        box-shadow: 0 4px 12px rgba(0, 158, 247, 0.3);
-                    }
-                    
-                    .btn-primary:hover {
-                        background: #0095e8;
-                        transform: translateY(-2px);
-                        box-shadow: 0 6px 16px rgba(0, 158, 247, 0.4);
-                    }
-                    
-                    .btn-secondary {
-                        background: var(--kt-gray-200);
-                        color: var(--kt-gray-700);
-                    }
-                    
-                    .btn-secondary:hover {
-                        background: var(--kt-gray-300);
-                        color: var(--kt-dark);
-                    }
-                    
-                    /* Print Styles */
-                    @media print {
-                        body {
-                            padding: 0;
-                            background: white;
-                        }
-                        
-                        .invoice-container {
-                            box-shadow: none;
-                            max-width: 100%;
-                        }
-                        
-                        .no-print {
-                            display: none !important;
-                        }
-                        
-                        .invoice-header {
-                            print-color-adjust: exact;
-                            -webkit-print-color-adjust: exact;
-                        }
-                        
-                        .payment-section {
-                            print-color-adjust: exact;
-                            -webkit-print-color-adjust: exact;
-                        }
-                        
-                        tbody tr:hover {
-                            background: transparent;
-                        }
-                    }
-                    
-                    @page {
-                        size: A4;
-                        margin: 15mm;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="invoice-container">
-                    ${printContent}
-                </div>
-                
-                <div class="print-actions no-print">
-                    <button class="btn btn-primary" onclick="window.print()">
-                        🖨️ Print Invoice
-                    </button>
-                    <button class="btn btn-secondary" onclick="window.close()">
-                        ✕ Close Window
-                    </button>
-                </div>
-                
-                <script>
-                    window.onload = function() {
-                        window.focus();
-                        // Uncomment to auto-print
-                        // setTimeout(() => window.print(), 300);
-                    };
-                <\/script>
-            </body>
-            </html>
-        `);
-        
-        printWindow.document.close();
-    }
-
-    // Initialize tooltips and toggle functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize Bootstrap tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-
-        // Handle toggle animation
-        const toggleButtons = document.querySelectorAll('.toggle-items');
-        toggleButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const target = document.querySelector(this.getAttribute('data-bs-target'));
-                if (target) {
-                    this.classList.toggle('collapsed');
-                }
-            });
-        });
-    });
-</script>
 
 
 <script>
