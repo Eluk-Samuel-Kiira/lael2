@@ -25,8 +25,89 @@ return [
     '_category_new' => 'New Category',
     'edit_category' => 'Edit Category',
     'category_id' => 'Category ID',
+
+    // Payment Modal
+    'process_payment' => 'Process Payment',
+    'payment_splits' => 'Payment Splits',
+    'add_payment' => 'Add Payment',
+    'payment_type' => 'Payment Type',
+    'totals' => 'Totals',
+    'no_order_found' => 'No Order Found',
+    'account' => 'Account',
+    'payments' => 'Payments',
+    'give_change_to_customer' => 'Give change to Customer',
+    'payments' => 'Payments',
+    'remaining' => 'Remaining',
+    'applied' => 'Applied',
+    'tendered' => 'Tendered',
+    'use_form_above_to_add' => 'Use the form above to add',
+    'amount' => 'Amount',
+    'paid_amount' => 'Paid Amount',
+    'remaining_balance' => 'Remaining Balance',
+    'total_paid' => 'Total Paid',
+    'no_payments_added' => 'No payments added yet',
+    'payment_total_mismatch' => 'Payment total does not match order total',
+    'payment_complete' => 'Payment complete! You can now process the order',
+    'transaction_reference' => 'Transaction Reference',
+    'transaction_reference_help' => 'Enter reference number for this transaction',
+    'enter_transaction_id' => 'Enter transaction ID',
+    'transaction_id_help' => 'For card, bank, or mobile money payments',
+    'add' => 'Add',
+    'complete_payment' => 'Complete Payment',
+    'processing' => 'Processing...',
+    'payment_completed' => 'Payment completed successfully',
+    'payment_failed' => 'Payment failed',
+    'payment_error' => 'An error occurred while processing payment',
+    
+    // Order Summary
+    'order_total' => 'Order Total',
+    'order_items' => 'Order Items',
+    'payment_details' => 'Payment Details',
+    'order_summary' => 'Order Summary',
+    
+    // Receipt
+    'payment_receipt' => 'Payment Receipt',
+    'print_receipt' => 'Print Receipt',
+    'close' => 'Close',
+    'thank_you_message' => 'Thank you for your business!',
+    
+    // Payment Types
+    'cash' => 'Cash',
+    'card' => 'Card',
+    'bank_account' => 'Bank Account',
+    'mobile_money' => 'Mobile Money',
+    'digital_wallet' => 'Digital Wallet',
+    'check' => 'Check',
+    'credit' => 'Credit',
+    'other' => 'Other',
+    
+    // Account Messages
+    'no_cash_accounts' => 'No cash accounts available',
+    'no_card_accounts' => 'No card accounts available',
+    'no_bank_accounts' => 'No bank accounts available',
+    'no_mobile_money_accounts' => 'No mobile money accounts available',
+    'no_digital_wallet_accounts' => 'No digital wallet accounts available',
+    'no_check_accounts' => 'No check accounts available',
+    'no_credit_accounts' => 'No credit accounts available',
+    'no_other_accounts' => 'No other payment accounts available',
+    'no_accounts_found' => 'No accounts found',
+    
+    // Selected Account Info
+    'selected_account' => 'Selected Account',
+    'account_name' => 'Account Name',
+    'account_number' => 'Account Number',
+    'account_holder' => 'Account Holder',
+    'provider' => 'Provider',
+    
+    // Cash Specific
+    'amount_tendered' => 'Amount Tendered',
+    'enter_amount_tendered' => 'Enter amount tendered',
+    'insufficient_amount' => 'Insufficient amount tendered',
+    'select_payment_method' => 'Please select a payment method',
     '_description' => 'Description',
     '_inventory' => 'Inventory',
+    'please_select_customer_type' => 'Please select the customer type',
+    'no_adjustment_needed' => 'No Adjustment Made   ',
     '_inventory_item' => 'Inventory Item',
     'store_inventory' => 'Store Inventory',
     'product_category' => 'Product Category',
@@ -119,6 +200,65 @@ return [
     'locations_index' => 'Locations Index',
 
     // POS
+    // Receipt Modal
+    'receipt' => 'RECEIPT',
+    'print' => 'Print',
+    'close' => 'Close',
+    
+    'no_products_match_search' => 'No products or variants match your search.',
+    'no_products_in_department' => 'No products in this department.',
+    'loading_amazing_things' => 'Loading amazing things...',
+    'preparing_dashboard' => 'Preparing dashboard...',
+    'fetching_data' => 'Fetching data...',
+    'almost_there' => 'Almost there...',
+    'making_it_pretty' => 'Making it pretty...',
+    'loading_magic' => 'Loading magic...',
+    'please_wait' => 'Please wait...',
+    'getting_ready' => 'Getting ready...',
+    
+    'network_error' => 'Network error occurred',
+    'page_not_found' => 'Page not found',
+    'error_loading_page' => 'Error loading page',
+    'go_back' => 'Go back',
+    'go_to_dashboard' => 'Go to dashboard',
+    'reload_page' => 'Reload page',
+    
+    // Store Info
+    'receipt_tagline' => 'YOUR SATISFACTION IS OUR PRIORITY',
+    
+    // Order Meta
+    'order' => 'Order',
+    'date' => 'Date',
+    'time' => 'Time',
+    'cashier' => 'Cashier',
+    'customer' => 'Customer',
+    'sale' => 'SALE',
+    
+    // Items Table
+    'qty' => 'Qty',
+    'item' => 'Item',
+    'price' => 'Price',
+    
+    // Totals
+    'subtotal' => 'Subtotal',
+    'discount' => 'Discount',
+    'tax' => 'Tax',
+    'total' => 'TOTAL',
+    
+    // Payment
+    'payment_methods' => 'Payment Methods',
+    'paid' => 'Paid',
+    'change_due' => 'CHANGE DUE',
+    
+    // Footer
+    'total_items' => 'Total Items',
+    'thank_you' => 'THANK YOU!',
+    'receipt_footer_message' => 'Please come again',
+    
+    // Additional
+    'walk_in_customer' => 'Walk-in Customer',
+    'order_number' => 'Order Number',
+
     'pos_index' => 'POS Index',
     '_pos' => 'Point Of Sale',
     '_orders' => 'Sale Orders',
@@ -139,6 +279,13 @@ return [
     'max_quantity_reached' => 'Maximum quantity reached',
     'sub_total' => 'Sub Total',
     '_discount' => 'Discount',
+    'payment_validation_failed' => 'Payment validation failed',
+    'payment_error' => 'Payment processing error',
+    'walk_in_customer' => 'Walk-in Customer',
+    'payment_method_not_found' => 'Payment method not found',
+    'payment_total_mismatch' => 'Payment total does not match order total',
+    'payment_completed' => 'Payment completed successfully',
+    'payment_failed' => 'Payment failed',
     'cart_cleared' => 'Cart Cleared',
     '_tax' => 'Tax',
     'grant_total' => 'Grand Total',
@@ -158,10 +305,9 @@ return [
     'cash_payment' => 'Cash Payment',
     'mobile_money_payment' => 'Mobile Money Payment',
     'card_payment' => 'Card Payment',
-    'payment_receipt' => 'Payment Receipt',
     'order_summary' => 'Order Summary',
     'total_amount' => 'Total Amount',
-    'amount_tendered' => 'Amount Tendered',
+    'fully_paid' => 'Fully Paid',
     'change_due' => 'Change Due',
     'enter_amount_tendered' => 'Enter amount tendered',
     'phone_number' => 'Phone Number',
@@ -366,7 +512,6 @@ return [
     'cash_details' => 'Cash Details',
     'complete_payment' => 'Complete Payment',
     'select_account' => 'Select Account',
-    'cash_payment' => 'Cash Payment',
     'mobile_money_payment' => 'Mobile Money Payment',
     'card_payment' => 'Card Payment',
     'bank_account_payment' => 'Bank Account Payment',

@@ -165,7 +165,6 @@ class CategoryController extends Controller
             'name' => $request->name,
             'description' => $request->description,
             'created_by' => $user->id,
-            // Don't update tenant_id
         ]);
 
         return response()->json([

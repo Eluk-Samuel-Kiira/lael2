@@ -55,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
                 'locations' => collect(),
                 'customers' => collect(),
                 'taxes' => collect(),
+                'globalPaymentMethods' => collect(),
                 'promotions' => collect(),
                 'suppliers' => collect(),
                 'chartOfAccounts' => collect(),
@@ -86,6 +87,12 @@ class AppServiceProvider extends ServiceProvider
                     'locations' => Location::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'customers' => Customer::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'taxes' => Tax::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
+                    'globalPaymentMethods' => PaymentMethod::where('tenant_id', $tenantId)
+                                    ->where('is_active', true)
+                                    ->orderBy('type')
+                                    ->orderBy('name')
+                                    ->get()
+                                    ->groupBy('type'),
                     'promotions' => Promotion::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'suppliers' => Supplier::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'expenseCategories' => ExpenseCategory::where('tenant_id', $tenantId)->where('is_active', 1)->orderBy('name')->get(),

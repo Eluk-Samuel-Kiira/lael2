@@ -102,13 +102,13 @@ class ProductVariantController extends Controller
         //                                     ->count();
         // $maxVariants = tenant_setting($tenantId, 'max_variants_per_product', 10); // Default to 10 if not set
 
-        if (($currentVariantCount + count($validated['variants'])) > $maxVariants) {
-            session()->flash('toast', [
-                'type' => 'error',
-                'message' => __('auth.maximum_variants_reached', ['max' => $maxVariants]),
-            ]);
-            return redirect()->back();
-        }
+        // if (($currentVariantCount + count($validated['variants'])) > $maxVariants) {
+        //     session()->flash('toast', [
+        //         'type' => 'error',
+        //         'message' => __('auth.maximum_variants_reached', ['max' => $maxVariants]),
+        //     ]);
+        //     return redirect()->back();
+        // }
 
         DB::beginTransaction();
 

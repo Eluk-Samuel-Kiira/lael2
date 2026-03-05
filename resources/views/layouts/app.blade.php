@@ -77,12 +77,12 @@
 							<a href="{{ route('dashboard') }}">
 								<img 
 									alt="Logo" 
-									src="{{ getLogoImage() }}" 
+									src="{{ getLogoImage() }}"
 									class="h-6 w-auto object-contain app-sidebar-logo-default" 
 									style="max-height: 44px;" 
 								/>
 
-								<img alt="Logo" src="assets/media/logos/default-small.svg" class="h-20px app-sidebar-logo-minimize" />
+								<img alt="Logo" src="{{ getFaviconImage() }}" class="h-30px app-sidebar-logo-minimize" />
 							</a>
 							{{-- 	
 							<h1 class="text-white font-bold text-lg app-sidebar-logo-default" style="font-size: 50px">

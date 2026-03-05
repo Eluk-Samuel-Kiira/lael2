@@ -167,50 +167,42 @@
 <script>
     // ==================== LOCALE MESSAGES ====================
     const loaderMessages = [
-        "Loading amazing things...",
-        "Preparing dashboard...",
-        "Fetching data...",
-        "Almost there...",
-        "Making it pretty...",
-        "Loading magic...",
-        "Please wait...",
-        "Getting ready..."
+        "{{ __('pagination.loading_amazing_things') }}",
+        "{{ __('pagination.preparing_dashboard') }}",
+        "{{ __('pagination.fetching_data') }}",
+        "{{ __('pagination.almost_there') }}",
+        "{{ __('pagination.making_it_pretty') }}",
+        "{{ __('pagination.loading_magic') }}",
+        "{{ __('pagination.please_wait') }}",
+        "{{ __('pagination.getting_ready') }}"
     ];
 
     const errorMessages = {
-        networkError: "Network error occurred",
-        pageNotFound: "Page not found",
-        errorLoading: "Error loading page",
-        goBack: "Go back",
-        goToDashboard: "Go to dashboard",
-        reloadPage: "Reload page"
+        networkError: "{{ __('pagination.network_error') }}",
+        pageNotFound: "{{ __('pagination.page_not_found') }}",
+        errorLoading: "{{ __('pagination.error_loading_page') }}",
+        goBack: "{{ __('pagination.go_back') }}",
+        goToDashboard: "{{ __('pagination.go_to_dashboard') }}",
+        reloadPage: "{{ __('loader.reload_page') }}"
     };
 
     // ==================== LOADER FUNCTIONS ====================
     let loaderTimeout;
 
     function showLoaderApp() {
-        // Clear any existing timeout
-        if (loaderTimeout) {
-            clearTimeout(loaderTimeout);
-        }
+        if (loaderTimeout) clearTimeout(loaderTimeout);
         
         const loader = document.getElementById('spaLoader');
         const circularLoader = document.getElementById('spaCircularLoader');
         const loaderText = document.getElementById('loaderText');
         const mainContent = document.getElementById('kt_app_main');
         
-        // Random message for circular loader
         const randomMessage = loaderMessages[Math.floor(Math.random() * loaderMessages.length)];
         if (loaderText) loaderText.textContent = randomMessage;
         
-        // Show top progress bar immediately
         loader.classList.add('active');
-        
-        // Add fade-out effect to content
         if (mainContent) mainContent.classList.add('fade-out');
         
-        // If loading takes more than 800ms, show circular loader
         loaderTimeout = setTimeout(() => {
             if (loader.classList.contains('active')) {
                 circularLoader.classList.add('active');
@@ -223,52 +215,28 @@
         const circularLoader = document.getElementById('spaCircularLoader');
         const mainContent = document.getElementById('kt_app_main');
         
-        // Clear timeout
-        if (loaderTimeout) {
-            clearTimeout(loaderTimeout);
-        }
-        
-        // Hide all loaders
+        if (loaderTimeout) clearTimeout(loaderTimeout);
         loader.classList.remove('active');
         circularLoader.classList.remove('active');
-        
-        // Remove fade-out effect
         if (mainContent) mainContent.classList.remove('fade-out');
     }
 
     // ==================== MOBILE MENU CLOSE FUNCTION ====================
     function closeMobileMenu() {
-        if (window.innerWidth <= 991.98) { // Mobile breakpoint
-            // Method 1: Use Metronic's KTApp if available
+        if (window.innerWidth <= 991.98) {
             if (window.KTApp && window.KTApp.hideMobileAside) {
                 window.KTApp.hideMobileAside();
                 return;
             }
-            
-            // Method 2: Find and click the mobile toggle button
             const mobileToggle = document.getElementById('kt_app_sidebar_mobile_toggle') || 
                                 document.querySelector('[data-kt-toggle="sidebar"]') ||
                                 document.querySelector('.aside-toggle');
-            
-            if (mobileToggle) {
-                mobileToggle.click();
-                return;
-            }
-            
-            // Method 3: Manual class removal as fallback
+            if (mobileToggle) { mobileToggle.click(); return; }
             const sidebar = document.querySelector('.app-sidebar');
             if (sidebar) {
-                sidebar.classList.remove('show');
-                sidebar.classList.remove('aside-open');
-                
-                // Remove overlay
+                sidebar.classList.remove('show', 'aside-open');
                 const overlay = document.querySelector('.aside-overlay');
-                if (overlay) {
-                    overlay.classList.remove('active');
-                    setTimeout(() => overlay.remove(), 100);
-                }
-                
-                // Reset body
+                if (overlay) { overlay.classList.remove('active'); setTimeout(() => overlay.remove(), 100); }
                 document.body.classList.remove('aside-open');
             }
         }
@@ -276,12 +244,10 @@
 
     // ==================== ACTIVE MENU TRACKING ====================
     function updateActiveMenuLink(url) {
-        // Remove active class from all menu links
         document.querySelectorAll('.menu-link').forEach(link => {
             link.classList.remove('active');
         });
 
-        // Find and activate the matching menu link
         let activeFound = false;
         
         document.querySelectorAll('.menu-link').forEach(link => {
@@ -291,8 +257,6 @@
             if (onclickAttr && (onclickAttr.includes(url) || (url === '/' && onclickAttr.includes('dashboard')))) {
                 link.classList.add('active');
                 activeFound = true;
-                
-                // Open all parent accordions
                 let parent = link.closest('.menu-item.menu-accordion');
                 while (parent) {
                     parent.classList.add('show', 'here');
@@ -303,7 +267,6 @@
             if (href && (href === url || (url === '/' && href.includes('dashboard')))) {
                 link.classList.add('active');
                 activeFound = true;
-                
                 let parent = link.closest('.menu-item.menu-accordion');
                 while (parent) {
                     parent.classList.add('show', 'here');
@@ -312,12 +275,10 @@
             }
         });
 
-        // Special handling for dashboard
         if (!activeFound && (url === '/' || url === '/dashboard')) {
             const dashboardLink = document.querySelector('[onclick*="dashboard"]');
             if (dashboardLink) {
                 dashboardLink.classList.add('active');
-                
                 let parent = dashboardLink.closest('.menu-item.menu-accordion');
                 while (parent) {
                     parent.classList.add('show', 'here');
@@ -331,29 +292,20 @@
     function show404Page() {
         const mainContent = document.getElementById('kt_app_main');
         if (!mainContent) return;
-
         const currentUrl = window.location.pathname;
-        
         mainContent.innerHTML = `
             <div class="error-404-page">
                 <div class="error-404-content">
-                    <div class="error-404-icon">
-                        <i class="ki-duotone ki-information fs-10x"></i>
-                    </div>
+                    <div class="error-404-icon"><i class="ki-duotone ki-information fs-10x"></i></div>
                     <h1 class="error-404-title">404</h1>
                     <h2 class="error-404-subtitle">${errorMessages.pageNotFound}</h2>
-                    <p class="error-404-text">
-                        ${errorMessages.errorLoading}<br>
-                        <code>${currentUrl}</code>
-                    </p>
+                    <p class="error-404-text">${errorMessages.errorLoading}<br><code>${currentUrl}</code></p>
                     <div class="error-404-actions">
                         <a href="javascript:void(0);" onclick="window.history.back()" class="btn btn-light">
-                            <i class="ki-duotone ki-arrow-left fs-2"></i>
-                            ${errorMessages.goBack}
+                            <i class="ki-duotone ki-arrow-left fs-2"></i> ${errorMessages.goBack}
                         </a>
                         <a href="javascript:void(0);" onclick="reloadToApp('/dashboard')" class="btn btn-primary">
-                            <i class="ki-duotone ki-home fs-2"></i>
-                            ${errorMessages.goToDashboard}
+                            <i class="ki-duotone ki-home fs-2"></i> ${errorMessages.goToDashboard}
                         </a>
                     </div>
                 </div>
@@ -364,22 +316,11 @@
 
     // ==================== NAVIGATION FUNCTIONS ====================
     function navigateToAppPages(url, event) {
-        // Prevent default if event exists
-        if (event) {
-            event.preventDefault();
-        }
-        
-        // Close mobile menu immediately when navigating
+        if (event) event.preventDefault();
         closeMobileMenu();
-        
-        // Only show loader for SPA navigation
-        if (!window.__INITIAL_LOAD__) {
-            showLoaderApp();
-        }
+        showLoaderApp();
 
-        fetch(url, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 404) throw new Error('404');
@@ -389,24 +330,17 @@
         })
         .then(data => {
             history.pushState({ url: url }, null, url);
-
             const parser = new DOMParser();
             const doc = parser.parseFromString(data, 'text/html');
             const ktAppMain = doc.getElementById('kt_app_main');
-
             if (ktAppMain) {
                 const titleMatch = data.match(/<title>(.*?)<\/title>/i);
                 document.title = titleMatch ? titleMatch[1] : 'Default Title';
                 document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
-                
-                // Update active menu
-                setTimeout(() => {
-                    updateActiveMenuLink(url);
-                }, 100);
+                setTimeout(() => updateActiveMenuLink(url), 100);
             } else {
                 show404Page();
             }
-
             hideLoaderApp();
         })
         .catch(error => {
@@ -417,14 +351,11 @@
                 document.getElementById('kt_app_main').innerHTML = `
                     <div class="error-404-page">
                         <div class="error-404-content">
-                            <div class="error-404-icon">
-                                <i class="ki-duotone ki-information fs-10x text-warning"></i>
-                            </div>
+                            <div class="error-404-icon"><i class="ki-duotone ki-information fs-10x text-warning"></i></div>
                             <h2 class="error-404-subtitle">${errorMessages.errorLoading}</h2>
                             <p class="error-404-text">${error.message}</p>
                             <button onclick="location.reload()" class="btn btn-primary">
-                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i>
-                                ${errorMessages.reloadPage}
+                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i> ${errorMessages.reloadPage}
                             </button>
                         </div>
                     </div>
@@ -437,18 +368,10 @@
     function renderAppPage(url) {
         const pageContent = document.getElementById('kt_app_main');
         if (!pageContent) return;
-
-        // Close mobile menu immediately when navigating
         closeMobileMenu();
+        showLoaderApp();
 
-        // Only show loader for SPA navigation
-        if (!window.__INITIAL_LOAD__) {
-            showLoaderApp();
-        }
-
-        fetch(url, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(response => {
             if (!response.ok) {
                 if (response.status === 404) throw new Error('404');
@@ -460,20 +383,14 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(data, 'text/html');
             const ktAppMain = doc.getElementById('kt_app_main');
-
             if (ktAppMain) {
                 const titleMatch = data.match(/<title>(.*?)<\/title>/i);
                 document.title = titleMatch ? titleMatch[1] : 'Default Title';
                 pageContent.innerHTML = ktAppMain.innerHTML;
-                
-                // Update active menu
-                setTimeout(() => {
-                    updateActiveMenuLink(url);
-                }, 100);
+                setTimeout(() => updateActiveMenuLink(url), 100);
             } else {
                 show404Page();
             }
-
             hideLoaderApp();
         })
         .catch(error => {
@@ -484,14 +401,11 @@
                 pageContent.innerHTML = `
                     <div class="error-404-page">
                         <div class="error-404-content">
-                            <div class="error-404-icon">
-                                <i class="ki-duotone ki-information fs-10x text-warning"></i>
-                            </div>
+                            <div class="error-404-icon"><i class="ki-duotone ki-information fs-10x text-warning"></i></div>
                             <h2 class="error-404-subtitle">${errorMessages.errorLoading}</h2>
                             <p class="error-404-text">${error.message}</p>
                             <button onclick="location.reload()" class="btn btn-primary">
-                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i>
-                                ${errorMessages.reloadPage}
+                                <i class="ki-duotone ki-arrow-circle-left fs-2"></i> ${errorMessages.reloadPage}
                             </button>
                         </div>
                     </div>
@@ -506,13 +420,7 @@
     }
 
     // ==================== EVENT LISTENERS ====================
-    
-    // Mark initial page load
-    window.__INITIAL_LOAD__ = true;
-
-    // Handle back/forward navigation
     window.addEventListener('popstate', (event) => {
-        window.__INITIAL_LOAD__ = false; // This is SPA navigation
         if (event.state && event.state.url) {
             renderAppPage(event.state.url);
         } else {
@@ -520,14 +428,9 @@
         }
     });
 
-    // Intercept all clicks on menu links
     document.addEventListener('click', (e) => {
         const menuLink = e.target.closest('.menu-link');
         if (menuLink && menuLink.getAttribute('onclick')) {
-            // This is SPA navigation
-            window.__INITIAL_LOAD__ = false;
-            
-            // Extract URL from onclick attribute
             const onclickAttr = menuLink.getAttribute('onclick');
             const urlMatch = onclickAttr.match(/'([^']+)'/);
             if (urlMatch && urlMatch[1]) {
@@ -537,14 +440,9 @@
         }
     });
 
-    // Also handle submenu items
     document.addEventListener('click', (e) => {
         const submenuLink = e.target.closest('.menu-sub .menu-link');
         if (submenuLink && submenuLink.getAttribute('onclick')) {
-            // This is SPA navigation from submenu
-            window.__INITIAL_LOAD__ = false;
-            
-            // Extract URL from onclick attribute
             const onclickAttr = submenuLink.getAttribute('onclick');
             const urlMatch = onclickAttr.match(/'([^']+)'/);
             if (urlMatch && urlMatch[1]) {
@@ -554,35 +452,12 @@
         }
     });
 
-    // Initial load - DON'T show loader
+    // ← FIX: On initial load, just highlight the active menu link.
+    //         Do NOT re-fetch and re-inject innerHTML — the page already
+    //         has the correct HTML. Re-injecting it was wiping the cart tbody
+    //         right after the first item was added.
     document.addEventListener('DOMContentLoaded', () => {
-        // Set flag to prevent loader on initial load
-        window.__INITIAL_LOAD__ = true;
-        
-        // Load initial content without loader
-        fetch(window.location.pathname, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(response => response.text())
-        .then(data => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(data, 'text/html');
-            const ktAppMain = doc.getElementById('kt_app_main');
-            
-            if (ktAppMain) {
-                document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
-                
-                // Update active menu
-                setTimeout(() => {
-                    updateActiveMenuLink(window.location.pathname);
-                }, 100);
-            }
-            
-            // Initial load complete
-            setTimeout(() => {
-                window.__INITIAL_LOAD__ = false;
-            }, 500);
-        });
+        updateActiveMenuLink(window.location.pathname);
     });
 </script>
  
@@ -1265,6 +1140,49 @@
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
 </script>
+
+<!-- Product Category  -->
+ <script>
+    function submitProductCategoryForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+        const form = document.getElementById(formId);
+        const submitButton = document.getElementById(submitButtonId);
+
+        if (!form || !submitButton) {
+            console.error('Form or button not found:', formId, submitButtonId);
+            return;
+        }
+
+        // Collect form data
+        const formData = Object.fromEntries(new FormData(form));
+        formData._method = method;
+        formData.routeName = url;
+
+        // Start loading
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        // Pass handling + data to reusable handler
+        handleFormSubmission(formData, submitButton, discardButtonId);
+    }
+
+    function editProductCategoryInstanceLoop(uniqueId) {
+        const submitButton = document.getElementById('editProductCategoryButton' + uniqueId);
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        // Select the form and create FormData from it
+        var form = document.getElementById('kt_ecommerce_edit_product_category_form' + uniqueId);
+        var formData = new FormData(form);
+
+        var data = Object.fromEntries(formData.entries());
+        // console.log(data);
+
+        // Set up the URL dynamically
+        var updateUrl = '{{ route('product-category.update', ['product_category' => ':id']) }}'.replace(':id', uniqueId);
+        
+        // Submit form data asynchronously
+        handleEditResponse(data, updateUrl, uniqueId, submitButton);
+
+    }
+ </script>
 
 
 

@@ -103,20 +103,20 @@ const LiveBladeResponse = {
             icon: 'error',        // Error icon
             title: `<span style="color: red;">${swalMessage}</span>`,       // The message to display
             showConfirmButton: false,
-            timer: 5000,          // Auto close after 5 seconds
+            timer: 2000,          // Auto close after 5 seconds
             timerProgressBar: true, // Show a progress bar
             customClass: {
                 popup: 'swal2-show', // Adds a fade-in effect for the popup
             }
         });
 
-        const statusDiv = document.getElementById('status');
-        statusDiv.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+        // const statusDiv = document.getElementById('status');
+        // statusDiv.innerHTML = `<div class="alert alert-danger">${message}</div>`;
         
-        // Optionally, remove the message after a few seconds
-        setTimeout(() => {
-            statusDiv.innerHTML = '';
-        }, 5000);
+        // // Optionally, remove the message after a few seconds
+        // setTimeout(() => {
+        //     statusDiv.innerHTML = '';
+        // }, 2000);
     },
     
 
@@ -133,7 +133,7 @@ const LiveBladeResponse = {
             icon: 'success',      // Success icon
             title: `<span style="color: green;">${swalMessage}</span>`,       // The message to display
             showConfirmButton: false,
-            timer: 5000,          // Auto close after 5 seconds
+            timer: 2000,          // Auto close after 5 seconds
             timerProgressBar: true, // Show a progress bar
             customClass: {
                 popup: 'swal2-show', // Adds a fade-in effect for the popup
@@ -141,15 +141,15 @@ const LiveBladeResponse = {
         });
 
         // Incase swal fire is not called
-        const statusDiv = document.getElementById('status');
-        if (statusDiv) {
-            statusDiv.innerHTML = `<div class="alert alert-success">${swalMessage}</div>`;
-        }
+        // const statusDiv = document.getElementById('status');
+        // if (statusDiv) {
+        //     statusDiv.innerHTML = `<div class="alert alert-success">${swalMessage}</div>`;
+        // }
         
-        // Optionally, remove the message after a few seconds
-        setTimeout(() => {
-            statusDiv.innerHTML = '';
-        }, 5000); 
+        // // Optionally, remove the message after a few seconds
+        // setTimeout(() => {
+        //     statusDiv.innerHTML = '';
+        // }, 2000); 
     },
     
 
@@ -229,7 +229,7 @@ const LiveBladeResponse = {
             icon: 'error',        // Error icon
             title: `<span style="color: red;">${swalMessage}</span>`,       // The message to display
             showConfirmButton: false,
-            timer: 5000,          // Auto close after 5 seconds
+            timer: 2000,          // Auto close after 5 seconds
             timerProgressBar: true, // Show a progress bar
             customClass: {
                 popup: 'swal2-show', // Adds a fade-in effect for the popup

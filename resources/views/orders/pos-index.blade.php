@@ -35,7 +35,7 @@
                 <div class="px-3 px-md-7 py-3 py-md-5 w-100 w-md-auto">
                     <input type="text" id="variantSearchInput" class="form-control" 
                         placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
-                        onkeyup="filterVariants(this.value)">
+                        onkeyup="filterProductsAndVariants(this.value)">
                 </div>
 
                 <!-- Department Filter -->

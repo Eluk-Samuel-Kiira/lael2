@@ -691,6 +691,7 @@ if (!function_exists('getSetting')) {
 
 
 
+
 if (!function_exists('getUIOptions')) {
     /**
      * Get UI configuration settings
@@ -706,22 +707,46 @@ if (!function_exists('getUIOptions')) {
         // UI-specific keys
         $uiKeys = [
             'app_name', 'favicon', 'logo', 'menu_nav_color', 
-            'font_family', 'font_size', 'locale', 'currency'
+            'font_family', 'font_size', 'locale', 'currency',
+            'app_contact', 'app_address', 'app_city', 'app_phone', 'app_email'
         ];
         
         // Default values for UI settings
         $defaults = [
-            'app_name' => 'LAEL POS',
+            'app_name' => 'STAR POS',
             'font_family' => 'Inter, sans-serif',
             'font_size' => '1',
             'menu_nav_color' => '#1e1e2d',
             'locale' => 'en',
             'currency' => 'USD',
+            'app_contact' => '',
+            'app_address' => '',
+            'app_city' => '',
+            'app_phone' => '',
+            'app_email' => '',
         ];
         
         // If specific key requested and it's a UI key
         if ($key && in_array($key, $uiKeys)) {
-            return getSetting($key, $defaults[$key] ?? null, $tenantId);
+            $value = getSetting($key, null, $tenantId);
+            
+            // Handle null or non-string values
+            if (is_null($value)) {
+                return $defaults[$key] ?? null;
+            }
+            
+            // If it's an array or object, convert to string or return default
+            if (is_array($value) || is_object($value)) {
+                // Try to get first element if it's an array
+                if (is_array($value) && !empty($value)) {
+                    $firstValue = reset($value);
+                    return is_string($firstValue) ? $firstValue : ($defaults[$key] ?? '');
+                }
+                return $defaults[$key] ?? '';
+            }
+            
+            // Ensure we return a string
+            return (string) $value;
         }
         
         // Return all UI settings
@@ -729,7 +754,22 @@ if (!function_exists('getUIOptions')) {
         $uiSettings = [];
         
         foreach ($uiKeys as $uiKey) {
-            $uiSettings[$uiKey] = $settings[$uiKey] ?? $defaults[$uiKey] ?? null;
+            $value = $settings[$uiKey] ?? null;
+            
+            // Handle null or non-string values
+            if (is_null($value)) {
+                $uiSettings[$uiKey] = $defaults[$uiKey] ?? null;
+            } elseif (is_array($value) || is_object($value)) {
+                // If it's an array, try to get first element
+                if (is_array($value) && !empty($value)) {
+                    $firstValue = reset($value);
+                    $uiSettings[$uiKey] = is_string($firstValue) ? $firstValue : ($defaults[$uiKey] ?? '');
+                } else {
+                    $uiSettings[$uiKey] = $defaults[$uiKey] ?? '';
+                }
+            } else {
+                $uiSettings[$uiKey] = (string) $value;
+            }
         }
         
         return $uiSettings;
@@ -820,6 +860,7 @@ if (!function_exists('appDefaultName')) {
             $setting = Setting::where('tenant_id', $tenantId)->first();
             
             if ($setting && !empty($setting->app_name)) {
+                \Log::info($setting->app_name);
                 // Extract the first word from the app_name
                 $firstWord = explode(' ', trim($setting->app_name))[0];
                 return $firstWord;

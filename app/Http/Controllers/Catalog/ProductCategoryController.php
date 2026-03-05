@@ -80,35 +80,37 @@ class ProductCategoryController extends Controller
             abort(403, __('payments.not_authorized'));
         }
 
-        try {
+        
 
-            $validated = $request->validate([
-                'name' => [
-                    'required',
-                    'string',
-                    'max:255',
-                    Rule::unique('product_categories')->where(function ($query) use ($tenantId) {
-                        return $query->where('tenant_id', $tenantId);
-                    })
-                ],
-                'parent_category_id' => [
-                    'required',
-                    'integer',
-                    function ($attribute, $value, $fail) use ($tenantId) {
-                        if ($value != 0) { // Assuming 0 means no parent
-                            $parentCategory = Category::where('id', $value)
-                                                ->where('tenant_id', $tenantId)
-                                                ->first();
-                            if (!$parentCategory) {
-                                $fail('The selected parent category is invalid.');
-                            }
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('product_categories')->where(function ($query) use ($tenantId) {
+                    return $query->where('tenant_id', $tenantId);
+                })
+            ],
+            'parent_category_id' => [
+                'required',
+                'integer',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    if ($value != 0) { // Assuming 0 means no parent
+                        $parentCategory = Category::where('id', $value)
+                                            ->where('tenant_id', $tenantId)
+                                            ->first();
+                        if (!$parentCategory) {
+                            $fail(__('payments.selected_cat_invalid'));
                         }
                     }
-                ],
-                'description' => 'nullable|string',
-                'is_active' => 'required|in:1,0',
-                'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            ]);
+                }
+            ],
+            'description' => 'nullable|string',
+            'is_active' => 'required|in:1,0',
+            // 'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
+
+        try {
 
             // Check maximum product categories limit
             // $currentProductCategoryCount = ProductCategory::where('tenant_id', $tenantId)->count();
@@ -126,20 +128,23 @@ class ProductCategoryController extends Controller
             $validated['tenant_id'] = $tenantId;
 
             // If file uploaded, store and set image_url
-            if ($request->hasFile('photo')) {
-                $path = $request->file('photo')->store('categories', 'public');
-                $validated['image_url'] = $path;
-            }
+            // if ($request->hasFile('photo')) {
+            //     $path = $request->file('photo')->store('categories', 'public');
+            //     $validated['image_url'] = $path;
+            // }
 
-            // Remove 'photo' from array before saving if not needed in DB
-            unset($validated['photo']);
+            // // Remove 'photo' from array before saving if not needed in DB
+            // unset($validated['photo']);
 
             ProductCategory::create($validated);
 
             return response()->json([
                 'success' => true,
+                'reload' => true,
+                'componentId' => 'reloadProductCategoryComponent',
+                'refresh' => false,
                 'message' => __('auth._created'),
-                'redirect' => route('product-category.index')
+                'redirect' => route('product-category.index'),
             ]);
 
         } catch (ValidationException $e) {
@@ -184,73 +189,82 @@ class ProductCategoryController extends Controller
             abort(403, __('payments.not_authorized'));
         }
 
-        try {
+        
+        // Find product category and ensure it belongs to tenant
+        $category = ProductCategory::where('id', $id)
+                                ->where('tenant_id', $tenantId)
+                                ->first();
 
-            // Find product category and ensure it belongs to tenant
-            $category = ProductCategory::where('id', $id)
-                                    ->where('tenant_id', $tenantId)
-                                    ->first();
-
-            if (!$category) {
-                session()->flash('toast', [
-                    'type' => 'error',
-                    'message' => __('auth._not_found'),
-                ]);
-                return redirect()->route('product-category.index');
-            }
-
-            $validated = $request->validate([
-                'name' => [
-                    'required',
-                    'max:255',
-                    Rule::unique('product_categories')->where(function ($query) use ($tenantId, $id) {
-                        return $query->where('tenant_id', $tenantId)
-                                ->where('id', '!=', $id);
-                    })->ignore($category->id),
-                ],
-                'parent_category_id' => [
-                    'required',
-                    'integer',
-                    function ($attribute, $value, $fail) use ($tenantId, $id) {
-                        if ($value != 0) {
-                            $parentCategory = Category::where('id', $value)
-                                                ->where('tenant_id', $tenantId)
-                                                ->first();
-                            if (!$parentCategory) {
-                                $fail('The selected parent category is invalid.');
-                            }
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'max:255',
+                Rule::unique('product_categories')->where(function ($query) use ($tenantId, $id) {
+                    return $query->where('tenant_id', $tenantId)
+                            ->where('id', '!=', $id);
+                })->ignore($category->id),
+            ],
+            'parent_category_id' => [
+                'required',
+                'integer',
+                function ($attribute, $value, $fail) use ($tenantId, $id) {
+                    if ($value != 0) {
+                        $parentCategory = Category::where('id', $value)
+                                            ->where('tenant_id', $tenantId)
+                                            ->first();
+                        if (!$parentCategory) {
+                            $fail('The selected parent category is invalid.');
                         }
                     }
-                ],
-                'description' => 'nullable|string',
-                'is_active' => 'required|in:1,0',
-                'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:4048',
-            ]);
+                }
+            ],
+            'description' => 'nullable|string',
+            'is_active' => 'required|in:1,0',
+            // 'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:4048',
+        ]);
+
+        try {
+
+
+            // Check if category belongs to tenant
+            if ($category->tenant_id !== $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.unauthorized_access'),
+                ]);
+            }
 
             $validated['slug'] = Str::slug($validated['name']);
             $validated['updated_by'] = $user->id;
 
             // If file uploaded, store and set image_url
-            if ($request->hasFile('photo')) {
-                $path = $request->file('photo')->store('categories', 'public');
-                $validated['image_url'] = $path;
-            } else {
-                // Keep existing image_url if no new file uploaded
-                $validated['image_url'] = $category->image_url;
-            }
+            // if ($request->hasFile('photo')) {
+            //     $path = $request->file('photo')->store('categories', 'public');
+            //     $validated['image_url'] = $path;
+            // } else {
+            //     // Keep existing image_url if no new file uploaded
+            //     $validated['image_url'] = $category->image_url;
+            // }
 
-            // Remove 'photo' field if exists (not needed in DB)
-            unset($validated['photo']);
+            // // Remove 'photo' field if exists (not needed in DB)
+            // unset($validated['photo']);
 
             // Update the category record
             $category->update($validated);
 
-            session()->flash('toast', [
-                'type' => 'success',
-                'message' => __('auth._updated'),
-            ]);
+            // session()->flash('toast', [
+            //     'type' => 'success',
+            //     'message' => __('auth._updated'),
+            // ]);
 
-            return redirect()->route('product-category.index');
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'componentId' => 'reloadProductCategoryComponent',
+                'refresh' => false,
+                'message' => __('auth._updated'),
+                'redirect' => route('product-category.index'),
+            ]);
 
         } catch (ValidationException $e) {
             return redirect()->back()

@@ -3,9 +3,12 @@
     @section('content')
     
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('accounting.income_statement')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
+                    {{__('accounting.income_statement')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         <a href="{{ route('accounting.income-statement') }}" class="text-muted text-hover-primary">
@@ -18,9 +21,11 @@
                     <li class="breadcrumb-item text-muted">{{__('accounting.income_statement')}}</li>
                 </ul>
             </div>
-            <div class="d-flex align-items-center gap-2 gap-lg-3">
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
                 <!-- Period Selector -->
-                <select class="form-select form-select-solid w-150px" id="periodSelect" onchange="changePeriod()">
+                <select class="form-select form-select-solid w-100 w-sm-150px" id="periodSelect" onchange="changePeriod()">
                     <option value="month" {{ $period === 'month' ? 'selected' : '' }}>{{ __('accounting.this_month') }}</option>
                     <option value="quarter" {{ $period === 'quarter' ? 'selected' : '' }}>{{ __('accounting.this_quarter') }}</option>
                     <option value="year" {{ $period === 'year' ? 'selected' : '' }}>{{ __('accounting.this_year') }}</option>
@@ -28,20 +33,24 @@
                 </select>
                 
                 <!-- Custom Date Range (shown when custom is selected) -->
-                <div id="customRange" style="display: {{ $period === 'custom' ? 'flex' : 'none' }}" class="align-items-center">
-                    <input type="date" id="customStartDate" class="form-control form-control-solid w-150px me-2" 
-                           value="{{ $startDate }}">
-                    <span class="me-2">to</span>
-                    <input type="date" id="customEndDate" class="form-control form-control-solid w-150px me-2" 
-                           value="{{ $endDate }}">
-                    <button class="btn btn-sm btn-primary" onclick="applyCustomDate()">
+                <div id="customRange" style="display: {{ $period === 'custom' ? 'flex' : 'none' }}" 
+                    class="flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
+                    <input type="date" id="customStartDate" class="form-control form-control-solid w-100 w-sm-150px" 
+                        value="{{ $startDate }}">
+                    <span class="d-none d-sm-inline text-gray-500 align-self-center">to</span>
+                    <span class="d-inline d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
+                    <input type="date" id="customEndDate" class="form-control form-control-solid w-100 w-sm-150px" 
+                        value="{{ $endDate }}">
+                    <button class="btn btn-sm btn-primary w-100 w-sm-auto flex-shrink-0" onclick="applyCustomDate()">
                         {{ __('accounting.apply') }}
                     </button>
                 </div>
                 
-                <button class="btn btn-sm btn-light" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
-                </button>
+                <!-- Print Button -->
+                <!-- <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
+                    <i class="ki-duotone ki-printer fs-2 me-2"></i>
+                    {{ __('accounting.print') }}
+                </button> -->
             </div>
         </div>
     </div>

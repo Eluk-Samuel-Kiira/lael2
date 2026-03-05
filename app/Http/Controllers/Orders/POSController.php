@@ -120,6 +120,7 @@ class POSController extends Controller
                 \Log::info("  - Variant: {$inv->variant_id}, Dept: {$inv->department_id}, Loc: {$inv->location_id}");
             }
         }
+        
 
 
         
@@ -148,7 +149,7 @@ class POSController extends Controller
                         'id'   => (int)$t->id,
                         'name' => $t->name,
                         'rate'  => $t->type === 'fixed'
-                                ? formatCurrency($rate) // convert & format if fixed amount
+                                ? $rate // convert & format if fixed amount
                                 : $rate,
                         'type' => $t->type,
                     ];
@@ -176,7 +177,7 @@ class POSController extends Controller
                         'name'        => $p->name,
                         'type'        => $p->discount_type,   // 'percentage' | 'fixed' | 'buy_x_get_y'
                         'value'       => $p->discount_type === 'fixed'
-                                        ? formatCurrency($value)   // show in system currency convert to needed currency
+                                        ? $value   // show in system currency convert to needed currency
                                         : $value, 
                         'start_date'  => $p->start_date,
                         'end_date'    => $p->end_date,
@@ -306,14 +307,6 @@ class POSController extends Controller
                         'shop_type' => 'multi_shop'
                     ];
 
-                    // Optional: Update the inventory quantities
-                    if ($inventory) {
-                        // Decrease allocated quantity (or quantity on hand depending on your logic)
-                        $inventory->quantity_allocated -= $item['quantity'];
-                        // If you want to also reduce quantity_on_hand when order is confirmed:
-                        // $inventory->quantity_on_hand -= $item['quantity'];
-                        $inventory->save();
-                    }
                 }
 
                 // Create order item
@@ -352,16 +345,12 @@ class POSController extends Controller
         }
     }
 
-    public function completePayment(Request $request) 
+    public function processSplitPayment(Request $request)
     {
-
         try {
-            $cartData = $request->items; 
-            $paymentDetails = $request->payment_details;  
-            $user = Auth::user();
+            $user     = Auth::user();
             $tenantId = $user->tenant_id;
-            $isSingleShop = tenant_is_single_shop($tenantId);
-                      
+
             if (!$user->hasPermissionTo('complete order')) {
                 return response()->json([
                     'success' => false,
@@ -369,114 +358,313 @@ class POSController extends Controller
                 ]);
             }
 
-            $order = Order::findOrFail($request->order_id);
-            $totalAmount = $request->total ?? 0;
-            
-            // Get payment method
-            $paymentMethod = PaymentMethod::findForTenant($request->payment_method_id, $tenantId);
-            
-            if (!$paymentMethod) {
+            // ── Resolve the order ──────────────────────────────────────────
+            // Supports both fresh POS sales (order_id not yet in DB) and
+            // completing an existing confirmed order from the orders table.
+            $completingExisting = (bool) $request->input('completing_existing_order', false);
+
+            if ($completingExisting) {
+                // Order already exists — just add payments and mark complete
+                $order = Order::findOrFail($request->order_id);
+            } else {
+                // Fresh POS sale: create the order first if it doesn't exist
+                // (your existing POS createOrder logic goes here — unchanged)
+                $order = Order::findOrFail($request->order_id);
+            }
+
+            $payments   = $request->payments;
+            $totalPaid  = array_sum(array_column($payments, 'amount'));
+            $isSingleShop = tenant_is_single_shop($tenantId);
+
+            // ── Validate total ─────────────────────────────────────────────
+            if (abs($totalPaid - $order->total) > 0.01) {
                 return response()->json([
                     'success' => false,
-                    'message' =>  __('pagination.payment_method_not_found')
+                    'message' => __('pagination.payment_total_mismatch')
                 ]);
             }
 
-            // Validate payment method can receive this amount
-            $validation = $paymentMethod->validateTransaction($totalAmount);
-            if (!$validation['success']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('pagination.payment_valid_fail' . $validation['message'])
+            $processedPayments = [];
+
+            // ── Process each payment split ─────────────────────────────────
+            foreach ($payments as $payment) {
+                $paymentMethod = PaymentMethod::findForTenant($payment['payment_method_id'], $tenantId);
+
+                if (!$paymentMethod) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('pagination.payment_method_not_found')
+                    ]);
+                }
+
+                $validation = $paymentMethod->validateTransaction($payment['amount']);
+                if (!$validation['success']) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('pagination.payment_validation_failed') . ': ' . $validation['message']
+                    ]);
+                }
+
+                // Record ledger transaction
+                $this->recordOrderPaymentTransaction(
+                    $order,
+                    $paymentMethod,
+                    $payment['amount'],
+                    [
+                        'amount_tendered'  => $payment['tendered']  ?? $payment['amount'],
+                        'change_due'       => $payment['change']    ?? 0,
+                        'transaction_id'   => $payment['transaction_reference'] ?? null,
+                    ]
+                );
+
+                // Create OrderPayment row
+                OrderPayment::create([
+                    'order_id'          => $order->id,
+                    'amount'            => $payment['amount'],
+                    'payment_method_id' => $paymentMethod->id,
+                    'transaction_id'    => $payment['transaction_reference'] ?? (string) Str::uuid(),
+                    'status'            => 'completed',
+                    'notes'             => __('pagination.payment_completed'),
+                    'processed_at'      => now(),
+                    'processed_by'      => $user->id,
                 ]);
+
+                // Update payment method balance
+                $paymentMethod->current_balance += $payment['amount'];
+                $paymentMethod->save();
+
+                $processedPayments[] = [
+                    'type'                  => $payment['type'],
+                    'method_name'           => $paymentMethod->name,
+                    'account_number'        => $paymentMethod->account_number,
+                    'amount'                => $payment['amount'],
+                    'tendered'              => $payment['tendered'] ?? $payment['amount'],
+                    'change'                => $payment['change']   ?? 0,
+                    'transaction_reference' => $payment['transaction_reference'] ?? null,
+                ];
             }
 
-            // Record payment transaction (money IN from sale)
-            $this->recordOrderPaymentTransaction($order, $paymentMethod, $totalAmount, $paymentDetails);
+            // ── Tax record ─────────────────────────────────────────────────
+            $taxAmount = $order->tax_total ?: ($request->tax ?? 0);
+            if ($taxAmount > 0) {
+                OrderTax::updateOrCreate(
+                    ['order_id' => $order->id],
+                    [
+                        'tax_name'   => 'VAT',
+                        'tax_rate'   => $order->subtotal > 0
+                            ? round(($taxAmount / $order->subtotal) * 100, 2)
+                            : 0,
+                        'tax_amount' => $taxAmount,
+                        'is_compound' => 1,
+                        'created_by' => $user->id,
+                    ]
+                );
+            }
 
-            // Update order with payment details
+            // ── Mark order complete ────────────────────────────────────────
             $order->update([
-                'paid_amount' => $paymentDetails['amount_tendered'] ?? $totalAmount,
-                'balance_due' => $paymentDetails['change_due'] ?? 0,
-                'notes' => __('pagination.payment_completed'),
-                'status' => 'completed',
+                'paid_amount'       => $totalPaid,
+                'balance_due'       => 0,
+                'status'            => 'completed',
+                'payment_method_id' => null, // split — no single method
             ]);
 
-            // Payment Details
-            $transactionId = $request->input('payment_details.transaction_id') ?: (string) Str::uuid();
-
-            // Create Payment record
-            OrderPayment::updateOrCreate(
-                ['order_id' => $order->id],
-                [
-                    'amount' => $totalAmount,
-                    'payment_method_id' => $paymentMethod->id,
-                    'transaction_id' => $transactionId,
-                    'status' => 'completed',
-                    'notes' => __('pagination.payment_completed'),
-                    'processed_at' => now(),
-                    'processed_by' => auth()->id(),
-                ]
-            );
-
-            // Create Tax Record
-            OrderTax::updateOrCreate(
-                ['order_id' => $order->id],
-                [
-                    'tax_name' => 'VAT',
-                    'tax_rate' => (($request->total - $request->subtotal) / $request->total) * 100,
-                    'tax_amount' => $request->tax,
-                    'is_compound' => 1,
-                    'created_by' => auth()->id(),
-                ]
-            );
-
-            // Update inventory based on shop type
-            foreach ($cartData as $item) {
-                $variant = ProductVariant::find($item['variant_id']);
-
-                if (!$variant) {
-                    continue;
-                }
-
-                if ($isSingleShop) {
-                    // Single Shop: Update overall quantity
-                    $this->handleSingleShopInventory($variant, $item, $order);
-                } else {
-                    // Multi Shop: Update inventory items
-                    $this->handleMultiShopInventory($variant, $item, $order);
+            // ── Inventory ──────────────────────────────────────────────────
+            // Skip inventory adjustment when completing an already-confirmed
+            // order (inventory was already deducted at confirmation time).
+            if (!$completingExisting) {
+                foreach ($order->orderItems as $item) {
+                    $variant = ProductVariant::find($item->variant_id);
+                    if ($variant) {
+                        if ($isSingleShop) {
+                            $this->handleSingleShopInventory($variant, $item, $order);
+                        } else {
+                            $this->handleMultiShopInventory($variant, $item, $order);
+                        }
+                    }
                 }
             }
 
-            // Get updated balance for response
-            $paymentMethod->refresh();
-            $balanceAfter = $paymentMethod->current_balance;
+            // ── Customer name for receipt ──────────────────────────────────
+            $customerName = $order->customer_name;
+            $customer     = null;
+            if (!$customerName && $order->customer_id) {
+                $customer     = Customer::find($order->customer_id);
+                $customerName = $customer
+                    ? trim($customer->first_name . ' ' . $customer->last_name)
+                    : null;
+            }
 
+            // ── Receipt payload ────────────────────────────────────────────
             return response()->json([
                 'success' => true,
                 'message' => __('pagination.payment_completed'),
-                'is_single_shop' => $isSingleShop,
-                'payment_method' => [
-                    'id' => $paymentMethod->id,
-                    'name' => $paymentMethod->name,
-                    'type' => $paymentMethod->type,
-                    'type_label' => $paymentMethod->getTypeLabel(),
+                'order'   => [
+                    'id'           => $order->id,
+                    'order_number' => $order->order_number,
+                    'ref'          => $order->order_number,
+                    'customer_name'=> $customerName ?? __('pagination.walk_in_customer'),
+                    'customer'     => [
+                        'name'  => $customerName ?? __('pagination.walk_in_customer'),
+                        'phone' => $customer->phone ?? null,
+                        'email' => $customer->email ?? null,
+                    ],
+                    'date'         => $order->created_at->format('Y-m-d'),
+                    'time'         => $order->created_at->format('H:i:s'),
+                    'subtotal'     => $order->subtotal,
+                    'discount'     => $order->discount_total,
+                    'tax'          => $order->tax_total,
+                    'total'        => $order->total,
+                    'total_paid'   => $totalPaid,
+                    'total_tendered' => array_sum(array_column($processedPayments, 'tendered')),
+                    'total_change'   => array_sum(array_column($processedPayments, 'change')),
+                    'items'        => $order->orderItems->map(fn($item) => [
+                        'name'     => $item->item_name,
+                        'quantity' => $item->quantity,
+                        'price'    => $item->unit_price,
+                        'total'    => $item->total_price,
+                        'note'     => $item->notes ?? null,
+                    ])->toArray(),
+                    'payments'     => $processedPayments,
+                    'order_type'   => $order->type ?? 'sale',
+                    'cashier'      => $user->name,
                 ],
-                'balance_before' => $paymentMethod->current_balance - $totalAmount, // Calculate previous balance
-                'balance_after' => $balanceAfter,
-                'transaction_id' => $transactionId,
-                'order_number' => $order->order_number,
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Payment completion failed: ' . $e->getMessage());
-            
+            \Log::error('Split payment failed: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Payment completion failed: ' . $e->getMessage()
+                'message' => __('pagination.payment_error') . ': ' . $e->getMessage()
             ], 500);
         }
     }
+
+    // public function completePayment(Request $request) 
+    // {
+
+    //     try {
+    //         $cartData = $request->items; 
+    //         $paymentDetails = $request->payment_details;  
+    //         $user = Auth::user();
+    //         $tenantId = $user->tenant_id;
+    //         $isSingleShop = tenant_is_single_shop($tenantId);
+                      
+    //         if (!$user->hasPermissionTo('complete order')) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => __('payments.not_authorized'),
+    //             ]);
+    //         }
+
+    //         $order = Order::findOrFail($request->order_id);
+    //         $totalAmount = $request->total ?? 0;
+            
+    //         // Get payment method
+    //         $paymentMethod = PaymentMethod::findForTenant($request->payment_method_id, $tenantId);
+            
+    //         if (!$paymentMethod) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' =>  __('pagination.payment_method_not_found')
+    //             ]);
+    //         }
+
+    //         // Validate payment method can receive this amount
+    //         $validation = $paymentMethod->validateTransaction($totalAmount);
+    //         if (!$validation['success']) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => __('pagination.payment_valid_fail' . $validation['message'])
+    //             ]);
+    //         }
+
+    //         // Record payment transaction (money IN from sale)
+    //         $this->recordOrderPaymentTransaction($order, $paymentMethod, $totalAmount, $paymentDetails);
+
+    //         // Update order with payment details
+    //         $order->update([
+    //             'paid_amount' => $paymentDetails['amount_tendered'] ?? $totalAmount,
+    //             'balance_due' => $paymentDetails['change_due'] ?? 0,
+    //             'notes' => __('pagination.payment_completed'),
+    //             'status' => 'completed',
+    //         ]);
+
+    //         // Payment Details
+    //         $transactionId = $request->input('payment_details.transaction_id') ?: (string) Str::uuid();
+
+    //         // Create Payment record
+    //         OrderPayment::updateOrCreate(
+    //             ['order_id' => $order->id],
+    //             [
+    //                 'amount' => $totalAmount,
+    //                 'payment_method_id' => $paymentMethod->id,
+    //                 'transaction_id' => $transactionId,
+    //                 'status' => 'completed',
+    //                 'notes' => __('pagination.payment_completed'),
+    //                 'processed_at' => now(),
+    //                 'processed_by' => auth()->id(),
+    //             ]
+    //         );
+
+    //         // Create Tax Record
+    //         OrderTax::updateOrCreate(
+    //             ['order_id' => $order->id],
+    //             [
+    //                 'tax_name' => 'VAT',
+    //                 'tax_rate' => (($request->total - $request->subtotal) / $request->total) * 100,
+    //                 'tax_amount' => $request->tax,
+    //                 'is_compound' => 1,
+    //                 'created_by' => auth()->id(),
+    //             ]
+    //         );
+
+    //         // Update inventory based on shop type
+    //         foreach ($cartData as $item) {
+    //             $variant = ProductVariant::find($item['variant_id']);
+
+    //             if (!$variant) {
+    //                 continue;
+    //             }
+
+    //             if ($isSingleShop) {
+    //                 // Single Shop: Update overall quantity
+    //                 $this->handleSingleShopInventory($variant, $item, $order);
+    //             } else {
+    //                 // Multi Shop: Update inventory items
+    //                 $this->handleMultiShopInventory($variant, $item, $order);
+    //             }
+    //         }
+
+    //         // Get updated balance for response
+    //         $paymentMethod->refresh();
+    //         $balanceAfter = $paymentMethod->current_balance;
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => __('pagination.payment_completed'),
+    //             'is_single_shop' => $isSingleShop,
+    //             'payment_method' => [
+    //                 'id' => $paymentMethod->id,
+    //                 'name' => $paymentMethod->name,
+    //                 'type' => $paymentMethod->type,
+    //                 'type_label' => $paymentMethod->getTypeLabel(),
+    //             ],
+    //             'balance_before' => $paymentMethod->current_balance - $totalAmount, // Calculate previous balance
+    //             'balance_after' => $balanceAfter,
+    //             'transaction_id' => $transactionId,
+    //             'order_number' => $order->order_number,
+    //         ]);
+
+    //     } catch (\Exception $e) {
+    //         \Log::error('Payment completion failed: ' . $e->getMessage());
+            
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Payment completion failed: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
 
     /**
      * Record order payment transaction for POS sales
