@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{ ProfileController, UserController, RoleController};
+use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserController, RoleController};
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ DepartmentController, EmployeeController, EmployeePaymentController, TenantController };
@@ -13,9 +13,11 @@ use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
     PurchasingReportsController };
 
-    Route::get('/test-currency', function() {
-        return debug_currency_conversion(4, 'AUD');
-    });
+    // Route::get('/test-currency', function() {
+    //     return debug_currency_conversion(4, 'AUD');
+    // });
+
+
 
     // Route::get('/test-aud-detailed', function() {
     //     $aud = \App\Models\Currency::where('code', 'AUD')->first();
@@ -78,6 +80,12 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
     //         'expected_result' => '~4.00 AUD (may be 3.99 or 4.01 due to rounding)',
     //     ];
     // });
+
+    // Protect with auth middleware — never expose this publicly!
+    Route::middleware(['auth'])->prefix('admin')->group(function () {
+        Route::get('/artisan',       [ArtisanCommandController::class, 'index'])->name('artisan.index');
+        Route::post('/artisan/run',  [ArtisanCommandController::class, 'run'])->name('artisan.run');
+    });
 
 
     Route::get('/', function () {

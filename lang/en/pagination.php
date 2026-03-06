@@ -198,12 +198,15 @@ return [
     'locations_new' => 'New Locations',
     'locations_edit' => 'Edit Locations',
     'locations_index' => 'Locations Index',
+    'export_to_pdf' => 'Export To PDF',
 
     // POS
     // Receipt Modal
     'receipt' => 'RECEIPT',
     'print' => 'Print',
     'close' => 'Close',
+    'apply' => 'Apply',
+    'clear' => 'Clear',
     
     'no_products_match_search' => 'No products or variants match your search.',
     'no_products_in_department' => 'No products in this department.',

@@ -5,9 +5,12 @@
     @unless(tenant_is_single_shop(auth()->user()->tenant_id))
     
         <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-            <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                    <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('passwords.inv_adjustments')}}</h1>
+            <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                <!-- Left side - Title and Breadcrumb -->
+                <div class="page-title d-flex flex-column">
+                    <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                        {{__('passwords.inv_adjustments')}}
+                    </h1>
                     <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                         <li class="breadcrumb-item text-muted">
                             @php
@@ -27,28 +30,42 @@
                         <li class="breadcrumb-item text-muted">{{__('pagination.product_index')}}</li>
                     </ul>
                 </div>
-                <div class="d-flex align-items-center gap-2 gap-lg-3">
+
+                <!-- Right side - Actions -->
+                <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-3 w-100 w-lg-auto">
                     <!-- Search Bar -->
-                    <div class="px-7 py-5">
-                        <input type="text" id="searchInput" class="form-control" placeholder="{{__('auth._search')}} {{__('pagination._products')}}"
-                            onkeyup="searchTable(this.value, 'kt_table_users')">
+                    <div class="w-100 w-lg-auto">
+                        <div class="input-group input-group-solid">
+                            <span class="input-group-text bg-body border-0">
+                                <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
+                            </span>
+                            <input type="text" 
+                                   id="searchInput" 
+                                   class="form-control form-control-solid border-0 ps-0" 
+                                   placeholder="{{__('auth._search')}} {{__('pagination._products')}}"
+                                   onkeyup="searchTable(this.value, 'kt_table_users')">
+                        </div>
                     </div>
 
                     <!-- Location Filter -->
-                    <select class="form-select form-select-solid fw-bold w-auto" id="locationFilter">
-                        <option value="">{{ __('pagination._location') }}</option>
-                        @foreach ($locations as $location)
-                            <option value="{{ $location->id }}">{{ ucwords(str_replace('_', ' ', $location->name)) }}</option>
-                        @endforeach
-                    </select>
+                    <div class="w-100 w-lg-auto">
+                        <select class="form-select form-select-solid fw-bold w-100" id="locationFilter">
+                            <option value="">{{ __('pagination._location') }}</option>
+                            @foreach ($locations as $location)
+                                <option value="{{ $location->id }}">{{ ucwords(str_replace('_', ' ', $location->name)) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
                     <!-- Department Filter -->
-                    <select class="form-select form-select-solid fw-bold w-auto" id="departmentFilter">
-                        <option value="">{{ __('auth._department') }}</option>
-                        @foreach ($departments as $department)
-                            <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
-                        @endforeach
-                    </select>
+                    <div class="w-100 w-lg-auto">
+                        <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter">
+                            <option value="">{{ __('auth._department') }}</option>
+                            @foreach ($departments as $department)
+                                <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>

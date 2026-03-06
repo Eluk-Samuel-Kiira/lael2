@@ -10,9 +10,9 @@
             <div class="container-fluid">
                 {{-- Toolbar Section --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                        <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                        <div class="page-title d-flex flex-column">
+                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
                                 {{ __('pagination.inventory_transactions') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
@@ -31,11 +31,13 @@
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.inventory_transactions') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-center gap-2 gap-lg-3">
+                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
                             @if($transactions->count() > 0)
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2"></i> {{ __('pagination.export') }}
+                            <div class="dropdown w-100 w-sm-auto">
+                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                    <span class="d-none d-sm-inline">{{ __('pagination.export') }}</span>
+                                    <span class="d-inline d-sm-none">{{ __('pagination.export') }}</span>
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>
@@ -74,28 +76,36 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.transactions') }}" id="filterForm">
-                                    <div class="row g-4 mb-4">
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Date Range --}}
-                                        <div class="col-md-12 col-lg-4">
+                                        <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.date_range') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="start_date" 
-                                                    value="{{ $startDate }}" required
-                                                    title="{{ __('pagination.start_date') }}">
-                                                <span class="input-group-text bg-light">{{ __('pagination.to') }}</span>
-                                                <input type="date" class="form-control" name="end_date" 
-                                                    value="{{ $endDate }}" required
-                                                    title="{{ __('pagination.end_date') }}">
+                                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                                <div class="input-group w-100">
+                                                    <span class="input-group-text">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control" name="start_date" 
+                                                        value="{{ $startDate }}" required
+                                                        title="{{ __('pagination.start_date') }}">
+                                                </div>
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('pagination.to') }}</span>
+                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('pagination.to') }}</span>
+                                                <div class="input-group w-100">
+                                                    <span class="input-group-text bg-light">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control" name="end_date" 
+                                                        value="{{ $endDate }}" required
+                                                        title="{{ __('pagination.end_date') }}">
+                                                </div>
                                             </div>
                                         </div>
                                         
                                         {{-- Transaction Type --}}
-                                        <div class="col-md-6 col-lg-2">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.transaction_type') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-switch fs-2"></i>
                                                 </span>
@@ -112,9 +122,9 @@
                                         </div>
                                         
                                         {{-- Location --}}
-                                        <div class="col-md-6 col-lg-3">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-location fs-2"></i>
                                                 </span>
@@ -129,11 +139,13 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        
+                                    </div>
+                                    
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
                                         {{-- Department --}}
-                                        <div class="col-md-6 col-lg-3">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-building fs-2"></i>
                                                 </span>
@@ -148,19 +160,19 @@
                                                 </select>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    {{-- Action Buttons --}}
-                                    <div class="row">
-                                        <div class="col-12 d-flex justify-content-end">
-                                            <div class="d-flex gap-2">
-                                                <button type="submit" class="btn btn-primary" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-2"></i>
-                                                    {{ __('pagination.apply_filters') }}
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex flex-column justify-content-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.inventory.transactions') }}" class="btn btn-light btn-active-light-primary">
-                                                    <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                                    {{ __('pagination.clear_filters') }}
+                                                <a href="{{ route('reports.inventory.transactions') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
                                                 </a>
                                             </div>
                                         </div>

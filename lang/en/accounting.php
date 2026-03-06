@@ -18,7 +18,9 @@ return [
     // Common terms
     'print' => 'Print',
     'apply_filters' => 'Apply Filters',
+    'top_vendor' => 'Top Vendor',
     'export' => 'Export',
+    'clear' => 'Clear',
     'search_accounts' => 'Search accounts...',
     'search_methods' => 'Search methods...',
     'search_transactions' => 'Search transactions...',

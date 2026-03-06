@@ -9,182 +9,190 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                        <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                                {{ __('auth.time_analysis') }}
-                            </h1>
-                            <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('accounting.dashboard') }}
+            {{-- Toolbar Section --}}
+            <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+                <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                    <div class="page-title d-flex flex-column">
+                        <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                            {{ __('auth.time_analysis') }}
+                        </h1>
+                        <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                            <li class="breadcrumb-item text-muted">
+                                <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
+                                    {{ __('accounting.dashboard') }}
+                                </a>
+                            </li>
+                            <li class="breadcrumb-item">
+                                <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                            </li>
+                            <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
+                            <li class="breadcrumb-item">
+                                <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                            </li>
+                            <li class="breadcrumb-item text-muted">{{ __('auth.time_analysis') }}</li>
+                        </ul>
+                    </div>
+                    <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
+                        @if($timeAnalysis->count() > 0)
+                        <div class="dropdown w-100 w-sm-auto">
+                            <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                                <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" 
+                                    onclick="exportCurrentPage({tableId: 'timeAnalysisTable', filename: 'time_analysis_{{ date('Y_m_d') }}', sheetName: 'Time Analysis'})">
+                                        <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
+                                        {{ __('accounting.export_to_excel') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" 
+                                    onclick="exportCurrentPage({tableId: 'timeAnalysisTable', filename: 'time_analysis_{{ date('Y_m_d') }}', format: 'csv'})">
+                                        <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
+                                        {{ __('accounting.export_to_csv') }}
+                                    </a>
                                 </li>
-                                <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
-                                <li class="breadcrumb-item text-muted">{{ __('auth.time_analysis') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-center gap-2 gap-lg-3">
-                            @if($timeAnalysis->count() > 0)
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'timeAnalysisTable', filename: 'time_analysis_{{ date('Y_m_d') }}', sheetName: 'Time Analysis'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'timeAnalysisTable', filename: 'time_analysis_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
-                        </div>
+                        @endif
                     </div>
                 </div>
+            </div>
 
-                {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
-                                </div>
+            {{-- Filter Section --}}
+            <div class="row mb-6">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
+                                <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.orders.time-analysis') }}" id="filterForm">
-                                    <div class="row g-6 mb-6">
-                                        {{-- Date Range --}}
-                                        <div class="col-md-6 col-lg-4">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="input-group">
+                        </div>
+                        <div class="card-body pt-0">
+                            <form method="GET" action="{{ route('reports.orders.time-analysis') }}" id="filterForm">
+                                <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-6">
+                                    {{-- Date Range --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
+                                        <div class="d-flex flex-column flex-sm-row gap-2">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                 </span>
                                                 <input type="date" class="form-control" name="start_date" 
                                                     value="{{ $startDate }}" required
                                                     title="{{ __('auth.start_date') }}">
-                                                <span class="input-group-text bg-light">{{ __('accounting.to') }}</span>
+                                            </div>
+                                            <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
+                                            <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
                                                 <input type="date" class="form-control" name="end_date" 
                                                     value="{{ $endDate }}" required
                                                     title="{{ __('auth.end_date') }}">
                                             </div>
                                         </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('auth.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Department --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('auth.department') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('auth.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Order Type --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('auth.order_type') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-bag fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="order_type">
-                                                    <option value="all">{{ __('auth.all_types') }}</option>
-                                                    <option value="sale" {{ $orderType == 'sale' ? 'selected' : '' }}>{{ __('auth.sale') }}</option>
-                                                    <option value="return" {{ $orderType == 'return' ? 'selected' : '' }}>{{ __('auth.return') }}</option>
-                                                    <option value="quote" {{ $orderType == 'quote' ? 'selected' : '' }}>{{ __('auth.quote') }}</option>
-                                                    <option value="layby" {{ $orderType == 'layby' ? 'selected' : '' }}>{{ __('auth.layby') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Group By --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('auth.group_by') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-chart-line fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="group_by" id="groupBySelect">
-                                                    <option value="daily" {{ $groupBy == 'daily' ? 'selected' : '' }}>{{ __('auth.daily') }}</option>
-                                                    <option value="hourly" {{ $groupBy == 'hourly' ? 'selected' : '' }}>{{ __('auth.hourly') }}</option>
-                                                    <option value="weekly" {{ $groupBy == 'weekly' ? 'selected' : '' }}>{{ __('auth.weekly') }}</option>
-                                                    <option value="monthly" {{ $groupBy == 'monthly' ? 'selected' : '' }}>{{ __('auth.monthly') }}</option>
-                                                </select>
-                                            </div>
+                                    </div>
+                                    
+                                    {{-- Location --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-location fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="location_id">
+                                                <option value="">{{ __('auth.all_locations') }}</option>
+                                                @foreach($locations as $location)
+                                                    <option value="{{ $location->id }}" 
+                                                            {{ $locationId == $location->id ? 'selected' : '' }}>
+                                                        {{ $location->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
                                         </div>
                                     </div>
                                     
-                                    {{-- Action Buttons --}}
-                                    <div class="row">
-                                        <div class="col-12 d-flex justify-content-end">
-                                            <div class="d-flex gap-2">
-                                                <button type="submit" class="btn btn-primary" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-2"></i>
-                                                    {{ __('accounting.apply_filters') }}
-                                                </button>
-                                                <a href="{{ route('reports.orders.time-analysis') }}" class="btn btn-light btn-active-light-primary">
-                                                    <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                                    {{ __('accounting.clear_filters') }}
-                                                </a>
-                                            </div>
+                                    {{-- Department --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('auth.department') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-building fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="department_id">
+                                                <option value="">{{ __('auth.all_departments') }}</option>
+                                                @foreach($departments as $department)
+                                                    <option value="{{ $department->id }}" 
+                                                            {{ $departmentId == $department->id ? 'selected' : '' }}>
+                                                        {{ $department->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
                                         </div>
                                     </div>
-                                </form>
-                            </div>
+                                    
+                                    {{-- Order Type --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('auth.order_type') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-bag fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="order_type">
+                                                <option value="all">{{ __('auth.all_types') }}</option>
+                                                <option value="sale" {{ $orderType == 'sale' ? 'selected' : '' }}>{{ __('auth.sale') }}</option>
+                                                <option value="return" {{ $orderType == 'return' ? 'selected' : '' }}>{{ __('auth.return') }}</option>
+                                                <option value="quote" {{ $orderType == 'quote' ? 'selected' : '' }}>{{ __('auth.quote') }}</option>
+                                                <option value="layby" {{ $orderType == 'layby' ? 'selected' : '' }}>{{ __('auth.layby') }}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Group By --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('auth.group_by') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-chart-line fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="group_by" id="groupBySelect">
+                                                <option value="daily" {{ $groupBy == 'daily' ? 'selected' : '' }}>{{ __('auth.daily') }}</option>
+                                                <option value="hourly" {{ $groupBy == 'hourly' ? 'selected' : '' }}>{{ __('auth.hourly') }}</option>
+                                                <option value="weekly" {{ $groupBy == 'weekly' ? 'selected' : '' }}>{{ __('auth.weekly') }}</option>
+                                                <option value="monthly" {{ $groupBy == 'monthly' ? 'selected' : '' }}>{{ __('auth.monthly') }}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {{-- Action Buttons --}}
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="submit" class="btn btn-primary" id="applyFilters">
+                                        <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                        <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                                        <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
+                                    </button>
+                                    <a href="{{ route('reports.orders.time-analysis') }}" class="btn btn-light btn-active-light-primary">
+                                        <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                        <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
+                                        <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
+                                    </a>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
+            </div>
 
                 {{-- Summary Statistics --}}
                 @if($timeAnalysis->count() > 0)
