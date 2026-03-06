@@ -6,6 +6,7 @@ use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Carbon\Carbon;
 
 class SupplierFactory extends Factory
 {
@@ -13,6 +14,14 @@ class SupplierFactory extends Factory
 
     public function definition()
     {
+        // Generate dates and ensure they're valid by converting to UTC format
+        $createdAt = $this->faker->dateTimeBetween('-1 year', 'now');
+        $updatedAt = $this->faker->dateTimeBetween('-1 year', 'now');
+        
+        // Ensure the dates are valid by converting to Carbon and formatting
+        $createdAt = Carbon::instance($createdAt)->format('Y-m-d H:i:s');
+        $updatedAt = Carbon::instance($updatedAt)->format('Y-m-d H:i:s');
+
         return [
             'tenant_id' => Tenant::inRandomOrder()->first()->id,
             'name' => $this->faker->company(),
@@ -28,8 +37,8 @@ class SupplierFactory extends Factory
             'payment_terms' => $this->faker->randomElement([15, 30, 45, 60]),
             'notes' => $this->faker->optional()->paragraph(),
             'is_active' => $this->faker->boolean(90),
-            'created_at' => $this->faker->dateTimeBetween('-1 year', 'now'),
-            'updated_at' => $this->faker->dateTimeBetween('-1 year', 'now'),
+            'created_at' => $createdAt,
+            'updated_at' => $updatedAt,
             'created_by' => User::inRandomOrder()->first()->id,
         ];
     }
