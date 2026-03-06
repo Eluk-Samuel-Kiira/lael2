@@ -10,9 +10,10 @@
             <div class="container-fluid">
                 {{-- Toolbar Section --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                        <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                        <!-- Left side - Title and Breadcrumb -->
+                        <div class="page-title d-flex flex-column">
+                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
                                 {{ __('accounting.expenses_by_vendor') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
@@ -27,11 +28,15 @@
                                 <li class="breadcrumb-item text-muted">{{ __('accounting.vendor_analysis') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-center gap-2 gap-lg-3">
+
+                        <!-- Right side - Actions -->
+                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
                             @if($vendorBreakdown->count() > 0)
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                            <div class="dropdown w-100 w-sm-auto">
+                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>
@@ -70,28 +75,37 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.by-vendor') }}" id="filterForm">
-                                    <div class="row g-6 mb-6">
+                                    {{-- First Row --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
                                         {{-- Date Range --}}
-                                        <div class="col-md-6 col-lg-4">
+                                        <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="start_date" 
-                                                    value="{{ $startDate }}" required
-                                                    title="{{ __('accounting.start_date') }}">
-                                                <span class="input-group-text bg-light">{{ __('accounting.to') }}</span>
-                                                <input type="date" class="form-control" name="end_date" 
-                                                    value="{{ $endDate }}" required
-                                                    title="{{ __('accounting.end_date') }}">
+                                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                                <div class="input-group w-100">
+                                                    <span class="input-group-text">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control" name="start_date" 
+                                                        value="{{ $startDate }}" required
+                                                        title="{{ __('accounting.start_date') }}">
+                                                </div>
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
+                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
+                                                <div class="input-group w-100">
+                                                    <span class="input-group-text bg-light">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control" name="end_date" 
+                                                        value="{{ $endDate }}" required
+                                                        title="{{ __('accounting.end_date') }}">
+                                                </div>
                                             </div>
                                         </div>
                                         
                                         {{-- Vendor Name --}}
-                                        <div class="col-md-6 col-lg-3">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('accounting.vendor_name') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-shop fs-2"></i>
                                                 </span>
@@ -101,11 +115,14 @@
                                                     maxlength="200">
                                             </div>
                                         </div>
-                                        
+                                    </div>
+
+                                    {{-- Second Row --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
                                         {{-- Category --}}
-                                        <div class="col-md-6 col-lg-2">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('accounting.category') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-category fs-2"></i>
                                                 </span>
@@ -122,9 +139,9 @@
                                         </div>
                                         
                                         {{-- Payment Method --}}
-                                        <div class="col-md-6 col-lg-3">
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('accounting.payment_method') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-credit-card fs-2"></i>
                                                 </span>
@@ -140,12 +157,13 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div class="row g-6 mb-6">
-                                        {{-- Amount Range --}}
-                                        <div class="col-md-6 col-lg-3">
+
+                                    {{-- Third Row --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
+                                        {{-- Min Amount --}}
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('accounting.min_amount') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-dollar fs-2"></i>
                                                 </span>
@@ -156,9 +174,10 @@
                                             </div>
                                         </div>
                                         
-                                        <div class="col-md-6 col-lg-3">
+                                        {{-- Max Amount --}}
+                                        <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('accounting.max_amount') }}</label>
-                                            <div class="input-group">
+                                            <div class="input-group w-100">
                                                 <span class="input-group-text">
                                                     <i class="ki-duotone ki-dollar fs-2"></i>
                                                 </span>
@@ -170,15 +189,17 @@
                                         </div>
                                         
                                         {{-- Action Buttons --}}
-                                        <div class="col-md-6 col-lg-6 d-flex align-items-end justify-content-end">
-                                            <div class="d-flex gap-2">
-                                                <button type="submit" class="btn btn-primary" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-2"></i>
-                                                    {{ __('accounting.apply_filters') }}
+                                        <div class="d-flex flex-column justify-content-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.by-vendor') }}" class="btn btn-light btn-active-light-primary">
-                                                    <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                                    {{ __('accounting.clear_filters') }}
+                                                <a href="{{ route('reports.expenses.by-vendor') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
                                                 </a>
                                             </div>
                                         </div>

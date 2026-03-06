@@ -72,8 +72,8 @@
                             <td>
                                 <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateUserStatus({{ $employee->id }}, this.value)"
                                 @cannot('update employee') disabled @endcannot>
-                                    <option value="1" {{ $employee->is_active == 1 ? 'selected' : '' }}>__('payments.active')</option>
-                                    <option value="0" {{ $employee->is_active == 0 ? 'selected' : '' }}>__('payments.inactive')</option>
+                                    <option value="1" {{ $employee->is_active == 1 ? 'selected' : '' }}>{{__('payments.active') }}</option>
+                                    <option value="0" {{ $employee->is_active == 0 ? 'selected' : '' }}>{{__('payments.inactive') }}</option>
                                 </select>
                             </td>
                             <td>

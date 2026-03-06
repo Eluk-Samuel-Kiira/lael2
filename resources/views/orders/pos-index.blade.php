@@ -3,9 +3,12 @@
     @section('content')
         
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">{{__('pagination._pos')}}</h1>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                    {{__('pagination._pos')}}
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         @php
@@ -25,27 +28,39 @@
                     <li class="breadcrumb-item text-muted">{{__('pagination.pos_index')}}</li>
                 </ul>
             </div>
-            <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2 gap-lg-3">
+
+            <!-- Right side - Actions -->
+            <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-3 w-100 w-lg-auto">
                 
-                <div class="px-3 px-md-7 py-3 py-md-5 w-100 w-md-auto">
-                    <h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ currency_code() }} ({{ currency_symbol() }})</h3>
+                <!-- Currency Display -->
+                <div class="px-3 px-lg-5 py-3 py-lg-5 bg-light rounded-3">
+                    <h3 class="fw-bold text-gray-800 fs-2qx mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
                 </div>
 
                 <!-- Search Bar -->
-                <div class="px-3 px-md-7 py-3 py-md-5 w-100 w-md-auto">
-                    <input type="text" id="variantSearchInput" class="form-control" 
-                        placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
-                        onkeyup="filterProductsAndVariants(this.value)">
+                <div class="w-100 w-lg-250px">
+                    <div class="input-group input-group-solid">
+                        <span class="input-group-text bg-body border-0">
+                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
+                        </span>
+                        <input type="text" 
+                               id="variantSearchInput" 
+                               class="form-control form-control-solid border-0 ps-0" 
+                               placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
+                               onkeyup="filterProductsAndVariants(this.value)">
+                    </div>
                 </div>
 
                 <!-- Department Filter -->
                 @if(!tenant_is_single_shop(auth()->user()->tenant_id))
-                <select class="form-select form-select-solid fw-bold w-100 w-md-auto" id="departmentFilter">
-                    <option value="">{{ __('auth._department') }}</option>
-                    @foreach ($user_departments as $department)
-                        <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
-                    @endforeach
-                </select>
+                <div class="w-100 w-lg-auto">
+                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter">
+                        <option value="">{{ __('auth._department') }}</option>
+                        @foreach ($user_departments as $department)
+                            <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 @endif
 
             </div>
@@ -57,14 +72,13 @@
             <div id="kt_app_content_container" class="app-container container-xxl">
                 <div id="status"></div>
                 
-                    <!--begin::Content-->
-                    @include('orders.pos.component')
-                    <!--end::Content-->
+                <!--begin::Content-->
+                @include('orders.pos.component')
+                <!--end::Content-->
                 
             </div>
         </div>
     </div>
-    
     
     @endsection
 </x-app-layout>

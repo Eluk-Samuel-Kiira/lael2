@@ -8,162 +8,169 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                        <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                                {{ __('accounting.expense_audit_report') }}
-                            </h1>
-                            <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('accounting.dashboard') }}
+            {{-- Toolbar Section --}}
+            <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+                <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                    <!-- Left side - Title and Breadcrumb -->
+                    <div class="page-title d-flex flex-column">
+                        <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                            {{ __('accounting.expense_audit_report') }}
+                        </h1>
+                        <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                            <li class="breadcrumb-item text-muted">
+                                <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
+                                    {{ __('accounting.dashboard') }}
+                                </a>
+                            </li>
+                            <li class="breadcrumb-item">
+                                <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                            </li>
+                            <li class="breadcrumb-item text-muted">{{ __('accounting.audit_and_compliance') }}</li>
+                        </ul>
+                    </div>
+
+                    <!-- Right side - Actions -->
+                    <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
+                        @if($auditStats['total_items'] > 0)
+                        <div class="dropdown w-100 w-sm-auto">
+                            <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                                <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" 
+                                    onclick="exportCurrentPage({tableId: 'auditItemsTable', filename: 'expense_audit_{{ date('Y_m_d') }}', sheetName: 'Audit Items'})">
+                                        <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
+                                        {{ __('accounting.export_to_excel') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" 
+                                    onclick="exportCurrentPage({tableId: 'auditItemsTable', filename: 'expense_audit_{{ date('Y_m_d') }}', format: 'csv'})">
+                                        <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
+                                        {{ __('accounting.export_to_csv') }}
+                                    </a>
                                 </li>
-                                <li class="breadcrumb-item text-muted">{{ __('accounting.audit_and_compliance') }}</li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" onclick="generateAuditPDF()">
+                                        <i class="ki-duotone ki-file-pdf fs-2 me-2 text-danger"></i>
+                                        {{ __('accounting.export_to_pdf') }}
+                                    </a>
+                                </li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-center gap-2 gap-lg-3">
-                            @if($auditStats['total_items'] > 0)
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'auditItemsTable', filename: 'expense_audit_{{ date('Y_m_d') }}', sheetName: 'Audit Items'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'auditItemsTable', filename: 'expense_audit_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" onclick="generateAuditPDF()">
-                                            <i class="ki-duotone ki-file-pdf fs-2 me-2 text-danger"></i>
-                                            {{ __('accounting.export_to_pdf') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
-                        </div>
+                        @endif
                     </div>
                 </div>
+            </div>
 
-                {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
-                                </div>
+            {{-- Filter Section --}}
+            <div class="row mb-6">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
+                                <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.expenses.audit') }}" id="filterForm">
-                                    <div class="row g-6">
-                                        {{-- Date Range --}}
-                                        <div class="col-md-6 col-lg-3">
-                                            <label class="form-label fw-semibold">{{ __('accounting.start_date') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="col-md-6 col-lg-3">
-                                            <label class="form-label fw-semibold">{{ __('accounting.end_date') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Audit Type --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('accounting.audit_type') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-search fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="audit_type" id="auditTypeSelect">
-                                                    @foreach($auditTypes as $key => $label)
-                                                        <option value="{{ $key }}" {{ $auditType == $key ? 'selected' : '' }}>
-                                                            {{ $label }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- High Value Threshold (visible only when high_value selected) --}}
-                                        <div class="col-md-6 col-lg-2" id="thresholdField" style="{{ $auditType != 'high_value' ? 'display: none;' : '' }}">
-                                            <label class="form-label fw-semibold">{{ __('accounting.threshold_amount') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-dollar fs-2"></i>
-                                                </span>
-                                                <input type="number" class="form-control" name="threshold" 
-                                                    value="{{ request()->get('threshold', 1000) }}" min="0" step="100">
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Employee --}}
-                                        <div class="col-md-6 col-lg-2">
-                                            <label class="form-label fw-semibold">{{ __('accounting.employee') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-user fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="employee_id">
-                                                    <option value="">{{ __('accounting.all_employees') }}</option>
-                                                    @foreach($employees as $employee)
-                                                        <option value="{{ $employee->id }}" {{ $employeeId == $employee->id ? 'selected' : '' }}>
-                                                            {{ $employee->first_name }} {{ $employee->last_name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="col-md-12 col-lg-2 d-flex align-items-end">
-                                            <div class="d-flex gap-2 w-100">
-                                                <button type="submit" class="btn btn-primary flex-fill" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-2"></i>
-                                                    {{ __('accounting.apply_filters') }}
-                                                </button>
-                                                <a href="{{ route('reports.expenses.audit') }}" class="btn btn-light btn-active-light-primary">
-                                                    <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                                    {{ __('accounting.clear_filters') }}
-                                                </a>
-                                            </div>
+                        </div>
+                        <div class="card-body pt-0">
+                            <form method="GET" action="{{ route('reports.expenses.audit') }}" id="filterForm">
+                                <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6">
+                                    {{-- Date Range --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('accounting.start_date') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-calendar fs-2"></i>
+                                            </span>
+                                            <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
                                         </div>
                                     </div>
-                                </form>
-                            </div>
+                                    
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('accounting.end_date') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-calendar fs-2"></i>
+                                            </span>
+                                            <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Audit Type --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('accounting.audit_type') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-search fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="audit_type" id="auditTypeSelect">
+                                                @foreach($auditTypes as $key => $label)
+                                                    <option value="{{ $key }}" {{ $auditType == $key ? 'selected' : '' }}>
+                                                        {{ $label }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- High Value Threshold --}}
+                                    <div class="flex-grow-1" id="thresholdField" style="{{ $auditType != 'high_value' ? 'display: none;' : '' }}">
+                                        <label class="form-label fw-semibold">{{ __('accounting.threshold_amount') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-dollar fs-2"></i>
+                                            </span>
+                                            <input type="number" class="form-control" name="threshold" 
+                                                value="{{ request()->get('threshold', 1000) }}" min="0" step="100">
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Employee --}}
+                                    <div class="flex-grow-1">
+                                        <label class="form-label fw-semibold">{{ __('accounting.employee') }}</label>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-user fs-2"></i>
+                                            </span>
+                                            <select class="form-select" name="employee_id">
+                                                <option value="">{{ __('accounting.all_employees') }}</option>
+                                                @foreach($employees as $employee)
+                                                    <option value="{{ $employee->id }}" {{ $employeeId == $employee->id ? 'selected' : '' }}>
+                                                        {{ $employee->first_name }} {{ $employee->last_name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Action Buttons --}}
+                                    <div class="d-flex flex-column justify-content-end">
+                                        <div class="d-flex flex-column flex-sm-row gap-2">
+                                            <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                                                <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                                                <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
+                                            </button>
+                                            <a href="{{ route('reports.expenses.audit') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
+                                                <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
+                                                <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
+            </div>
 
                 {{-- Audit Statistics --}}
                 @if($auditStats['total_items'] > 0)

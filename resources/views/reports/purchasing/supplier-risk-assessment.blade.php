@@ -10,9 +10,9 @@
             <div class="container-fluid">
                 {{-- Toolbar Section --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
-                        <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                        <div class="page-title d-flex flex-column">
+                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
                                 {{ __('pagination.supplier_risk_assessment') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
@@ -35,11 +35,13 @@
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.supplier_risk_assessment') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-center gap-2 gap-lg-3">
+                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
                             @if($suppliers->count() > 0)
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2"></i> {{ __('pagination.export') }}
+                            <div class="dropdown w-100 w-sm-auto">
+                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                    <span class="d-none d-sm-inline">{{ __('pagination.export') }}</span>
+                                    <span class="d-inline d-sm-none">{{ __('pagination.export') }}</span>
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>

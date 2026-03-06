@@ -18,6 +18,9 @@ return [
 
     // Common terms
     '_account' => 'Account',
+    'save' => 'Save',
+    'artisan_commands' => 'Artisan Commands',
+    'generate' => 'Generate',
     '_actions' => 'Actions',
     '_active' => 'Active',
     '_add' => 'Add',
