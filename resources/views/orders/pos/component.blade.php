@@ -400,6 +400,7 @@
     <!--end::Sidebar-->
 </div>
 
+@include('orders.pos.pause-buy')
 @include('orders.pos.payment-mode')
 @endcan
 
