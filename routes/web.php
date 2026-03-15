@@ -201,7 +201,6 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         
         // Orders and Purchases
-        Route::resource('orders', OrderController::class);
         Route::get('/pos-index', [POSController::class, 'index'])->name('pos.index');
         Route::post('/orders/process-payment', [POSController::class, 'processPayment'])
             ->name('orders.process-payment');
@@ -213,6 +212,11 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('orders.process-split-payment');
         
         Route::post('/pos-cancel/{id}', [POSController::class, 'cancel']);
+
+        Route::get('orders/paused', [OrderController::class, 'getPausedOrders'])
+            ->name('orders.paused');
+            
+        Route::resource('orders', OrderController::class);
 
 
         // Taxes and Promotions

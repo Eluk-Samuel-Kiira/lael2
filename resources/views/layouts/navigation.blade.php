@@ -101,7 +101,7 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('orders.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('orders.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -188,7 +188,7 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('items.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('items.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -197,7 +197,7 @@
                         </div>
 
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('stocks.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('stocks.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1124,17 +1124,6 @@
                         </div>
                         @endcan
 
-                        @can('view department')
-                        <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('department.index') }}')">
-                                <span class="menu-bullet">
-                                    <span class="bullet bullet-dot"></span>
-                                </span>
-                                <span class="menu-title">{{ __('auth._department') }}</span>
-                            </a>
-                        </div>
-                        @endcan
-
                         @can('view location')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('locations.index') }}')">
@@ -1142,6 +1131,17 @@
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title">{{ __('pagination._locations') }}</span>
+                            </a>
+                        </div>
+                        @endcan
+
+                        @can('view department')
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('department.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('auth._department') }}</span>
                             </a>
                         </div>
                         @endcan

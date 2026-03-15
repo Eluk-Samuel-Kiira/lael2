@@ -1,7 +1,7 @@
 {{-- resources/views/artisan/index.blade.php --}}
 
 <x-app-layout>
-    @section('title', __('auth.artisan_commands'))
+    @section('title', __('artisan.page_title'))
     @section('content')
 
     {{-- Toolbar Section --}}
@@ -10,20 +10,20 @@
             {{-- Page Title --}}
             <div class="page-title d-flex flex-column me-3">
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-1 flex-column my-0">
-                    Artisan Command Runner
+                    {{__('artisan.page_heading')}}
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        <a href="{{ url('/') }}" class="text-muted text-hover-primary">Home</a>
+                        <a href="{{ url('/') }}" class="text-muted text-hover-primary">{{__('general.home')}}</a>
                     </li>
                     <li class="breadcrumb-item">
                         <span class="bullet bg-gray-500 w-5px h-2px"></span>
                     </li>
-                    <li class="breadcrumb-item text-muted">Admin</li>
+                    <li class="breadcrumb-item text-muted">{{__('general.admin')}}</li>
                     <li class="breadcrumb-item">
                         <span class="bullet bg-gray-500 w-5px h-2px"></span>
                     </li>
-                    <li class="breadcrumb-item text-muted">Artisan Runner</li>
+                    <li class="breadcrumb-item text-muted">{{__('artisan.breadcrumb_runner')}}</li>
                 </ul>
             </div>
 
@@ -34,7 +34,7 @@
                         <span class="path1"></span><span class="path2"></span><span class="path3"></span>
                         <span class="path4"></span><span class="path5"></span>
                     </i>
-                    Laravel CLI
+                    {{__('artisan.laravel_cli_badge')}}
                 </span>
             </div>
         </div>
@@ -51,8 +51,8 @@
                 </i>
                 <div class="d-flex flex-stack flex-grow-1">
                     <div class="fw-semibold">
-                        <h4 class="text-gray-900 fw-bold">Super Admin Use Only</h4>
-                        <div class="fs-6 text-gray-700">Only whitelisted commands are available. Use carefully in production.</div>
+                        <h4 class="text-gray-900 fw-bold">{{__('artisan.alert_title')}}</h4>
+                        <div class="fs-6 text-gray-700">{{__('artisan.alert_description')}}</div>
                     </div>
                 </div>
             </div>
@@ -64,16 +64,16 @@
                     <div class="card card-flush h-100">
                         <div class="card-header pt-7">
                             <h3 class="card-title align-items-start flex-column">
-                                <span class="card-label fw-bold text-gray-900">Run Command</span>
-                                <span class="text-muted mt-1 fw-semibold fs-7">Select and execute an Artisan command</span>
+                                <span class="card-label fw-bold text-gray-900">{{__('artisan.card_title_run')}}</span>
+                                <span class="text-muted mt-1 fw-semibold fs-7">{{__('artisan.card_subtitle_run')}}</span>
                             </h3>
                         </div>
 
                         <div class="card-body pt-5">
                             {{-- Command Select --}}
                             <div class="fv-row mb-8">
-                                <label class="form-label fw-semibold text-gray-900 fs-6 required">Select Command</label>
-                                <select id="artisan_command" class="form-select form-select-solid" data-control="select2" data-placeholder="-- Choose a command --">
+                                <label class="form-label fw-semibold text-gray-900 fs-6 required">{{__('artisan.command_select_label')}}</label>
+                                <select id="artisan_command" class="form-select form-select-solid" data-control="select2" data-placeholder="{{__('artisan.command_select_placeholder')}}">
                                     <option></option>
                                     @foreach($commands as $cmd => $description)
                                         <option value="{{ $cmd }}">php artisan {{ $cmd }}</option>
@@ -88,7 +88,7 @@
                                         <span class="path1"></span><span class="path2"></span>
                                     </i>
                                     <div>
-                                        <div class="fs-7 text-muted fw-semibold">Description</div>
+                                        <div class="fs-7 text-muted fw-semibold">{{__('artisan.description_label')}}</div>
                                         <div id="description_text" class="fs-6 text-gray-800 fw-bold"></div>
                                     </div>
                                 </div>
@@ -100,10 +100,10 @@
                                     <i class="ki-duotone ki-rocket fs-3 me-2">
                                         <span class="path1"></span><span class="path2"></span>
                                     </i>
-                                    Run Command
+                                    {{__('artisan.run_button_label')}}
                                 </span>
                                 <span class="indicator-progress">
-                                    Please wait...
+                                    {{__('artisan.run_button_processing')}}
                                     <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                                 </span>
                             </button>
@@ -116,8 +116,8 @@
                     <div class="card card-flush h-100">
                         <div class="card-header pt-7">
                             <h3 class="card-title align-items-start flex-column">
-                                <span class="card-label fw-bold text-gray-900">Output</span>
-                                <span class="text-muted mt-1 fw-semibold fs-7">Command execution result</span>
+                                <span class="card-label fw-bold text-gray-900">{{__('artisan.card_title_output')}}</span>
+                                <span class="text-muted mt-1 fw-semibold fs-7">{{__('artisan.card_subtitle_output')}}</span>
                             </h3>
                             <div class="card-toolbar">
                                 <button id="clear_output" class="btn btn-sm btn-light-danger btn-flex">
@@ -125,7 +125,7 @@
                                         <span class="path1"></span><span class="path2"></span>
                                         <span class="path3"></span><span class="path4"></span><span class="path5"></span>
                                     </i>
-                                    Clear Output
+                                    {{__('artisan.clear_output_button')}}
                                 </button>
                             </div>
                         </div>
@@ -140,12 +140,12 @@
                                         <span class="terminal-dot bg-warning rounded-circle" style="width: 12px; height: 12px;"></span>
                                         <span class="terminal-dot bg-success rounded-circle" style="width: 12px; height: 12px;"></span>
                                     </div>
-                                    <span class="terminal-title text-gray-500 fs-8 fw-semibold" id="terminal_title">bash — artisan runner</span>
+                                    <span class="terminal-title text-gray-500 fs-8 fw-semibold" id="terminal_title">{{__('artisan.terminal_default_title')}}</span>
                                 </div>
                                 {{-- Terminal Body --}}
                                 <div id="terminal_output" class="terminal-body p-5" 
                                      style="background: #1e1e2e; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 13px; color: #cdd6f4; min-height: 330px; white-space: pre-wrap; word-break: break-word;">
-                                    <span class="text-gray-600">$ Waiting for command...</span>
+                                    <span class="text-gray-600">{{__('artisan.terminal_placeholder')}}</span>
                                 </div>
                             </div>
 
@@ -180,7 +180,7 @@
             // Initialize Select2 if available
             if (typeof $ !== 'undefined' && $.fn.select2) {
                 $(selectEl).select2({
-                    placeholder: "-- Choose a command --",
+                    placeholder: "{{__('artisan.command_select_placeholder')}}",
                     allowClear: true
                 });
             }
@@ -206,8 +206,8 @@
                 // Loading state
                 runBtn.setAttribute('data-kt-indicator', 'on');
                 runBtn.disabled = true;
-                terminalTitle.textContent = 'bash — running: php artisan ' + command;
-                terminalOut.innerHTML = '<span style="color:#89b4fa;">$ php artisan ' + command + '</span>\n<span class="text-gray-600">Running...</span>';
+                terminalTitle.textContent = '{{__('artisan.terminal_running_prefix')}}' + command;
+                terminalOut.innerHTML = '<span style="color:#89b4fa;">$ php artisan ' + command + '</span>\n<span class="text-gray-600">{{__('artisan.terminal_running_status')}}</span>';
                 statusBadge.classList.add('d-none');
 
                 fetch('{{ route("artisan.run") }}', {
@@ -227,18 +227,18 @@
                         '<span style="color:#89b4fa;">$ php artisan ' + command + '</span>\n\n' +
                         '<span style="color:' + color + ';">' + escapeHtml(data.output) + '</span>';
 
-                    terminalTitle.textContent = prompt + ' bash — php artisan ' + command;
+                    terminalTitle.textContent = prompt + ' {{__('artisan.terminal_running_prefix')}}' + command;
 
                     statusBadge.classList.remove('d-none');
                     statusBadge.innerHTML = data.success
-                        ? '<span class="badge badge-light-success fs-7 fw-bold px-5 py-3"><i class="ki-duotone ki-check-circle fs-3 me-2"><span class="path1"></span><span class="path2"></span></i> Command completed successfully</span>'
-                        : '<span class="badge badge-light-danger fs-7 fw-bold px-5 py-3"><i class="ki-duotone ki-cross-circle fs-3 me-2"><span class="path1"></span><span class="path2"></span></i> Command failed</span>';
+                        ? '<span class="badge badge-light-success fs-7 fw-bold px-5 py-3"><i class="ki-duotone ki-check-circle fs-3 me-2"><span class="path1"></span><span class="path2"></span></i> {{__('artisan.status_success')}}</span>'
+                        : '<span class="badge badge-light-danger fs-7 fw-bold px-5 py-3"><i class="ki-duotone ki-cross-circle fs-3 me-2"><span class="path1"></span><span class="path2"></span></i> {{__('artisan.status_failed')}}</span>';
                 })
                 .catch(err => {
                     terminalOut.innerHTML =
                         '<span style="color:#89b4fa;">$ php artisan ' + command + '</span>\n\n' +
-                        '<span style="color:#f38ba8;">❌ Network or server error: ' + escapeHtml(err.message) + '</span>';
-                    terminalTitle.textContent = '❌ bash — php artisan ' + command;
+                        '<span style="color:#f38ba8;">❌ {{__('artisan.error_network_prefix')}}' + escapeHtml(err.message) + '</span>';
+                    terminalTitle.textContent = '❌ {{__('artisan.terminal_running_prefix')}}' + command;
                 })
                 .finally(() => {
                     runBtn.removeAttribute('data-kt-indicator');
@@ -248,8 +248,8 @@
 
             // Clear output
             clearBtn.addEventListener('click', function() {
-                terminalOut.innerHTML = '<span class="text-gray-600">$ Waiting for command...</span>';
-                terminalTitle.textContent = 'bash — artisan runner';
+                terminalOut.innerHTML = '<span class="text-gray-600">{{__('artisan.terminal_placeholder')}}</span>';
+                terminalTitle.textContent = '{{__('artisan.terminal_default_title')}}';
                 statusBadge.classList.add('d-none');
             });
 

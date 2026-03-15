@@ -95,6 +95,11 @@
                                 
                                 @can('refund order')
                                     @if ($order->status === 'completed')
+                                        <button class="btn btn-sm btn-icon btn-light btn-active-light-primary"
+                                            onclick="printOrder({{ $order->id }})"
+                                            data-bs-toggle="tooltip" data-bs-title="{{ __('passwords._print') }}">
+                                            <i class="ki-duotone ki-printer fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                        </button>
                                         <button class="btn btn-sm btn-icon btn-light-success"
                                             onclick="openRefund_{{ $order->id }}()"
                                             data-bs-toggle="tooltip" data-bs-title="{{ __('payments.refund') }}">
@@ -113,14 +118,6 @@
                                             <i class="ki-duotone ki-cross fs-4"><span class="path1"></span><span class="path2"></span></i>
                                         </button>
                                     @endif
-                                @endcan
-
-                                @can('print order')
-                                    <button class="btn btn-sm btn-icon btn-light btn-active-light-primary"
-                                        onclick="printOrder({{ $order->id }})"
-                                        data-bs-toggle="tooltip" data-bs-title="{{ __('passwords._print') }}">
-                                        <i class="ki-duotone ki-printer fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                                    </button>
                                 @endcan
 
                                 {{-- Detail trigger icon --}}

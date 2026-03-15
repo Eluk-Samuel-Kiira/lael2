@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Orders;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Facades\{ Auth, DB, Log };
 use App\Models\{ Product, SingleShopInventoryLog, InventoryItems, ProductVariant, Order, InventoryTransactions };
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Validator;
@@ -220,10 +220,10 @@ class POSController extends Controller
 
     public function processPayment(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
-        if (!$user->hasPermissionTo('create order')) {
+
+        if (! $user->hasPermissionTo('create order')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -231,116 +231,146 @@ class POSController extends Controller
         }
 
         try {
-            $cartData = json_decode($request->cart_data, true);
+            $cartData     = json_decode($request->cart_data, true);
             $isSingleShop = tenant_is_single_shop($tenantId);
 
-            // Determine customer details
-            $customerId = null;
+            // ── RESUME PATH: existing paused order ───────────────────────
+            // JS sets resumed_order_id when the cashier restores a paused cart.
+            // In this case we skip creating a new order entirely — the existing
+            // confirmed order is already in the DB, we just return its details
+            // so the payment modal can complete it.
+            $resumedOrderId = $request->input('resumed_order_id');
+
+            if ($resumedOrderId) {
+                $order = Order::findOrFail($resumedOrderId);
+
+                // Safety: only allow resuming orders that belong to this tenant
+                // and are still in a resumable state
+                if ($order->tenant_id !== $tenantId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('payments.not_authorized'),
+                    ]);
+                }
+
+                if ($order->status !== 'confirmed' || $order->paid_amount > 0) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('pagination.order_not_resumable'),
+                    ]);
+                }
+
+                \Log::info('[PauseBuy] Resuming existing order', [
+                    'order_id'     => $order->id,
+                    'order_number' => $order->order_number,
+                ]);
+
+                return response()->json([
+                    'success'      => true,
+                    'message'      => __('pagination.order_resumed'),
+                    'order_number' => $order->order_number,
+                    'customerName' => $order->customer_name,
+                    'order_id'     => $order->id,
+                    'is_single_shop' => $isSingleShop,
+                    'resumed'      => true,   // flag for JS if needed
+                ]);
+            }
+
+            // ── FRESH PATH: new order ─────────────────────────────────────
+            $customerId   = null;
             $customerName = null;
 
             if (isset($cartData['customer'])) {
                 if ($cartData['customer']['type'] === 'existing') {
-                    $customerId = $cartData['customer']['id'];
-                    
-                    $customer = Customer::find($customerId);
-                    $customerName = $customer ? trim($customer->first_name . ' ' . $customer->last_name) : null;
+                    $customerId   = $cartData['customer']['id'];
+                    $customer     = Customer::find($customerId);
+                    $customerName = $customer
+                        ? trim($customer->first_name . ' ' . $customer->last_name)
+                        : null;
                 } elseif ($cartData['customer']['type'] === 'new') {
                     $customerName = $cartData['customer']['name'];
                 }
             }
 
-            // Generate order number
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-            
+
             $order = Order::create([
-                'tenant_id' => $tenantId,
-                'customer_id' => $customerId,     
-                'customer_name' => $customerName, 
-                'location_id' => $user->location_id ?? 1,
-                'department_id' => $user->department_id ?? 1,
-                'order_number' => $orderNumber,
-                'type' => 'sale',
-                'status' => 'confirmed',
-                'subtotal' => $cartData['subtotal'],
+                'tenant_id'      => $tenantId,
+                'customer_id'    => $customerId,
+                'customer_name'  => $customerName,
+                'location_id'    => $user->location_id   ?? 1,
+                'department_id'  => $user->department_id ?? 1,
+                'order_number'   => $orderNumber,
+                'type'           => 'sale',
+                'status'         => 'confirmed',
+                'subtotal'       => $cartData['subtotal'],
                 'discount_total' => $cartData['discount'],
-                'tax_total' => $cartData['tax'],
-                'total' => $cartData['total'],
-                'paid_amount' => 0, // Will be updated after payment
-                'balance_due' => 0,
-                'source' => 'pos',
-                'created_by' => $user->id,
+                'tax_total'      => $cartData['tax'],
+                'total'          => $cartData['total'],
+                'paid_amount'    => 0,
+                'balance_due'    => 0,
+                'source'         => 'pos',
+                'created_by'     => $user->id,
             ]);
 
-            // Create order items 
             foreach ($cartData['items'] as $item) {
-                // Get product variant
                 $variant = ProductVariant::find($item['variant_id']);
-                
-                if (!$variant) {
-                    continue;
-                }
+                if (! $variant) continue;
 
-                // Prepare inventory data based on shop type
                 $inventoryData = [];
                 if ($isSingleShop) {
-                    // Single shop: Track overall quantity changes
                     $inventoryData = [
                         'initial_stock' => $variant->overal_quantity_at_hand,
                         'current_stock' => $variant->overal_quantity_at_hand - $item['quantity'],
-                        'shop_type' => 'single_shop'
+                        'shop_type'     => 'single_shop',
                     ];
                 } else {
-                    // Multi-shop: Get the specific inventory item for this location/department
                     $inventory = $variant->inventory()
-                        ->where('location_id', $user->location_id ?? 1)
+                        ->where('location_id',  $user->location_id  ?? 1)
                         ->where('department_id', $user->department_id ?? 1)
                         ->first();
-                    
-                    \Log::info('Inventory item found:', ['inventory' => $inventory]);
-                    
+
                     $inventoryData = [
                         'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
                         'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                        'inventory_id' => $inventory ? $inventory->id : null,
-                        'location_id' => $user->location_id ?? 1,
+                        'inventory_id'  => $inventory ? $inventory->id : null,
+                        'location_id'   => $user->location_id  ?? 1,
                         'department_id' => $user->department_id ?? 1,
-                        'shop_type' => 'multi_shop'
+                        'shop_type'     => 'multi_shop',
                     ];
-
                 }
 
-                // Create order item
-                $orderItem = $order->orderItems()->create([
-                    'product_id' => $variant->product_id,
-                    'variant_id' => $variant->id,
-                    'item_name' => $item['name'],
-                    'sku' => $variant->sku,
-                    'unit_price' => $item['price'],
-                    'quantity' => $item['quantity'],
-                    'tax_amount' => $item['tax_total'],
-                    'discount' => $item['discount'],
-                    'total_price' => $item['total'],
-                    'inventory_data' => json_encode($inventoryData),
-                    'tax_data' => json_encode($item['taxes'] ?? []),
-                    'promotion_data' => json_encode($item['promotions'] ?? []),
+                $order->orderItems()->create([
+                    'product_id'      => $variant->product_id,
+                    'variant_id'      => $variant->id,
+                    'item_name'       => $item['name'],
+                    'sku'             => $variant->sku,
+                    'unit_price'      => $item['price'],
+                    'quantity'        => $item['quantity'],
+                    'tax_amount'      => $item['tax_total'],
+                    'discount'        => $item['discount'],
+                    'total_price'     => $item['total'],
+                    'inventory_data'  => json_encode($inventoryData),
+                    'tax_data'        => json_encode($item['taxes']      ?? []),
+                    'promotion_data'  => json_encode($item['promotions'] ?? []),
                 ]);
             }
 
             return response()->json([
-                'success' => true,
-                'message' => __('pagination.order_placed'),
-                'order_number' => $orderNumber,
-                'customerName' => $customerName,
-                'order_id' => $order['id'],
+                'success'        => true,
+                'message'        => __('pagination.order_placed'),
+                'order_number'   => $orderNumber,
+                'customerName'   => $customerName,
+                'order_id'       => $order->id,
                 'is_single_shop' => $isSingleShop,
+                'resumed'        => false,
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Order processing failed: ' . $e->getMessage());
-            
             return response()->json([
                 'success' => false,
-                'message' => 'Order processing failed: ' . $e->getMessage()
+                'message' => __('pagination.order_failed'),
             ], 500);
         }
     }
@@ -351,73 +381,149 @@ class POSController extends Controller
             $user     = Auth::user();
             $tenantId = $user->tenant_id;
 
-            if (!$user->hasPermissionTo('complete order')) {
+            if (! $user->hasPermissionTo('complete order')) {
                 return response()->json([
                     'success' => false,
                     'message' => __('payments.not_authorized'),
                 ]);
             }
 
-            // ── Resolve the order ──────────────────────────────────────────
-            // Supports both fresh POS sales (order_id not yet in DB) and
-            // completing an existing confirmed order from the orders table.
-            $completingExisting = (bool) $request->input('completing_existing_order', false);
-
-            if ($completingExisting) {
-                // Order already exists — just add payments and mark complete
-                $order = Order::findOrFail($request->order_id);
-            } else {
-                // Fresh POS sale: create the order first if it doesn't exist
-                // (your existing POS createOrder logic goes here — unchanged)
-                $order = Order::findOrFail($request->order_id);
-            }
-
-            $payments   = $request->payments;
-            $totalPaid  = array_sum(array_column($payments, 'amount'));
+            $order        = Order::findOrFail($request->order_id);
+            $payments     = $request->payments ?? [];
             $isSingleShop = tenant_is_single_shop($tenantId);
 
-            // ── Validate total ─────────────────────────────────────────────
-            if (abs($totalPaid - $order->total) > 0.01) {
+            if (empty($payments)) {
                 return response()->json([
                     'success' => false,
-                    'message' => __('pagination.payment_total_mismatch')
+                    'message' => __('pagination.no_payments_added'),
                 ]);
             }
 
-            $processedPayments = [];
+            // ── Was the cart modified after resuming? ──────────────────────
+            // JS sends updated_cart when the cashier changed items on a
+            // resumed order. We sync the order + items before payment.
+            $cartWasUpdated = (bool) $request->input('cart_updated', false);
+            $updatedCart    = $request->input('updated_cart');   // full cart payload
+
+            if ($cartWasUpdated && $updatedCart) {
+                // Delete old items and replace with the updated cart
+                $order->orderItems()->delete();
+
+                $newSubtotal = 0;
+                $newDiscount = 0;
+                $newTax      = 0;
+
+                foreach ($updatedCart['items'] as $item) {
+                    $variant = ProductVariant::find($item['variant_id']);
+                    if (! $variant) continue;
+
+                    $inventoryData = [];
+                    if ($isSingleShop) {
+                        $inventoryData = [
+                            'initial_stock' => $variant->overal_quantity_at_hand,
+                            'current_stock' => $variant->overal_quantity_at_hand - $item['quantity'],
+                            'shop_type'     => 'single_shop',
+                        ];
+                    } else {
+                        $inventory = $variant->inventory()
+                            ->where('location_id',   $user->location_id   ?? 1)
+                            ->where('department_id', $user->department_id ?? 1)
+                            ->first();
+                        $inventoryData = [
+                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                            'inventory_id'  => $inventory?->id,
+                            'location_id'   => $user->location_id   ?? 1,
+                            'department_id' => $user->department_id ?? 1,
+                            'shop_type'     => 'multi_shop',
+                        ];
+                    }
+
+                    $order->orderItems()->create([
+                        'product_id'     => $variant->product_id,
+                        'variant_id'     => $variant->id,
+                        'item_name'      => $item['name'],
+                        'sku'            => $variant->sku,
+                        'unit_price'     => $item['price'],
+                        'quantity'       => $item['quantity'],
+                        'tax_amount'     => $item['tax_total']  ?? 0,
+                        'discount'       => $item['discount']   ?? 0,
+                        'total_price'    => $item['total'],
+                        'inventory_data' => json_encode($inventoryData),
+                        'tax_data'       => json_encode($item['taxes']      ?? []),
+                        'promotion_data' => json_encode($item['promotions'] ?? []),
+                    ]);
+
+                    $newSubtotal += $item['subtotal'] ?? ($item['price'] * $item['quantity']);
+                    $newDiscount += $item['discount'] ?? 0;
+                    $newTax      += $item['tax_total'] ?? 0;
+                }
+
+                $newTotal = $newSubtotal - $newDiscount + $newTax;
+
+                // Sync order header with updated totals
+                $order->update([
+                    'subtotal'       => $newSubtotal,
+                    'discount_total' => $newDiscount,
+                    'tax_total'      => $newTax,
+                    'total'          => $newTotal,
+                ]);
+
+                // Refresh so $order->total is now the updated value
+                $order->refresh();
+
+                \Log::info('[POS] Order totals updated after cart change', [
+                    'order_id' => $order->id,
+                    'new_total' => $newTotal,
+                ]);
+            }
+
+            // ── Validate payment total against (possibly updated) order ────
+            $totalPaid = array_sum(array_column($payments, 'amount'));
+
+            if (abs($totalPaid - $order->total) > 0.01) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.payment_total_mismatch'),
+                    'expected' => $order->total,
+                    'received' => $totalPaid,
+                ]);
+            }
 
             // ── Process each payment split ─────────────────────────────────
-            foreach ($payments as $payment) {
-                $paymentMethod = PaymentMethod::findForTenant($payment['payment_method_id'], $tenantId);
+            $processedPayments = [];
 
-                if (!$paymentMethod) {
+            foreach ($payments as $payment) {
+                $paymentMethod = PaymentMethod::findForTenant(
+                    $payment['payment_method_id'], $tenantId
+                );
+
+                if (! $paymentMethod) {
                     return response()->json([
                         'success' => false,
-                        'message' => __('pagination.payment_method_not_found')
+                        'message' => __('pagination.payment_method_not_found'),
                     ]);
                 }
 
                 $validation = $paymentMethod->validateTransaction($payment['amount']);
-                if (!$validation['success']) {
+                if (! $validation['success']) {
                     return response()->json([
                         'success' => false,
-                        'message' => __('pagination.payment_validation_failed') . ': ' . $validation['message']
+                        'message' => __('pagination.payment_validation_failed') . ': ' . $validation['message'],
                     ]);
                 }
 
-                // Record ledger transaction
                 $this->recordOrderPaymentTransaction(
                     $order,
                     $paymentMethod,
                     $payment['amount'],
                     [
-                        'amount_tendered'  => $payment['tendered']  ?? $payment['amount'],
-                        'change_due'       => $payment['change']    ?? 0,
-                        'transaction_id'   => $payment['transaction_reference'] ?? null,
+                        'amount_tendered' => $payment['tendered']              ?? $payment['amount'],
+                        'change_due'      => $payment['change']                ?? 0,
+                        'transaction_id'  => $payment['transaction_reference'] ?? null,
                     ]
                 );
 
-                // Create OrderPayment row
                 OrderPayment::create([
                     'order_id'          => $order->id,
                     'amount'            => $payment['amount'],
@@ -429,113 +535,123 @@ class POSController extends Controller
                     'processed_by'      => $user->id,
                 ]);
 
-                // Update payment method balance
                 $paymentMethod->current_balance += $payment['amount'];
                 $paymentMethod->save();
 
                 $processedPayments[] = [
                     'type'                  => $payment['type'],
                     'method_name'           => $paymentMethod->name,
-                    'account_number'        => $paymentMethod->account_number,
-                    'amount'                => $payment['amount'],
-                    'tendered'              => $payment['tendered'] ?? $payment['amount'],
-                    'change'                => $payment['change']   ?? 0,
+                    'account_number'        => $paymentMethod->account_number ?? null,
+                    'amount'                => (float) $payment['amount'],
+                    'tendered'              => (float) ($payment['tendered'] ?? $payment['amount']),
+                    'change'                => (float) ($payment['change']   ?? 0),
                     'transaction_reference' => $payment['transaction_reference'] ?? null,
                 ];
             }
 
             // ── Tax record ─────────────────────────────────────────────────
-            $taxAmount = $order->tax_total ?: ($request->tax ?? 0);
+            $taxAmount = $order->tax_total ?: 0;
             if ($taxAmount > 0) {
                 OrderTax::updateOrCreate(
                     ['order_id' => $order->id],
                     [
-                        'tax_name'   => 'VAT',
-                        'tax_rate'   => $order->subtotal > 0
+                        'tax_name'    => 'VAT',
+                        'tax_rate'    => $order->subtotal > 0
                             ? round(($taxAmount / $order->subtotal) * 100, 2)
                             : 0,
-                        'tax_amount' => $taxAmount,
+                        'tax_amount'  => $taxAmount,
                         'is_compound' => 1,
-                        'created_by' => $user->id,
+                        'created_by'  => $user->id,
                     ]
                 );
             }
 
-            // ── Mark order complete ────────────────────────────────────────
-            $order->update([
-                'paid_amount'       => $totalPaid,
-                'balance_due'       => 0,
-                'status'            => 'completed',
-                'payment_method_id' => null, // split — no single method
-            ]);
-
             // ── Inventory ──────────────────────────────────────────────────
-            // Skip inventory adjustment when completing an already-confirmed
-            // order (inventory was already deducted at confirmation time).
-            if (!$completingExisting) {
+            // Only run inventory deduction when the cart was updated.
+            // Original confirmed orders already had inventory deducted
+            // at processPayment() time — don't double-deduct.
+            if ($cartWasUpdated) {
+                $order->load('orderItems'); // reload fresh items
                 foreach ($order->orderItems as $item) {
                     $variant = ProductVariant::find($item->variant_id);
-                    if ($variant) {
-                        if ($isSingleShop) {
-                            $this->handleSingleShopInventory($variant, $item, $order);
-                        } else {
-                            $this->handleMultiShopInventory($variant, $item, $order);
-                        }
+                    if (! $variant) continue;
+                    if ($isSingleShop) {
+                        $this->handleSingleShopInventory($variant, $item, $order);
+                    } else {
+                        $this->handleMultiShopInventory($variant, $item, $order);
                     }
                 }
             }
 
-            // ── Customer name for receipt ──────────────────────────────────
+            // ── Complete the order ─────────────────────────────────────────
+            $order->update([
+                'paid_amount'       => $totalPaid,
+                'balance_due'       => 0,
+                'status'            => 'completed',
+                'payment_method_id' => null,
+            ]);
+
+            // ── Build receipt ──────────────────────────────────────────────
             $customerName = $order->customer_name;
             $customer     = null;
-            if (!$customerName && $order->customer_id) {
+            if (! $customerName && $order->customer_id) {
                 $customer     = Customer::find($order->customer_id);
                 $customerName = $customer
                     ? trim($customer->first_name . ' ' . $customer->last_name)
                     : null;
             }
 
-            // ── Receipt payload ────────────────────────────────────────────
+            $order->load('orderItems');
+
             return response()->json([
                 'success' => true,
                 'message' => __('pagination.payment_completed'),
                 'order'   => [
-                    'id'           => $order->id,
-                    'order_number' => $order->order_number,
-                    'ref'          => $order->order_number,
-                    'customer_name'=> $customerName ?? __('pagination.walk_in_customer'),
-                    'customer'     => [
+                    'id'             => $order->id,
+                    'order_number'   => $order->order_number,
+                    'ref'            => $order->order_number,
+                    'customer_name'  => $customerName ?? __('pagination.walk_in_customer'),
+                    'customer'       => [
                         'name'  => $customerName ?? __('pagination.walk_in_customer'),
-                        'phone' => $customer->phone ?? null,
-                        'email' => $customer->email ?? null,
+                        'phone' => $customer?->phone ?? null,
+                        'email' => $customer?->email ?? null,
                     ],
-                    'date'         => $order->created_at->format('Y-m-d'),
-                    'time'         => $order->created_at->format('H:i:s'),
-                    'subtotal'     => $order->subtotal,
-                    'discount'     => $order->discount_total,
-                    'tax'          => $order->tax_total,
-                    'total'        => $order->total,
-                    'total_paid'   => $totalPaid,
-                    'total_tendered' => array_sum(array_column($processedPayments, 'tendered')),
-                    'total_change'   => array_sum(array_column($processedPayments, 'change')),
-                    'items'        => $order->orderItems->map(fn($item) => [
+                    'date'           => $order->created_at->format('Y-m-d'),
+                    'time'           => $order->created_at->format('H:i:s'),
+                    'subtotal'       => (float) $order->subtotal,
+                    'discount'       => (float) $order->discount_total,
+                    'tax'            => (float) $order->tax_total,
+                    'total'          => (float) $order->total,
+                    'total_paid'     => (float) $totalPaid,
+                    'total_tendered' => (float) array_sum(array_column($processedPayments, 'tendered')),
+                    'total_change'   => (float) array_sum(array_column($processedPayments, 'change')),
+                    'items'          => $order->orderItems->map(fn ($item) => [
                         'name'     => $item->item_name,
-                        'quantity' => $item->quantity,
-                        'price'    => $item->unit_price,
-                        'total'    => $item->total_price,
+                        'quantity' => (int)   $item->quantity,
+                        'price'    => (float) $item->unit_price,
+                        'total'    => (float) $item->total_price,
                         'note'     => $item->notes ?? null,
                     ])->toArray(),
-                    'payments'     => $processedPayments,
-                    'order_type'   => $order->type ?? 'sale',
-                    'cashier'      => $user->name,
+                    'payments'       => $processedPayments,
+                    'order_type'     => $order->type ?? 'sale',
+                    'cashier'        => $user->name,
                 ],
             ]);
 
-        } catch (\Exception $e) {
-            \Log::error('Split payment failed: ' . $e->getMessage());
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json([
                 'success' => false,
-                'message' => __('pagination.payment_error') . ': ' . $e->getMessage()
+                'message' => __('pagination.order_not_found'),
+            ], 404);
+
+        } catch (\Exception $e) {
+            \Log::error('Split payment failed: ' . $e->getMessage(), [
+                'order_id' => $request->order_id ?? null,
+                'trace'    => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.payment_error'),
             ], 500);
         }
     }
