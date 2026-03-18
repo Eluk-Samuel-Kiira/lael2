@@ -530,7 +530,7 @@ class EmployeePaymentController extends Controller
     }
 
 
-    
+
     public function updatePaymentStatus(Request $request, $id)
     {
         $user = Auth::user();
@@ -763,6 +763,8 @@ class EmployeePaymentController extends Controller
                             ]);
                         }
                     }
+                } else {
+                    \Log::info('No deposit');
                 }
 
                 // Update payment with transaction refs
