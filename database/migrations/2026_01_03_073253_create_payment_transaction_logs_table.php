@@ -27,7 +27,7 @@ return new class extends Migration
             $table->enum('transaction_category', [
                 'EXPENSE', 'PURCHASE_ORDER', 'PAYMENT', 'ORDER',
                 'SALARY', 'INVOICE', 'REFUND', 'FEE', 'ADJUSTMENT', 'ALLOWANCE', 'BONUS',
-                'OVERTIME', 'ADVANCE', 'OTHER'
+                'OVERTIME', 'ADVANCE', 'OTHER', 'ADVANCE_REPAYMENT'
             ])->index('idx_payment_logs_category');
             
             $table->string('reference_table')->nullable()->index('idx_payment_logs_ref_table');

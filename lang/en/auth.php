@@ -16,8 +16,138 @@ return [
     'password' => 'The provided password is incorrect.',
     'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',
 
+
+
+
+
+    
+    
+    // Document related
+    'documents' => 'Documents',
+    'employee_documents' => 'Employee Documents',
+    'upload_new_document' => 'Upload New Document',
+    'document_name' => 'Document Name',
+    'document_category' => 'Category',
+    'select_category' => 'Select Category',
+    'cv_resume' => 'CV / Resume',
+    'employment_contract' => 'Employment Contract',
+    'id_proof' => 'ID Proof',
+    'certificate' => 'Certificate',
+    'photo' => 'Photo',
+    'offer_letter' => 'Offer Letter',
+    'select_file' => 'Select File',
+    'supported_files_pdf_images_doc' => 'Supported files: PDF, JPG, PNG, DOC, DOCX',
+    'uploading' => 'Uploading...',
+    'upload_document' => 'Upload Document',
+    'no_documents_uploaded' => 'No documents uploaded yet',
+    'category' => 'Category',
+    'uploaded' => 'Uploaded',
+    'actions' => 'Actions',
+    'close' => 'Close',
+
+    'advance' => 'Advance',
+    'advances' => 'Advances',
+    'my_advances' => 'My Advances',
+    'request_new_advance' => 'Request New Advance',
+    'outstanding_balance' => 'Outstanding Balance',
+    'next_deduction' => 'Next Deduction',
+    'deduction_history' => 'Deduction History',
+    
+    // Sync related
+    'sync_users' => 'Sync Users to Employees',
+    'confirm_sync' => 'Sync Users to Employees?',
+    'sync_warning_message' => 'This will update all employee records with the latest user data. Continue?',
+    'yes_sync' => 'Yes, Sync Now',
+    'sync_completed' => 'Sync Completed Successfully!',
+    'sync_summary' => 'Sync Summary',
+    'sync_results' => 'Sync Results',
+    'created' => 'Created',
+    'select_salary_type' => 'Select Salary Type',
+    'updated' => 'Updated',
+    'skipped' => 'Skipped',
+    'errors' => 'Errors',
+    'total_users' => 'Total Users',
+    'total_employees' => 'Total Employees',
+    'sync_failed' => 'Sync Failed',
+    'sync_error' => 'Sync Error',
+    'ok' => 'OK',
+    'sync_in_progress' => 'Sync in Progress',
+    
+    // Personal Information
+    'personal_information' => 'Personal Information',
+    'gender' => 'Gender',
+    'select_gender' => 'Select Gender',
+    'male' => 'Male',
+    'female' => 'Female',
+    'other' => 'Other',
+    'date_of_birth' => 'Date of Birth',
+    'residence' => 'Residence',
+    
+    // Employment Details
+    'employment_details' => 'Employment Details',
+    'employee_type' => 'Employee Type',
+    'select_employee_type' => 'Select Employee Type',
+    'permanent' => 'Permanent',
+    'contract' => 'Contract',
+    'casual' => 'Casual',
+    'temporary' => 'Temporary',
+    'intern' => 'Intern',
+    'probation' => 'Probation',
+    'department' => 'Department',
+    'select_department' => 'Select Department',
+    
+    // Salary Information
+    'salary_information' => 'Salary Information',
+    'recurring_salary' => 'Recurring Salary',
+    'recurring_day' => 'Payment Day of Month',
+    'Hourly' => 'Hourly',
+    'Weekly' => 'Weekly',
+    'Monthly' => 'Monthly',
+    'Quarterly' => 'Quarterly',
+    'Annual' => 'Annual',
+    
+    // Tax & Social Security
+    'tax_social_security' => 'Tax & Social Security',
+    'nssf_number' => 'NSSF Number',
+    'tin_number' => 'TIN Number',
+    
+    // Bank Details
+    'bank_details' => 'Bank Details',
+    'bank_name' => 'Bank Name',
+    'bank_account' => 'Bank Account Number',
+    'bank_branch' => 'Bank Branch',
+    
+    // Identification
+    'identification' => 'Identification',
+    'id_type' => 'ID Type',
+    'select_id_type' => 'Select ID Type',
+    'national_id' => 'National ID',
+    'passport' => 'Passport',
+    'drivers_license' => 'Driver\'s License',
+    'voters_card' => 'Voter\'s Card',
+    'id_number' => 'ID Number',
+    'qualification' => 'Highest Qualification',
+    
+    // Next of Kin
+    'next_of_kin' => 'Next of Kin',
+    'next_of_kin_name' => 'Next of Kin Name',
+    'next_of_kin_contact' => 'Next of Kin Contact',
+    'next_of_kin_relationship' => 'Relationship',
+    
+    // Documents
+    'documents' => 'Documents',
+    'upload_documents' => 'Upload Documents',
+    'supported_files' => 'Supported files: PDF, JPG, PNG, DOC, DOCX (Max 5MB)',
+    'existing_documents' => 'Existing Documents',
+    
+    // Notes
+    'notes' => 'Notes',
+    'additional_notes' => 'Additional notes or comments...',
+
+
     // Common terms
     '_account' => 'Account',
+    'no_employee_found' => 'No employees found.',
     'save' => 'Save',
     'artisan_commands' => 'Artisan Commands',
     'generate' => 'Generate',
@@ -102,6 +232,7 @@ return [
     '_search' => 'Search... ',
     '_select' => 'Select',
     '_sign_out' => 'Sign Out',
+    '_sign_in' => 'Sign In',
     '_status' => 'Status',
     '_symbol' => 'Symbol',
     '_system' => 'System',
@@ -432,10 +563,20 @@ return [
     'orders_with_discount' => 'Orders with Discount',
     'orders_without_discount' => 'Orders without Discount',
     'other' => 'Other',
+    'for_demo_access' => 'For Demo Access',
+    'click_to_fill' => 'Click to Auto-Fill: ',
+    'tap_to_fill' => ' Tap to fill demo credentials automatically',
+    'pos_service' => 'Point Of Sale As A Service',
     'Paid' => 'Paid',
+    'most_advanced_pos' => ' Starpos the most advanced POS System in the world  ',
     'payment_created' => 'Payment created successfully',
     'payment_deleted' => 'Payment deleted successfully',
     'payment_id' => 'Payment ID',
+    'login_success_title' => 'Success!',
+    'login_success_message' => 'You have successfully logged in!',
+    'login_error_title' => 'Oops!',
+    'login_error_message' => 'Account Suspended, Contact Admin to re-establish it or These credentials do not match our records.',
+    'ok_button' => 'Ok, got it!',
     'payment_method' => 'Payment Method',
     'payment_method_analysis' => 'Payment Method Analysis',
     'payment_method_distribution' => 'Payment Method Distribution',

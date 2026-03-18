@@ -1,3 +1,4 @@
+
 @can('view employee payment')
 <!-- resources/views/procurement/employee-payment/component.blade.php -->
 <div class="card-body py-4" id="reloadPaymentComponent">
@@ -31,7 +32,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $payment->id }}</div>
+                                <div class="badge badge-light fw-bold">{{__('auth._id')}}{{ $payment->id }}</div>
                             </td>
                             <td>{{ $payment->employee->first_name.' '.$payment->employee->last_name ?? 'N/A' }}</td>
                             <td>

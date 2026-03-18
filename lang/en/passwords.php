@@ -27,6 +27,7 @@ return [
     'sales_index' => 'Sales Index',
     'sales_table' => 'Sales Table',
     'sales' => 'Sales',
+    '_supplier' => 'Supplier',
     'order_number' => 'Order Number',
     '_customer' => 'Customer',
     'actions' => 'Actions',

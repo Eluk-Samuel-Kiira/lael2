@@ -141,6 +141,15 @@ if (!function_exists('getLogoImage')) {
     }
 }
 
+    function calculateTaxDueDate($paymentDate)
+    {
+        // Example: Taxes due by 15th of following month
+        return \Carbon\Carbon::parse($paymentDate)
+            ->addMonth()
+            ->startOfMonth()
+            ->addDays(14); // 15th of next month
+    }
+
 
 if (!function_exists('getFaviconImage')) {
     function getFaviconImage($tenantId = null, $forceRefresh = false)

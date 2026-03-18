@@ -1130,6 +1130,425 @@
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
 
+    // Function to load employee advances for create modal
+    function loadEmployeeAdvances() {
+        const employeeId = $('#employee_select').val();
+        const paymentType = $('#payment_type').val();
+        
+        if (!employeeId) {
+            $('#advance_deductions_container').html(`
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-arrow-up fs-2 mb-3 d-block"></i>
+                    <span>{{ __('payments.select_employee_to_view_advances') }}</span>
+                </div>
+            `);
+            $('#advance_deduction_preview').addClass('d-none');
+            return;
+        }
+
+        $('#advance_deductions_container').html(`
+            <div class="text-center py-4">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">{{ __('payments.loading') }}</span>
+                </div>
+                <p class="mt-2 text-muted">{{ __('payments.loading_advances') }}</p>
+            </div>
+        `);
+
+        // No payment_id for create mode
+        fetch(`/employee-advances/${employeeId}/active?payment_type=${paymentType}`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.advances.length > 0) {
+                renderAdvancesTable(data.advances, 'create', null);
+            } else {
+                $('#advance_deductions_container').html(`
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-check-circle fs-2 mb-3 text-success d-block"></i>
+                        <span>${data.message || '{{ __("payments.no_active_advances") }}'}</span>
+                    </div>
+                `);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading advances:', error);
+            $('#advance_deductions_container').html(`
+                <div class="text-center py-5 text-danger">
+                    <i class="fas fa-exclamation-triangle fs-2 mb-3 d-block"></i>
+                    <span>{{ __('payments.error_loading_advances') }}</span>
+                </div>
+            `);
+        });
+    }
+
+    // Function to load employee advances for edit modal
+    function editLoadEmployeeAdvances(paymentId) {
+        const employeeId = document.getElementById('edit_employee_select_' + paymentId).value;
+        const paymentType = document.getElementById('edit_payment_type_' + paymentId).value;
+        
+        if (!employeeId) {
+            document.getElementById('edit_advance_deductions_container_' + paymentId).innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-arrow-up fs-2 mb-3 d-block"></i>
+                    <span>{{ __('payments.select_employee_to_view_advances') }}</span>
+                </div>
+            `;
+            return;
+        }
+
+        document.getElementById('edit_advance_deductions_container_' + paymentId).innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-warning" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">{{ __('payments.loading_advances') }}</p>
+            </div>
+        `;
+
+        // Pass payment_id for edit mode to include previously selected advances
+        fetch(`/employee-advances/${employeeId}/active?payment_type=${paymentType}&payment_id=${paymentId}`, {
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.advances.length > 0) {
+                renderAdvancesTable(data.advances, 'edit', paymentId);
+            } else {
+                document.getElementById('edit_advance_deductions_container_' + paymentId).innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-check-circle fs-2 mb-3 text-success d-block"></i>
+                        <span>${data.message || '{{ __("payments.no_active_advances") }}'}</span>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading advances:', error);
+            document.getElementById('edit_advance_deductions_container_' + paymentId).innerHTML = `
+                <div class="text-center py-5 text-danger">
+                    <i class="fas fa-exclamation-triangle fs-2 mb-3 d-block"></i>
+                    <span>{{ __('payments.error_loading_advances') }}</span>
+                </div>
+            `;
+        });
+    }
+
+    // Shared function to render advances table
+    function renderAdvancesTable(advances, mode, paymentId) {
+        // Get existing deductions if in edit mode
+        let existingAdvanceIds = [];
+        let existingDeductions = {};
+        
+        if (mode === 'edit' && paymentId) {
+            const existingDeductionsInput = document.getElementById('edit_advance_deductions_' + paymentId).value;
+            if (existingDeductionsInput && existingDeductionsInput !== '[]') {
+                const deductions = JSON.parse(existingDeductionsInput);
+                existingAdvanceIds = deductions.map(d => d.advance_id.toString());
+                deductions.forEach(d => {
+                    existingDeductions[d.advance_id] = d.deduction_amount;
+                });
+            }
+        }
+
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-row-bordered table-row-gray-100 align-middle">
+                    <thead>
+                        <tr class="fw-bold text-muted bg-light">
+                            <th class="w-50px">
+                                <div class="form-check form-check-sm form-check-custom form-check-solid">
+                                    <input class="form-check-input" type="checkbox" id="${mode}_select_all_advances_${mode === 'edit' ? paymentId : ''}" onchange="${mode === 'edit' ? 'edit' : ''}ToggleAllAdvances${mode === 'edit' ? '(' + paymentId + ', this.checked)' : '(this)'}">
+                                </div>
+                            </th>
+                            <th>{{ __('payments.advance_date') }}</th>
+                            <th>{{ __('payments.advance_amount') }}</th>
+                            <th>{{ __('payments.remaining') }}</th>
+                            <th>{{ __('payments.deduction_frequency') }}</th>
+                            <th>{{ __('payments.status') }}</th>
+                            <th class="text-end">{{ __('payments.to_deduct') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        advances.forEach(advance => {
+            const isChecked = mode === 'edit' ? existingAdvanceIds.includes(advance.id.toString()) : false;
+            const deductionAmount = (mode === 'edit' && existingDeductions[advance.id]) 
+                ? existingDeductions[advance.id] 
+                : (advance.installment_amount || advance.remaining_amount);
+            
+            const checkboxClass = mode === 'edit' ? `edit-advance-checkbox-${paymentId}` : 'advance-checkbox';
+            const inputClass = mode === 'edit' ? `edit-deduction-amount-input-${paymentId}` : 'deduction-amount-input';
+            const disabled = mode === 'edit' ? (!isChecked ? 'disabled' : '') : 'disabled';
+            
+            // Add visual indicator for fully paid advances that were previously selected
+            const statusBadge = advance.is_fully_paid 
+                ? '<span class="badge badge-light-secondary ms-2">{{ __("payments.fully_paid") }}</span>' 
+                : '';
+            
+            html += `
+                <tr ${advance.is_fully_paid && !isChecked ? 'class="bg-light-secondary text-muted"' : ''}>
+                    <td>
+                        <div class="form-check form-check-sm form-check-custom form-check-solid">
+                            <input class="form-check-input ${checkboxClass}" 
+                                type="checkbox" 
+                                value="${advance.id}"
+                                data-remaining="${advance.remaining_amount}"
+                                data-installment="${advance.installment_amount || advance.remaining_amount}"
+                                data-frequency="${advance.deduction_frequency}"
+                                onchange="${mode === 'edit' ? 'edit' : ''}UpdateAdvanceDeductionPreview${mode === 'edit' ? '(' + paymentId + ')' : '()'}"
+                                ${isChecked ? 'checked' : ''}
+                                ${advance.is_fully_paid && !isChecked ? 'disabled' : ''}>
+                        </div>
+                    </td>
+                    <td>${advance.advance_date}</td>
+                    <td class="fw-bold">{{ currency_symbol() }}${formatCurrency(advance.advance_amount)}</td>
+                    <td class="${advance.remaining_amount > 0 ? 'text-warning' : 'text-success'} fw-bold">
+                        {{ currency_symbol() }}${formatCurrency(advance.remaining_amount)}
+                    </td>
+                    <td><span class="badge badge-light-info">${advance.deduction_frequency_label}</span></td>
+                    <td>
+                        <span class="badge badge-light-${advance.status === 'fully_paid' ? 'success' : 'primary'}">
+                            ${advance.status.replace('_', ' ')}
+                        </span>
+                    </td>
+                    <td class="text-end">
+                        <div class="input-group input-group-sm w-200px ms-auto">
+                            <input type="number" 
+                                class="form-control form-control-sm ${inputClass}" 
+                                data-advance-id="${advance.id}"
+                                min="0.01" 
+                                max="${advance.remaining_amount}"
+                                step="0.01"
+                                value="${deductionAmount}"
+                                ${disabled}>
+                            <span class="input-group-text">{{ currency_symbol() }}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 text-muted fs-7">
+                <i class="fas fa-info-circle me-1"></i>
+                {{ __('payments.advance_deduction_note_edit') }}
+            </div>
+        `;
+
+        if (mode === 'edit') {
+            document.getElementById('edit_advance_deductions_container_' + paymentId).innerHTML = html;
+            
+            // Add event listeners to enable/disable inputs based on checkbox
+            document.querySelectorAll(`.edit-advance-checkbox-${paymentId}`).forEach(cb => {
+                cb.addEventListener('change', function() {
+                    const advanceId = this.value;
+                    const input = document.querySelector(`.edit-deduction-amount-input-${paymentId}[data-advance-id="${advanceId}"]`);
+                    if (input) {
+                        input.disabled = !this.checked;
+                    }
+                    editUpdateAdvanceDeductionPreview(paymentId);
+                });
+            });
+            
+            editUpdateAdvanceDeductionPreview(paymentId);
+        } else {
+            $('#advance_deductions_container').html(html);
+            
+            // Add event listeners for create mode
+            $('.advance-checkbox').on('change', function() {
+                const advanceId = $(this).val();
+                const input = $(`.deduction-amount-input[data-advance-id="${advanceId}"]`);
+                if (input.length) {
+                    input.prop('disabled', !$(this).is(':checked'));
+                }
+                updateAdvanceDeductionPreview();
+            });
+            
+            updateAdvanceDeductionPreview();
+        }
+    }
+
+
+    // Toggle all advances
+    function toggleAllAdvances(checkbox) {
+        $('.advance-checkbox').prop('checked', checkbox.checked);
+        updateAdvanceDeductionPreview();
+    }
+
+    // Update advance deduction preview
+    function updateAdvanceDeductionPreview() {
+        let grossAmount = parseFloat($('#gross_amount').val()) || 0;
+        let totalDeduction = 0;
+        let selectedAdvances = [];
+        
+        $('.advance-checkbox:checked').each(function() {
+            let advanceId = $(this).val();
+            let remaining = parseFloat($(this).data('remaining'));
+            let installmentAmount = parseFloat($(this).data('installment'));
+            
+            // For recurring advances, use installment amount; for one-time, use remaining
+            let deductionAmount = Math.min(installmentAmount, remaining);
+            totalDeduction += deductionAmount;
+            
+            selectedAdvances.push({
+                advance_id: advanceId,
+                deduction_amount: deductionAmount
+            });
+        });
+        
+        // Update preview
+        let afterDeduction = Math.max(0, grossAmount - totalDeduction);
+        
+        $('#preview_advance_count').text($('.advance-checkbox:checked').length);
+        $('#preview_advance_deduction').text(formatCurrency(totalDeduction));
+        $('#preview_after_advance').text(formatCurrency(afterDeduction));
+        
+        // Store in hidden fields
+        $('#total_advance_deduction').val(totalDeduction.toFixed(2));
+        $('#advance_deductions').val(JSON.stringify(selectedAdvances));
+        
+        // Show preview if any advances selected
+        if ($('.advance-checkbox:checked').length > 0) {
+            $('#advance_deduction_preview').removeClass('d-none');
+        } else {
+            $('#advance_deduction_preview').addClass('d-none');
+        }
+    }
+
+    // Trigger advance loading when employee or payment type changes
+    $(document).ready(function() {
+        $('#employee_select, #payment_type').on('change', function() {
+            loadEmployeeAdvances();
+        });
+        
+        $('#gross_amount').on('input', function() {
+            updateAdvanceDeductionPreview();
+        });
+    });
+
+
+
+
+    // Modify editEmployeePayment function to handle advance deductions
+    function editEmployeePayment(uniqueId) {
+        const submitButton = document.getElementById('editEmployeePaymentButton' + uniqueId);
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        var form = document.getElementById('editPaymentForm' + uniqueId);
+        var formData = new FormData(form);
+
+        // Handle selected taxes
+        formData.delete('selected_taxes[]');
+        document.querySelectorAll(`.edit-tax-checkbox-${uniqueId}:checked`).forEach(cb => {
+            formData.append('selected_taxes[]', cb.value);
+        });
+
+        // Handle advance deductions
+        const advanceDeductions = document.getElementById('edit_advance_deductions_' + uniqueId).value;
+        if (advanceDeductions && advanceDeductions !== '[]') {
+            const deductions = JSON.parse(advanceDeductions);
+            formData.delete('advance_deductions');
+            formData.append('advance_deductions', JSON.stringify(deductions));
+            
+            const totalDeduction = document.getElementById('edit_total_advance_deduction_' + uniqueId).value;
+            formData.delete('total_advance_deduction');
+            formData.append('total_advance_deduction', totalDeduction);
+        }
+
+        // Set up the URL dynamically
+        var updateUrl = '/payment/' + uniqueId;
+        
+        // Submit form data asynchronously
+        fetch(updateUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.log('Response data:', data);
+            
+            if (data.success) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(data.message);
+                } else {
+                    alert(data.message);
+                }
+                
+                $('#editPaymentModal' + uniqueId).modal('hide');
+                
+                if (data.reload) {
+                    location.reload();
+                } else if (data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } else {
+                // Handle validation errors
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(key => {
+                        const errorElement = document.getElementById(key + uniqueId);
+                        if (errorElement) {
+                            errorElement.innerHTML = '<span class="text-danger">' + data.errors[key][0] + '</span>';
+                        }
+                    });
+                }
+                
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(data.message || 'Error updating payment');
+                } else {
+                    alert(data.message || 'Error updating payment');
+                }
+            }
+        })
+        .catch(error => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.error('Error:', error);
+            
+            if (error.errors) {
+                Object.keys(error.errors).forEach(key => {
+                    const errorElement = document.getElementById(key + uniqueId);
+                    if (errorElement) {
+                        errorElement.innerHTML = '<span class="text-danger">' + error.errors[key][0] + '</span>';
+                    }
+                });
+            }
+            
+        });
+    }
+
+    // Load advances when modal is opened
+    $('[id^="editPaymentModal"]').on('shown.bs.modal', function() {
+        const modalId = $(this).attr('id');
+        const paymentId = modalId.replace('editPaymentModal', '');
+        
+        // Load advances if employee is already selected
+        const employeeSelect = document.getElementById('edit_employee_select_' + paymentId);
+        if (employeeSelect && employeeSelect.value) {
+            editLoadEmployeeAdvances(paymentId);
+        }
+    });
 
 </script>
 
@@ -1466,6 +1885,9 @@
         document.getElementById('display_tax_amount').textContent = totalTax.toFixed(2);
     }
 </script>
+
+
+
 
 
 

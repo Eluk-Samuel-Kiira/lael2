@@ -69,6 +69,7 @@
     }
 
 
+
     // Function to handle navigation
     function navigateToGuestPage(url) {
         showLoader(); // Show loader during content loading
@@ -168,9 +169,9 @@
 @include('layouts.pos-js')
 
 
+
+
 <script>
-    // Main Initiator Functions
-    
     function handleFormSubmiter(formData, submitButtonId) {
         
         // console.log(formData);
@@ -184,43 +185,67 @@
             
             // Only for Login 
             if (formData["routeName"] === "/login") {
-
-                const alertOptions = noErrors
-                    ? {
-                        icon: 'success',
-                        title: 'Success!',
-                        text: 'You have successfully logged in!',
-                        confirmButtonText: 'Ok, got it!',
-                        backdrop: true
-                    }
-                    : {
-                        icon: 'error',
-                        title: 'Oops!',
-                        text: 'Account Suspended, Contact Admin to re-establish it or These credentials do not match our records.',
-                        confirmButtonText: 'Ok, got it!',
-                        backdrop: true
-                    };
-                
-                Swal.fire(alertOptions).then(() => {
-                    if (noErrors) {
-                        // window.location.href = '/dashboard'; // Redirect on success
+                if (noErrors) {
+                    // Success toast notification
+                    toastr.success(
+                        '{{ __("auth.login_success_message") }}', 
+                        '{{ __("auth.login_success_title") }}', 
+                        {
+                            closeButton: true,
+                            progressBar: true,
+                            positionClass: "toast-top-right",
+                            timeOut: 3000,
+                            extendedTimeOut: 1000,
+                            showMethod: 'fadeIn',
+                            hideMethod: 'fadeOut',
+                            onclick: null
+                        }
+                    );
+                    
+                    // Redirect after a short delay
+                    setTimeout(() => {
                         reloadTo('/dashboard');
-                    }
-                });
-                
+                    }, 1500);
+                } else {
+                    // Error toast notification
+                    toastr.error(
+                        '{{ __("auth.login_error_message") }}', 
+                        '{{ __("auth.login_error_title") }}', 
+                        {
+                            closeButton: true,
+                            progressBar: true,
+                            positionClass: "toast-top-right",
+                            timeOut: 5000,
+                            extendedTimeOut: 2000,
+                            showMethod: 'fadeIn',
+                            hideMethod: 'fadeOut',
+                            onclick: null
+                        }
+                    );
+                }
             }
 
         })
         .catch(error => {
             console.error('An unexpected error occurred:', error);
+            // Error toast for unexpected errors
+            toastr.error(
+                '{{ __("auth.unexpected_error") }}', 
+                '{{ __("auth.error_title") }}', 
+                {
+                    closeButton: true,
+                    progressBar: true,
+                    positionClass: "toast-top-right",
+                    timeOut: 5000,
+                    extendedTimeOut: 2000
+                }
+            );
         })
         .finally(() => {
             LiveBlade.toggleButtonLoading(submitButtonId, false);
         });
 
     }
-
-    
 </script>
 
 

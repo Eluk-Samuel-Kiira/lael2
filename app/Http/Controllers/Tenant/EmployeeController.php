@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ Employee };
+use App\Models\{ Employee, User };
 use Illuminate\Support\Facades\{ Mail, Auth };
 
 class EmployeeController extends Controller
@@ -78,6 +78,8 @@ class EmployeeController extends Controller
     {
         //
     }
+    
+
 
     /**
      * Update the specified resource in storage.
@@ -107,41 +109,73 @@ class EmployeeController extends Controller
                 ]);
             }
 
-            if ($employee->termination_date) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('auth.terminated_empl'),
-                ]);
-            }
-
-            // Validate the request
+            
+            // Validate only employee-specific fields - BUT INCLUDE ALL FIELDS FROM FORM
             $validated = $request->validate([
-                'salary' => 'required|numeric|min:0',
-                'salary_type' => 'required|in:hourly,weekly,monthly,annual',
+                // These are coming from the form but should be ignored/optional
+                'first_name' => 'sometimes|string|max:255',
+                'last_name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|max:255',
+                'phone' => 'sometimes|string|max:20',
+                
+                // Personal Information (Employee specific)
+                'gender' => 'nullable|in:male,female,other',
+                'date_of_birth' => 'nullable|date|before:today',
+                'residence' => 'nullable|string|max:500',
+                
+                // Employment Details
+                'department_id' => 'nullable|exists:departments,id',
+                'job_title' => 'nullable|string|max:255',
+                'employee_type' => 'required|in:permanent,contract,casual,temporary,intern,probation',
                 'hire_date' => 'required|date',
-                'termination_date' => 'nullable|date',
+                'termination_date' => 'nullable|date|after_or_equal:hire_date',
+                'is_active' => 'sometimes|boolean',
+                
+                // Salary Information
+                'salary' => 'required|numeric|min:0',
+                'salary_type' => 'required|in:hourly,weekly,monthly,quarterly,annual',
+                'is_salary_recurring' => 'sometimes|boolean',
+                'recurring_day' => 'nullable|required_if:is_salary_recurring,1|integer|min:1|max:31',
+                
+                // Tax & Social Security
+                'nssf_number' => 'nullable|string|max:50|unique:employees,nssf_number,' . $id . ',id,tenant_id,' . $tenantId,
+                'tin_number' => 'nullable|string|max:50|unique:employees,tin_number,' . $id . ',id,tenant_id,' . $tenantId,
+                
+                // Bank Details
+                'bank_name' => 'nullable|string|max:255',
+                'bank_account_number' => 'nullable|string|max:50',
+                'bank_branch' => 'nullable|string|max:255',
+                
+                // Identification
+                'id_type' => 'nullable|in:national_id,passport,drivers_license,voters_card,other',
+                'id_number' => 'nullable|string|max:50',
+                'qualification' => 'nullable|string|max:255',
+                
+                // Next of Kin
+                'next_of_kin_name' => 'nullable|string|max:255',
+                'next_of_kin_contact' => 'nullable|string|max:20',
+                'next_of_kin_relationship' => 'nullable|string|max:100',
+                
+                // Notes
+                'notes' => 'nullable|string|max:1000',
+                
+                // Documents (handled separately)
+                'documents' => 'nullable',
+                'documents.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
             ]);
 
-            // Update employee fields
-            $employee->update([
-                'salary' => $validated['salary'],
-                'salary_type' => $validated['salary_type'],
-                'hire_date' => $validated['hire_date'],
-                'termination_date' => $validated['termination_date'],
-                'is_active' => $validated['termination_date'] ? false : true,
-            ]);
 
-            // Sync with User model if user exists and belongs to same tenant
-            if ($employee->user && $employee->user->tenant_id === $tenantId) {
-                $employee->user->update([
-                    'job_title' => $employee->job_title, 
-                    'first_name' => $employee->first_name, 
-                    'last_name' => $employee->last_name, 
-                    'email' => $employee->email, 
-                    'phone' => $employee->telephone_number, 
-                    'department_id' => $employee->department_id, 
-                ]);
+            // If terminated, automatically set inactive
+            if (!empty($validated['termination_date'])) {
+                $validated['is_active'] = false;
+            } elseif ($request->has('is_active')) {
+                $validated['is_active'] = true;
             }
+
+            // Update only employee table with validated data
+            $employee->update($validated);
+
+            \Log::info('Employee updated successfully', ['employee_id' => $id]);
 
             // Return success response
             return response()->json([
@@ -154,19 +188,31 @@ class EmployeeController extends Controller
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            // Log the validation errors in detail
+            \Log::error('Employee update validation failed', [
+                'employee_id' => $id,
+                'errors' => $e->errors(),
+                'request_data' => $request->except(['_token', '_method'])
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
                 'errors' => $e->errors()
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error updating employee', ['error' => $e->getMessage(), 'employee_id' => $id]);
+            \Log::error('Error updating employee', [
+                'error' => $e->getMessage(),
+                'employee_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Error updating employee: ' . $e->getMessage()
             ]);
         }
     }
+
 
     /**
      * Remove the specified resource from storage.
@@ -243,5 +289,95 @@ class EmployeeController extends Controller
             'success' => false,
             'message' => __('auth.update_failed'),
         ]);
+    }
+
+
+    
+        
+    public function syncUsersToEmployees(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $tenantId = $user->tenant_id;
+            
+            if (!$user->hasPermissionTo('edit employee')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+
+            // Get all users for this tenant
+            $users = User::where('tenant_id', $tenantId)->get();
+            
+            $syncStats = [
+                'created' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+                'errors' => 0
+            ];
+
+            foreach ($users as $user) {
+                try {
+                    // Check if employee exists for this user
+                    $employee = Employee::where('user_id', $user->id)
+                                    ->where('tenant_id', $tenantId)
+                                    ->first();
+
+                    $employeeData = [
+                        'tenant_id' => $tenantId,
+                        'user_id' => $user->id,
+                        'first_name' => $user->first_name,
+                        'last_name' => $user->last_name,
+                        'email' => $user->email,
+                        'phone' => $user->telephone_number,
+                        'job_title' => $user->job_title,
+                        // 'department_id' => $user->department_id,
+                        'hire_date' => $user->created_at ?? now(),
+                        'is_active' => $user->status === 'active',
+                    ];
+
+                    if ($employee) {
+                        // Update existing employee
+                        $employee->update($employeeData);
+                        $syncStats['updated']++;
+                    } else {
+                        // Create new employee
+                        $employeeData['hire_date'] = now();
+                        Employee::create($employeeData);
+                        $syncStats['created']++;
+                    }
+
+                } catch (\Exception $e) {
+                    $syncStats['errors']++;
+                    \Log::error('Error syncing user to employee', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Get counts for summary
+            $totalUsers = $users->count();
+            $totalEmployees = Employee::where('tenant_id', $tenantId)->count();
+
+            return response()->json([
+                'success' => true,
+                'message' => __('auth.sync_completed'),
+                'stats' => $syncStats,
+                'summary' => [
+                    'total_users' => $totalUsers,
+                    'total_employees' => $totalEmployees,
+                    'sync_date' => now()->format('Y-m-d H:i:s')
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in sync users to employees', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.sync_error') . ': ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -29,6 +29,8 @@ return new class extends Migration
             $table->decimal('hourly_rate', 8, 2)->nullable();
             $table->json('breakdown')->nullable(); // For detailed payment breakdown
             $table->text('notes')->nullable();
+            $table->json('advance_deductions')->nullable();
+            $table->bigInteger('total_advance_deduction')->nullable()->comment('Stored in smallest currency unit');
             
             // 👇 Changed to BIGINT for storing in smallest currency unit
             $table->bigInteger('gross_amount')->nullable()->comment('Stored in smallest currency unit');

@@ -28,22 +28,22 @@
 
         <div class="d-grid mb-10">
             <button id="loginSubmitButton" onclick="loginAction()" type="button" class="btn btn-primary">
-                <span class="indicator-label">{{__('Sign In')}}</span>
-                <span class="indicator-progress" style="display: none;">{{__('Please wait... ')}}
+                <span class="indicator-label">{{__('auth._sign_in')}}</span>
+                <span class="indicator-progress" style="display: none;">{{__('auth.run_button_processing')}}
                 <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
             </button>
         </div>
 
         <!-- Demo credentials (auto-fill when clicked) -->
         <div class="text-center">
-            <p class="text-gray-400 fw-semibold mb-2">{{ __('For Demo Access') }}</p>
+            <p class="text-gray-400 fw-semibold mb-2">{{ __('auth.for_demo_access') }}</p>
             <button type="button" 
                 onclick="fillDemoCredentials()" 
                 class="btn btn-outline-primary btn-sm fw-semibold px-4 py-2 rounded-pill shadow-sm d-inline-flex align-items-center gap-2">
                 <i class="fas fa-magic"></i>
-                <span>Click to Auto-Fill: <strong>trialuser@gmail.com / password@123</strong></span>
+                <span>{{ __('auth.click_to_fill') }}<strong>trialuser@gmail.com / password@123</strong></span>
             </button>
-            <p class="text-muted fs-7 mt-2">Tap to fill demo credentials automatically</p>
+            <p class="text-muted fs-7 mt-2">{{ __('auth.tap_to_fill') }}</p>
         </div>
     </form>
 

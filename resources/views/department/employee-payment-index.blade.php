@@ -54,7 +54,7 @@
                 </button>
                 @endcan
 
-                <!-- Modal include - KEPT INSIDE the actions div for functionality -->
+                <!-- Modals -->
                 @include('department.employee-payment.create')
             </div>
         </div>
