@@ -133,6 +133,16 @@ class UserSeeder extends Seeder
                 'edit completed payment',
                 'delete completed payment',
             ],
+            'Employee Advance Management' => [
+                'create employee advance',
+                'view employee advance',
+                'edit employee advance',
+                'delete employee advance',
+                'update employee advance',
+                'approve employee advance',
+                'cancel employee advance',
+                'reject employee advance',
+            ],
             'Promotion Management' => [
                 'create promotion',
                 'view promotion',

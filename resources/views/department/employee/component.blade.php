@@ -1,7 +1,7 @@
 @can('view employee')
 <div class="card-body py-4" id="employeeUserIndexTable">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-7 gy-2 gs-3" id="kt_table_users">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -12,9 +12,11 @@
                     <th class="min-w-125px">{{ __('pagination.id') }}</th>
                     <th class="min-w-125px">{{ __('pagination.employee') }}</th>
                     <th class="min-w-125px">{{ __('pagination.department') }}</th>
+                    {{-- 
                     <th class="min-w-125px">{{ __('pagination.email') }}</th>
                     <th class="min-w-125px">{{ __('pagination.phone') }}</th>
                     <th class="min-w-125px">{{ __('pagination.job_title') }}</th>
+                    --}}
                     <th class="min-w-125px">{{ __('pagination.salary') }}</th>
                     <th class="min-w-125px">{{ __('pagination.hire_date') }}</th>
                     <th class="min-w-125px">{{ __('pagination.term_date') }}</th>
@@ -50,9 +52,11 @@
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $employee->department->name ?? __('payments.none') }}</div>
                             </td>
-                            <td>{{ $employee->email }}</td>
+                            {{-- 
+                            <td>{{ $employee->email }}</td> 
                             <td>{{ $employee->phone ?? 'N/A' }}</td>
                             <td>{{ $employee->job_title ?? 'N/A' }}</td>
+                            --}}
                             <td>
                                 <div class="d-flex flex-column">
                                     <span class="badge badge-light fw-bold">{{ $employee->salary }} - {{ currency_symbol() }}</span>
@@ -80,22 +84,33 @@
                                 <div class="d-flex gap-2">
                                     @can('edit employee')
                                         <button 
-                                        class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
-                                        data-bs-toggle="modal" 
+                                            class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal" 
                                             data-bs-target="#editUserModal{{$employee->id}}">
                                             <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
-                                            </button>
+                                        </button>
                                     @endcan
+                                    <button 
+                                        class="btn btn-sm btn-light btn-active-color-info d-flex align-items-center px-3 py-2" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#documentsModal{{$employee->id}}">
+                                        <i class="bi bi-file-earmark-text me-1 fs-5"></i> 
+                                        <span>{{ __('auth.documents') }}</span>
+                                        @if($employee->documents && count(json_decode($employee->documents, true)) > 0)
+                                            <span class="badge badge-primary ms-1">{{ count(json_decode($employee->documents, true)) }}</span>
+                                        @endif
+                                    </button>
                                 </div>
 
                                 @include('department.employee.edit')
+                                @include('department.employee.documents')
                                 
                             </td>
                         </tr>
                     @endforeach
                 @else
                     <tr>
-                        <td colspan="11" class="text-center py-4">{{ __('No employees found.') }}</td>
+                        <td colspan="11" class="text-center py-4">{{ __('auth.no_employee_found') }}</td>
                     </tr>
                 @endif
             </tbody>

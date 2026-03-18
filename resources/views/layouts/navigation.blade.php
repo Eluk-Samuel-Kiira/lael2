@@ -323,13 +323,24 @@
                         </div>
                         @endcan
 
+                        @can('view employee advance')
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('employee-advance.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('auth.advance') }}</span>
+                            </a>
+                        </div>
+                        @endcan
+
                         @can('view employee payment')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('payment.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.employee_payment') }}</span>
+                                <span class="menu-title">{{ __('pagination.employee_pay_roll') }}</span>
                             </a>
                         </div>
                         @endcan

@@ -11,11 +11,21 @@
         <meta name="keywords" content="Top 10 most used POS System in the world now" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta property="og:locale" content="en_US" />
-        <meta property="og:type" content="LAEL POS SYSTEM" />
-        <meta property="og:title" content="The most advanced POS System in the world" />
-        <meta property="og:url" content="https://lael.stardena.com" />
-        <meta property="og:site_name" content="Lael by Stardena" />
-        <link rel="canonical" href="https://lael.stardena.com" />
+        <meta property="og:type" content="STARPOS SYSTEM" />
+        <meta property="og:type" content="{{ __('auth.pos_service') }}" />
+        <meta property="og:title" content="{{ __('auth.most_advanced_pos') }}" />
+        <meta property="og:url" content="https://starpos.stardena.com" />
+        <meta property="og:url" content="https://starpos.stardena.org" />
+        <meta property="og:site_name" content="Starpos by Stardena" />
+
+        
+		<link rel="icon" type="image/png" sizes="512x512" href="{{ getFaviconImage() }}">
+		<link rel="icon" type="image/png" sizes="192x192" href="{{ getFaviconImage() }}">
+		<link rel="icon" type="image/png" sizes="32x32" href="{{ getFaviconImage() }}">
+		<link rel="icon" type="image/png" sizes="16x16" href="{{ getFaviconImage() }}">
+
+        <link rel="canonical" href="https://starpos.stardena.com" />
+        <link rel="canonical" href="https://starpos.stardena.org" />
 		<link rel="shortcut icon" href="{{ asset('assets/media/logos/favicon.ico') }}" />
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700" />
 		<link href="{{ asset('assets/plugins/global/plugins.bundle.css') }}" rel="stylesheet" type="text/css" />

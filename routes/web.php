@@ -3,11 +3,12 @@
 use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserController, RoleController};
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Tenant\{ DepartmentController, EmployeeController, EmployeePaymentController, TenantController };
-use App\Http\Controllers\Catalog\ {CategoryController, InventoryItemController, ProductVariantController, 
+use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
+    EmployeePaymentController, TenantController, EmployeeAdvanceController };
+use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, 
     InventoryAdjustmentsController, ProductController, ProductCategoryController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
-use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController };
+use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
@@ -139,8 +140,45 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::put('/employees/{id}/departments', [UserController::class, 'updateDepartments'])
             ->name('employees.updateDepartments');
 
+            
+        Route::post('/employee/documents/upload', [EmployeeDocumentController::class, 'upload'])->name('employee.documents.upload');
+        Route::post('/employee/documents/delete', [EmployeeDocumentController::class, 'delete'])->name('employee.documents.delete');
+        Route::get('/employee/{id}/documents', [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
+        
+
+
+
+        Route::resource('employee-advance', EmployeeAdvanceController::class);
+        // Get active advances for payment form
+        Route::get('/employee-advances/{employeeId}/active', [EmployeeAdvanceController::class, 'getActiveAdvances'])
+            ->name('employee.advances.active');
+        
+        // Approve advance
+        Route::post('/employee-advances/{id}/approve', [EmployeeAdvanceController::class, 'approve'])
+            ->name('employee.advances.approve');
+        
+        // Reject advance
+        Route::post('/employee-advances/{id}/reject', [EmployeeAdvanceController::class, 'reject'])
+            ->name('employee.advances.reject');
+        
+        // Cancel advance
+        Route::post('/employee-advances/{id}/cancel', [EmployeeAdvanceController::class, 'cancel'])
+            ->name('employee.advances.cancel');
+        
+        // Get advance statistics
+        Route::get('/employee-advances/statistics', [EmployeeAdvanceController::class, 'getStatistics'])
+            ->name('employee.advances.statistics');
+        
+        // Export advances
+        Route::get('/employee-advances/export', [EmployeeAdvanceController::class, 'export'])
+            ->name('employee.advances.export');
+
+
+
         Route::resource('user', EmployeeController::class);
         Route::post('/user-status/{id}', [EmployeeController::class, 'changeUserStatus']);
+        Route::post('/sync-users-to-employees', [EmployeeController::class, 'syncUsersToEmployees'])
+            ->name('sync.users.to.employees');
 
         Route::resource('payment', EmployeePaymentController::class);
         Route::post('/payment-status/{id}', [EmployeePaymentController::class, 'updatePaymentStatus']);
@@ -219,9 +257,18 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::resource('orders', OrderController::class);
 
 
+
         // Taxes and Promotions
         Route::resource('tax', TaxController::class);
         Route::post('/tax-status/{id}', [TaxController::class, 'updateTaxStatus']);
+
+        Route::prefix('tax')->name('tax.')->group(function () {
+            Route::get('/liabilities', [TaxLiabilityController::class, 'index'])->name('liabilities.index');
+            Route::post('/liabilities/remit', [TaxLiabilityController::class, 'remitTaxes'])->name('liabilities.remit');
+            Route::get('/liabilities/summary', [TaxLiabilityController::class, 'summary'])->name('liabilities.summary');
+        });
+
+
         Route::resource('promotion', PromotionController::class);
         Route::post('/promotion-status/{id}', [PromotionController::class, 'updatePromotionStatus']);
 

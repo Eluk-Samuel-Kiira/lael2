@@ -807,22 +807,22 @@ function formatPaymentType(type) {
      6. CANCEL POS ORDER
 ════════════════════════════════════════════════ --}}
 <script>
-function cancelPOSOrder(orderId) {
-    Swal.fire({
-        title: '{{ __("passwords.cancel_title") }}', text: '{{ __("passwords.cancel_confirmation") }}',
-        icon: 'warning', showCancelButton: true,
-        confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
-        confirmButtonText: '{{ __("passwords.cancel_order") }}', cancelButtonText: '{{ __("passwords.keep_order") }}',
-        reverseButtons: true, showLoaderOnConfirm: true,
-        preConfirm: () => $.ajax({ url: '/pos-cancel/'+orderId, method:'POST',
-            data: { _token:'{{ csrf_token() }}', status:'cancelled' }, dataType:'json' })
-            .then(r => { if (r.success===false) throw new Error(r.message||'Failed'); return r; })
-            .catch(e => Swal.showValidationMessage(`Request failed: ${e.statusText||e.message}`))
-    }).then(result => {
-        if (result.isConfirmed && result.value?.success) {
-            Swal.fire({ title:'{{ __("passwords.success") }}', text:result.value.message, icon:'success', confirmButtonColor:'#3085d6' })
-                .then(() => location.reload());
-        }
-    });
-}
+    function cancelPOSOrder(orderId) {
+        Swal.fire({
+            title: '{{ __("passwords.cancel_title") }}', text: '{{ __("passwords.cancel_confirmation") }}',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonColor: '#dc3545', cancelButtonColor: '#6c757d',
+            confirmButtonText: '{{ __("passwords.cancel_order") }}', cancelButtonText: '{{ __("passwords.keep_order") }}',
+            reverseButtons: true, showLoaderOnConfirm: true,
+            preConfirm: () => $.ajax({ url: '/pos-cancel/'+orderId, method:'POST',
+                data: { _token:'{{ csrf_token() }}', status:'cancelled' }, dataType:'json' })
+                .then(r => { if (r.success===false) throw new Error(r.message||'Failed'); return r; })
+                .catch(e => Swal.showValidationMessage(`Request failed: ${e.statusText||e.message}`))
+        }).then(result => {
+            if (result.isConfirmed && result.value?.success) {
+                Swal.fire({ title:'{{ __("passwords.success") }}', text:result.value.message, icon:'success', confirmButtonColor:'#3085d6' })
+                    .then(() => location.reload());
+            }
+        });
+    }
 </script>

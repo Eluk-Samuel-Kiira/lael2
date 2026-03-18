@@ -20,13 +20,26 @@
     
     // Get applied tax IDs for checkboxes
     $appliedTaxIds = collect($appliedTaxesArray)->pluck('tax_id')->filter()->toArray();
+    
+    // Decode advance_deductions if exists
+    $advanceDeductionsArray = null;
+    if ($payment->advance_deductions) {
+        if (is_string($payment->advance_deductions)) {
+            $advanceDeductionsArray = json_decode($payment->advance_deductions, true);
+        } elseif (is_array($payment->advance_deductions)) {
+            $advanceDeductionsArray = $payment->advance_deductions;
+        }
+    }
+    
+    $hasAdvanceDeductions = !empty($advanceDeductionsArray);
+    $totalAdvanceDeduction = $payment->total_advance_deduction ?? 0;
 @endphp
 
 <div class="modal fade" id="editPaymentModal{{$payment->id}}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl"> <!-- Changed to modal-xl to accommodate more content -->
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{ __('payments.edit_payment') }} - {{ $payment->id }}</h5>
+                <h5 class="modal-title">{{ __('payments.edit_payment') }} - #{{ $payment->id }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="editPaymentForm{{$payment->id}}" class="form">
@@ -38,7 +51,8 @@
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.employee') }} *</label>
                             <select name="employee_id" class="form-select" required id="edit_employee_select_{{ $payment->id }}"
-                                    @if($payment->status === 'completed') disabled @endif>
+                                    @if($payment->status === 'completed') disabled @endif
+                                    onchange="editLoadEmployeeAdvances({{ $payment->id }})">
                                 <option value="">{{ __('payments.select_employee') }}</option>
                                 @foreach($active_employees as $employee)
                                     <option value="{{ $employee->id }}" 
@@ -73,7 +87,8 @@
                                     style="background-color: #f8f9fa; cursor: not-allowed;">
                                 <input type="hidden" name="payment_type" value="{{ $payment->payment_type }}">
                             @else
-                                <select name="payment_type" class="form-select" required id="edit_payment_type_{{ $payment->id }}">
+                                <select name="payment_type" class="form-select" required id="edit_payment_type_{{ $payment->id }}"
+                                        onchange="editLoadEmployeeAdvances({{ $payment->id }})">
                                     <option value="">{{ __('payments.select_payment_type') }}</option>
                                     <option value="salary" {{ old('payment_type', $payment->payment_type) == 'salary' ? 'selected' : '' }}>
                                         {{ __('payments.salary') }}
@@ -87,9 +102,9 @@
                                     <option value="overtime" {{ old('payment_type', $payment->payment_type) == 'overtime' ? 'selected' : '' }}>
                                         {{ __('payments.overtime') }}
                                     </option>
-                                    <option value="advance" {{ old('payment_type', $payment->payment_type) == 'advance' ? 'selected' : '' }}>
+                                    <!-- <option value="advance" {{ old('payment_type', $payment->payment_type) == 'advance' ? 'selected' : '' }}>
                                         {{ __('payments.advance') }}
-                                    </option>
+                                    </option> -->
                                     <option value="other" {{ old('payment_type', $payment->payment_type) == 'other' ? 'selected' : '' }}>
                                         {{ __('payments.other') }}
                                     </option>
@@ -132,7 +147,7 @@
                             <input type="number" name="gross_amount" id="edit_gross_amount_{{ $payment->id }}" 
                                 class="form-control" step="0.01" min="0.01" required
                                 value="{{ old('gross_amount', $payment->gross_amount ?? $payment->amount) }}"
-                                onchange="editCalculateTaxPreview({{ $payment->id }})"
+                                onchange="editCalculateTaxPreview({{ $payment->id }}); editUpdateAdvanceDeductionPreview({{ $payment->id }})"
                                 @if($payment->status === 'completed') readonly @endif>
                             <div id="gross_amount{{ $payment->id }}"></div>
                             @if($payment->status !== 'completed')
@@ -144,7 +159,7 @@
                         <div class="col-md-4">
                             <label class="form-label">{{ __('payments.total_tax_amount') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">$</span>
+                                <span class="input-group-text">{{ currency_symbol() }}</span>
                                 <input type="text" 
                                     class="form-control bg-light" 
                                     id="edit_display_total_tax_{{ $payment->id }}"
@@ -160,7 +175,7 @@
                         <div class="col-md-4">
                             <label class="form-label">{{ __('payments.net_amount_paid') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">$</span>
+                                <span class="input-group-text">{{ currency_symbol() }}</span>
                                 <input type="text" 
                                     class="form-control bg-light" 
                                     id="edit_display_net_amount_{{ $payment->id }}"
@@ -257,10 +272,10 @@
                                                         @if($taxType === 'percentage')
                                                                             {{ number_format($taxRate, 2) }}%
                                                         @else
-                                                                            ${{ number_format($taxRate, 2) }}
+                                                                            {{ currency_symbol() }}{{ number_format($taxRate, 2) }}
                                                         @endif
                                                                     </span>
-                                                                    <span class="fw-bold text-danger">${{ number_format($taxAmount, 2) }}</span>
+                                                                    <span class="fw-bold text-danger">{{ currency_symbol() }}{{ number_format($taxAmount, 2) }}</span>
                                                                 </div>
                                                         @if($taxCode)
                                                                     <small class="text-muted d-block">{{ $taxCode }}</small>
@@ -338,7 +353,7 @@
                                         <div class="card-body p-4">
                                             <span class="text-muted fw-bold d-block">{{ __('payments.gross_amount') }}</span>
                                             <span class="text-dark fw-bolder fs-2" id="edit_preview_gross_{{ $payment->id }}">
-                                                ${{ number_format($payment->gross_amount ?? $payment->amount, 2) }}
+                                                {{ currency_symbol() }}{{ number_format($payment->gross_amount ?? $payment->amount, 2) }}
                                             </span>
                                         </div>
                                     </div>
@@ -348,7 +363,7 @@
                                         <div class="card-body p-4">
                                             <span class="text-muted fw-bold d-block">{{ __('payments.total_tax') }}</span>
                                             <span class="text-danger fw-bolder fs-2" id="edit_preview_tax_{{ $payment->id }}">
-                                                ${{ number_format($payment->total_tax_amount ?? 0, 2) }}
+                                                {{ currency_symbol() }}{{ number_format($payment->total_tax_amount ?? 0, 2) }}
                                             </span>
                                         </div>
                                     </div>
@@ -358,7 +373,7 @@
                                         <div class="card-body p-4">
                                             <span class="text-muted fw-bold d-block">{{ __('payments.net_amount') }}</span>
                                             <span class="text-success fw-bolder fs-2" id="edit_preview_net_{{ $payment->id }}">
-                                                ${{ number_format($payment->net_amount ?? $payment->amount, 2) }}
+                                                {{ currency_symbol() }}{{ number_format($payment->net_amount ?? $payment->amount, 2) }}
                                             </span>
                                         </div>
                                     </div>
@@ -396,11 +411,11 @@
                                                             @if($taxType === 'percentage')
                                                                 {{ number_format($taxRate, 2) }}%
                                                             @else
-                                                                ${{ number_format($taxRate, 2) }}
+                                                                {{ currency_symbol() }}{{ number_format($taxRate, 2) }}
                                                             @endif
                                                         </span>
                                                     </td>
-                                                    <td class="text-end fw-bold">${{ number_format($taxAmount, 2) }}</td>
+                                                    <td class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($taxAmount, 2) }}</td>
                                                 </tr>
                                             @endforeach
                                         @else
@@ -416,13 +431,13 @@
                                             <tr class="fw-bold bg-light">
                                                 <td colspan="2" class="text-end">{{ __('payments.total_tax') }}:</td>
                                                 <td class="text-end text-danger" id="edit_footer_total_tax_{{ $payment->id }}">
-                                                    ${{ number_format($payment->total_tax_amount ?? 0, 2) }}
+                                                    {{ currency_symbol() }}{{ number_format($payment->total_tax_amount ?? 0, 2) }}
                                                 </td>
                                             </tr>
                                             <tr class="fw-bold bg-light">
                                                 <td colspan="2" class="text-end">{{ __('payments.net_amount') }}:</td>
                                                 <td class="text-end text-success" id="edit_footer_net_amount_{{ $payment->id }}">
-                                                    ${{ number_format($payment->net_amount ?? $payment->amount, 2) }}
+                                                    {{ currency_symbol() }}{{ number_format($payment->net_amount ?? $payment->amount, 2) }}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -436,6 +451,128 @@
                                     {{ __('payments.completed_payment_tax_note') }}
                                 </div>
                             @endif
+                        </div>
+
+                        <!-- ADVANCE DEDUCTIONS SECTION -->
+                        <div class="col-12 mt-5">
+                            <div class="card card-flush {{ $payment->status === 'completed' ? 'bg-light-secondary' : 'bg-light-warning' }}">
+                                <div class="card-header">
+                                    <h3 class="card-title">
+                                        <i class="fas fa-hand-holding-usd {{ $payment->status === 'completed' ? 'text-secondary' : 'text-warning' }} me-2"></i>
+                                        {{ __('payments.advance_deductions') }}
+                                        @if($payment->status === 'completed')
+                                            <span class="badge badge-secondary ms-2">{{ __('payments.locked') }}</span>
+                                        @endif
+                                    </h3>
+                                    @if($payment->status !== 'completed')
+                                        <div class="card-toolbar">
+                                            <button type="button" class="btn btn-sm btn-warning" onclick="editLoadEmployeeAdvances({{ $payment->id }})">
+                                                <i class="fas fa-sync me-2"></i>
+                                                {{ __('payments.load_advances') }}
+                                            </button>
+                                        </div>
+                                    @endif
+                                </div>
+                                <div class="card-body">
+                                    @if($payment->status === 'completed')
+                                        <!-- COMPLETED PAYMENT: Show advance deductions as read-only -->
+                                        @if($hasAdvanceDeductions)
+                                            <div class="table-responsive">
+                                                <table class="table table-row-bordered table-row-gray-100 align-middle">
+                                                    <thead>
+                                                        <tr class="fw-bold text-muted bg-light">
+                                                            <th>{{ __('payments.advance_id') }}</th>
+                                                            <th>{{ __('payments.advance_amount') }}</th>
+                                                            <th class="text-end">{{ __('payments.deducted_amount') }}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach($advanceDeductionsArray as $deduction)
+                                                            @php
+                                                                $advance = \App\Models\EmployeeAdvance::find($deduction['advance_id']);
+                                                            @endphp
+                                                            <tr>
+                                                                <td>#{{ $deduction['advance_id'] }}</td>
+                                                                <td>{{ $advance ? currency_symbol() . number_format($advance->advance_amount, 2) : 'N/A' }}</td>
+                                                                <td class="text-end fw-bold text-danger">{{ currency_symbol() }}{{ number_format($deduction['deduction_amount'], 2) }}</td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr class="fw-bold bg-light">
+                                                            <td colspan="2" class="text-end">{{ __('payments.total_deduction') }}:</td>
+                                                            <td class="text-end text-danger">{{ currency_symbol() }}{{ number_format($totalAdvanceDeduction, 2) }}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        @else
+                                            <div class="text-center py-5 text-muted">
+                                                <i class="fas fa-info-circle fs-2 mb-3 d-block"></i>
+                                                <span>{{ __('payments.no_advance_deductions_for_this_payment') }}</span>
+                                            </div>
+                                        @endif
+                                    @else
+                                        <!-- EDITABLE PAYMENT: Show advance deductions selection -->
+                                        <div id="edit_advance_deductions_container_{{ $payment->id }}" class="mb-3">
+                                            @if($hasAdvanceDeductions)
+                                                <!-- We'll load via AJAX, but show loading initially -->
+                                                <div class="text-center py-4">
+                                                    <div class="spinner-border text-warning" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2 text-muted">{{ __('payments.loading_advances') }}</p>
+                                                </div>
+                                            @else
+                                                <div class="text-center py-5 text-muted">
+                                                    <i class="fas fa-arrow-up fs-2 mb-3 d-block"></i>
+                                                    <span>{{ __('payments.select_employee_to_view_advances') }}</span>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        <!-- Advance Deduction Preview -->
+                                        <div id="edit_advance_deduction_preview_{{ $payment->id }}" class="mt-4 p-4 bg-white rounded {{ !$hasAdvanceDeductions ? 'd-none' : '' }}">
+                                            <h5 class="mb-3">{{ __('payments.advance_deduction_summary') }}</h5>
+                                            <div class="row g-3">
+                                                <div class="col-md-4">
+                                                    <div class="card card-dashed">
+                                                        <div class="card-body p-3">
+                                                            <span class="text-muted fw-bold d-block">{{ __('payments.selected_advances') }}</span>
+                                                            <span class="text-warning fw-bolder fs-3" id="edit_preview_advance_count_{{ $payment->id }}">
+                                                                {{ $hasAdvanceDeductions ? count($advanceDeductionsArray) : 0 }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="card card-dashed">
+                                                        <div class="card-body p-3">
+                                                            <span class="text-muted fw-bold d-block">{{ __('payments.total_deduction') }}</span>
+                                                            <span class="text-danger fw-bolder fs-3" id="edit_preview_advance_deduction_{{ $payment->id }}">
+                                                                {{ currency_symbol() }}{{ number_format($totalAdvanceDeduction, 2) }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="card card-dashed">
+                                                        <div class="card-body p-3">
+                                                            <span class="text-muted fw-bold d-block">{{ __('payments.amount_after_deduction') }}</span>
+                                                            <span class="text-success fw-bolder fs-3" id="edit_preview_after_advance_{{ $payment->id }}">
+                                                                {{ currency_symbol() }}{{ number_format(($payment->gross_amount ?? $payment->amount) - $totalAdvanceDeduction, 2) }}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <input type="hidden" name="advance_deductions" id="edit_advance_deductions_{{ $payment->id }}" value="{{ $payment->advance_deductions ?? '' }}">
+                                        <input type="hidden" name="total_advance_deduction" id="edit_total_advance_deduction_{{ $payment->id }}" value="{{ $totalAdvanceDeduction }}">
+                                    @endif
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Description -->

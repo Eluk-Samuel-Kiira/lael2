@@ -33,13 +33,13 @@
                         <!-- Payment Type -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.payment_type') }} *</label>
-                            <select name="payment_type" class="form-select" required id="payment_type">
+                            <select name="payment_type" class="form-select" required id="payment_type" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                 <option value="">{{ __('payments.select_payment_type') }}</option>
                                 <option value="salary">{{ __('payments.salary') }}</option>
                                 <option value="allowance">{{ __('payments.allowance') }}</option>
                                 <option value="bonus">{{ __('payments.bonus') }}</option>
                                 <option value="overtime">{{ __('payments.overtime') }}</option>
-                                <option value="advance">{{ __('payments.advance') }}</option>
+                                <!-- <option value="advance">{{ __('payments.advance') }}</option> -->
                                 <option value="other">{{ __('payments.other') }}</option>
                             </select>
                             <div id="payment_type"></div>
@@ -48,7 +48,7 @@
                         <!-- Payment Method with auto-selected default -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.payment_method') }} *</label>
-                            <select name="payment_method_id" class="form-select" required>
+                            <select name="payment_method_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true" required>
                                 <option value="">{{ __('payments.select_payment_method') }}</option>
                                 @foreach($active_payment_methods as $method)
                                     @php
@@ -83,7 +83,7 @@
                         <!-- Status -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.status') }} *</label>
-                            <select name="status" class="form-select" required>
+                            <select name="status" class="form-select" required data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                 <option value="pending">{{ __('payments.pending') }}</option>
                                 <!-- <option value="completed">{{ __('payments.completed') }}</option> -->
                                 <option value="failed">{{ __('payments.failed') }}</option>
@@ -208,6 +208,66 @@
                         </div>
                         <input type="hidden" name="net_amount" id="net_amount" value="0">
                         <input type="hidden" name="total_tax_amount" id="total_tax_amount" value="0">
+
+                        <!-- ADVANCE DEDUCTIONS SECTION - Add this after tax section -->
+                        <div class="col-12 mt-5">
+                            <div class="card card-flush bg-light-warning">
+                                <div class="card-header">
+                                    <h3 class="card-title">
+                                        <i class="fas fa-hand-holding-usd text-warning me-2"></i>
+                                        {{ __('payments.advance_deductions') }}
+                                    </h3>
+                                    <div class="card-toolbar">
+                                        <button type="button" class="btn btn-sm btn-warning" onclick="loadEmployeeAdvances()">
+                                            <i class="fas fa-sync me-2"></i>
+                                            {{ __('payments.load_advances') }}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="advance_deductions_container" class="mb-3">
+                                        <div class="text-center py-5 text-muted">
+                                            <i class="fas fa-arrow-up fs-2 mb-3 d-block"></i>
+                                            <span>{{ __('payments.select_employee_to_view_advances') }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Advance Deduction Preview -->
+                                    <div id="advance_deduction_preview" class="mt-4 p-4 bg-white rounded d-none">
+                                        <h5 class="mb-3">{{ __('payments.advance_deduction_summary') }}</h5>
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <div class="card card-dashed">
+                                                    <div class="card-body p-3">
+                                                        <span class="text-muted fw-bold d-block">{{ __('payments.selected_advances') }}</span>
+                                                        <span class="text-warning fw-bolder fs-3" id="preview_advance_count">0</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card card-dashed">
+                                                    <div class="card-body p-3">
+                                                        <span class="text-muted fw-bold d-block">{{ __('payments.total_deduction') }}</span>
+                                                        <span class="text-danger fw-bolder fs-3" id="preview_advance_deduction">0.00</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="card card-dashed">
+                                                    <div class="card-body p-3">
+                                                        <span class="text-muted fw-bold d-block">{{ __('payments.amount_after_deduction') }}</span>
+                                                        <span class="text-success fw-bolder fs-3" id="preview_after_advance">0.00</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden" name="advance_deductions" id="advance_deductions" value="">
+                                    <input type="hidden" name="total_advance_deduction" id="total_advance_deduction" value="0">
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Description -->
                         <div class="col-12">

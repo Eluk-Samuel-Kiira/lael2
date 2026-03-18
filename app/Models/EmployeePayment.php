@@ -18,6 +18,8 @@ class EmployeePayment extends Model
         'payment_type',
         'description',
         'amount',
+        'advance_deductions',
+        'total_advance_deduction',
         'gross_amount',
         'net_amount',
         'total_tax_amount',
@@ -45,6 +47,7 @@ protected $casts = [
         'completed_at' => 'date',
         // Money fields - stored as integers in DB
         'amount' => 'integer',
+        'advance_deductions' => 'array',
         'gross_amount' => 'integer',
         'net_amount' => 'integer',
         'total_tax_amount' => 'integer',
@@ -73,6 +76,44 @@ protected $casts = [
     const STATUS_FAILED = 'failed';
     const STATUS_CANCELLED = 'cancelled';
 
+
+    // Add accessor for advance deductions if needed
+    public function getTotalAdvanceDeductionAttribute($value): ?float
+    {
+        return $value ? $value / 100 : 0;
+    }
+
+    public function setTotalAdvanceDeductionAttribute($value): void
+    {
+        $this->attributes['total_advance_deduction'] = $value ? round($value * 100) : 0;
+    }
+
+    // Add relationships
+    public function advances()
+    {
+        return $this->hasMany(EmployeeAdvance::class, 'payment_id');
+    }
+
+    // Add method to get deductible advances
+    public function getDeductibleAdvancesAttribute()
+    {
+        if (!$this->employee) {
+            return collect([]);
+        }
+
+        return EmployeeAdvance::where('employee_id', $this->employee_id)
+            ->where('tenant_id', $this->tenant_id)
+            ->active()
+            ->get()
+            ->filter(function($advance) {
+                return $advance->appliesToSalaryType($this->payment_type);
+            });
+    }
+
+    public function taxLiabilities()
+    {
+        return $this->hasMany(TaxLiability::class, 'employee_payment_id');
+    }
 
 
     /**
