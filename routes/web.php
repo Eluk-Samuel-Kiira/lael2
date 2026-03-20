@@ -4,7 +4,7 @@ use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserCont
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
-    EmployeePaymentController, TenantController, EmployeeAdvanceController };
+    EmployeePaymentController, TenantController, EmployeeAdvanceController, LeaveController };
 use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, 
     InventoryAdjustmentsController, ProductController, ProductCategoryController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
@@ -174,6 +174,12 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('employee.advances.export');
 
 
+        Route::resource('leave', LeaveController::class);
+        Route::get('/leave/calendar/events', [LeaveController::class, 'getCalendarEvents'])->name('leave.calendar.events');
+        Route::post('/leave/{id}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+        Route::post('/leave/{id}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+        Route::post('/leave/{id}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+
 
         Route::resource('user', EmployeeController::class);
         Route::post('/user-status/{id}', [EmployeeController::class, 'changeUserStatus']);
@@ -286,6 +292,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/purchase-orders/{purchaseOrder}/receive-items', [PurchaseOrderController::class, 'receiveItems'])->name('purchase-orders.receive-items');
         Route::post('/purchase-cancel/{id}', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
         Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('purchase-orders.destroy');
+
+        Route::post('/purchase-orders/calculate-tax-preview', [PurchaseOrderController::class, 'calculateTaxPreview'])
+            ->name('purchase_order.calculate_tax_preview');
 
         // Expenses
         Route::resource('expense-category', ExpenseCategoryController::class);

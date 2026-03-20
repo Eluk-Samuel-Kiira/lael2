@@ -36,7 +36,7 @@ class TaxLiability extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
+        'amount' => 'integer',
         'rate' => 'decimal:2',
         'due_date' => 'date',
         'remitted_at' => 'datetime',
@@ -47,8 +47,150 @@ class TaxLiability extends Model
     ];
 
     /**
-     * Relationships
+     * Status constants
      */
+    const STATUS_PENDING = 'pending';
+    const STATUS_REMITTED = 'remitted';
+    const STATUS_OVERDUE = 'overdue';
+    const STATUS_CANCELLED = 'cancelled';
+
+    /**
+     * Tax type constants
+     */
+    const TYPE_PERCENTAGE = 'percentage';
+    const TYPE_FIXED = 'fixed';
+
+    // ============================================
+    // ACCESSORS - Convert from stored integer to float
+    // ============================================
+
+    /**
+     * Accessor for amount
+     */
+    public function getAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    // ============================================
+    // MUTATORS - Convert from float to stored integer
+    // ============================================
+
+    /**
+     * Mutator for amount
+     */
+    public function setAmountAttribute($value): void
+    {
+        $this->attributes['amount'] = to_base_currency($value);
+    }
+
+    // ============================================
+    // ADDITIONAL ACCESSORS
+    // ============================================
+
+    /**
+     * Get formatted amount
+     */
+    public function getFormattedAmountAttribute(): string
+    {
+        return number_format($this->amount, 2);
+    }
+
+    /**
+     * Get status badge HTML
+     */
+    public function getStatusBadgeAttribute(): string
+    {
+        $colors = [
+            self::STATUS_PENDING => 'warning',
+            self::STATUS_REMITTED => 'success',
+            self::STATUS_OVERDUE => 'danger',
+            self::STATUS_CANCELLED => 'secondary',
+        ];
+
+        $labels = [
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_REMITTED => 'Remitted',
+            self::STATUS_OVERDUE => 'Overdue',
+            self::STATUS_CANCELLED => 'Cancelled',
+        ];
+
+        $color = $colors[$this->status] ?? 'secondary';
+        $label = $labels[$this->status] ?? ucfirst($this->status);
+
+        return '<span class="badge badge-light-' . $color . '">' . $label . '</span>';
+    }
+
+    /**
+     * Get formatted rate with percentage sign
+     */
+    public function getFormattedRateAttribute(): string
+    {
+        if ($this->tax_type === self::TYPE_FIXED) {
+            return number_format($this->rate, 2);
+        }
+        return number_format($this->rate, 2) . '%';
+    }
+
+    /**
+     * Get tax type label
+     */
+    public function getTaxTypeLabelAttribute(): string
+    {
+        return match($this->tax_type) {
+            self::TYPE_PERCENTAGE => 'Percentage',
+            self::TYPE_FIXED => 'Fixed Amount',
+            default => ucfirst($this->tax_type),
+        };
+    }
+
+    /**
+     * Get period display
+     */
+    public function getPeriodDisplayAttribute(): string
+    {
+        $period = (string) $this->tax_year;
+        
+        if ($this->tax_month) {
+            $monthName = \Carbon\Carbon::create()->month($this->tax_month)->format('F');
+            $period .= ' - ' . $monthName;
+        } elseif ($this->tax_quarter) {
+            $period .= ' - Q' . $this->tax_quarter;
+        }
+        
+        return $period;
+    }
+
+    /**
+     * Get due date formatted
+     */
+    public function getDueDateFormattedAttribute(): string
+    {
+        return $this->due_date ? $this->due_date->format('d M Y') : '—';
+    }
+
+    /**
+     * Get remitted date formatted
+     */
+    public function getRemittedDateFormattedAttribute(): string
+    {
+        return $this->remitted_at ? $this->remitted_at->format('d M Y') : '—';
+    }
+
+    /**
+     * Check if liability is overdue
+     */
+    public function getIsOverdueAttribute(): bool
+    {
+        return $this->status === self::STATUS_PENDING 
+            && $this->due_date 
+            && $this->due_date->isPast();
+    }
+
+    // ============================================
+    // RELATIONSHIPS
+    // ============================================
+
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
@@ -79,22 +221,23 @@ class TaxLiability extends Model
         return $this->belongsTo(PaymentMethod::class, 'remittance_payment_method_id');
     }
 
-    /**
-     * Scopes
-     */
+    // ============================================
+    // SCOPES
+    // ============================================
+
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->where('status', self::STATUS_PENDING);
     }
 
     public function scopeRemitted($query)
     {
-        return $query->where('status', 'remitted');
+        return $query->where('status', self::STATUS_REMITTED);
     }
 
     public function scopeOverdue($query)
     {
-        return $query->where('status', 'pending')
+        return $query->where('status', self::STATUS_PENDING)
             ->where('due_date', '<', now());
     }
 
@@ -118,87 +261,143 @@ class TaxLiability extends Model
         return $query;
     }
 
+    public function scopeForEmployee($query, $employeeId)
+    {
+        return $query->where('employee_id', $employeeId);
+    }
+
     public function scopeForPayment($query, $paymentId)
     {
         return $query->where('employee_payment_id', $paymentId);
     }
 
-    /**
-     * Accessors
-     */
-    public function getStatusBadgeAttribute(): string
-    {
-        return match($this->status) {
-            'pending' => '<span class="badge badge-light-warning">Pending</span>',
-            'remitted' => '<span class="badge badge-light-success">Remitted</span>',
-            'overdue' => '<span class="badge badge-light-danger">Overdue</span>',
-            'cancelled' => '<span class="badge badge-light-secondary">Cancelled</span>',
-            default => '<span class="badge badge-light-info">' . ucfirst($this->status) . '</span>',
-        };
-    }
-
-    public function getFormattedAmountAttribute(): string
-    {
-        return number_format($this->amount, 2) . ' ' . ($this->tenant->currency ?? 'UGX');
-    }
-
-    public function getPeriodAttribute(): string
-    {
-        $period = $this->tax_year;
-        
-        if ($this->tax_month) {
-            $monthName = \Carbon\Carbon::create()->month($this->tax_month)->format('F');
-            $period .= ' - ' . $monthName;
-        } elseif ($this->tax_quarter) {
-            $period .= ' - Q' . $this->tax_quarter;
-        }
-        
-        return $period;
-    }
+    // ============================================
+    // METHODS
+    // ============================================
 
     /**
-     * Methods
+     * Mark liability as remitted
      */
     public function markAsRemitted($remittanceData = [])
     {
         $this->update(array_merge([
-            'status' => 'remitted',
+            'status' => self::STATUS_REMITTED,
             'remitted_at' => now(),
         ], $remittanceData));
     }
 
+    /**
+     * Mark liability as overdue
+     */
     public function markAsOverdue()
     {
-        if ($this->status === 'pending' && $this->due_date && $this->due_date->isPast()) {
-            $this->update(['status' => 'overdue']);
+        if ($this->status === self::STATUS_PENDING && $this->due_date && $this->due_date->isPast()) {
+            $this->update(['status' => self::STATUS_OVERDUE]);
         }
     }
 
     /**
-     * Static Helpers
+     * Mark liability as cancelled
+     */
+    public function markAsCancelled()
+    {
+        $this->update(['status' => self::STATUS_CANCELLED]);
+    }
+
+    /**
+     * Calculate tax amount for a given taxable amount
+     */
+    public function calculateTaxAmount(float $taxableAmount): float
+    {
+        if ($this->tax_type === self::TYPE_PERCENTAGE) {
+            return $taxableAmount * ($this->rate / 100);
+        }
+        
+        // Fixed amount
+        return $this->rate;
+    }
+
+    // ============================================
+    // STATIC HELPERS
+    // ============================================
+
+    /**
+     * Get total pending tax amount for a tenant
      */
     public static function getPendingTotal($tenantId)
     {
         return self::where('tenant_id', $tenantId)
-            ->whereIn('status', ['pending', 'overdue'])
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_OVERDUE])
             ->sum('amount');
     }
 
-    public static function getMonthlyTotal($tenantId, $year, $month)
+    /**
+     * Get total remitted tax for a period
+     */
+    public static function getRemittedTotal($tenantId, $year, $month = null)
+    {
+        $query = self::where('tenant_id', $tenantId)
+            ->where('status', self::STATUS_REMITTED)
+            ->where('tax_year', $year);
+        
+        if ($month) {
+            $query->where('tax_month', $month);
+        }
+        
+        return $query->sum('amount');
+    }
+
+    /**
+     * Get monthly tax summary
+     */
+    public static function getMonthlySummary($tenantId, $year)
     {
         return self::where('tenant_id', $tenantId)
             ->where('tax_year', $year)
-            ->where('tax_month', $month)
-            ->where('status', 'remitted')
-            ->sum('amount');
+            ->selectRaw('tax_month, 
+                         SUM(CASE WHEN status = "pending" THEN amount ELSE 0 END) as pending,
+                         SUM(CASE WHEN status = "remitted" THEN amount ELSE 0 END) as remitted,
+                         SUM(CASE WHEN status = "overdue" THEN amount ELSE 0 END) as overdue')
+            ->groupBy('tax_month')
+            ->orderBy('tax_month')
+            ->get();
     }
 
+    /**
+     * Get outstanding liabilities by period
+     */
     public static function getOutstandingByPeriod($tenantId)
     {
         return self::where('tenant_id', $tenantId)
-            ->whereIn('status', ['pending', 'overdue'])
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_OVERDUE])
             ->selectRaw('tax_year, tax_month, tax_quarter, SUM(amount) as total')
             ->groupBy('tax_year', 'tax_month', 'tax_quarter')
+            ->orderBy('tax_year', 'desc')
+            ->orderBy('tax_month', 'desc')
             ->get();
+    }
+
+    /**
+     * Get all statuses for dropdown
+     */
+    public static function getStatuses(): array
+    {
+        return [
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_REMITTED => 'Remitted',
+            self::STATUS_OVERDUE => 'Overdue',
+            self::STATUS_CANCELLED => 'Cancelled',
+        ];
+    }
+
+    /**
+     * Get all tax types for dropdown
+     */
+    public static function getTaxTypes(): array
+    {
+        return [
+            self::TYPE_PERCENTAGE => 'Percentage (%)',
+            self::TYPE_FIXED => 'Fixed Amount',
+        ];
     }
 }

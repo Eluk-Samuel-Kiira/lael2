@@ -1,4 +1,4 @@
-<!-- resources/views/procurement/employee-payment-index.blade.php -->
+{{-- resources/views/procurement/employee-payment-index.blade.php --}}
 <x-app-layout>
     @section('title', __('payments.employee_payment_index'))
     @section('content')
@@ -46,6 +46,17 @@
                     </div>
                 </div>
 
+                <!-- Export Button -->
+                @can('export employee payment')
+                <button type="button" class="btn btn-light-primary flex-shrink-0" onclick="exportPayments()">
+                    <i class="ki-duotone ki-file-down fs-2 me-2">
+                        <span class="path1"></span>
+                        <span class="path2"></span>
+                    </i>
+                    <span class="d-none d-sm-inline">{{ __('payments.export') }}</span>
+                </button>
+                @endcan
+
                 @can('create employee payment')
                 <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_payment">
                     <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
@@ -64,7 +75,9 @@
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
                 <div id="status"></div>
-                <div class="card">
+
+                <!-- Payments Table Card -->
+                <div class="card mt-6">
                     @include('department.employee-payment.component')
                 </div>
             </div>
@@ -73,3 +86,4 @@
     
     @endsection
 </x-app-layout>
+

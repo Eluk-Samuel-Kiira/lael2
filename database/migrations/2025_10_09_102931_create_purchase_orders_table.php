@@ -21,6 +21,10 @@ return new class extends Migration
             $table->bigInteger('subtotal')->comment('Stored in smallest currency unit');
             $table->bigInteger('tax_total')->default(0)->comment('Stored in smallest currency unit');
             $table->bigInteger('total')->comment('Stored in smallest currency unit');
+
+            $table->bigInteger('received_subtotal')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('received_tax_total')->default(0)->comment('Stored in smallest currency unit');
+            $table->bigInteger('received_total')->default(0)->comment('Stored in smallest currency unit');
             
             $table->text('notes')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users');

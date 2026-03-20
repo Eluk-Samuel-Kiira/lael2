@@ -23,6 +23,7 @@ return new class extends Migration
             
             $table->enum('type', ['percentage', 'fixed'])->default('percentage');
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_withholding_tax')->default(false)->comment('If true, tax is deducted from supplier payment; if false, tax is added to supplier payment');
             $table->foreignId('created_by')->constrained('users')->cascadeOnDelete();
             $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
             

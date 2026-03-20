@@ -1,4 +1,3 @@
- 
 <div class="modal fade" id="kt_modal_add_tax" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-650px">
         <div class="modal-content">
@@ -28,26 +27,42 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('pagination._code')}}</span>
                                 </label>
-                                <input type="text" class="form-control form-control-solid" name="code" max="6"/>
+                                <input type="text" class="form-control form-control-solid" name="code" maxlength="6"/>
                                 <div id="code"></div>
                             </div>
                         </div>
+                        
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
-                                <label class="required form-label">{{__('pagination._type')}}</span></label>
-                                <select name="type" class="form-select"  data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <label class="required form-label">{{__('pagination._type')}}</label>
+                                <select name="type" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
                                     <option></option>
                                     <option value="percentage">{{__('pagination._percentage')}}</option>
                                     <option value="fixed">{{__('pagination._fixed')}}</option>
                                 </select>
                                 <div id="type"></div>
                             </div>
+                            
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('pagination._rate')}}</span>
                                 </label>
-                                <input type="number" class="form-control form-control-solid" name="rate"/>
+                                <input type="number" step="0.01" class="form-control form-control-solid" name="rate"/>
                                 <div id="rate"></div>
+                            </div>
+                        </div>
+
+                        <!-- Withholding Tax Checkbox -->
+                        <div class="row g-9 mb-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-12">
+                                <div class="form-check form-switch form-check-custom form-check-solid">
+                                    <input class="form-check-input" type="checkbox" name="is_withholding_tax" id="is_withholding_tax" value="1">
+                                    <label class="form-check-label fw-semibold" for="is_withholding_tax">
+                                        <i class="bi bi-receipt me-1"></i>
+                                        {{ __('passwords.withholding_tax') }}
+                                    </label>
+                                </div>
+                                <div class="text-muted fs-7 mt-1">{{ __('passwords.withholding_tax_help') }}</div>
                             </div>
                         </div>
 
@@ -69,7 +84,4 @@
             </div>
         </div>
     </div>
-</div>  
-
-
-
+</div>

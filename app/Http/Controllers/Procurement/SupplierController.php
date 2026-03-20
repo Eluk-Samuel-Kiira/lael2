@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Procurement;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ Supplier, PurchaseOrder };
-use Illuminate\Support\Facades\{ Mail, Auth };
+use App\Models\{ Supplier, PurchaseOrder, Product };
+use Illuminate\Support\Facades\{ Mail, Auth, DB };
 use Illuminate\Validation\Rule;
 
 
@@ -55,13 +55,15 @@ class SupplierController extends Controller
         //
     }
 
+
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created supplier in storage.
      */
     public function store(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('create supplier')) {
             return response()->json([
                 'success' => false,
@@ -70,14 +72,29 @@ class SupplierController extends Controller
         }
 
         $validated = $request->validate([
+            // Identity
             'name' => [
                 'required',
                 'string',
-                'max:100',
+                'max:150',
                 Rule::unique('suppliers')->where(function ($query) use ($tenantId) {
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
+            'trading_name' => 'nullable|string|max:150',
+            'supplier_type' => 'required|in:individual,company,government,ngo,foreign',
+            'is_active' => 'sometimes|boolean',
+            'supplier_code' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('suppliers')->where(function ($query) use ($tenantId) {
+                    return $query->where('tenant_id', $tenantId);
+                })
+            ],
+
+            // Contact
+            'contact_person' => 'nullable|string|max:100',
             'email' => [
                 'nullable',
                 'email',
@@ -86,6 +103,18 @@ class SupplierController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
+            'phone' => 'nullable|string|max:50',
+            'phone_secondary' => 'nullable|string|max:50',
+            'website' => 'nullable|string|max:255|url',
+
+            // Address
+            'address' => 'nullable|string',
+            'city' => 'nullable|string|max:100',
+            'state' => 'nullable|string|max:100',
+            'postal_code' => 'nullable|string|max:20',
+            'country_code' => 'nullable|string|size:2',
+
+            // Tax & Compliance
             'tax_number' => [
                 'nullable',
                 'string',
@@ -94,20 +123,40 @@ class SupplierController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            'contact_person' => 'nullable|string|max:100',
-            'phone' => 'nullable|string|max:50',
-            'address' => 'nullable|string',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'postal_code' => 'nullable|string|max:20',
-            'country_code' => 'nullable|string|size:2',
-            'payment_terms' => 'nullable|integer|min:0',
-            'notes' => 'nullable|string|max:500',
+            'is_vat_registered' => 'sometimes|boolean',
+            'vat_number' => 'nullable|string|max:50|required_if:is_vat_registered,1',
+            'withholding_tax_applicable' => 'sometimes|boolean',
+            'withholding_tax_rate' => 'nullable|numeric|min:0|max:100|required_if:withholding_tax_applicable,1',
+            'withholding_tax_exemption_ref' => 'nullable|string|max:100',
+            'withholding_tax_exemption_expiry' => 'nullable|date|after:today',
+
+            // Banking
+            'bank_name' => 'nullable|string|max:100',
+            'bank_branch' => 'nullable|string|max:100',
+            'bank_account_name' => 'nullable|string|max:150',
+            'bank_account_number' => 'nullable|string|max:50',
+            'bank_swift_code' => 'nullable|string|max:20',
+            'mobile_money_number' => 'nullable|string|max:50',
+            'mobile_money_provider' => 'nullable|string|max:50|required_with:mobile_money_number',
+
+            // Payment Terms
+            'payment_terms_days' => 'nullable|integer|min:0|max:365',
+            'payment_terms_type' => 'nullable|in:net,cod,prepaid,installment',
+            'preferred_payment_method' => 'nullable|in:bank_transfer,mobile_money,cash,cheque,other',
+            'credit_limit' => 'nullable|numeric|min:0',
+
+            // Classification
+            'category' => 'nullable|string|max:100',
+            'risk_level' => 'nullable|in:low,medium,high',
+            'currency_code' => 'nullable|string|size:3',
+
+            // Notes
+            'notes' => 'nullable|string|max:1000',
         ]);
 
         // Check maximum suppliers limit
         $currentSupplierCount = Supplier::where('tenant_id', $tenantId)->count();
-        $maxSuppliers = tenant_setting($tenantId, 'max_suppliers', 50); // Default to 50 if not set
+        $maxSuppliers = tenant_setting($tenantId, 'max_suppliers', 50);
 
         if ($currentSupplierCount >= $maxSuppliers) {
             return response()->json([
@@ -116,45 +165,55 @@ class SupplierController extends Controller
             ]);
         }
 
+        // Set defaults
         $validated['tenant_id'] = $tenantId;
         $validated['created_by'] = $user->id;
+        
+        // Handle boolean fields
+        $validated['is_active'] = $request->has('is_active');
+        $validated['is_vat_registered'] = $request->has('is_vat_registered');
+        $validated['withholding_tax_applicable'] = $request->has('withholding_tax_applicable');
+        
+        // Convert credit limit to smallest currency unit if provided
+        if (isset($validated['credit_limit']) && $validated['credit_limit'] !== null) {
+            $validated['credit_limit'] = to_base_currency($validated['credit_limit']);
+        }
 
-        $supplier = Supplier::create($validated);
+        DB::beginTransaction();
+        
+        try {
+            $supplier = Supplier::create($validated);
+            
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'componentId' => 'reloadSupplierComponent',
-            'refresh' => false,
-            'message' => __('auth._created'),
-            'redirect' => route('suppliers.index'),
-        ]);
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'componentId' => 'reloadSupplierComponent',
+                'refresh' => false,
+                'message' => __('auth._created'),
+                'redirect' => route('suppliers.index'),
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating supplier', ['error' => $e->getMessage()]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.error_creating') . ': ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
-
     /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
+     * Update the specified supplier in storage.
      */
     public function update(Request $request, string $id)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('edit supplier')) {
             return response()->json([
                 'success' => false,
@@ -174,16 +233,32 @@ class SupplierController extends Controller
             ]);
         }
 
-        $request->validate([
+        $validated = $request->validate([
+            // Identity
             'name' => [
                 'required',
                 'string',
-                'max:100',
+                'max:150',
                 Rule::unique('suppliers')->where(function ($query) use ($tenantId, $id) {
                     return $query->where('tenant_id', $tenantId)
                             ->where('id', '!=', $id);
-                })->ignore($supplier->id),
+                }),
             ],
+            'trading_name' => 'nullable|string|max:150',
+            'supplier_type' => 'required|in:individual,company,government,ngo,foreign',
+            'is_active' => 'sometimes|boolean',
+            'supplier_code' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('suppliers')->where(function ($query) use ($tenantId, $id) {
+                    return $query->where('tenant_id', $tenantId)
+                            ->where('id', '!=', $id);
+                }),
+            ],
+
+            // Contact
+            'contact_person' => 'nullable|string|max:100',
             'email' => [
                 'nullable',
                 'email',
@@ -191,8 +266,20 @@ class SupplierController extends Controller
                 Rule::unique('suppliers')->where(function ($query) use ($tenantId, $id) {
                     return $query->where('tenant_id', $tenantId)
                             ->where('id', '!=', $id);
-                })->ignore($supplier->id),
+                }),
             ],
+            'phone' => 'nullable|string|max:50',
+            'phone_secondary' => 'nullable|string|max:50',
+            'website' => 'nullable|string|max:255|url',
+
+            // Address
+            'address' => 'nullable|string',
+            'city' => 'nullable|string|max:100',
+            'state' => 'nullable|string|max:100',
+            'postal_code' => 'nullable|string|max:20',
+            'country_code' => 'nullable|string|size:2',
+
+            // Tax & Compliance
             'tax_number' => [
                 'nullable',
                 'string',
@@ -200,44 +287,79 @@ class SupplierController extends Controller
                 Rule::unique('suppliers')->where(function ($query) use ($tenantId, $id) {
                     return $query->where('tenant_id', $tenantId)
                             ->where('id', '!=', $id);
-                })->ignore($supplier->id),
+                }),
             ],
-            'contact_person' => 'nullable|string|max:100',
-            'phone' => 'nullable|string|max:50',
-            'address' => 'nullable|string',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'postal_code' => 'nullable|string|max:20',
-            'country_code' => 'nullable|string|size:2',
-            'payment_terms' => 'nullable|integer|min:0',
-            'notes' => 'nullable|string|max:500',
+            'is_vat_registered' => 'sometimes|boolean',
+            'vat_number' => 'nullable|string|max:50|required_if:is_vat_registered,1',
+            'withholding_tax_applicable' => 'sometimes|boolean',
+            'withholding_tax_rate' => 'nullable|numeric|min:0|max:100|required_if:withholding_tax_applicable,1',
+            'withholding_tax_exemption_ref' => 'nullable|string|max:100',
+            'withholding_tax_exemption_expiry' => 'nullable|date|after:today',
+
+            // Banking
+            'bank_name' => 'nullable|string|max:100',
+            'bank_branch' => 'nullable|string|max:100',
+            'bank_account_name' => 'nullable|string|max:150',
+            'bank_account_number' => 'nullable|string|max:50',
+            'bank_swift_code' => 'nullable|string|max:20',
+            'mobile_money_number' => 'nullable|string|max:50',
+            'mobile_money_provider' => 'nullable|string|max:50|required_with:mobile_money_number',
+
+            // Payment Terms
+            'payment_terms_days' => 'nullable|integer|min:0|max:365',
+            'payment_terms_type' => 'nullable|in:net,cod,prepaid,installment',
+            'preferred_payment_method' => 'nullable|in:bank_transfer,mobile_money,cash,cheque,other',
+            'credit_limit' => 'nullable|numeric|min:0',
+
+            // Classification
+            'category' => 'nullable|string|max:100',
+            'risk_level' => 'nullable|in:low,medium,high',
+            'currency_code' => 'nullable|string|size:3',
+
+            // Notes
+            'notes' => 'nullable|string|max:1000',
         ]);
 
-        $supplier->update([
-            'name' => $request->name,
-            'email' => $request->email,
-            'tax_number' => $request->tax_number,
-            'contact_person' => $request->contact_person,
-            'phone' => $request->phone,
-            'address' => $request->address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postal_code' => $request->postal_code,
-            'country_code' => $request->country_code,
-            'payment_terms' => $request->payment_terms,
-            'notes' => $request->notes,
-            // Don't update tenant_id or created_by - they should remain the same
-        ]);
+        // Handle boolean fields
+        $validated['is_active'] = $request->has('is_active');
+        $validated['is_vat_registered'] = $request->has('is_vat_registered');
+        $validated['withholding_tax_applicable'] = $request->has('withholding_tax_applicable');
+        
+        // Convert credit limit to smallest currency unit if provided
+        if (isset($validated['credit_limit']) && $validated['credit_limit'] !== null) {
+            $validated['credit_limit'] = to_base_currency($validated['credit_limit']);
+        }
 
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'componentId' => 'reloadSupplierComponent', // Update to match your component ID
-            'refresh' => false,
-            'message' => __('auth._updated'),
-            'redirect' => route('suppliers.index'),
-        ]);
-    }    
+        DB::beginTransaction();
+        
+        try {
+            $supplier->update($validated);
+            
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'componentId' => 'reloadSupplierComponent',
+                'refresh' => false,
+                'message' => __('auth._updated'),
+                'redirect' => route('suppliers.index'),
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating supplier', [
+                'error' => $e->getMessage(),
+                'id' => $id,
+                'tenant_id' => $tenantId
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.error_updating') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 
 
     
@@ -280,7 +402,7 @@ class SupplierController extends Controller
         }
 
         // Check if supplier has any purchase orders
-        $hasPurchaseOrders = PurchaseOrder::where('supplier_id', $id)
+        $hasPurchaseOrders = PurchaseOrder::where('id', $id)
             ->where('tenant_id', $tenantId)
             ->exists();
 
@@ -292,10 +414,10 @@ class SupplierController extends Controller
         }
 
         // Check if supplier is attached to any products
-        $hasProducts = Product::where('supplier_id', $id)
+        $hasProducts = Product::where('id', $id)
             ->where('tenant_id', $tenantId)
             ->orWhereHas('variants', function ($query) use ($id, $tenantId) {
-                $query->where('supplier_id', $id)
+                $query->where('id', $id)
                     ->where('tenant_id', $tenantId);
             })
             ->exists();
@@ -308,7 +430,7 @@ class SupplierController extends Controller
         }
 
         // Check if supplier has any invoices
-        // $hasInvoices = Invoice::where('supplier_id', $id)
+        // $hasInvoices = Invoice::where('id', $id)
         //     ->where('tenant_id', $tenantId)
         //     ->exists();
 
