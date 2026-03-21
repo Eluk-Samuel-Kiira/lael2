@@ -4,7 +4,8 @@ namespace App\Http\Controllers\Procurement;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ ExpenseCategory, Expense, Employee, PaymentMethod };
+use App\Models\{ ExpenseCategory, Expense, Employee, PaymentMethod, Department, Location, Tax, 
+    Supplier, SupplierTaxLiability  };
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\{ Auth, Log, Storage, DB };
 use Illuminate\Validation\Rule;
@@ -55,9 +56,6 @@ class ExpenseController extends Controller
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -69,29 +67,28 @@ class ExpenseController extends Controller
                 'message' => __('payments.not_authorized'),
             ]);
         }
-
-        // Validation rules
+        
         $validated = $request->validate([
             'description' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|decimal:0,2',
-            'tax_amount' => 'nullable|numeric|min:0|decimal:0,2',
-            'vendor_name' => 'required|string|max:200',
+            'gross_amount' => 'required|numeric|min:0.01',
+            'supplier_id' => 'required|exists:suppliers,id',
             'category_id' => 'required|exists:expense_categories,id',
             'employee_id' => 'nullable|exists:employees,id',
+            'department_id' => 'required|exists:departments,id',
+            'location_id' => 'required|exists:locations,id',
             'date' => 'required|date',
             'paid_date' => 'nullable|date|after_or_equal:date',
             'payment_method_id' => [
-                'nullable',
+                'required',
                 Rule::exists('payment_methods', 'id')->where(function ($query) use ($tenantId) {
                     $query->where('tenant_id', $tenantId)
                         ->where('is_active', true);
                 })
             ],
             'payment_status' => 'required|in:pending,paid,reimbursed',
-            'is_recurring' => 'boolean',
-            'recurring_frequency' => 'nullable|required_if:is_recurring,true|in:weekly,monthly,quarterly,annually',
-            'next_recurring_date' => 'nullable|date|after_or_equal:date',
-            'receipt' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120', // 5MB
+            'receipt' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'selected_taxes' => 'nullable|array',
+            'selected_taxes.*' => 'exists:taxes,id',
         ]);
 
         // Check if category belongs to tenant
@@ -103,6 +100,30 @@ class ExpenseController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('auth.category_not_found'),
+            ]);
+        }
+
+        // Check if department belongs to tenant
+        $department = Department::where('id', $validated['department_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$department) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.department_not_found'),
+            ]);
+        }
+
+        // Check if location belongs to tenant
+        $location = Location::where('id', $validated['location_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$location) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.location_not_found'),
             ]);
         }
 
@@ -120,6 +141,18 @@ class ExpenseController extends Controller
             }
         }
 
+        // Check if supplier belongs to tenant
+        $supplier = Supplier::where('id', $validated['supplier_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$supplier) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.supplier_not_found'),
+            ]);
+        }
+
         // Generate unique expense number
         $expenseNumber = $this->generateExpenseNumber($tenantId);
 
@@ -129,21 +162,63 @@ class ExpenseController extends Controller
             $receiptUrl = $this->uploadReceipt($request->file('receipt'), $tenantId);
         }
 
-        // Calculate total amount
-        $amount = $validated['amount'];
-        $taxAmount = $validated['tax_amount'] ?? 0;
-        $totalAmount = $amount + $taxAmount;
-
+        // CALCULATE TAXES ON BACKEND
+        $grossAmount = $validated['gross_amount'];
+        $additiveTax = 0;
+        $withholdingTax = 0;
+        $taxBreakdown = [];
+        
+        if (!empty($validated['selected_taxes'])) {
+            $taxes = Tax::whereIn('id', $validated['selected_taxes'])
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->get();
+            
+            foreach ($taxes as $tax) {
+                // Calculate tax amount based on GROSS amount
+                if ($tax->type === Tax::TYPE_PERCENTAGE) {
+                    $taxAmount = $grossAmount * ($tax->rate / 100);
+                } else {
+                    $taxAmount = $tax->rate; // Fixed amount
+                }
+                
+                if ($tax->is_withholding_tax) {
+                    $withholdingTax += $taxAmount;
+                } else {
+                    $additiveTax += $taxAmount;
+                }
+                
+                $taxBreakdown[] = [
+                    'tax_id' => $tax->id,
+                    'tax_name' => $tax->name,
+                    'tax_code' => $tax->code,
+                    'rate' => $tax->rate,
+                    'type' => $tax->type,
+                    'amount' => $taxAmount,
+                    'is_withholding_tax' => $tax->is_withholding_tax,
+                ];
+            }
+        }
+        
+        // Calculate all amounts
+        $totalTax = $additiveTax + $withholdingTax;
+        $netAmount = $grossAmount + $additiveTax - $withholdingTax;  // What supplier actually gets paid
+        $totalAmount = $grossAmount + $additiveTax;  // Total amount including additive tax only (for reference)
+        
         // Create the expense
         $expense = Expense::create([
             'tenant_id' => $tenantId,
             'expense_number' => $expenseNumber,
             'description' => $validated['description'],
-            'amount' => $amount,
-            'tax_amount' => $taxAmount,
-            // 'total_amount' => $totalAmount, // Will be calculated automatically if using generated column
-            'vendor_name' => $validated['vendor_name'],
+            'gross_amount' => $grossAmount,
+            'tax_amount' => $totalTax,
+            'net_amount' => $netAmount,
+            'total_amount' => $totalAmount,
+            'supplier_id' => $validated['supplier_id'],
+            'vendor_name' => $supplier->name,
             'category_id' => $validated['category_id'],
+            'department_id' => $validated['department_id'],
+            'location_id' => $validated['location_id'],
             'employee_id' => $validated['employee_id'] ?? null,
             'date' => $validated['date'],
             'paid_date' => $validated['paid_date'] ?? null,
@@ -153,6 +228,7 @@ class ExpenseController extends Controller
             'recurring_frequency' => $validated['recurring_frequency'] ?? null,
             'next_recurring_date' => $validated['next_recurring_date'] ?? null,
             'receipt_url' => $receiptUrl,
+            'tax_breakdown' => json_encode($taxBreakdown),
             'created_by' => $user->id,
         ]);
 
@@ -163,32 +239,20 @@ class ExpenseController extends Controller
             'refresh' => false,
             'message' => __('auth.expense_created'),
             'redirect' => route('expense.index'),
+            'tax_breakdown' => $taxBreakdown,
+            'gross_amount' => $grossAmount,
+            'net_amount' => $netAmount,
+            'total_tax' => $totalTax,
+            'additive_tax' => $additiveTax,
+            'withholding_tax' => $withholdingTax,
         ]);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, $id)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('edit expense')) {
             return response()->json([
                 'success' => false,
@@ -216,14 +280,15 @@ class ExpenseController extends Controller
             ]);
         }
 
-        // Validation rules
+        // Validation rules - ADDED selected_taxes
         $validated = $request->validate([
             'description' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01|decimal:0,2',
-            'tax_amount' => 'nullable|numeric|min:0|decimal:0,2',
-            'vendor_name' => 'required|string|max:200',
+            'gross_amount' => 'required|numeric|min:0.01',
+            'supplier_id' => 'required|exists:suppliers,id',
             'category_id' => 'required|exists:expense_categories,id',
             'employee_id' => 'nullable|exists:employees,id',
+            'department_id' => 'required|exists:departments,id',
+            'location_id' => 'required|exists:locations,id',
             'date' => 'required|date',
             'paid_date' => 'nullable|date|after_or_equal:date',
             'payment_method_id' => [
@@ -238,7 +303,21 @@ class ExpenseController extends Controller
             'recurring_frequency' => 'nullable|required_if:is_recurring,true|in:weekly,monthly,quarterly,annually',
             'next_recurring_date' => 'nullable|date|after_or_equal:date',
             'receipt' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:5120',
+            'selected_taxes' => 'nullable|array', // ADDED
+            'selected_taxes.*' => 'exists:taxes,id', // ADDED
         ]);
+
+        // Check if supplier belongs to tenant
+        $supplier = Supplier::where('id', $validated['supplier_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$supplier) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.supplier_not_found'),
+            ]);
+        }
 
         // Check if category belongs to tenant
         $category = ExpenseCategory::where('id', $validated['category_id'])
@@ -249,6 +328,30 @@ class ExpenseController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('auth.category_not_found'),
+            ]);
+        }
+
+        // Check if department belongs to tenant
+        $department = Department::where('id', $validated['department_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$department) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.department_not_found'),
+            ]);
+        }
+
+        // Check if location belongs to tenant
+        $location = Location::where('id', $validated['location_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$location) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.location_not_found'),
             ]);
         }
 
@@ -267,37 +370,78 @@ class ExpenseController extends Controller
         }
 
         // Handle receipt upload if new file provided
-        // $receiptUrl = $expense->receipt_url;
-        // if ($request->hasFile('receipt')) {
-        //     // Delete old receipt if exists
-        //     if ($receiptUrl) {
-        //         $this->deleteReceipt($receiptUrl);
-        //     }
-        //     $receiptUrl = $this->uploadReceipt($request->file('receipt'), $tenantId);
-        // }
+        $receiptUrl = $expense->receipt_url;
+        if ($request->hasFile('receipt')) {
+            $receiptUrl = $this->uploadReceipt($request->file('receipt'), $tenantId);
+        }
 
-        // Calculate total amount
-        $amount = $validated['amount'];
-        $taxAmount = $validated['tax_amount'] ?? 0;
-        $totalAmount = $amount + $taxAmount;
+        // RECALCULATE TAXES (same logic as store)
+        $grossAmount = $validated['gross_amount'];
+        $additiveTax = 0;
+        $withholdingTax = 0;
+        $taxBreakdown = [];
+        
+        if (!empty($validated['selected_taxes'])) {
+            $taxes = Tax::whereIn('id', $validated['selected_taxes'])
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->get();
+            
+            foreach ($taxes as $tax) {
+                if ($tax->type === Tax::TYPE_PERCENTAGE) {
+                    $taxAmount = $grossAmount * ($tax->rate / 100);
+                } else {
+                    $taxAmount = $tax->rate;
+                }
+                
+                if ($tax->is_withholding_tax) {
+                    $withholdingTax += $taxAmount;
+                } else {
+                    $additiveTax += $taxAmount;
+                }
+                
+                $taxBreakdown[] = [
+                    'tax_id' => $tax->id,
+                    'tax_name' => $tax->name,
+                    'tax_code' => $tax->code,
+                    'rate' => $tax->rate,
+                    'type' => $tax->type,
+                    'amount' => $taxAmount,
+                    'is_withholding_tax' => $tax->is_withholding_tax,
+                ];
+            }
+        }
+        
+        // Calculate all amounts
+        $totalTax = $additiveTax + $withholdingTax;
+        $netAmount = $grossAmount + $additiveTax - $withholdingTax;
+        $totalAmount = $grossAmount + $additiveTax;
+        
+        // Vendor name from supplier
+        $vendorName = $supplier->name;
 
-        // Update the expense
+        // Update the expense with recalculated values
         $expense->update([
             'description' => $validated['description'],
-            'amount' => $amount,
-            'tax_amount' => $taxAmount,
-            // 'total_amount' => $totalAmount, // Will be calculated automatically if using generated column
-            'vendor_name' => $validated['vendor_name'],
+            'gross_amount' => $grossAmount,
+            'tax_amount' => $totalTax,
+            'net_amount' => $netAmount,
+            'total_amount' => $totalAmount,
+            'supplier_id' => $validated['supplier_id'],
+            'vendor_name' => $vendorName,
             'category_id' => $validated['category_id'],
+            'department_id' => $validated['department_id'],
+            'location_id' => $validated['location_id'],
             'employee_id' => $validated['employee_id'] ?? null,
             'date' => $validated['date'],
             'paid_date' => $validated['paid_date'] ?? null,
-            'payment_method_id' => $validated['payment_method_id'] ?? null, // Use payment_method_id
+            'payment_method_id' => $validated['payment_method_id'] ?? null,
             'payment_status' => $validated['payment_status'],
             'is_recurring' => $validated['is_recurring'] ?? false,
             'recurring_frequency' => $validated['recurring_frequency'] ?? null,
             'next_recurring_date' => $validated['next_recurring_date'] ?? null,
-            // 'receipt_url' => $receiptUrl,
+            'receipt_url' => $receiptUrl,
+            'tax_breakdown' => json_encode($taxBreakdown), // Update tax breakdown
         ]);
 
         // Reset approval if significant changes were made
@@ -315,8 +459,15 @@ class ExpenseController extends Controller
             'refresh' => false,
             'message' => __('auth.expense_updated'),
             'redirect' => route('expense.index'),
+            'tax_breakdown' => $taxBreakdown,
+            'gross_amount' => $grossAmount,
+            'net_amount' => $netAmount,
+            'total_tax' => $totalTax,
+            'additive_tax' => $additiveTax,
+            'withholding_tax' => $withholdingTax,
         ]);
     }
+
 
     /**
      * Remove the specified resource from storage.
@@ -370,6 +521,10 @@ class ExpenseController extends Controller
         ]);
     }
 
+
+    /**
+     * Update expense payment status
+     */
     public function updateExpenseStatus(Request $request, $id)
     {
         $user = Auth::user();
@@ -397,133 +552,31 @@ class ExpenseController extends Controller
             ]);
         }
 
-        // Check if trying to mark as paid but expense is not approved
-        if (($request->status === 'paid' || $request->status === 'reimbursed') && !$expense->approved_at) {
+        // Validate status transition
+        if (!$this->isValidStatusTransition($expense, $request->status)) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.cannot_pay_unapproved_expense'),
-            ]);
-        }
-
-        // Check if trying to change from paid/reimbursed back to pending
-        if ($request->status === 'pending' && ($expense->payment_status === 'paid' || $expense->payment_status === 'reimbursed')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.cannot_revert_paid_status'),
-            ]);
-        }
-
-        // Check if payment method exists for paid/reimbursed status
-        if (($request->status === 'paid' || $request->status === 'reimbursed') && !$expense->payment_method_id) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.no_payment_method_for_expense'),
+                'message' => $this->getStatusTransitionError($expense, $request->status),
             ]);
         }
 
         DB::beginTransaction();
         try {
-            $updateData = [
-                'payment_status' => $request->status,
-                'updated_at' => now(),
-            ];
-
-            // Get the total amount from the expense
-            $totalAmount = $expense->total_amount ?? $expense->amount + $expense->tax_amount;
-
-            // Set paid date only when marking as paid or reimbursed
-            if ($request->status === 'paid' || $request->status === 'reimbursed') {
-                $updateData['paid_date'] = now();
-                
-                // If reimbursed, also set paid_by to current user
-                if ($request->status === 'reimbursed') {
-                    $updateData['paid_by'] = $user->id;
-                }
-                
-                // ✅ PROCESS PAYMENT TRANSACTION USING EXISTING PAYMENT METHOD FROM DATABASE
-                $paymentMethod = PaymentMethod::findForTenant($expense->payment_method_id, $tenantId);
-                
-                if (!$paymentMethod) {
-                    throw new \Exception(__('pagination.payment_method_not_found'));
-                }
-                
-                // Validate the payment method can handle this transaction
-                $validation = $paymentMethod->validateTransaction($totalAmount);
-                if (!$validation['success']) {
-                    throw new \Exception($validation['message']);
-                }
-
-                // Determine transaction type based on status
-                $transactionType = $request->status === 'paid' ? 'WITHDRAWAL' : 'DEPOSIT';
-                $transactionCategory = $request->status === 'paid' ? 'EXPENSE' : 'REFUND';
-                $description = $request->status === 'paid' 
-                    ? 'Expense Payment - ' . $expense->expense_number
-                    : 'Expense Reimbursement - ' . $expense->expense_number;
-                
-                $notes = $request->status === 'paid' 
-                    ? 'Payment for expense'
-                    : 'Reimbursement back to account';
-
-                // Record expense payment using PaymentTransactionService
-                $transactionData = [
-                    'user_id' => $user->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'tenant_id' => $tenantId,
-                    'transaction_type' => $transactionType,
-                    'transaction_category' => $transactionCategory,
-                    'amount' => $totalAmount,
-                    'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                    'reference_table' => 'expenses',
-                    'reference_id' => $expense->id,
-                    'description' => $description,
-                    'notes' => $notes,
-                    'metadata' => [
-                        'expense_number' => $expense->expense_number,
-                        'expense_description' => $expense->description,
-                        'vendor_name' => $expense->vendor_name,
-                        'category_id' => $expense->category_id,
-                        'payment_status' => $request->status,
-                        'amount' => $expense->amount,
-                        'tax_amount' => $expense->tax_amount,
-                        'total_amount' => $totalAmount,
-                        'processed_by_id' => $user->id,
-                        'processed_by_name' => $user->last_name.' '.$user->last_name ?? 'Unkown',
-                        'transaction_nature' => $request->status === 'paid' ? 'EXPENSE_PAYMENT' : 'EXPENSE_REIMBURSEMENT',
-                    ],
-                ];
-
-                // Record the transaction
-                $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
-                
-                // Update expense with transaction reference
-                $updateData['payment_transaction_ref'] = $transactionLog->transaction_ref ?? null;
-
-                \Log::info('Expense payment transaction recorded', [
-                    'expense_number' => $expense->expense_number,
-                    'transaction_type' => $transactionType,
-                    'amount' => $totalAmount,
-                    'payment_method' => $paymentMethod->name,
-                    'payment_method_id' => $expense->payment_method_id,
-                    'transaction_ref' => $transactionLog->transaction_ref ?? 'N/A',
-                ]);
-
-            } else {
-                // If reverting to pending, clear payment info
-                $updateData['paid_date'] = null;
-                $updateData['paid_by'] = null;
-                $updateData['payment_transaction_ref'] = null;
-                // Note: We keep the payment_method_id since it's part of the original expense record
+            // Get old status before update
+            $oldStatus = $expense->payment_status;
+            
+            // Update the status
+            $this->updateExpenseStatusData($expense, $request->status, $user);
+            
+            // Create tax liabilities ONLY when marking as paid (not reimbursed)
+            if ($this->shouldCreateTaxLiabilities($expense, $request->status, $oldStatus)) {
+                $this->createExpenseTaxLiabilities($expense, $tenantId);
             }
-
-            $expense->update($updateData);
-
+            
+            // Process payment transaction
+            $transactionInfo = $this->processPaymentTransaction($expense, $request->status, $oldStatus, $user, $tenantId);
+            
             DB::commit();
-
-            // Log the activity
-            // activity()
-            //     ->causedBy($user)
-            //     ->performedOn($expense)
-            //     ->log('updated payment status to ' . $request->status);
 
             return response()->json([
                 'success' => true,
@@ -531,12 +584,7 @@ class ExpenseController extends Controller
                 'reload' => true,
                 'componentId' => 'reloadExpenseComponent',
                 'redirect' => route('expense.index'),
-                'transaction_info' => isset($transactionLog) ? [
-                    'transaction_ref' => $transactionLog->transaction_ref,
-                    'transaction_type' => $transactionType ?? null,
-                    'amount' => $totalAmount,
-                    'payment_method' => $paymentMethod->name ?? null,
-                ] : null,
+                'transaction_info' => $transactionInfo,
             ]);
 
         } catch (\Exception $e) {
@@ -548,6 +596,351 @@ class ExpenseController extends Controller
             ]);
         }
     }
+
+    /**
+     * Check if status transition is valid
+     */
+    private function isValidStatusTransition($expense, $newStatus)
+    {
+        $currentStatus = $expense->payment_status;
+        
+        // Cannot pay unapproved expense
+        if (in_array($newStatus, ['paid', 'reimbursed']) && !$expense->approved_at) {
+            return false;
+        }
+        
+        // Reimbursement only allowed from paid status
+        if ($newStatus === 'reimbursed' && $currentStatus !== 'paid') {
+            return false;
+        }
+        
+        // Cannot revert paid/reimbursed to pending
+        if ($newStatus === 'pending' && in_array($currentStatus, ['paid', 'reimbursed'])) {
+            return false;
+        }
+        
+        // Need payment method for paid
+        if ($newStatus === 'paid' && !$expense->payment_method_id) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Get status transition error message
+     */
+    private function getStatusTransitionError($expense, $newStatus)
+    {
+        $currentStatus = $expense->payment_status;
+        
+        if (in_array($newStatus, ['paid', 'reimbursed']) && !$expense->approved_at) {
+            return __('auth.cannot_pay_unapproved_expense');
+        }
+        
+        if ($newStatus === 'reimbursed' && $currentStatus !== 'paid') {
+            return __('auth.cannot_reimburse_unpaid_expense');
+        }
+        
+        if ($newStatus === 'pending' && in_array($currentStatus, ['paid', 'reimbursed'])) {
+            return __('auth.cannot_revert_paid_status');
+        }
+        
+        if ($newStatus === 'paid' && !$expense->payment_method_id) {
+            return __('auth.no_payment_method_for_expense');
+        }
+        
+        return __('auth.invalid_status_transition');
+    }
+
+    /**
+     * Update expense status data
+     */
+    private function updateExpenseStatusData($expense, $status, $user)
+    {
+        $updateData = [
+            'payment_status' => $status,
+            'updated_at' => now(),
+        ];
+
+        if ($status === 'paid') {
+            $updateData['paid_date'] = now();
+            $updateData['paid_by'] = null;
+        } elseif ($status === 'reimbursed') {
+            $updateData['paid_date'] = now();
+            $updateData['paid_by'] = $user->id;
+        } else {
+            // When reverting to pending
+            $updateData['paid_date'] = null;
+            $updateData['paid_by'] = null;
+            $updateData['payment_transaction_ref'] = null;
+        }
+
+        $expense->update($updateData);
+    }
+
+    /**
+     * Check if tax liabilities should be created
+     */
+    private function shouldCreateTaxLiabilities($expense, $newStatus, $oldStatus)
+    {
+        // Decode tax_breakdown if it's a string
+        $taxBreakdown = $expense->tax_breakdown;
+        if (is_string($taxBreakdown)) {
+            $taxBreakdown = json_decode($taxBreakdown, true);
+        }
+        
+        // Only create tax liabilities when:
+        // 1. Changing from pending to paid (NOT from paid to reimbursed)
+        // 2. Expense has tax breakdown data
+        return $oldStatus === 'pending' && 
+            $newStatus === 'paid' &&
+            !empty($taxBreakdown);
+    }
+
+    /**
+     * Create tax liabilities for expense
+     */
+    private function createExpenseTaxLiabilities($expense, $tenantId)
+    {
+        $taxBreakdown = $expense->tax_breakdown;
+        if (is_string($taxBreakdown)) {
+            $taxBreakdown = json_decode($taxBreakdown, true);
+        }
+        
+        if (empty($taxBreakdown)) {
+            return;
+        }
+        
+        $supplierId = $expense->supplier_id;
+        
+        foreach ($taxBreakdown as $tax) {
+            // Skip taxes with zero amount
+            if (empty($tax['amount']) || $tax['amount'] <= 0) {
+                continue;
+            }
+            
+            SupplierTaxLiability::create([
+                'tenant_id' => $tenantId,
+                'expense_id' => $expense->id,
+                'supplier_id' => $supplierId,
+                'tax_id' => $tax['tax_id'] ?? null,
+                'taxable_amount' => $expense->gross_amount,
+                'tax_amount' => $tax['amount'],
+                'tax_rate' => $tax['rate'] ?? 0,
+                'tax_name' => $tax['tax_name'] ?? 'Tax',
+                'tax_code' => $tax['tax_code'] ?? null,
+                'tax_type' => $tax['type'] ?? 'percentage',
+                'is_withholding_tax' => $tax['is_withholding_tax'] ?? false,
+                'reference_number' => $expense->expense_number,
+                'transaction_date' => $expense->date,
+                'due_date' => now()->addMonth()->startOfMonth()->addDays(14),
+                'status' => 'pending',
+                'tax_year' => now()->year,
+                'tax_month' => now()->month,
+                'tax_quarter' => ceil(now()->month / 3),
+                'notes' => $expense->description,
+                'metadata' => [
+                    'expense_number' => $expense->expense_number,
+                    'vendor_name' => $expense->vendor_name,
+                    'category_id' => $expense->category_id,
+                    'expense_date' => $expense->date->format('Y-m-d'),
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Process payment transaction for expense
+     */
+    private function processPaymentTransaction($expense, $newStatus, $oldStatus, $user, $tenantId)
+    {
+        // Use net_amount - this is the actual amount that leaves/enters the company
+        $paymentAmount = $expense->net_amount;
+        
+        // Only process payment when:
+        // 1. Changing from pending to paid (money goes OUT)
+        // 2. Changing from paid to reimbursed (money comes BACK IN)
+        if ($oldStatus === 'pending' && $newStatus === 'paid') {
+            return $this->processWithdrawal($expense, $user, $tenantId, $paymentAmount);
+        }
+        
+        if ($oldStatus === 'paid' && $newStatus === 'reimbursed') {
+            return $this->processDeposit($expense, $user, $tenantId, $paymentAmount);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Process payment withdrawal (money leaving the company)
+     */
+    private function processWithdrawal($expense, $user, $tenantId, $amount)
+    {
+        $paymentMethod = PaymentMethod::findForTenant($expense->payment_method_id, $tenantId);
+        
+        if (!$paymentMethod) {
+            throw new \Exception(__('pagination.payment_method_not_found'));
+        }
+        
+        $validation = $paymentMethod->validateTransaction($amount);
+        if (!$validation['success']) {
+            throw new \Exception($validation['message']);
+        }
+        
+        // Calculate tax breakdown for metadata
+        $taxBreakdown = $expense->tax_breakdown;
+        if (is_string($taxBreakdown)) {
+            $taxBreakdown = json_decode($taxBreakdown, true);
+        }
+        
+        $additiveTax = 0;
+        $withholdingTax = 0;
+        
+        if (!empty($taxBreakdown)) {
+            foreach ($taxBreakdown as $tax) {
+                if ($tax['is_withholding_tax'] ?? false) {
+                    $withholdingTax += $tax['amount'];
+                } else {
+                    $additiveTax += $tax['amount'];
+                }
+            }
+        }
+        
+        $transactionData = [
+            'user_id' => $user->id,
+            'payment_method_id' => $paymentMethod->id,
+            'tenant_id' => $tenantId,
+            'transaction_type' => 'WITHDRAWAL',
+            'transaction_category' => 'EXPENSE',
+            'amount' => $amount,
+            'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+            'reference_table' => 'expenses',
+            'reference_id' => $expense->id,
+            'description' => 'Expense Payment - ' . $expense->expense_number,
+            'notes' => 'Payment for expense',
+            'metadata' => [
+                'expense_number' => $expense->expense_number,
+                'expense_description' => $expense->description,
+                'vendor_name' => $expense->vendor_name,
+                'supplier_id' => $expense->supplier_id,
+                'category_id' => $expense->category_id,
+                'department_id' => $expense->department_id,
+                'location_id' => $expense->location_id,
+                'gross_amount' => $expense->gross_amount,
+                'tax_amount' => $expense->tax_amount,
+                'net_amount' => $amount,
+                'additive_tax' => $additiveTax,
+                'withholding_tax' => $withholdingTax,
+                'processed_by_id' => $user->id,
+                'processed_by_name' => $user->name,
+                'transaction_nature' => 'EXPENSE_PAYMENT',
+            ],
+        ];
+        
+        $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
+        
+        // Update expense with transaction reference
+        $expense->update(['payment_transaction_ref' => $transactionLog->transaction_ref]);
+        
+        return [
+            'transaction_ref' => $transactionLog->transaction_ref,
+            'transaction_type' => 'WITHDRAWAL',
+            'amount' => $amount,
+            'payment_method' => $paymentMethod->name,
+            'gross_amount' => $expense->gross_amount,
+            'net_amount' => $amount,
+            'tax_amount' => $expense->tax_amount,
+            'additive_tax' => $additiveTax,
+            'withholding_tax' => $withholdingTax,
+        ];
+    }
+
+    /**
+     * Process payment deposit (money coming back to the company - reimbursement)
+     */
+    private function processDeposit($expense, $user, $tenantId, $amount)
+    {
+        $paymentMethod = PaymentMethod::findForTenant($expense->payment_method_id, $tenantId);
+        
+        if (!$paymentMethod) {
+            throw new \Exception(__('pagination.payment_method_not_found'));
+        }
+        
+        $validation = $paymentMethod->validateTransaction($amount);
+        if (!$validation['success']) {
+            throw new \Exception($validation['message']);
+        }
+        
+        // Calculate tax breakdown for metadata
+        $taxBreakdown = $expense->tax_breakdown;
+        if (is_string($taxBreakdown)) {
+            $taxBreakdown = json_decode($taxBreakdown, true);
+        }
+        
+        $additiveTax = 0;
+        $withholdingTax = 0;
+        
+        if (!empty($taxBreakdown)) {
+            foreach ($taxBreakdown as $tax) {
+                if ($tax['is_withholding_tax'] ?? false) {
+                    $withholdingTax += $tax['amount'];
+                } else {
+                    $additiveTax += $tax['amount'];
+                }
+            }
+        }
+        
+        $transactionData = [
+            'user_id' => $user->id,
+            'payment_method_id' => $paymentMethod->id,
+            'tenant_id' => $tenantId,
+            'transaction_type' => 'DEPOSIT',
+            'transaction_category' => 'REFUND',
+            'amount' => $amount,
+            'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+            'reference_table' => 'expenses',
+            'reference_id' => $expense->id,
+            'description' => 'Expense Reimbursement - ' . $expense->expense_number,
+            'notes' => 'Reimbursement back to account',
+            'metadata' => [
+                'expense_number' => $expense->expense_number,
+                'expense_description' => $expense->description,
+                'vendor_name' => $expense->vendor_name,
+                'supplier_id' => $expense->supplier_id,
+                'category_id' => $expense->category_id,
+                'department_id' => $expense->department_id,
+                'location_id' => $expense->location_id,
+                'gross_amount' => $expense->gross_amount,
+                'tax_amount' => $expense->tax_amount,
+                'net_amount' => $amount,
+                'additive_tax' => $additiveTax,
+                'withholding_tax' => $withholdingTax,
+                'processed_by_id' => $user->id,
+                'processed_by_name' => $user->name,
+                'transaction_nature' => 'EXPENSE_REIMBURSEMENT',
+            ],
+        ];
+        
+        $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
+        
+        // Update expense with transaction reference
+        $expense->update(['payment_transaction_ref' => $transactionLog->transaction_ref]);
+        
+        return [
+            'transaction_ref' => $transactionLog->transaction_ref,
+            'transaction_type' => 'DEPOSIT',
+            'amount' => $amount,
+            'payment_method' => $paymentMethod->name,
+            'gross_amount' => $expense->gross_amount,
+            'net_amount' => $amount,
+            'tax_amount' => $expense->tax_amount,
+            'additive_tax' => $additiveTax,
+            'withholding_tax' => $withholdingTax,
+        ];
+    }
+
+
 
     /**
      * Approve an expense

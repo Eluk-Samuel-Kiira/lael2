@@ -8,6 +8,91 @@ use App\Models\{ TenantSetting, PaymentMethod };
 use Illuminate\Support\Facades\Auth;
 use App\Models\Location;
 
+
+
+/**
+ * Get all countries for dropdown
+ * Usage: getCountries()
+ */
+if (! function_exists('getCountries')) {
+    function getCountries($withFlag = true, $withPhone = true)
+    {
+        $countries = config('countries.countries', []);
+        $result = [];
+        
+        foreach ($countries as $country) {
+            $name = $country['name'];
+            
+            if ($withFlag && isset($country['flag'])) {
+                $name = $country['flag'] . ' ' . $name;
+            }
+            
+            if ($withPhone && isset($country['phone'])) {
+                $name .= ' (+' . $country['phone'] . ')';
+            }
+            
+            $result[$country['code']] = $name;
+        }
+        
+        return $result;
+    }
+}
+
+/**
+ * Get country by code
+ * Usage: getCountry('UG')
+ */
+if (! function_exists('getCountry')) {
+    function getCountry($code)
+    {
+        $byCode = config('countries.by_code');
+        
+        if ($byCode && isset($byCode[strtoupper($code)])) {
+            return $byCode[strtoupper($code)];
+        }
+        
+        return null;
+    }
+}
+
+/**
+ * Get currency by country code
+ * Usage: getCurrency('UG') // returns 'UGX'
+ */
+if (! function_exists('getCurrency')) {
+    function getCurrency($code)
+    {
+        $country = getCountry($code);
+        return $country['currency'] ?? null;
+    }
+}
+
+/**
+ * Get phone code by country code
+ * Usage: getPhoneCode('UG') // returns '256'
+ */
+if (! function_exists('getPhoneCode')) {
+    function getPhoneCode($code)
+    {
+        $country = getCountry($code);
+        return $country['phone'] ?? null;
+    }
+}
+
+/**
+ * Get flag by country code
+ * Usage: getFlag('UG') // returns '🇺🇬'
+ */
+if (! function_exists('getFlag')) {
+    function getFlag($code)
+    {
+        $country = getCountry($code);
+        return $country['flag'] ?? null;
+    }
+}
+
+
+
 if (! function_exists('is_tab_show')) {
     function is_tab_show($routeName)
     {

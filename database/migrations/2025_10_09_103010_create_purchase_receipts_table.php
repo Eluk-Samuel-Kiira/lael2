@@ -14,6 +14,11 @@ return new class extends Migration
             $table->foreignId('received_by')->nullable()->constrained('users');
             $table->timestamp('received_at')->useCurrent();
             $table->text('notes')->nullable();
+
+            // Add to purchase_receipts migration
+            $table->bigInteger('subtotal')->nullable()->comment('Stored in smallest currency unit');
+            $table->bigInteger('tax_total')->nullable()->comment('Stored in smallest currency unit');
+            $table->bigInteger('total')->nullable()->comment('Stored in smallest currency unit');
             
             $table->timestamps();
         });

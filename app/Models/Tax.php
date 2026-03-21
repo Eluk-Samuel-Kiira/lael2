@@ -16,12 +16,14 @@ class Tax extends Model
         'code',
         'rate',
         'type',
+        'is_withholding_tax',
         'is_active',
         'created_by',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_withholding_tax' => 'boolean',
     ];
 
     /**

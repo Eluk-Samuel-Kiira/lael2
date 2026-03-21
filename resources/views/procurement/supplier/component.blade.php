@@ -50,7 +50,7 @@
                                 <div class="badge badge-light fw-bold">{{ $supplier->phone }}</div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $supplier->supplierCreater->name ?? __('pagination._none')}}</div>
+                                <div class="badge badge-light fw-bold">{{ $supplier->createdBy->name ?? __('pagination._none')}}</div>
                             </td>
                             <td>{{ $supplier->created_at->format('d M Y, h:i a') }}</td>
                             <td>

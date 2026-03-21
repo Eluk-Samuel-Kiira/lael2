@@ -177,6 +177,14 @@ class UserController extends Controller
                 'message' => __('payments.not_authorized'),
             ]);
         }
+
+        // Check if user has protected roles using Spatie Permission
+        if ($authUser->hasAnyRole(['super_admin', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.user_not_updatable'),
+            ]);
+        }
         
         // Get the validated data
         $validatedData = $request->validated();
@@ -235,6 +243,14 @@ class UserController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        // Check if user has protected roles using Spatie Permission
+        if ($authUser->hasAnyRole(['super_admin', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.user_not_updatable'),
             ]);
         }
 

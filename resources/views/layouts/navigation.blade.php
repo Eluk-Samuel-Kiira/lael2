@@ -243,7 +243,7 @@
 
                         @can('view purchase_orders')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('purchase_order.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('purchase_order.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -341,6 +341,17 @@
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title">{{ __('pagination.employee_pay_roll') }}</span>
+                            </a>
+                        </div>
+                        @endcan
+
+                        @can('view leave')
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('leave.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('payments.leave') }}</span>
                             </a>
                         </div>
                         @endcan

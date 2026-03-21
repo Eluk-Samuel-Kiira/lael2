@@ -11,8 +11,7 @@
                         </div>
                     </th>
                     <th class="min-w-125px">{{__('pagination.expense_id')}}</th>
-                    <th class="min-w-125px">{{__('pagination.expense_number')}}</th>
-                    <th class="min-w-125px">{{__('pagination.description')}}</th> 
+                    <th class="min-w-125px">{{__('auth.supplier')}}</th>
                     <th class="min-w-125px">{{__('pagination.amount')}}</th> 
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
@@ -33,10 +32,9 @@
                             <td>
                                 <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $expense->id }}</div>
                             </td>
-                            <td>{{ $expense->expense_number }}</td>
-                            <td>{{ $expense->description }}</td>
+                            <td>{{ $expense->vendor_name ?? '' }}</td>
                             <td>
-                                <div class="badge badge-light fw-bold">${{ number_format($expense->total_amount, 2) }}</div>
+                                <div class="badge badge-light fw-bold">${{ number_format($expense->net_amount, 2) }}</div>
                             </td>
                             <td>
                                 @php

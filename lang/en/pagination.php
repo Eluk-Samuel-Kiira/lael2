@@ -416,6 +416,7 @@ return [
     'phone' => 'Phone',
     'job_title' => 'Job Title',
     'salary' => 'Salary',
+    'gross_amount' => 'Gross Amount',
     'hire_date' => 'Hire Date',
     'term_date' => 'Termination Date',
     'status' => 'Status',

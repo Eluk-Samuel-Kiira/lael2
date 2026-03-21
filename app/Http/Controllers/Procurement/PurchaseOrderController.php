@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\{ Supplier, PurchaseOrder, ProductVariant, PurchaseOrderItem, InventoryItems, PaymentMethod,
         PurchaseReceipt, InventoryTransactions, InventoryAdjustment, PurchaseReceiptItem, SingleShopInventoryLog,
-        Location, Department };
+        Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant };
 use Illuminate\Support\Facades\{ Auth, DB };
 
 
@@ -657,7 +657,8 @@ class PurchaseOrderController extends Controller
         }
     }
 
-    
+
+
     public function receiveItems(Request $request, PurchaseOrder $purchaseOrder)
     {
         $user = Auth::user();
@@ -668,6 +669,22 @@ class PurchaseOrderController extends Controller
                 'success' => false,
                 'message' => __('payments.not_authorized'),
             ]);
+        }
+
+        $items = $request->input('items', []);
+        
+        // If items is empty or missing, get all purchase order items and set quantity to 0
+        if (empty($items)) {
+            $purchaseOrderItems = $purchaseOrder->items;
+            $items = [];
+            foreach ($purchaseOrderItems as $orderItem) {
+                $items[$orderItem->id] = [
+                    'purchase_order_item_id' => $orderItem->id,
+                    'product_variant_id' => $orderItem->product_variant_id,
+                    'quantity_received' => 0,
+                ];
+            }
+            $request->merge(['items' => $items]);
         }
 
         $validated = $request->validate([
@@ -682,6 +699,11 @@ class PurchaseOrderController extends Controller
             'batch_number' => 'nullable|string|max:100',
             'expiry_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
+            'selected_taxes' => 'nullable|array',
+            'selected_taxes.*' => 'exists:taxes,id',
+            'total_tax_amount' => 'nullable|numeric|min:0',
+            'net_amount' => 'nullable|numeric|min:0',
+            'taxable_amount' => 'nullable|numeric|min:0',
         ]);
 
         // Check if purchase order can receive items
@@ -692,25 +714,28 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        $tenantId = auth()->user()->tenant_id;
-        $isSingleShop = tenant_is_single_shop($tenantId);
-
         DB::beginTransaction();
         try {
             $totalReceived = 0;
             $receiptItems = [];
-            $totalCost = 0; // Track total cost for payment processing
+            $currentReceiptSubtotal = 0; // Subtotal for this receipt only
             $user = auth()->user();
+            $isSingleShop = tenant_is_single_shop($tenantId);
 
+            // Get the gross amount from form or calculate from items
+            $grossAmount = $request->gross_amount ?? 0;
+            
             // Create purchase receipt record first
             $purchaseReceipt = PurchaseReceipt::create([
                 'purchase_order_id' => $purchaseOrder->id,
                 'received_by' => $user->id,
                 'received_at' => now(),
+                'batch_number' => $validated['batch_number'] ?? null,
+                'expiry_date' => $validated['expiry_date'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Process each item
+            // Process each item and calculate current receipt subtotal
             foreach ($validated['items'] as $itemData) {
                 $quantityReceived = $itemData['quantity_received'];
                 
@@ -724,14 +749,14 @@ class PurchaseOrderController extends Controller
                         throw new \Exception(__('passwords.cannot_receive_more_than_ordered'));
                     }
 
-                    // Calculate item cost for payment (cost * quantity)
+                    // Calculate item cost for this receipt
                     $itemCost = $purchaseOrderItem->unit_cost * $quantityReceived;
-                    $totalCost += $itemCost; // Accumulate total cost
+                    $currentReceiptSubtotal += $itemCost;
 
                     // Get current inventory quantity before update
                     $quantityBefore = $variant->overal_quantity_at_hand;
 
-                    // Update purchase order item
+                    // Update purchase order item received quantity
                     $purchaseOrderItem->received_quantity = $newReceivedQuantity;
                     $purchaseOrderItem->save();
 
@@ -749,12 +774,13 @@ class PurchaseOrderController extends Controller
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'purchase_order_item_id' => $purchaseOrderItem->id,
                         'quantity_received' => $quantityReceived,
+                        'unit_cost' => $purchaseOrderItem->unit_cost,
                         'batch_number' => $validated['batch_number'] ?? null,
                         'expiry_date' => $validated['expiry_date'] ?? null,
                     ]);
 
                     // Log received product variant
-                    \App\Models\ReceivedProductVariant::create([
+                    ReceivedProductVariant::create([
                         'purchase_order_id' => $purchaseOrder->id,
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'purchase_order_item_id' => $purchaseOrderItem->id,
@@ -771,7 +797,7 @@ class PurchaseOrderController extends Controller
                         'tenant_id' => $tenantId,
                     ]);
 
-                    // ✅ LOG TO SINGLE SHOP INVENTORY LOG IF SINGLE SHOP
+                    // LOG TO SINGLE SHOP INVENTORY LOG IF SINGLE SHOP
                     if ($isSingleShop) {
                         SingleShopInventoryLog::create([
                             'variant_id' => $variant->id,
@@ -797,44 +823,156 @@ class PurchaseOrderController extends Controller
                         ]);
                     }
 
-                    // Store receipt item data for response
                     $receiptItems[] = $receiptItem;
                 }
             }
 
-            // ✅ INTEGRATE PAYMENT WITHDRAWAL FROM ACCOUNT
-            // Only process payment if payment method is provided and there's a total cost
-            if (isset($validated['payment_method_id']) && $totalCost > 0) {
+            // Determine taxable amount for this receipt
+            $taxableAmount = $grossAmount > 0 ? $grossAmount : $currentReceiptSubtotal;
+            
+            // Calculate taxes for this receipt only
+            $currentReceiptTaxAmount = 0;
+            $currentReceiptAdditiveTax = 0;
+            $currentReceiptWithholdingTax = 0;
+            $taxBreakdown = [];
+            $taxLiabilities = [];
+            
+            if (!empty($validated['selected_taxes'])) {
+                $taxes = Tax::whereIn('id', $validated['selected_taxes'])
+                    ->where('tenant_id', $tenantId)
+                    ->where('is_active', true)
+                    ->get();
+                
+                foreach ($taxes as $tax) {
+                    // Calculate tax amount based on taxable amount (subtotal)
+                    if ($tax->type === Tax::TYPE_PERCENTAGE) {
+                        $taxAmount = $taxableAmount * ($tax->rate / 100);
+                    } else {
+                        $taxAmount = $tax->rate;
+                    }
+                    
+                    $currentReceiptTaxAmount += $taxAmount;
+                    
+                    if ($tax->is_withholding_tax) {
+                        $currentReceiptWithholdingTax += $taxAmount;
+                    } else {
+                        $currentReceiptAdditiveTax += $taxAmount;
+                    }
+                    
+                    $taxBreakdown[] = [
+                        'tax_id' => $tax->id,
+                        'tax_name' => $tax->name,
+                        'tax_code' => $tax->code,
+                        'rate' => $tax->rate,
+                        'type' => $tax->type,
+                        'amount' => $taxAmount,
+                        'is_withholding_tax' => $tax->is_withholding_tax ?? false,
+                    ];
+                    
+                    // Create tax liability record for this receipt
+                    $taxLiabilities[] = SupplierTaxLiability::create([
+                        'tenant_id' => $tenantId,
+                        'supplier_id' => $purchaseOrder->supplier_id,
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'purchase_receipt_id' => $purchaseReceipt->id,
+                        'taxable_amount' => $taxableAmount,
+                        'tax_amount' => $taxAmount,
+                        'tax_rate' => $tax->rate,
+                        'tax_name' => $tax->name,
+                        'tax_code' => $tax->code,
+                        'tax_type' => $tax->type,
+                        'reference_number' => $purchaseOrder->po_number . '-' . $purchaseReceipt->id,
+                        'transaction_date' => now(),
+                        'due_date' => $this->calculateTaxDueDate(),
+                        'status' => 'pending',
+                        'tax_year' => now()->year,
+                        'tax_month' => now()->month,
+                        'tax_quarter' => ceil(now()->month / 3),
+                        'is_withholding_tax' => $tax->is_withholding_tax ?? false,
+                        'notes' => 'Receipt #' . $purchaseReceipt->id . ' from PO #' . $purchaseOrder->po_number,
+                        'metadata' => [
+                            'purchase_order_number' => $purchaseOrder->po_number,
+                            'receipt_id' => $purchaseReceipt->id,
+                            'supplier_name' => $purchaseOrder->supplier->name,
+                            'items_received' => $totalReceived,
+                        ],
+                    ]);
+                }
+            }
+            
+            // Calculate current receipt total payable
+            $currentReceiptPayable = $currentReceiptSubtotal + $currentReceiptAdditiveTax - $currentReceiptWithholdingTax;
+            
+            // Get current cumulative totals from the purchase order
+            $cumulativeSubtotal = $purchaseOrder->received_subtotal ?? 0;
+            $cumulativeTaxTotal = $purchaseOrder->received_tax_total ?? 0;
+            $cumulativeTotal = $purchaseOrder->received_total ?? 0;
+            
+            // Update cumulative totals with current receipt values
+            $newCumulativeSubtotal = $cumulativeSubtotal + $currentReceiptSubtotal;
+            $newCumulativeTaxTotal = $cumulativeTaxTotal + $currentReceiptTaxAmount;
+            $newCumulativeTotal = $cumulativeTotal + $currentReceiptPayable;
+            
+            // Log the calculation for debugging
+            \Log::info('Receipt calculation', [
+                'receipt_subtotal' => $currentReceiptSubtotal,
+                'receipt_additive_tax' => $currentReceiptAdditiveTax,
+                'receipt_withholding_tax' => $currentReceiptWithholdingTax,
+                'receipt_tax' => $currentReceiptTaxAmount,
+                'receipt_payable' => $currentReceiptPayable,
+                'cumulative_subtotal_before' => $cumulativeSubtotal,
+                'cumulative_subtotal_after' => $newCumulativeSubtotal,
+                'cumulative_tax_before' => $cumulativeTaxTotal,
+                'cumulative_tax_after' => $newCumulativeTaxTotal,
+                'cumulative_total_before' => $cumulativeTotal,
+                'cumulative_total_after' => $newCumulativeTotal,
+            ]);
+
+            // PROCESS PAYMENT for this receipt
+            if (isset($validated['payment_method_id']) && $currentReceiptPayable > 0) {
                 $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
                 
                 if (!$paymentMethod) {
                     throw new \Exception(__('pagination.payment_method_not_found'));
                 }
                 
-                // Validate the payment method can handle this transaction
-                $validation = $paymentMethod->validateTransaction($totalCost);
+                $validation = $paymentMethod->validateTransaction($currentReceiptPayable);
                 if (!$validation['success']) {
                     throw new \Exception($validation['message']);
                 }
 
-                // Record purchase order payment withdrawal using PaymentTransactionService
+                $taxDescription = '';
+                if ($currentReceiptTaxAmount > 0) {
+                    $taxSummary = collect($taxBreakdown)->map(function($tax) {
+                        $prefix = $tax['is_withholding_tax'] ? '-' : '+';
+                        return $prefix . number_format($tax['amount'], 2);
+                    })->implode(', ');
+                    $taxDescription = " (Taxes: {$taxSummary})";
+                }
+
                 $transactionData = [
                     'user_id' => $user->id,
                     'tenant_id' => $tenantId,
                     'payment_method_id' => $paymentMethod->id,
                     'transaction_type' => 'WITHDRAWAL',
                     'transaction_category' => 'PURCHASE_ORDER',
-                    'amount' => $totalCost,
+                    'amount' => $currentReceiptPayable,
                     'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
                     'reference_table' => 'purchase_orders',
                     'reference_id' => $purchaseOrder->id,
-                    'description' => 'Purchase Order Payment - PO #' . $purchaseOrder->po_number,
-                    'notes' => 'Payment for received items (cost × quantity)',
+                    'description' => 'Purchase Order Payment - PO #' . $purchaseOrder->po_number . ' - Receipt #' . $purchaseReceipt->id . $taxDescription,
+                    'notes' => 'Payment for receipt #' . $purchaseReceipt->id . ($currentReceiptTaxAmount > 0 ? ' with tax adjustments' : ''),
                     'metadata' => [
                         'purchase_order_number' => $purchaseOrder->po_number,
-                        'purchase_receipt_id' => $purchaseReceipt->id,
+                        'receipt_id' => $purchaseReceipt->id,
                         'total_items_received' => $totalReceived,
-                        'total_cost' => $totalCost,
+                        'receipt_subtotal' => $currentReceiptSubtotal,
+                        'receipt_additive_tax' => $currentReceiptAdditiveTax,
+                        'receipt_withholding_tax' => $currentReceiptWithholdingTax,
+                        'receipt_tax' => $currentReceiptTaxAmount,
+                        'cumulative_subtotal' => $newCumulativeSubtotal,
+                        'cumulative_tax' => $newCumulativeTaxTotal,
+                        'cumulative_total' => $newCumulativeTotal,
                         'payment_status' => $validated['payment_status'] ?? 'paid',
                         'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
                         'items_count' => count($validated['items']),
@@ -844,49 +982,40 @@ class PurchaseOrderController extends Controller
                     ],
                 ];
 
-                // Add payment date if provided
                 if (isset($validated['payment_date'])) {
                     $transactionData['effective_date'] = $validated['payment_date'];
                 }
 
-                // Record the withdrawal transaction
                 $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
-                
-                // \Log::info('Payment withdrawal recorded for PO #' . $purchaseOrder->po_number, [
-                //     'transaction_ref' => $transactionLog->transaction_ref ?? 'N/A',
-                //     'amount' => $totalCost,
-                //     'payment_method' => $paymentMethod->name,
-                //     'items_received' => $totalReceived,
-                // ]);
             }
 
-            // Update payment information for ALL items that were received
-            // Only update if payment information was provided
+            // Update payment information for items in this receipt
             if (isset($validated['payment_method_id']) || isset($validated['payment_status'])) {
                 $itemIds = collect($validated['items'])
                     ->pluck('purchase_order_item_id')
                     ->toArray();
                 
                 $updateData = [];
-                
                 if (isset($validated['payment_method_id'])) {
                     $updateData['payment_method_id'] = $validated['payment_method_id'];
                 }
-                
                 if (isset($validated['payment_status'])) {
                     $updateData['payment_status'] = $validated['payment_status'];
                 }
-                
                 if (isset($validated['payment_date'])) {
                     $updateData['payment_date'] = $validated['payment_date'];
                 }
                 
-                // Update all received items with the same payment information
-                PurchaseOrderItem::whereIn('id', $itemIds)
-                    ->update($updateData);
+                PurchaseOrderItem::whereIn('id', $itemIds)->update($updateData);
             }
 
-            // Update purchase order status
+            // Update purchase order with CUMULATIVE totals
+            $purchaseOrder->received_subtotal = $newCumulativeSubtotal;
+            $purchaseOrder->received_tax_total = $newCumulativeTaxTotal;
+            $purchaseOrder->received_total = $newCumulativeTotal;
+            $purchaseOrder->subtotal = $purchaseOrder->subtotal ?? $newCumulativeSubtotal;
+            $purchaseOrder->tax_total = $purchaseOrder->tax_total ?? $newCumulativeTaxTotal;
+            $purchaseOrder->total = $purchaseOrder->total ?? $newCumulativeTotal;
             $purchaseOrder->status = $validated['status'];
             $purchaseOrder->received_at = now();
             $purchaseOrder->received_by = $user->id;
@@ -894,7 +1023,6 @@ class PurchaseOrderController extends Controller
 
             DB::commit();
 
-            // Prepare response
             $response = [
                 'success' => true,
                 'message' => $validated['status'] === 'received' 
@@ -903,16 +1031,34 @@ class PurchaseOrderController extends Controller
                 'reload' => true,
                 'data' => [
                     'total_received' => $totalReceived,
-                    'total_cost' => $totalCost,
+                    'receipt_subtotal' => $currentReceiptSubtotal,
+                    'receipt_additive_tax' => $currentReceiptAdditiveTax,
+                    'receipt_withholding_tax' => $currentReceiptWithholdingTax,
+                    'receipt_tax' => $currentReceiptTaxAmount,
+                    'receipt_paid' => $currentReceiptPayable,
+                    'cumulative_subtotal' => $newCumulativeSubtotal,
+                    'cumulative_tax' => $newCumulativeTaxTotal,
+                    'cumulative_total' => $newCumulativeTotal,
                     'purchase_receipt_id' => $purchaseReceipt->id,
                 ]
             ];
 
-            // Add payment info to response if payment was processed
+            if (!empty($taxLiabilities)) {
+                $response['tax_liabilities'] = collect($taxLiabilities)->map(function($liability) {
+                    return [
+                        'id' => $liability->id,
+                        'tax_name' => $liability->tax_name,
+                        'tax_amount' => $liability->tax_amount,
+                        'status' => $liability->status,
+                        'due_date' => $liability->due_date,
+                    ];
+                });
+            }
+            
             if (isset($paymentMethod)) {
                 $response['payment_info'] = [
                     'payment_method' => $paymentMethod->name,
-                    'amount_withdrawn' => $totalCost,
+                    'amount_withdrawn' => $currentReceiptPayable,
                     'transaction_completed' => true,
                 ];
             }
@@ -926,13 +1072,101 @@ class PurchaseOrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Error receiving items: ' . $e->getMessage());
+            \Log::error('Error receiving items: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all(),
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => __('passwords.receiving_error') . $e->getMessage(),
+                'message' => __('passwords.receiving_error') . ': ' . $e->getMessage(),
             ]);
         }
     }
+
+    /**
+     * Calculate tax due date (15th of following month)
+     */
+    private function calculateTaxDueDate()
+    {
+        return now()->addMonth()->startOfMonth()->addDays(14);
+    }
+
+    public function calculateTaxPreview(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $tenantId = $user->tenant_id;
+
+            $request->validate([
+                'taxable_amount' => 'required|numeric|min:0',
+                'selected_taxes' => 'required|array',
+                'selected_taxes.*' => 'exists:taxes,id',
+            ]);
+
+            $taxableAmount = $request->taxable_amount;
+            $selectedTaxIds = $request->selected_taxes;
+
+            $taxes = Tax::whereIn('id', $selectedTaxIds)
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->get();
+
+            $totalTax = 0;
+            $additiveTax = 0;
+            $withholdingTax = 0;
+            $breakdown = [];
+
+            foreach ($taxes as $tax) {
+                // Calculate tax amount
+                if ($tax->type === Tax::TYPE_PERCENTAGE) {
+                    $taxAmount = $taxableAmount * ($tax->rate / 100);
+                } else {
+                    $taxAmount = $tax->rate;
+                }
+
+                $totalTax += $taxAmount;
+                
+                if ($tax->is_withholding_tax) {
+                    $withholdingTax += $taxAmount;
+                } else {
+                    $additiveTax += $taxAmount;
+                }
+
+                $breakdown[] = [
+                    'id' => $tax->id,
+                    'name' => $tax->name,
+                    'code' => $tax->code,
+                    'rate' => $tax->rate,
+                    'type' => $tax->type,
+                    'amount' => $taxAmount,
+                    'formatted_rate' => $tax->formatted_rate,
+                    'is_withholding_tax' => $tax->is_withholding_tax,
+                ];
+            }
+
+            $netPayable = $taxableAmount + $additiveTax - $withholdingTax;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'taxable_amount' => $taxableAmount,
+                    'total_tax' => $totalTax,
+                    'additive_tax' => $additiveTax,
+                    'withholding_tax' => $withholdingTax,
+                    'net_payable' => $netPayable,
+                    'tax_breakdown' => $breakdown,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Tax preview error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
 
     public function cancel(Request $request, $id)

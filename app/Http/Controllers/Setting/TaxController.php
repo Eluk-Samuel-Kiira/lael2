@@ -62,6 +62,7 @@ class TaxController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('create tax')) {
             return response()->json([
                 'success' => false,
@@ -87,8 +88,9 @@ class TaxController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            'rate' => 'required',
-            'type' => 'required',
+            'rate' => 'required|numeric|min:0',
+            'type' => 'required|in:percentage,fixed',
+            'is_withholding_tax' => 'sometimes|boolean',
         ]);
 
         $tax = Tax::create([
@@ -96,8 +98,9 @@ class TaxController extends Controller
             'code' => $request->code,
             'rate' => $request->rate,
             'type' => $request->type,
+            'is_withholding_tax' => $request->has('is_withholding_tax') ? true : false,
             'created_by' => $user->id,
-            'tenant_id' => $tenantId, // Use dynamic tenant_id
+            'tenant_id' => $tenantId,
         ]);
 
         return response()->json([
@@ -110,29 +113,11 @@ class TaxController extends Controller
         ]);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('edit tax')) {
             return response()->json([
                 'success' => false,
@@ -144,7 +129,6 @@ class TaxController extends Controller
                 ->where('tenant_id', $tenantId)
                 ->first();
 
-        // Check if tax exists and belongs to tenant
         if (!$tax) {
             return response()->json([
                 'success' => false,
@@ -159,7 +143,7 @@ class TaxController extends Controller
                 Rule::unique('taxes')->where(function ($query) use ($tenantId, $id) {
                     return $query->where('tenant_id', $tenantId)
                             ->where('id', '!=', $id);
-                })->ignore($tax->id),
+                }),
             ],
             'code' => [
                 'required',
@@ -169,10 +153,11 @@ class TaxController extends Controller
                 Rule::unique('taxes')->where(function ($query) use ($tenantId, $id) {
                     return $query->where('tenant_id', $tenantId)
                             ->where('id', '!=', $id);
-                })->ignore($tax->id),
+                }),
             ],
-            'rate' => 'required',
-            'type' => 'required',
+            'rate' => 'required|numeric|min:0',
+            'type' => 'required|in:percentage,fixed',
+            'is_withholding_tax' => 'sometimes|boolean',
         ]);
 
         $tax->update([
@@ -180,8 +165,7 @@ class TaxController extends Controller
             'code' => $request->code,
             'rate' => $request->rate,
             'type' => $request->type,
-            'created_by' => $user->id,
-            // Don't update tenant_id on update
+            'is_withholding_tax' => $request->has('is_withholding_tax') ? true : false,
         ]);
 
         return response()->json([

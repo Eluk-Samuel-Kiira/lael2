@@ -9,6 +9,8 @@ use App\Models\ExpenseCategory;
 use App\Models\User;
 use App\Models\Employee;
 use App\Models\PaymentMethod;
+use App\Models\{ Department, Supplier };
+use App\Models\Location;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ExpenseFactory extends Factory
@@ -36,21 +38,31 @@ class ExpenseFactory extends Factory
             throw new \Exception("No expense categories found for tenant {$tenantId}. Please create expense categories first.");
         }
         
-        // Get existing users (MUST exist)
+        // Get department if exists (nullable)
+        $department = Department::where('tenant_id', $tenantId)
+            ->inRandomOrder()
+            ->first();
+        
+        // Get location if exists (nullable)
+        $location = Location::where('tenant_id', $tenantId)
+            ->inRandomOrder()
+            ->first();
+        
+        // Get existing users
         $users = User::where('tenant_id', $tenantId)->get();
         
         if ($users->isEmpty()) {
             throw new \Exception("No users found for tenant {$tenantId}. Please create users first.");
         }
         
-        // Get existing employee (MUST exist)
+        // Get existing employee
         $employee = Employee::where('tenant_id', $tenantId)->inRandomOrder()->first();
         
         if (!$employee) {
             throw new \Exception("No employees found for tenant {$tenantId}. Please create employees first.");
         }
         
-        // Get existing payment method (MUST exist)
+        // Get existing payment method
         $paymentMethod = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->inRandomOrder()
@@ -68,16 +80,69 @@ class ExpenseFactory extends Factory
         $createdBy = $users->random()->id;
         $approvedBy = $this->faker->optional(0.8)->passthrough($users->random()->id);
         
+        // Get supplier if exists
+        $supplier = Supplier::where('tenant_id', $tenantId)
+            ->inRandomOrder()
+            ->first();
+        
+        // Calculate amounts
+        $grossAmount = $this->faker->randomFloat(2, 10, 1000);  // Original expense amount
+        $additiveTax = 0;
+        $withholdingTax = 0;
+        $taxBreakdown = [];
+        
+        // Randomly decide if this expense has taxes
+        $hasVat = $this->faker->boolean(60);
+        $hasWht = $this->faker->boolean(40);
+        
+        if ($hasVat) {
+            $vatRate = 18;
+            $vatAmount = $grossAmount * ($vatRate / 100);
+            $additiveTax += $vatAmount;
+            $taxBreakdown[] = [
+                'tax_id' => 1,
+                'tax_name' => 'VAT',
+                'tax_code' => 'VAT18',
+                'rate' => $vatRate,
+                'type' => 'percentage',
+                'amount' => $vatAmount,
+                'is_withholding_tax' => false,
+            ];
+        }
+        
+        if ($hasWht) {
+            $whtRate = 6;
+            $whtAmount = $grossAmount * ($whtRate / 100);
+            $withholdingTax += $whtAmount;
+            $taxBreakdown[] = [
+                'tax_id' => 2,
+                'tax_name' => 'Withholding Tax',
+                'tax_code' => 'WHT6',
+                'rate' => $whtRate,
+                'type' => 'percentage',
+                'amount' => $whtAmount,
+                'is_withholding_tax' => true,
+            ];
+        }
+        
+        $totalTax = $additiveTax + $withholdingTax;
+        $netAmount = $grossAmount + $additiveTax - $withholdingTax;  // What supplier actually gets
+        $totalAmount = $grossAmount + $additiveTax;  // Gross + additive tax (for reference)
+        
         return [
             'tenant_id' => $tenantId,
             'expense_number' => 'EXP-' . date('Y') . '-' . $this->faker->unique()->numerify('#####'),
             'date' => $date,
             'description' => $this->faker->sentence(6),
             'category_id' => $category->id,
-            'vendor_name' => $this->faker->company(),
-            'amount' => $this->faker->randomFloat(2, 10, 1000),
-            'tax_amount' => $this->faker->randomFloat(2, 0, 200),
-            'payment_method_id' => $paymentMethod->id, // Changed from payment_method
+            'supplier_id' => $supplier ? $supplier->id : null,
+            'vendor_name' => $supplier ? $supplier->name : $this->faker->company(),
+            'gross_amount' => $grossAmount,
+            'tax_amount' => $totalTax,
+            'net_amount' => $netAmount,
+            'total_amount' => $totalAmount,
+            'tax_breakdown' => json_encode($taxBreakdown),
+            'payment_method_id' => $paymentMethod->id,
             'payment_status' => $this->faker->randomElement(['pending', 'paid', 'reimbursed']),
             'paid_date' => $this->faker->optional(0.7)->dateTimeBetween($date, 'now'),
             'is_recurring' => $this->faker->boolean(20),
@@ -87,53 +152,107 @@ class ExpenseFactory extends Factory
             'approved_by' => $approvedBy,
             'approved_at' => $this->faker->optional(0.8)->dateTimeBetween($date, 'now'),
             'employee_id' => $employee->id,
+            'department_id' => $department ? $department->id : null,
+            'location_id' => $location ? $location->id : null,
             'created_by' => $createdBy,
             'created_at' => $date,
             'updated_at' => $date,
         ];
     }
 
-    public function forTenant($tenantId)
+    // ... keep all your existing state methods ...
+    
+    public function forSupplier($supplierId)
     {
-        return $this->state(function (array $attributes) use ($tenantId) {
+        return $this->state(function (array $attributes) use ($supplierId) {
+            $supplier = Supplier::find($supplierId);
             return [
-                'tenant_id' => $tenantId,
-            ];
-        });
-    }
-
-    public function withCategory($categoryId)
-    {
-        return $this->state(function (array $attributes) use ($categoryId) {
-            return [
-                'category_id' => $categoryId,
+                'supplier_id' => $supplierId,
+                'vendor_name' => $supplier ? $supplier->name : $attributes['vendor_name'],
             ];
         });
     }
     
-    public function forEmployee($employeeId)
+    public function withVat($vatRate = 18)
     {
-        return $this->state(function (array $attributes) use ($employeeId) {
+        return $this->state(function (array $attributes) use ($vatRate) {
+            $grossAmount = $attributes['gross_amount'] ?? $this->faker->randomFloat(2, 100, 1000);
+            $vatAmount = $grossAmount * ($vatRate / 100);
+            $additiveTax = $vatAmount;
+            
+            // Get existing withholding tax from breakdown
+            $existingBreakdown = isset($attributes['tax_breakdown']) ? json_decode($attributes['tax_breakdown'], true) : [];
+            $withholdingTax = 0;
+            
+            foreach ($existingBreakdown as $tax) {
+                if ($tax['is_withholding_tax'] ?? false) {
+                    $withholdingTax += $tax['amount'];
+                }
+            }
+            
+            $totalTax = $additiveTax + $withholdingTax;
+            $netAmount = $grossAmount + $additiveTax - $withholdingTax;
+            $totalAmount = $grossAmount + $additiveTax;
+            
+            // Add VAT to breakdown
+            $existingBreakdown[] = [
+                'tax_id' => 1,
+                'tax_name' => 'VAT',
+                'tax_code' => 'VAT' . $vatRate,
+                'rate' => $vatRate,
+                'type' => 'percentage',
+                'amount' => $vatAmount,
+                'is_withholding_tax' => false,
+            ];
+            
             return [
-                'employee_id' => $employeeId,
+                'gross_amount' => $grossAmount,
+                'tax_amount' => $totalTax,
+                'net_amount' => $netAmount,
+                'total_amount' => $totalAmount,
+                'tax_breakdown' => json_encode($existingBreakdown),
             ];
         });
     }
     
-    public function createdBy($userId)
+    public function withWht($whtRate = 6)
     {
-        return $this->state(function (array $attributes) use ($userId) {
-            return [
-                'created_by' => $userId,
+        return $this->state(function (array $attributes) use ($whtRate) {
+            $grossAmount = $attributes['gross_amount'] ?? $this->faker->randomFloat(2, 100, 1000);
+            $whtAmount = $grossAmount * ($whtRate / 100);
+            $withholdingTax = $whtAmount;
+            
+            // Get existing additive tax from breakdown
+            $existingBreakdown = isset($attributes['tax_breakdown']) ? json_decode($attributes['tax_breakdown'], true) : [];
+            $additiveTax = 0;
+            
+            foreach ($existingBreakdown as $tax) {
+                if (!($tax['is_withholding_tax'] ?? false)) {
+                    $additiveTax += $tax['amount'];
+                }
+            }
+            
+            $totalTax = $additiveTax + $withholdingTax;
+            $netAmount = $grossAmount + $additiveTax - $withholdingTax;
+            $totalAmount = $grossAmount + $additiveTax;
+            
+            // Add WHT to breakdown
+            $existingBreakdown[] = [
+                'tax_id' => 2,
+                'tax_name' => 'Withholding Tax',
+                'tax_code' => 'WHT' . $whtRate,
+                'rate' => $whtRate,
+                'type' => 'percentage',
+                'amount' => $whtAmount,
+                'is_withholding_tax' => true,
             ];
-        });
-    }
-    
-    public function withPaymentMethod($paymentMethodId)
-    {
-        return $this->state(function (array $attributes) use ($paymentMethodId) {
+            
             return [
-                'payment_method_id' => $paymentMethodId,
+                'gross_amount' => $grossAmount,
+                'tax_amount' => $totalTax,
+                'net_amount' => $netAmount,
+                'total_amount' => $totalAmount,
+                'tax_breakdown' => json_encode($existingBreakdown),
             ];
         });
     }

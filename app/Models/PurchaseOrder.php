@@ -22,6 +22,9 @@ class PurchaseOrder extends Model
         'subtotal',
         'tax_total',
         'total',
+        'received_subtotal',
+        'received_tax_total',
+        'received_total',
         'notes',
         'created_by',
         
@@ -44,6 +47,9 @@ class PurchaseOrder extends Model
         'subtotal' => 'integer',
         'tax_total' => 'integer',
         'total' => 'integer',
+        'received_subtotal' => 'integer',
+        'received_tax_total' => 'integer',
+        'received_total' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'submitted_at' => 'datetime',
@@ -71,6 +77,21 @@ class PurchaseOrder extends Model
         return from_base_currency($value);
     }
 
+    public function getReceivedSubtotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getReceivedTaxTotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getReceivedTotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
     /**
      * Mutators - Convert from display float to stored integer
      */
@@ -89,6 +110,21 @@ class PurchaseOrder extends Model
         $this->attributes['total'] = to_base_currency($value);
     }
 
+
+    public function setReceivedSubtotalAttribute($value): void
+    {
+        $this->attributes['received_subtotal'] = to_base_currency($value);
+    }
+
+    public function setReceivedTaxTotalAttribute($value): void
+    {
+        $this->attributes['received_tax_total'] = to_base_currency($value);
+    }
+
+    public function setReceivedTotalAttribute($value): void
+    {
+        $this->attributes['received_total'] = to_base_currency($value);
+    }
 
     
 

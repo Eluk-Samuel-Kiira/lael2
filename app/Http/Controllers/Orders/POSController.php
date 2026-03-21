@@ -15,7 +15,6 @@ use App\Models\{ OrderItem, OrderPayment, InventoryLog, Customer, Inventory, Ord
 
 class POSController extends Controller
 {
-    // POSController.php
     public function index(Request $request)
     {
         Artisan::call('optimize:clear');
@@ -549,9 +548,22 @@ class POSController extends Controller
                 ];
             }
 
+            // ── Record promotion/discount loss (after all splits processed) ─
+            if ($order->discount_total > 0) {
+                $order->load('orderItems'); // ensure items are available for breakdown
+                $primaryMethod = PaymentMethod::findForTenant(
+                    $payments[0]['payment_method_id'], $tenantId
+                );
+                if ($primaryMethod) {
+                    $this->recordOrderPromotionLoss($order, $primaryMethod);
+                }
+            }
+
             // ── Tax record ─────────────────────────────────────────────────
             $taxAmount = $order->tax_total ?: 0;
             if ($taxAmount > 0) {
+                $now = now();
+
                 OrderTax::updateOrCreate(
                     ['order_id' => $order->id],
                     [
@@ -562,24 +574,27 @@ class POSController extends Controller
                         'tax_amount'  => $taxAmount,
                         'is_compound' => 1,
                         'created_by'  => $user->id,
+                        // ── Remittance tracking ────────────────────
+                        'tenant_id'   => $tenantId,
+                        'status'      => 'pending',
+                        'tax_year'    => $now->year,
+                        'tax_month'   => $now->month,
+                        'tax_quarter' => (int) ceil($now->month / 3),
+                        // URA deadline: 15th of the following month
+                        'due_date'    => $now->copy()->addMonthNoOverflow()->startOfMonth()->addDays(14),
                     ]
                 );
             }
 
             // ── Inventory ──────────────────────────────────────────────────
-            // Only run inventory deduction when the cart was updated.
-            // Original confirmed orders already had inventory deducted
-            // at processPayment() time — don't double-deduct.
-            if ($cartWasUpdated) {
-                $order->load('orderItems'); // reload fresh items
-                foreach ($order->orderItems as $item) {
-                    $variant = ProductVariant::find($item->variant_id);
-                    if (! $variant) continue;
-                    if ($isSingleShop) {
-                        $this->handleSingleShopInventory($variant, $item, $order);
-                    } else {
-                        $this->handleMultiShopInventory($variant, $item, $order);
-                    }
+            $order->load('orderItems'); // reload fresh items
+            foreach ($order->orderItems as $item) {
+                $variant = ProductVariant::find($item->variant_id);
+                if (! $variant) continue;
+                if ($isSingleShop) {
+                    $this->handleSingleShopInventory($variant, $item, $order);
+                } else {
+                    $this->handleMultiShopInventory($variant, $item, $order);
                 }
             }
 
@@ -655,132 +670,6 @@ class POSController extends Controller
             ], 500);
         }
     }
-
-    // public function completePayment(Request $request) 
-    // {
-
-    //     try {
-    //         $cartData = $request->items; 
-    //         $paymentDetails = $request->payment_details;  
-    //         $user = Auth::user();
-    //         $tenantId = $user->tenant_id;
-    //         $isSingleShop = tenant_is_single_shop($tenantId);
-                      
-    //         if (!$user->hasPermissionTo('complete order')) {
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' => __('payments.not_authorized'),
-    //             ]);
-    //         }
-
-    //         $order = Order::findOrFail($request->order_id);
-    //         $totalAmount = $request->total ?? 0;
-            
-    //         // Get payment method
-    //         $paymentMethod = PaymentMethod::findForTenant($request->payment_method_id, $tenantId);
-            
-    //         if (!$paymentMethod) {
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' =>  __('pagination.payment_method_not_found')
-    //             ]);
-    //         }
-
-    //         // Validate payment method can receive this amount
-    //         $validation = $paymentMethod->validateTransaction($totalAmount);
-    //         if (!$validation['success']) {
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' => __('pagination.payment_valid_fail' . $validation['message'])
-    //             ]);
-    //         }
-
-    //         // Record payment transaction (money IN from sale)
-    //         $this->recordOrderPaymentTransaction($order, $paymentMethod, $totalAmount, $paymentDetails);
-
-    //         // Update order with payment details
-    //         $order->update([
-    //             'paid_amount' => $paymentDetails['amount_tendered'] ?? $totalAmount,
-    //             'balance_due' => $paymentDetails['change_due'] ?? 0,
-    //             'notes' => __('pagination.payment_completed'),
-    //             'status' => 'completed',
-    //         ]);
-
-    //         // Payment Details
-    //         $transactionId = $request->input('payment_details.transaction_id') ?: (string) Str::uuid();
-
-    //         // Create Payment record
-    //         OrderPayment::updateOrCreate(
-    //             ['order_id' => $order->id],
-    //             [
-    //                 'amount' => $totalAmount,
-    //                 'payment_method_id' => $paymentMethod->id,
-    //                 'transaction_id' => $transactionId,
-    //                 'status' => 'completed',
-    //                 'notes' => __('pagination.payment_completed'),
-    //                 'processed_at' => now(),
-    //                 'processed_by' => auth()->id(),
-    //             ]
-    //         );
-
-    //         // Create Tax Record
-    //         OrderTax::updateOrCreate(
-    //             ['order_id' => $order->id],
-    //             [
-    //                 'tax_name' => 'VAT',
-    //                 'tax_rate' => (($request->total - $request->subtotal) / $request->total) * 100,
-    //                 'tax_amount' => $request->tax,
-    //                 'is_compound' => 1,
-    //                 'created_by' => auth()->id(),
-    //             ]
-    //         );
-
-    //         // Update inventory based on shop type
-    //         foreach ($cartData as $item) {
-    //             $variant = ProductVariant::find($item['variant_id']);
-
-    //             if (!$variant) {
-    //                 continue;
-    //             }
-
-    //             if ($isSingleShop) {
-    //                 // Single Shop: Update overall quantity
-    //                 $this->handleSingleShopInventory($variant, $item, $order);
-    //             } else {
-    //                 // Multi Shop: Update inventory items
-    //                 $this->handleMultiShopInventory($variant, $item, $order);
-    //             }
-    //         }
-
-    //         // Get updated balance for response
-    //         $paymentMethod->refresh();
-    //         $balanceAfter = $paymentMethod->current_balance;
-
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => __('pagination.payment_completed'),
-    //             'is_single_shop' => $isSingleShop,
-    //             'payment_method' => [
-    //                 'id' => $paymentMethod->id,
-    //                 'name' => $paymentMethod->name,
-    //                 'type' => $paymentMethod->type,
-    //                 'type_label' => $paymentMethod->getTypeLabel(),
-    //             ],
-    //             'balance_before' => $paymentMethod->current_balance - $totalAmount, // Calculate previous balance
-    //             'balance_after' => $balanceAfter,
-    //             'transaction_id' => $transactionId,
-    //             'order_number' => $order->order_number,
-    //         ]);
-
-    //     } catch (\Exception $e) {
-    //         \Log::error('Payment completion failed: ' . $e->getMessage());
-            
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Payment completion failed: ' . $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
 
     /**
      * Record order payment transaction for POS sales
@@ -866,24 +755,109 @@ class POSController extends Controller
     }
 
     /**
+     * Record promotion/discount as a financial loss (revenue reduction).
+     * Aggregates per-item promotion_data for a full breakdown in metadata.
+     */
+    private function recordOrderPromotionLoss($order, $paymentMethod): void
+    {
+        $totalDiscount = $order->discount_total ?? 0;
+
+        if ($totalDiscount <= 0) {
+            return;
+        }
+
+        try {
+            // ── Build per-item promotion breakdown from stored promotion_data ──
+            $itemPromotions = [];
+
+            foreach ($order->orderItems as $item) {
+                $promotions = is_string($item->promotion_data)
+                    ? json_decode($item->promotion_data, true)
+                    : ($item->promotion_data ?? []);
+
+                if (! empty($promotions)) {
+                    $itemPromotions[] = [
+                        'item_name'    => $item->item_name,
+                        'variant_id'   => $item->variant_id,
+                        'sku'          => $item->sku,
+                        'quantity'     => $item->quantity,
+                        'unit_price'   => $item->unit_price,
+                        'item_discount'=> $item->discount ?? 0,
+                        'promotions'   => $promotions,
+                    ];
+                }
+            }
+
+            // ── Resolve customer name ──────────────────────────────────────────
+            $customerName = $order->customer_name;
+            if (! $customerName && $order->customer_id) {
+                $customer     = \App\Models\Customer::find($order->customer_id);
+                $customerName = $customer
+                    ? trim($customer->first_name . ' ' . $customer->last_name)
+                    : null;
+            }
+
+            $transactionData = [
+                'tenant_id'            => $order->tenant_id,
+                'user_id'              => auth()->id(),
+                'payment_method_id'    => $paymentMethod->id,
+                'transaction_type'     => 'WITHDRAWAL',
+                'transaction_category' => 'ADJUSTMENT',
+                'amount'               => $totalDiscount,
+                'currency_id'          => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+                'reference_table'      => 'orders',
+                'reference_id'         => $order->id,
+                'description'          => 'Promotion/Discount Loss - Order #' . $order->order_number,
+                'notes'                => 'Revenue reduction from applied discounts and promotions',
+                'metadata'             => [
+                    'order_number'       => $order->order_number,
+                    'customer_id'        => $order->customer_id,
+                    'customer_name'      => $customerName ?? __('pagination.walk_in_customer'),
+                    'subtotal_before'    => $order->subtotal,
+                    'total_discount'     => $totalDiscount,
+                    'final_total'        => $order->total,
+                    'transaction_nature' => 'PROMOTION_LOSS',
+                    'processed_by_id'    => auth()->id(),
+                    'processed_by_name'  => auth()->user()->name,
+                    'items_with_promotions' => $itemPromotions, // full per-item breakdown
+                ],
+            ];
+
+            app('payment-transaction')->recordTransaction($transactionData);
+
+            \Log::info('[POS] Promotion loss recorded', [
+                'order_id'        => $order->id,
+                'discount_total'  => $totalDiscount,
+                'promoted_items'  => count($itemPromotions),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to record promotion loss: ' . $e->getMessage(), [
+                'order_id' => $order->id,
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Helper method to record order payment using PaymentMethod model
      */
-    private function recordOrderPaymentSimple($order, $paymentMethod, $amount): void
-    {
-        // Alternative simpler method using PaymentMethod model
-        $transactionData = [
-            'user_id' => auth()->id(),
-            'transaction_type' => 'WITHDRAWAL',
-            'transaction_category' => 'ORDER',
-            'amount' => $amount,
-            'currency_id' => $paymentMethod->currency_id ?? Currency::default()->id,
-            'reference_id' => $order->id,
-            'description' => 'Order payment #' . $order->order_number,
-            'notes' => 'Payment processed',
-        ];
+    // private function recordOrderPaymentSimple($order, $paymentMethod, $amount): void
+    // {
+    //     // Alternative simpler method using PaymentMethod model
+    //     $transactionData = [
+    //         'user_id' => auth()->id(),
+    //         'transaction_type' => 'WITHDRAWAL',
+    //         'transaction_category' => 'ORDER',
+    //         'amount' => $amount,
+    //         'currency_id' => $paymentMethod->currency_id ?? Currency::default()->id,
+    //         'reference_id' => $order->id,
+    //         'description' => 'Order payment #' . $order->order_number,
+    //         'notes' => 'Payment processed',
+    //     ];
 
-        $paymentMethod->recordTransaction($transactionData);
-    }
+    //     $paymentMethod->recordTransaction($transactionData);
+    // }
 
     /**
      * Handle inventory updates for single shop
@@ -925,6 +899,7 @@ class POSController extends Controller
      */
     private function handleMultiShopInventory($variant, $item, $order, $user = null)
     {
+        // \Log::info('Yes it reached');
         // Get the user if not passed
         if (!$user) {
             $user = Auth::user();

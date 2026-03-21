@@ -124,6 +124,16 @@ class UserSeeder extends Seeder
                 'delete employee',
                 'update employee',
             ],
+            'Employee Leave' => [
+                'create leave',
+                'view leave',
+                'edit leave',
+                'delete leave',
+                'update leave',
+                'approve leave',
+                'reject leave',
+                'cancel leave',
+            ],
             'Employee Payment Management' => [
                 'create employee payment',
                 'view employee payment',

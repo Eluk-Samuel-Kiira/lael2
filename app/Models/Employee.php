@@ -169,7 +169,7 @@ class Employee extends Model
     protected function salary(): Attribute
     {
         return Attribute::make(
-            get: fn ($value) => $value ? number_format($value, 2) : null,
+            get: fn ($value) => $value,
         );
     }
 

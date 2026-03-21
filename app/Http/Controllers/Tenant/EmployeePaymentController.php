@@ -17,10 +17,7 @@ class EmployeePaymentController extends Controller
     {
         $this->taxService = $taxService;
     }
-    
-    /**
-     * Display a listing of the resource.
-     */
+
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -33,21 +30,61 @@ class EmployeePaymentController extends Controller
             ]);
         }
         
-        // Build the query
-        $query = EmployeePayment::with(['employee', 'tenant', 'paymentMethod']);
+        // Build the query with filters
+        $query = EmployeePayment::with(['employee', 'tenant', 'paymentMethod'])
+            ->where('tenant_id', $tenantId);
 
-        // If user is NOT super_admin, filter by tenant
-                if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $tenantId);
+        // Apply filters
+        if ($request->has('status') && !empty($request->status)) {
+            $query->where('status', $request->status);
         }
-        // Get data for the create modal and edit modals
+
+        if ($request->has('payment_type') && !empty($request->payment_type)) {
+            $query->where('payment_type', $request->payment_type);
+        }
+
+        if ($request->has('employee_id') && !empty($request->employee_id)) {
+            $query->where('employee_id', $request->employee_id);
+        }
+
+        if ($request->has('payment_method_id') && !empty($request->payment_method_id)) {
+            $query->where('payment_method_id', $request->payment_method_id);
+        }
+
+        if ($request->has('date_from') && !empty($request->date_from)) {
+            $query->whereDate('payment_date', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to') && !empty($request->date_to)) {
+            $query->whereDate('payment_date', '<=', $request->date_to);
+        }
+
+        if ($request->has('min_amount') && !empty($request->min_amount)) {
+            $query->where('gross_amount', '>=', to_base_currency($request->min_amount));
+        }
+
+        if ($request->has('max_amount') && !empty($request->max_amount)) {
+            $query->where('gross_amount', '<=', to_base_currency($request->max_amount));
+        }
+
+        // Get filtered payments with pagination
+        $payments = $query->latest()->paginate($request->get('per_page', 15));
+        
+        // Calculate statistics
+        $statistics = $this->getPaymentStatistics($tenantId, $request);
+        
+        // Get data for filters
+        $employees = Employee::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name']);
+        
+        $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->get(['id', 'name', 'type']);
+        
         $taxService = app(TaxCalculationService::class);
         $availableTaxes = $taxService->getAvailableTaxes($tenantId);
-        
-        $payments = $query->latest()->get();
-
-        // Get data for the create modal
-        // $availableTaxes = $this->taxService->getAvailableTaxes($tenantId);
 
         $bladeToReload = $request->query('bladeFileToReload');
         switch ($bladeToReload) {
@@ -55,13 +92,73 @@ class EmployeePaymentController extends Controller
                 return view('department.employee-payment.component', [
                     'payments' => $payments,
                     'taxes' => $availableTaxes,
+                    'statistics' => $statistics,
+                    'employees' => $employees,
+                    'paymentMethods' => $paymentMethods,
+                    'filters' => $request->all(),
                 ]);
             default:
                 return view('department.employee-payment-index', [
                     'payments' => $payments,
                     'taxes' => $availableTaxes,
+                    'statistics' => $statistics,
+                    'employees' => $employees,
+                    'paymentMethods' => $paymentMethods,
+                    'filters' => $request->all(),
                 ]);
         }
+    }
+
+    /**
+     * Get payment statistics
+     */
+    private function getPaymentStatistics($tenantId, $request)
+    {
+        $query = EmployeePayment::where('tenant_id', $tenantId);
+        
+        // Apply same filters to statistics for consistency
+        if ($request->has('status') && !empty($request->status)) {
+            $query->where('status', $request->status);
+        }
+        if ($request->has('employee_id') && !empty($request->employee_id)) {
+            $query->where('employee_id', $request->employee_id);
+        }
+        if ($request->has('date_from') && !empty($request->date_from)) {
+            $query->whereDate('payment_date', '>=', $request->date_from);
+        }
+        if ($request->has('date_to') && !empty($request->date_to)) {
+            $query->whereDate('payment_date', '<=', $request->date_to);
+        }
+
+        $today = now();
+        $startOfMonth = $today->copy()->startOfMonth();
+        $endOfMonth = $today->copy()->endOfMonth();
+
+        return [
+            'total_payments' => $query->count(),
+            'total_amount' => from_base_currency($query->sum('amount')),
+            'total_gross' => from_base_currency($query->sum('gross_amount')),
+            'total_tax' => from_base_currency($query->sum('total_tax_amount')),
+            'total_advance_deductions' => from_base_currency($query->sum('total_advance_deduction')),
+            
+            'pending_count' => (clone $query)->where('status', 'pending')->count(),
+            'completed_count' => (clone $query)->where('status', 'completed')->count(),
+            'failed_count' => (clone $query)->where('status', 'failed')->count(),
+            'cancelled_count' => (clone $query)->where('status', 'cancelled')->count(),
+            
+            'this_month_count' => (clone $query)->whereBetween('payment_date', [$startOfMonth, $endOfMonth])->count(),
+            'this_month_amount' => from_base_currency((clone $query)->whereBetween('payment_date', [$startOfMonth, $endOfMonth])->sum('amount')),
+            
+            'avg_payment' => from_base_currency($query->avg('amount')),
+            
+            'by_type' => [
+                'salary' => (clone $query)->where('payment_type', 'salary')->count(),
+                'allowance' => (clone $query)->where('payment_type', 'allowance')->count(),
+                'bonus' => (clone $query)->where('payment_type', 'bonus')->count(),
+                'overtime' => (clone $query)->where('payment_type', 'overtime')->count(),
+                'advance' => (clone $query)->where('payment_type', 'advance')->count(),
+            ],
+        ];
     }
     
     /**
@@ -835,6 +932,73 @@ class EmployeePaymentController extends Controller
 
 
 
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('export employee payment')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $query = EmployeePayment::with(['employee', 'paymentMethod'])
+            ->where('tenant_id', $tenantId);
+
+        // Apply filters same as index
+        if ($request->has('status') && !empty($request->status)) {
+            $query->where('status', $request->status);
+        }
+        // ... add other filters
+
+        $payments = $query->get();
+
+        $filename = 'payments_' . now()->format('Y-m-d_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+        ];
+
+        $callback = function() use ($payments) {
+            $file = fopen('php://output', 'w');
+            
+            // Headers
+            fputcsv($file, [
+                'ID',
+                'Employee',
+                'Payment Type',
+                'Payment Method',
+                'Gross Amount',
+                'Net Amount',
+                'Tax Amount',
+                'Advance Deduction',
+                'Payment Date',
+                'Status',
+            ]);
+
+            // Data
+            foreach ($payments as $payment) {
+                fputcsv($file, [
+                    $payment->id,
+                    $payment->employee->first_name . ' ' . $payment->employee->last_name,
+                    $payment->payment_type,
+                    $payment->paymentMethod->name ?? 'N/A',
+                    $payment->gross_amount,
+                    $payment->net_amount,
+                    $payment->total_tax_amount,
+                    $payment->total_advance_deduction ?? 0,
+                    $payment->payment_date->format('Y-m-d'),
+                    $payment->status,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 
 
 }

@@ -97,6 +97,14 @@ class EmployeeController extends Controller
                 ]);
             }
 
+            // Check if user has protected roles using Spatie Permission
+            if ($user->hasAnyRole(['super_admin', 'admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.user_not_updatable'),
+                ]);
+            }
+
             // Find the employee and ensure it belongs to tenant
             $employee = Employee::where('id', $id)
                             ->where('tenant_id', $tenantId)
@@ -232,6 +240,14 @@ class EmployeeController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
+            ]);
+        }
+        
+        // Check if user has protected roles using Spatie Permission
+        if ($user->hasAnyRole(['super_admin', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.user_not_updatable'),
             ]);
         }
 

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('tax_id')->nullable()->constrained()->onDelete('set null');
             
             // Tax Details
-            $table->decimal('amount', 15, 2)->comment('Tax amount withheld');
+            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
             $table->string('tax_name');
             $table->decimal('rate', 10, 2);
             $table->string('tax_code')->nullable();

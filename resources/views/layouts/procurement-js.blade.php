@@ -28,6 +28,518 @@
 </script>
 
 
+
+
+<script>
+    // Function to print purchase order as receipt
+    function printPurchaseOrder(orderId) {
+        const modalElement = document.getElementById('viewPurchase' + orderId);
+        if (!modalElement) {
+            console.error('Modal not found');
+            return;
+        }
+
+        // Extract all data from the modal
+        const poNumber = modalElement.querySelector('.modal-header h2')?.innerText || 'Purchase Order';
+        
+        // Get supplier name
+        let supplier = '—';
+        const supplierEl = modalElement.querySelector('.fw-bold.fs-5.text-gray-800');
+        if (supplierEl) {
+            supplier = supplierEl.innerText.trim();
+        } else {
+            const supplierCard = modalElement.querySelector('.col-md-4 .fw-bold.fs-5');
+            if (supplierCard) supplier = supplierCard.innerText.trim();
+        }
+        
+        // Get expected delivery
+        let expectedDelivery = '—';
+        const deliveryEl = modalElement.querySelector('.col-md-4 .fw-bold.fs-5 i');
+        if (deliveryEl && deliveryEl.parentElement) {
+            expectedDelivery = deliveryEl.parentElement.innerText.replace('expected_delivery', '').trim();
+        }
+        
+        // Get location
+        let location = '—';
+        const locationEl = modalElement.querySelector('.col-md-4 .text-muted.fs-7');
+        if (locationEl) {
+            location = locationEl.innerText.replace('location', '').trim();
+        }
+        
+        // Get items from table
+        const items = [];
+        const tableRows = modalElement.querySelectorAll('tbody tr');
+        tableRows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 7) {
+                items.push({
+                    product: cells[0]?.innerText.trim() || '—',
+                    quantity: cells[1]?.innerText.trim() || '0',
+                    received: cells[2]?.innerText.trim() || '0',
+                    pending: cells[3]?.innerText.trim() || '0',
+                    unitCost: cells[4]?.innerText.trim() || '0',
+                    tax: cells[5]?.innerText.trim() || '0',
+                    total: cells[6]?.innerText.trim() || '0'
+                });
+            }
+        });
+
+        // Get totals from the order summary section
+        let subtotal = '0';
+        let taxTotal = '0';
+        let grandTotal = '0';
+        
+        // Method 1: Look for order summary table
+        const summaryTable = modalElement.querySelector('.order-summary-table, table.table-sm');
+        if (summaryTable) {
+            const rows = summaryTable.querySelectorAll('tr');
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 2) {
+                    const label = cells[0]?.innerText?.toLowerCase() || '';
+                    const value = cells[1]?.innerText || '0';
+                    const numericValue = value.replace(/[^0-9.-]/g, '');
+                    
+                    if (label.includes('subtotal')) {
+                        subtotal = numericValue;
+                    } else if (label.includes('tax')) {
+                        taxTotal = numericValue;
+                    } else if (label.includes('grand') || label.includes('total')) {
+                        grandTotal = numericValue;
+                    }
+                }
+            });
+        }
+        
+        // Method 2: Look for tfoot in items table
+        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
+            const tfootRows = modalElement.querySelectorAll('tfoot tr');
+            if (tfootRows.length >= 3) {
+                subtotal = tfootRows[0]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
+                taxTotal = tfootRows[1]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
+                grandTotal = tfootRows[2]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
+            }
+        }
+        
+        // Method 3: Look for the order totals in the footer card
+        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
+            const totalsCard = modalElement.querySelector('.totals-card, .card-dashed');
+            if (totalsCard) {
+                const numbers = totalsCard.innerText.match(/[\d,]+\.?\d*/g);
+                if (numbers && numbers.length >= 3) {
+                    grandTotal = numbers[numbers.length - 1];
+                    taxTotal = numbers[numbers.length - 2] || '0';
+                    subtotal = numbers[numbers.length - 3] || '0';
+                }
+            }
+        }
+        
+        // Method 4: Get from the main order object if available
+        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
+            const orderTotalEl = modalElement.querySelector('.fw-bold.text-primary.fs-5');
+            if (orderTotalEl) {
+                grandTotal = orderTotalEl.innerText.replace(/[^0-9.-]/g, '');
+            }
+        }
+        
+        // Get created date
+        let createdDate = new Date().toLocaleDateString();
+        const createdDateEl = modalElement.querySelector('.timeline-content .text-muted.fs-8:first-child');
+        if (createdDateEl) {
+            createdDate = createdDateEl.innerText;
+        }
+        
+        // Get notes
+        let notes = '';
+        const notesEl = modalElement.querySelector('.card-body p');
+        if (notesEl) {
+            notes = notesEl.innerText;
+        }
+        
+        // Parse numbers to ensure they're valid
+        subtotal = parseFloat(subtotal) || 0;
+        taxTotal = parseFloat(taxTotal) || 0;
+        grandTotal = parseFloat(grandTotal) || 0;
+
+        // Create receipt HTML
+        const printWindow = window.open('', '_blank', 'width=1000,height=900');
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Purchase Order - ${poNumber}</title>
+                <meta charset="UTF-8">
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    body {
+                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 14px;
+                        line-height: 1.5;
+                        color: #1e293b;
+                        background: #f1f5f9;
+                        padding: 40px;
+                    }
+                    
+                    .print-container {
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 20px 35px -8px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    }
+                    
+                    .print-header {
+                        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                        color: white;
+                        padding: 32px 40px;
+                        text-align: center;
+                    }
+                    
+                    .print-header h1 {
+                        font-size: 28px;
+                        font-weight: 700;
+                        margin-bottom: 8px;
+                        letter-spacing: -0.5px;
+                    }
+                    
+                    .print-header .po-number {
+                        font-size: 18px;
+                        font-weight: 500;
+                        opacity: 0.9;
+                        margin-top: 8px;
+                    }
+                    
+                    .print-header .date {
+                        font-size: 14px;
+                        opacity: 0.7;
+                        margin-top: 8px;
+                    }
+                    
+                    .print-body {
+                        padding: 40px;
+                    }
+                    
+                    .info-grid {
+                        display: grid;
+                        grid-template-columns: repeat(3, 1fr);
+                        gap: 24px;
+                        margin-bottom: 32px;
+                        padding-bottom: 24px;
+                        border-bottom: 2px solid #e2e8f0;
+                    }
+                    
+                    .info-card {
+                        background: #f8fafc;
+                        padding: 16px 20px;
+                        border-radius: 12px;
+                        border: 1px solid #e2e8f0;
+                    }
+                    
+                    .info-label {
+                        font-size: 12px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        color: #64748b;
+                        margin-bottom: 8px;
+                    }
+                    
+                    .info-value {
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: #0f172a;
+                    }
+                    
+                    .items-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 24px 0;
+                    }
+                    
+                    .items-table th {
+                        text-align: left;
+                        padding: 12px 16px;
+                        background: #f1f5f9;
+                        font-weight: 600;
+                        font-size: 13px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        color: #475569;
+                        border-bottom: 2px solid #e2e8f0;
+                    }
+                    
+                    .items-table td {
+                        padding: 12px 16px;
+                        border-bottom: 1px solid #e2e8f0;
+                        color: #334155;
+                    }
+                    
+                    .items-table .text-right {
+                        text-align: right;
+                    }
+                    
+                    .items-table .text-center {
+                        text-align: center;
+                    }
+                    
+                    .badge {
+                        display: inline-block;
+                        padding: 4px 8px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        border-radius: 6px;
+                    }
+                    
+                    .badge-success {
+                        background: #dcfce7;
+                        color: #166534;
+                    }
+                    
+                    .badge-warning {
+                        background: #fef9c3;
+                        color: #854d0e;
+                    }
+                    
+                    .totals-section {
+                        margin-top: 24px;
+                        padding-top: 24px;
+                        border-top: 2px solid #e2e8f0;
+                        display: flex;
+                        justify-content: flex-end;
+                    }
+                    
+                    .totals-card {
+                        width: 350px;
+                        background: #f8fafc;
+                        padding: 20px;
+                        border-radius: 12px;
+                    }
+                    
+                    .total-row {
+                        display: flex;
+                        justify-content: space-between;
+                        padding: 8px 0;
+                        font-size: 14px;
+                    }
+                    
+                    .total-row.grand-total {
+                        margin-top: 8px;
+                        padding-top: 12px;
+                        border-top: 2px solid #e2e8f0;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: #0f172a;
+                    }
+                    
+                    .notes-section {
+                        margin-top: 32px;
+                        padding: 20px;
+                        background: #fef9e7;
+                        border-radius: 12px;
+                        border-left: 4px solid #f59e0b;
+                    }
+                    
+                    .footer {
+                        margin-top: 40px;
+                        padding-top: 24px;
+                        border-top: 1px solid #e2e8f0;
+                        text-align: center;
+                        font-size: 12px;
+                        color: #94a3b8;
+                    }
+                    
+                    .no-print {
+                        text-align: center;
+                        padding: 20px;
+                        background: #f8fafc;
+                        border-top: 1px solid #e2e8f0;
+                    }
+                    
+                    .btn {
+                        padding: 10px 24px;
+                        font-size: 14px;
+                        font-weight: 500;
+                        border-radius: 8px;
+                        border: none;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        margin: 0 8px;
+                    }
+                    
+                    .btn-primary {
+                        background: #3b82f6;
+                        color: white;
+                    }
+                    
+                    .btn-primary:hover {
+                        background: #2563eb;
+                    }
+                    
+                    .btn-secondary {
+                        background: #64748b;
+                        color: white;
+                    }
+                    
+                    .btn-secondary:hover {
+                        background: #475569;
+                    }
+                    
+                    @media print {
+                        body {
+                            background: white;
+                            padding: 0;
+                        }
+                        .print-container {
+                            box-shadow: none;
+                            border-radius: 0;
+                        }
+                        .no-print {
+                            display: none !important;
+                        }
+                        .btn {
+                            display: none;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-container">
+                    <div class="print-header">
+                        <h1>PURCHASE ORDER</h1>
+                        <div class="po-number">${poNumber}</div>
+                        <div class="date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                    </div>
+                    
+                    <div class="print-body">
+                        <!-- Information Grid -->
+                        <div class="info-grid">
+                            <div class="info-card">
+                                <div class="info-label">SUPPLIER</div>
+                                <div class="info-value">${supplier}</div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-label">EXPECTED DELIVERY</div>
+                                <div class="info-value">${expectedDelivery}</div>
+                            </div>
+                            <div class="info-card">
+                                <div class="info-label">LOCATION</div>
+                                <div class="info-value">${location}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Items Table -->
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>PRODUCT</th>
+                                    <th class="text-center">QTY</th>
+                                    <th class="text-center">RECEIVED</th>
+                                    <th class="text-center">PENDING</th>
+                                    <th class="text-right">UNIT COST</th>
+                                    <th class="text-right">TAX</th>
+                                    <th class="text-right">TOTAL</th>
+                                  </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(item => `
+                                 <tr>
+                                     <td><strong>${item.product}</strong></td>
+                                     <td class="text-center">${item.quantity}</td>
+                                     <td class="text-center"><span class="badge badge-success">${item.received}</span></td>
+                                     <td class="text-center"><span class="badge badge-warning">${item.pending}</span></td>
+                                     <td class="text-right">${parseFloat(item.unitCost).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                     <td class="text-right">${parseFloat(item.tax).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                     <td class="text-right"><strong>${parseFloat(item.total).toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></td>
+                                 </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        
+                        <!-- Totals Section -->
+                        <div class="totals-section">
+                            <div class="totals-card">
+                                <div class="total-row">
+                                    <span>Subtotal:</span>
+                                    <span>${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                                <div class="total-row">
+                                    <span>Tax Total:</span>
+                                    <span>${taxTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                                <div class="total-row grand-total">
+                                    <span>GRAND TOTAL:</span>
+                                    <span>${grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${notes ? `
+                        <div class="notes-section">
+                            <strong>NOTES</strong>
+                            <div>${notes}</div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="footer">
+                            <div>Thank you for your business!</div>
+                            <div style="margin-top: 8px;">Generated on ${new Date().toLocaleString()}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="no-print">
+                        <button onclick="window.print()" class="btn btn-primary">
+                            Print
+                        </button>
+                        <button onclick="window.close()" class="btn btn-secondary">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                        }, 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+    }
+
+    // Function to download as PDF
+    function downloadPurchaseOrder(orderId) {
+        printPurchaseOrder(orderId);
+        // setTimeout(() => {
+        //     // alert('To save as PDF, click "Print" then select "Save as PDF" as your printer.');
+        // }, 1000);
+    }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <script>
 
     // Global variable to track item count
@@ -563,30 +1075,6 @@
     }
 
 
-    // Update receiving total
-    function updateReceivingTotal(orderId) {
-        let total = 0;
-        let totalPending = 0;
-        
-        const receivingInputs = document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`);
-        const orderedFields = document.querySelectorAll(`#receiveItemsForm${orderId} .ordered-quantity`);
-        const receivedFields = document.querySelectorAll(`#receiveItemsForm${orderId} .received-quantity`);
-        
-        // Calculate total receiving
-        receivingInputs.forEach(input => {
-            total += parseInt(input.value) || 0;
-        });
-        
-        // Calculate total pending (ordered - received)
-        for (let i = 0; i < orderedFields.length; i++) {
-            const ordered = parseInt(orderedFields[i].textContent) || 0;
-            const received = parseInt(receivedFields[i].textContent) || 0;
-            totalPending += (ordered - received);
-        }
-        
-        document.getElementById(`receivingTotal${orderId}`).textContent = total;
-        document.getElementById(`remainingAfter${orderId}`).textContent = totalPending - total;
-    }
 
     // Submit receiving form
     function submitReceiving(orderId, status) {
@@ -650,23 +1138,7 @@
                     timer: 2000,
                     showConfirmButton: false
                 }).then(() => {
-                    // Reset receiving quantities to zero
-                    const receivingInputs = document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`);
-                    receivingInputs.forEach(input => {
-                        input.value = 0;
-                    });
-                    
-                    // Update receiving total display
-                    updateReceivingTotal(orderId);
-                    
-                    // Close the modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById(`receiveItemsModal${orderId}`));
-                    if (modal) {
-                        modal.hide();
-                    }
-                    
-                    // Reload the page to show updated status and quantities
-                    location.reload();
+                    window.location.reload();
                 });
             }
             }).catch(error => {
@@ -782,6 +1254,13 @@
 
 
 
+
+
+
+
+
+
+
 <!-- Expense -->
 <script>
 
@@ -835,10 +1314,58 @@
             return;
         }
 
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
+        // Collect form data using FormData to properly handle arrays
+        const formDataObj = new FormData(form);
+        
+        // Remove existing selected_taxes entries to avoid duplication
+        formDataObj.delete('selected_taxes[]');
+        
+        // Get all checked tax checkboxes
+        const taxCheckboxes = document.querySelectorAll('.expense-tax-checkbox:checked');
+        
+        // Append each checked checkbox value
+        taxCheckboxes.forEach(checkbox => {
+            formDataObj.append('selected_taxes[]', checkbox.value);
+        });
+        
+        // If no taxes selected, append an empty value to ensure the field exists
+        if (taxCheckboxes.length === 0) {
+            formDataObj.append('selected_taxes[]', '');
+        }
+        
+        // Get total tax and net amount from hidden fields (calculated by preview)
+        const totalTaxAmount = document.getElementById('expense_total_tax_amount')?.value;
+        const netAmount = document.getElementById('expense_net_amount')?.value;
+        
+        // Add tax amounts if they exist and are greater than 0
+        if (totalTaxAmount && parseFloat(totalTaxAmount) > 0) {
+            formDataObj.append('total_tax_amount', totalTaxAmount);
+            formDataObj.append('net_amount', netAmount);
+        }
+        
+        // Convert FormData to object for the existing handler
+        const formData = {};
+        for (let [key, value] of formDataObj.entries()) {
+            // Handle array values specially
+            if (key.endsWith('[]')) {
+                const arrayKey = key.slice(0, -2);
+                if (!formData[arrayKey]) {
+                    formData[arrayKey] = [];
+                }
+                if (value !== '') { // Don't push empty values
+                    formData[arrayKey].push(value);
+                }
+            } else {
+                formData[key] = value;
+            }
+        }
+        
+        // Add method and route
         formData._method = method;
         formData.routeName = url;
+
+        // Debug log
+        console.log('Form data being sent:', formData);
 
         // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
@@ -904,6 +1431,337 @@
 
    
 </script>
+
+<!-- Expenses continue  -->
+<script>
+    // Calculate tax preview for expense
+    function calculateExpenseTaxPreview() {
+        const amount = parseFloat(document.getElementById('expense_amount').value) || 0;
+        
+        if (amount === 0) {
+            Swal.fire('{{ __("passwords.info") }}', '{{ __("passwords.please_enter_amount_first") }}', 'info');
+            return;
+        }
+        
+        // Get selected taxes
+        const selectedTaxes = [];
+        document.querySelectorAll('.expense-tax-checkbox:checked').forEach(checkbox => {
+            selectedTaxes.push({
+                id: checkbox.value,
+                rate: parseFloat(checkbox.dataset.rate),
+                type: checkbox.dataset.type,
+                name: checkbox.dataset.name,
+                is_withholding: checkbox.dataset.is_withholding === 'true'
+            });
+        });
+        
+        if (selectedTaxes.length === 0) {
+            Swal.fire('{{ __("passwords.info") }}', '{{ __("passwords.please_select_at_least_one_tax") }}', 'info');
+            return;
+        }
+        
+        // Calculate taxes
+        let additiveTax = 0;
+        let withholdingTax = 0;
+        let taxBreakdown = [];
+        
+        selectedTaxes.forEach(tax => {
+            let taxAmount = 0;
+            if (tax.type === 'percentage') {
+                taxAmount = amount * (tax.rate / 100);
+            } else {
+                taxAmount = tax.rate; // Fixed amount
+            }
+            
+            if (tax.is_withholding) {
+                withholdingTax += taxAmount;
+            } else {
+                additiveTax += taxAmount;
+            }
+            
+            taxBreakdown.push({
+                name: tax.name,
+                rate: tax.rate,
+                type: tax.type,
+                amount: taxAmount,
+                is_withholding: tax.is_withholding
+            });
+        });
+        
+        const totalTax = additiveTax + withholdingTax;
+        const totalAmount = amount + additiveTax - withholdingTax;
+        
+        // Update preview section
+        document.getElementById('expense_preview_taxable').innerText = amount.toFixed(2);
+        document.getElementById('expense_preview_tax').innerText = totalTax.toFixed(2);
+        document.getElementById('expense_preview_total').innerText = totalAmount.toFixed(2);
+        
+        // UPDATE HIDDEN FIELDS - THESE WILL BE SENT TO BACKEND
+        document.getElementById('expense_total_tax_amount').value = totalTax;
+        document.getElementById('expense_net_amount').value = totalAmount;
+        
+        // Also update the amount field if needed (optional)
+        // document.getElementById('expense_amount').value = totalAmount;
+        
+        // Build breakdown table
+        const tbody = document.getElementById('expense_tax_breakdown_body');
+        tbody.innerHTML = '';
+        
+        taxBreakdown.forEach(tax => {
+            const effect = tax.is_withholding ? 
+                '<span class="badge badge-light-danger">{{ __("passwords.deducted") }}</span>' : 
+                '<span class="badge badge-light-primary">{{ __("passwords.added") }}</span>';
+            
+            const typeLabel = tax.type === 'percentage' ? `${tax.rate}%` : `{{ __("passwords.fixed") }} ${tax.rate}`;
+            
+            const row = `
+                <tr>
+                    <td><strong>${tax.name}</strong></td>
+                    <td><span class="badge badge-light-info">${typeLabel}</span></td>
+                    <td>${typeLabel}</td>
+                    <td class="text-end">${tax.amount.toFixed(2)}</td>
+                    <td class="text-center">${effect}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+        
+        // Show preview
+        document.getElementById('expense_tax_preview').classList.remove('d-none');
+        
+        Swal.fire('{{ __("passwords.success") }}', '{{ __("passwords.tax_calculation_completed") }}', 'success');
+    }
+        
+
+    function calculateEditTotal(expenseId) {
+        const grossAmount = parseFloat(document.getElementById('editGrossAmount' + expenseId).value) || 0;
+        const taxAmount = parseFloat(document.getElementById('editTaxAmount' + expenseId).value) || 0;
+        const totalAmount = grossAmount + taxAmount;
+        
+        document.getElementById('editTotalAmount' + expenseId).value = totalAmount.toFixed(2);
+    }
+    
+</script>
+
+
+
+
+
+
+
+
+
+<!-- Employee Leave  -->
+
+<!-- BEGIN: PAGE SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script>
+    let calendar;
+    let currentView = 'calendar';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeCalendar();
+        initializeTooltips();
+    });
+
+    function initializeCalendar() {
+        const calendarEl = document.getElementById('kt_calendar');
+        
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            initialView: 'dayGridMonth',
+            locale: 'en',
+            height: 'auto',
+            editable: false,
+            selectable: true,
+            selectMirror: true,
+            dayMaxEvents: true,
+            weekends: true,
+            
+            events: {
+                url: '{{ route("leave.calendar.events") }}',
+                method: 'GET',
+                failure: function() {
+                    console.error('Error loading calendar events');
+                }
+            },
+            
+            eventClick: function(info) {
+                viewLeave(info.event.id);
+            },
+            
+            eventDidMount: function(info) {
+                // Add tooltip to events
+                const tooltip = new bootstrap.Tooltip(info.el, {
+                    title: `${info.event.title} (${info.event.extendedProps.leave_type})`,
+                    placement: 'top',
+                    trigger: 'hover',
+                    container: 'body'
+                });
+            },
+            
+            loading: function(isLoading) {
+                if (!isLoading) {
+                    // Calendar loaded
+                }
+            }
+        });
+        
+        calendar.render();
+    }
+
+    function toggleView(view) {
+        currentView = view;
+        
+        if (view === 'calendar') {
+            document.getElementById('calendarView').style.display = 'block';
+            document.getElementById('listView').style.display = 'none';
+            document.getElementById('viewCalendarBtn').classList.add('active');
+            document.getElementById('viewListBtn').classList.remove('active');
+            calendar.render();
+        } else {
+            document.getElementById('calendarView').style.display = 'none';
+            document.getElementById('listView').style.display = 'block';
+            document.getElementById('viewListBtn').classList.add('active');
+            document.getElementById('viewCalendarBtn').classList.remove('active');
+        }
+    }
+
+    function applyFilters() {
+        const status = document.getElementById('status_filter').value;
+        const employee = document.getElementById('employee_filter').value;
+        const type = document.getElementById('type_filter').value;
+        const dateFrom = document.getElementById('date_from').value;
+        const dateTo = document.getElementById('date_to').value;
+        
+        // Build URL with filters
+        const params = new URLSearchParams();
+        if (status) params.append('status', status);
+        if (employee) params.append('employee_id', employee);
+        if (type) params.append('leave_type', type);
+        if (dateFrom) params.append('date_from', dateFrom);
+        if (dateTo) params.append('date_to', dateTo);
+        
+        window.location.href = window.location.pathname + '?' + params.toString();
+    }
+
+    function resetFilters() {
+        window.location.href = window.location.pathname;
+    }
+
+
+
+    function approveLeave(id) {
+        Swal.fire({
+            title: '{{ __("payments.confirm_approve") }}',
+            text: '{{ __("payments.confirm_approve_message") }}',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: '{{ __("payments.yes_approve") }}',
+            cancelButtonText: '{{ __("auth._cancel") }}'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch('/leave/' + id + '/approve', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Success', data.message, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                });
+            }
+        });
+    }
+
+
+    function cancelLeave(id) {
+        Swal.fire({
+            title: '{{ __("payments.confirm_cancel") }}',
+            text: '{{ __("payments.confirm_cancel_message") }}',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: '{{ __("payments.yes_cancel") }}',
+            cancelButtonText: '{{ __("auth._cancel") }}'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch('/leave/' + id + '/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Success', data.message, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    function deleteLeave(id) {
+        Swal.fire({
+            title: '{{ __("payments.confirm_delete") }}',
+            text: '{{ __("payments.confirm_delete_message") }}',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: '{{ __("payments.yes_delete") }}',
+            cancelButtonText: '{{ __("auth._cancel") }}'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch('/leave/' + id, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Success', data.message, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    function initializeTooltips() {
+        var tooltips = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltips.map(function(el) {
+            return new bootstrap.Tooltip(el);
+        });
+    }
+</script>
+<!-- END: PAGE SCRIPTS -->
+
+
 
 
 <!-- Employee Payment -->
