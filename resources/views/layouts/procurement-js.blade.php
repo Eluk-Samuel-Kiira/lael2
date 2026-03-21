@@ -1314,10 +1314,58 @@
             return;
         }
 
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
+        // Collect form data using FormData to properly handle arrays
+        const formDataObj = new FormData(form);
+        
+        // Remove existing selected_taxes entries to avoid duplication
+        formDataObj.delete('selected_taxes[]');
+        
+        // Get all checked tax checkboxes
+        const taxCheckboxes = document.querySelectorAll('.expense-tax-checkbox:checked');
+        
+        // Append each checked checkbox value
+        taxCheckboxes.forEach(checkbox => {
+            formDataObj.append('selected_taxes[]', checkbox.value);
+        });
+        
+        // If no taxes selected, append an empty value to ensure the field exists
+        if (taxCheckboxes.length === 0) {
+            formDataObj.append('selected_taxes[]', '');
+        }
+        
+        // Get total tax and net amount from hidden fields (calculated by preview)
+        const totalTaxAmount = document.getElementById('expense_total_tax_amount')?.value;
+        const netAmount = document.getElementById('expense_net_amount')?.value;
+        
+        // Add tax amounts if they exist and are greater than 0
+        if (totalTaxAmount && parseFloat(totalTaxAmount) > 0) {
+            formDataObj.append('total_tax_amount', totalTaxAmount);
+            formDataObj.append('net_amount', netAmount);
+        }
+        
+        // Convert FormData to object for the existing handler
+        const formData = {};
+        for (let [key, value] of formDataObj.entries()) {
+            // Handle array values specially
+            if (key.endsWith('[]')) {
+                const arrayKey = key.slice(0, -2);
+                if (!formData[arrayKey]) {
+                    formData[arrayKey] = [];
+                }
+                if (value !== '') { // Don't push empty values
+                    formData[arrayKey].push(value);
+                }
+            } else {
+                formData[key] = value;
+            }
+        }
+        
+        // Add method and route
         formData._method = method;
         formData.routeName = url;
+
+        // Debug log
+        console.log('Form data being sent:', formData);
 
         // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
@@ -1383,6 +1431,125 @@
 
    
 </script>
+
+<!-- Expenses continue  -->
+<script>
+    // Calculate tax preview for expense
+    function calculateExpenseTaxPreview() {
+        const amount = parseFloat(document.getElementById('expense_amount').value) || 0;
+        
+        if (amount === 0) {
+            Swal.fire('{{ __("passwords.info") }}', '{{ __("passwords.please_enter_amount_first") }}', 'info');
+            return;
+        }
+        
+        // Get selected taxes
+        const selectedTaxes = [];
+        document.querySelectorAll('.expense-tax-checkbox:checked').forEach(checkbox => {
+            selectedTaxes.push({
+                id: checkbox.value,
+                rate: parseFloat(checkbox.dataset.rate),
+                type: checkbox.dataset.type,
+                name: checkbox.dataset.name,
+                is_withholding: checkbox.dataset.is_withholding === 'true'
+            });
+        });
+        
+        if (selectedTaxes.length === 0) {
+            Swal.fire('{{ __("passwords.info") }}', '{{ __("passwords.please_select_at_least_one_tax") }}', 'info');
+            return;
+        }
+        
+        // Calculate taxes
+        let additiveTax = 0;
+        let withholdingTax = 0;
+        let taxBreakdown = [];
+        
+        selectedTaxes.forEach(tax => {
+            let taxAmount = 0;
+            if (tax.type === 'percentage') {
+                taxAmount = amount * (tax.rate / 100);
+            } else {
+                taxAmount = tax.rate; // Fixed amount
+            }
+            
+            if (tax.is_withholding) {
+                withholdingTax += taxAmount;
+            } else {
+                additiveTax += taxAmount;
+            }
+            
+            taxBreakdown.push({
+                name: tax.name,
+                rate: tax.rate,
+                type: tax.type,
+                amount: taxAmount,
+                is_withholding: tax.is_withholding
+            });
+        });
+        
+        const totalTax = additiveTax + withholdingTax;
+        const totalAmount = amount + additiveTax - withholdingTax;
+        
+        // Update preview section
+        document.getElementById('expense_preview_taxable').innerText = amount.toFixed(2);
+        document.getElementById('expense_preview_tax').innerText = totalTax.toFixed(2);
+        document.getElementById('expense_preview_total').innerText = totalAmount.toFixed(2);
+        
+        // UPDATE HIDDEN FIELDS - THESE WILL BE SENT TO BACKEND
+        document.getElementById('expense_total_tax_amount').value = totalTax;
+        document.getElementById('expense_net_amount').value = totalAmount;
+        
+        // Also update the amount field if needed (optional)
+        // document.getElementById('expense_amount').value = totalAmount;
+        
+        // Build breakdown table
+        const tbody = document.getElementById('expense_tax_breakdown_body');
+        tbody.innerHTML = '';
+        
+        taxBreakdown.forEach(tax => {
+            const effect = tax.is_withholding ? 
+                '<span class="badge badge-light-danger">{{ __("passwords.deducted") }}</span>' : 
+                '<span class="badge badge-light-primary">{{ __("passwords.added") }}</span>';
+            
+            const typeLabel = tax.type === 'percentage' ? `${tax.rate}%` : `{{ __("passwords.fixed") }} ${tax.rate}`;
+            
+            const row = `
+                <tr>
+                    <td><strong>${tax.name}</strong></td>
+                    <td><span class="badge badge-light-info">${typeLabel}</span></td>
+                    <td>${typeLabel}</td>
+                    <td class="text-end">${tax.amount.toFixed(2)}</td>
+                    <td class="text-center">${effect}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+        
+        // Show preview
+        document.getElementById('expense_tax_preview').classList.remove('d-none');
+        
+        Swal.fire('{{ __("passwords.success") }}', '{{ __("passwords.tax_calculation_completed") }}', 'success');
+    }
+        
+
+    function calculateEditTotal(expenseId) {
+        const grossAmount = parseFloat(document.getElementById('editGrossAmount' + expenseId).value) || 0;
+        const taxAmount = parseFloat(document.getElementById('editTaxAmount' + expenseId).value) || 0;
+        const totalAmount = grossAmount + taxAmount;
+        
+        document.getElementById('editTotalAmount' + expenseId).value = totalAmount.toFixed(2);
+    }
+    
+</script>
+
+
+
+
+
+
+
+
 
 <!-- Employee Leave  -->
 

@@ -37,10 +37,22 @@
                             <div id="description{{ $expense->id }}"></div>
                         </div>
                         
-                        <div class="col-md-6">
-                            <label class="form-label required">{{ __('pagination.vendor') }}</label>
-                            <input type="text" name="vendor_name" class="form-control" value="{{ old('vendor_name', $expense->vendor_name) }}" required>
-                            <div id="vendor_name{{ $expense->id }}"></div>
+                        <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                            <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                <span class="required">{{ __('passwords.supplier') }}</span>
+                            </label>
+                            <select name="supplier_id" class="form-select" data-control="select2" data-placeholder="{{ __('passwords._select_supplier') }}">
+                                <option value="">{{ __('passwords._select_supplier') }}</option>
+                                @foreach($suppliers as $supplier)
+                                    <option value="{{ $supplier->id }}" {{ ($expense->supplier_id ?? old('supplier_id')) == $supplier->id ? 'selected' : '' }}>
+                                        {{ $supplier->name }}
+                                        @if($supplier->tax_number)
+                                            (TIN: {{ $supplier->tax_number }})
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div id="supplier_id{{ $expense->id }}"></div>
                         </div>
                         
                         <div class="col-md-6">
@@ -56,25 +68,27 @@
                             <div id="employee_id{{ $expense->id }}"></div>
                         </div>
                         
-                        <!-- Amount Information -->
+                        <!-- Amount Information with Auto-calculation -->
                         <div class="col-md-4">
-                            <label class="form-label required">{{ __('pagination.amount') }}</label>
+                            <label class="form-label required">{{ __('pagination.gross_amount') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">{{ config('app.currency') ?? '$' }}</span>
-                                <input type="number" name="amount" class="form-control" step="0.01" min="0" required 
-                                       value="{{ old('amount', $expense->amount) }}" 
-                                       id="editAmount{{$expense->id}}">
-                                <div id="amount{{ $expense->id }}"></div>
+                                <span class="input-group-text">{{ currency_symbol() }}</span>
+                                <input type="number" name="gross_amount" class="form-control" step="0.01" min="0" required 
+                                       value="{{ old('gross_amount', $expense->gross_amount) }}" 
+                                       id="editGrossAmount{{$expense->id}}"
+                                       oninput="calculateEditTotal({{$expense->id}})">
+                                <div id="gross_amount{{ $expense->id }}"></div>
                             </div>
                         </div>
                         
                         <div class="col-md-4">
                             <label class="form-label">{{ __('pagination.tax_amount') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">{{ config('app.currency') ?? '$' }}</span>
+                                <span class="input-group-text">{{ currency_symbol() }}</span>
                                 <input type="number" name="tax_amount" class="form-control" step="0.01" min="0" 
                                        value="{{ old('tax_amount', $expense->tax_amount) }}"
-                                       id="editTax{{$expense->id}}">
+                                       id="editTaxAmount{{$expense->id}}"
+                                       oninput="calculateEditTotal({{$expense->id}})">
                                 <div id="tax_amount{{ $expense->id }}"></div>
                             </div>
                         </div>
@@ -82,8 +96,8 @@
                         <div class="col-md-4">
                             <label class="form-label">{{ __('pagination.total_amount') }}</label>
                             <div class="input-group">
-                                <span class="input-group-text">{{ config('app.currency') ?? '$' }}</span>
-                                <input type="text" class="form-control" id="editTotal{{$expense->id}}" readonly 
+                                <span class="input-group-text">{{ currency_symbol() }}</span>
+                                <input type="text" class="form-control bg-light" id="editTotalAmount{{$expense->id}}" readonly 
                                        value="{{ number_format($expense->total_amount, 2) }}">
                                 <div id="editTotal{{ $expense->id }}"></div>
                             </div>
@@ -93,7 +107,6 @@
                         <div class="col-md-6">
                             <label class="form-label">{{ __('pagination.payment_method') }}</label>
                             @if(isset($expense) && $expense->payment_status === 'paid' && $expense->payment_method_id)
-                                <!-- For paid expenses, show readonly field with hidden input -->
                                 <input type="text" 
                                     class="form-control" 
                                     value="{{ $expense->paymentMethod->name ?? 'N/A' }}" 
@@ -101,7 +114,6 @@
                                     style="background-color: #f8f9fa; cursor: not-allowed;">
                                 <input type="hidden" name="payment_method_id" value="{{ $expense->payment_method_id }}">
                             @else
-                                <!-- For non-paid expenses or new expenses, show select dropdown -->
                                 <select name="payment_method_id" class="form-select">
                                     <option value="">{{ __('pagination.select_payment_method') }}</option>
                                     @foreach($active_payment_methods as $method)
@@ -135,18 +147,41 @@
                             <div id="paid_date{{ $expense->id }}"></div>
                         </div>
                         
+                        <!-- Location & Department -->
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('pagination.location') }}</label>
+                            <select name="location_id" class="form-select" required>
+                                <option value="">{{ __('pagination.select_location') }}</option>
+                                @foreach($locations as $location)
+                                    <option value="{{ $location->id }}" {{ $expense->location_id == $location->id ? 'selected' : '' }}>
+                                        {{ $location->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div id="location_id{{ $expense->id }}"></div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('pagination.department') }}</label>
+                            <select name="department_id" class="form-select" required>
+                                <option value="">{{ __('pagination.select_department') }}</option>
+                                @foreach($departments as $department)
+                                    <option value="{{ $department->id }}" {{ $expense->department_id == $department->id ? 'selected' : '' }}>
+                                        {{ $department->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div id="department_id{{ $expense->id }}"></div>
+                        </div>
+                        
                         <!-- Recurring Expenses -->
                         <div class="col-md-6">
                             <div class="form-check form-switch mt-4">
-                                <!-- Hidden input with value 0 -->
                                 <input type="hidden" name="is_recurring" value="0">
-                                
-                                <!-- Checkbox with value 1 -->
                                 <input class="form-check-input" type="checkbox" name="is_recurring" 
                                     value="1" id="editRecurringSwitch{{$expense->id}}" 
                                     {{ $expense->is_recurring ? 'checked' : '' }}
                                     onchange="toggleRecurringFields{{$expense->id}}()">
-                                
                                 <label class="form-check-label" for="editRecurringSwitch{{$expense->id}}">
                                     {{ __('pagination.recurring_expense') }}
                                 </label>
@@ -168,21 +203,6 @@
                             <div id="recurring_frequency{{ $expense->id }}"></div>
                         </div>
 
-                        <script>
-                            function toggleRecurringFields{{$expense->id}}() {
-                                const checkbox = document.getElementById('editRecurringSwitch{{$expense->id}}');
-                                const recurringFields = document.getElementById('recurringFields{{$expense->id}}');
-                                
-                                if (checkbox.checked) {
-                                    recurringFields.style.display = 'block';
-                                } else {
-                                    recurringFields.style.display = 'none';
-                                    // Optional: Clear the frequency selection when hiding
-                                    recurringFields.querySelector('select').value = '';
-                                }
-                            }
-                        </script>
-                        
                         <div class="col-md-6 edit-recurring-fields{{$expense->id}}" style="display: {{ $expense->is_recurring ? 'block' : 'none' }};">
                             <label class="form-label">{{ __('pagination.next_recurring_date') }}</label>
                             <input type="date" name="next_recurring_date" class="form-control" 
@@ -208,22 +228,17 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <!-- Action Buttons -->
-                    <div class="row g-9 mb-8">
-                        <div class="col-md-12 text-end">
-                            <button type="button" id="closeModalEditButton{{$expense->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">
-                                {{ __('auth._discard') }}
-                            </button>
-                            <button onclick="updateExpense({{$expense->id}})" id="editExpenseButton{{ $expense->id }}" type="button" class="btn btn-primary"
-                            @if($expense->payment_status === 'paid') disabled @endif>
-                                <span class="indicator-label">{{__('auth._update')}}</span>
-                                <span class="indicator-progress">
-                                    {{__('auth.please_wait') }}
-                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
-                                </span>
-                            </button>
-                        </div>
-                    </div>
+                    <button type="button" id="closeModalEditButton{{$expense->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">
+                        {{ __('auth._discard') }}
+                    </button>
+                    <button onclick="updateExpense({{$expense->id}})" id="editExpenseButton{{ $expense->id }}" type="button" class="btn btn-primary"
+                    @if($expense->payment_status === 'paid') disabled @endif>
+                        <span class="indicator-label">{{__('auth._update')}}</span>
+                        <span class="indicator-progress">
+                            {{__('auth.please_wait') }}
+                            <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                        </span>
+                    </button>
                 </div>
             </form>
         </div>

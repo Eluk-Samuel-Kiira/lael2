@@ -48,7 +48,6 @@ return [
 
     'select_applicable_taxes' => 'Select Applicable Taxes',
     'tax_calculation_summary' => 'Tax Calculation Summary',
-    'taxable_amount' => 'Taxable Amount',
     'total_tax' => 'Total Tax',
     'total_payable' => 'Total Payable',
     'preview_calculation' => 'Preview Calculation',
@@ -80,7 +79,6 @@ return [
     'withholding_tax_note' => 'This tax will be DEDUCTED from the supplier payment',
     'select_applicable_taxes' => 'Select Applicable Taxes',
     'tax_calculation_summary' => 'Tax Calculation Summary',
-    'taxable_amount' => 'Taxable Amount',
     'total_tax' => 'Total Tax',
     'net_payable' => 'Net Payable',
     'tax_name' => 'Tax Name',
@@ -146,7 +144,6 @@ return [
     'difference' => 'Difference',
     'calculated_from_quantities' => 'Calculated from quantities',
     'enter_gross_amount_help' => 'Enter the total gross amount (optional). If left empty, items total will be used.',
-    'taxable_amount' => 'Taxable Amount',
     'total_tax' => 'Total Tax',
     'tax_calculated' => 'Tax calculated successfully',
     'calculation_failed' => 'Tax calculation failed',
@@ -165,6 +162,21 @@ return [
     'estimated' => 'Estimated',
     'tax_liability_created' => 'Tax liability created',
     'tax_remittance_due_date' => 'Tax remittance due date',
+
+
+    'location_department' => 'Location & Department',
+    
+    'additive_tax_note' => 'This tax will be ADDED to the expense amount',
+    'withholding_tax_note' => 'This tax will be DEDUCTED from the expense amount',
+    'enter_description' => 'Enter description',
+    'enter_vendor' => 'Enter vendor name',
+    'select_category' => 'Select category',
+    'select_employee' => 'Select employee',
+    'expense_new' => 'New Expense',
+    'payment_information' => 'Payment Information',
+    'paid' => 'Paid',
+    'reimbursed' => 'Reimbursed',
+    'pending' => 'Pending',
 
     'thank_you_business' => 'Thank you for your business!',
     'generated_on' => 'Generated on',
@@ -545,7 +557,7 @@ return [
     'items_count' => 'Items Count',
     'status' => 'Status',
     'subtotal' => 'Subtotal',
-    'total_amount' => 'Total Amount',
+    
     'balance' => 'Balance',
     'change_type' => 'Change Type',
     'default' => 'Default',
@@ -573,7 +585,7 @@ return [
     'order_status' => 'Order Status',
     'expected_delivery' => 'Expected Delivery',
     'order_date' => 'Order Date',
-    'total_amount' => 'Total Amount',
+    
     'subtotal' => 'Subtotal',
     'tax' => 'Tax',
     'notes' => 'Notes',
@@ -925,6 +937,15 @@ return [
     'total_value_usd' => 'Total Value ($)',
     'orders' => 'orders',
 
+    'info' => 'Information',
+    'please_enter_amount_first' => 'Please enter an amount first',
+    'please_select_at_least_one_tax' => 'Please select at least one tax',
+    'tax_calculation_completed' => 'Tax calculation completed',
+    'deducted' => 'Deducted (-)',
+    'added' => 'Added (+)',
+    'fixed' => 'Fixed',
+    'success' => 'Success!',
+
     // Follow up modal
     'send_follow_up_email' => 'Send follow-up email to supplier?',
     'follow_up_email_sent' => 'Follow-up email sent successfully',
@@ -1001,7 +1022,7 @@ return [
     'not_paid' => 'Not paid',
     'not_set' => 'Not set',
     'paid' => 'Paid',
-    'total_amount' => 'Total Amount',
+    
     'no_payments_found' => 'No Payments Found',
     'no_payment_transactions_match_filters' => 'No payment transactions match the selected filters',
     'clear_filters_view_all' => 'Clear filters to view all payments',

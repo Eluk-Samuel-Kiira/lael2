@@ -20,13 +20,14 @@ return new class extends Migration
             
             // Categorization
             $table->unsignedBigInteger('category_id');
+            $table->foreignId('supplier_id')->nullable()->constrained('suppliers')->nullOnDelete();
             $table->string('vendor_name', 200)->nullable();
             
-            // Amounts - Changed to BIGINT for storing in smallest currency unit
-            $table->bigInteger('amount')->comment('Stored in smallest currency unit');
-            $table->bigInteger('tax_amount')->default(0)->comment('Stored in smallest currency unit');
-            $table->bigInteger('total_amount')->storedAs('amount + tax_amount')->comment('Stored in smallest currency unit');
-            
+            $table->bigInteger('gross_amount')->comment('Original expense amount before taxes (stored in smallest currency unit)');
+            $table->bigInteger('tax_amount')->default(0)->comment('Total tax amount (additive + withholding) stored in smallest currency unit');
+            $table->bigInteger('net_amount')->default(0)->comment('Amount paid to supplier after taxes (stored in smallest currency unit)');
+            $table->bigInteger('total_amount')->default(0)->comment('Total amount (gross + additive tax) for reference (stored in smallest currency unit)');
+
             // Payment Info
             $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete();  
             $table->enum('payment_status', ['pending', 'paid', 'reimbursed'])->default('pending');
@@ -36,12 +37,16 @@ return new class extends Migration
             $table->boolean('is_recurring')->default(false);
             $table->enum('recurring_frequency', ['weekly', 'monthly', 'quarterly', 'annually'])->nullable();
             $table->date('next_recurring_date')->nullable();
+            $table->json('tax_breakdown')->nullable()->comment('Detailed breakdown of taxes applied');
             
             // Attachments & Tracking
             $table->string('receipt_url', 255)->nullable();
             $table->unsignedBigInteger('approved_by')->nullable();
             $table->timestamp('approved_at')->nullable();
             $table->unsignedBigInteger('employee_id')->nullable();
+            
+            $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
+            $table->foreignId('location_id')->nullable()->constrained('locations')->nullOnDelete();
             
             // Audit
             $table->unsignedBigInteger('created_by')->nullable();
@@ -81,6 +86,9 @@ return new class extends Migration
             $table->index(['tenant_id', 'category_id']);
             $table->index(['tenant_id', 'payment_status']);
             $table->index(['tenant_id', 'is_recurring']);
+            $table->index(['tenant_id', 'department_id']);  
+            $table->index(['tenant_id', 'location_id']); 
+            $table->index(['tenant_id', 'supplier_id']);    
             $table->index('expense_number');
             $table->index('date');
         });

@@ -20,14 +20,20 @@ class Expense extends Model
         'date',
         'description',
         'category_id',
+        'location_id',
+        'department_id',
+        'category_id',
+        'supplier_id', 
         'vendor_name',
-        'amount',
+        'gross_amount',     
         'tax_amount',
-        'total_amount',
+        'net_amount',       
+        'total_amount', 
         'payment_method_id',
         'payment_status',
         'paid_date',
         'is_recurring',
+        'tax_breakdown',
         'recurring_frequency',
         'next_recurring_date',
         'receipt_url',
@@ -39,20 +45,20 @@ class Expense extends Model
 
     protected $casts = [
         'date' => 'date',
-        'amount' => 'integer',
+        'gross_amount' => 'integer',
         'tax_amount' => 'integer',
+        'net_amount' => 'integer',
         'total_amount' => 'integer',
         'is_recurring' => 'boolean',
         'paid_date' => 'date',
         'next_recurring_date' => 'date',
         'approved_at' => 'datetime',
+        'tax_breakdown' => 'array',
     ];
 
 
-    /**
-     * Accessors - Convert from stored integer to display float
-     */
-    public function getAmountAttribute(?int $value): ?float
+    // Accessors
+    public function getGrossAmountAttribute(?int $value): ?float
     {
         return from_base_currency($value);
     }
@@ -62,23 +68,39 @@ class Expense extends Model
         return from_base_currency($value);
     }
 
+    public function getNetAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
     public function getTotalAmountAttribute(?int $value): ?float
     {
         return from_base_currency($value);
     }
 
-    /**
-     * Mutators - Convert from display float to stored integer
-     */
-    public function setAmountAttribute($value): void
+
+    // Mutators
+    public function setGrossAmountAttribute($value): void
     {
-        $this->attributes['amount'] = to_base_currency($value);
+        $this->attributes['gross_amount'] = to_base_currency($value);
     }
 
     public function setTaxAmountAttribute($value): void
     {
         $this->attributes['tax_amount'] = to_base_currency($value);
     }
+
+    public function setNetAmountAttribute($value): void
+    {
+        $this->attributes['net_amount'] = to_base_currency($value);
+    }
+
+    public function setTotalAmountAttribute($value): void
+    {
+        $this->attributes['total_amount'] = to_base_currency($value);
+    }
+
+
 
     /**
      * Get the tenant that owns the expense.
@@ -94,6 +116,16 @@ class Expense extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ExpenseCategory::class, 'category_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'location_id');
+    }
+    
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
     }
 
     /**
@@ -128,32 +160,37 @@ class Expense extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    // // 👇 Accessors for monetary fields
-    // protected function amount(): Attribute
-    // {
-    //     return Attribute::make(
-    //         get: fn ($value) => format_currency($value),
-    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
-    //     );
-    // }
+    // Add relationship
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class);
+    }
 
-    // protected function taxAmount(): Attribute
-    // {
-    //     return Attribute::make(
-    //         get: fn ($value) => format_currency($value),
-    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
-    //     );
-    // }
+    // Helper to get supplier name
+    public function getSupplierNameAttribute()
+    {
+        if ($this->supplier) {
+            return $this->supplier->name;
+        }
+        return $this->vendor_name ?? 'N/A';
+    }
 
-    // protected function totalAmount(): Attribute
-    // {
-    //     return Attribute::make(
-    //         get: fn ($value) => format_currency($value),
-    //         set: fn ($value) => convert_to_base(clean_currency_value($value), $this->getCurrencyCode(), $this->tenant_id)->getAmount(),
-    //     );
-    // }
-
-
+    // Helper to get supplier tax info
+    public function getSupplierTaxInfoAttribute()
+    {
+        if ($this->supplier) {
+            return [
+                'id' => $this->supplier->id,
+                'name' => $this->supplier->name,
+                'tin' => $this->supplier->tax_number,
+                'vat_registered' => $this->supplier->is_vat_registered,
+                'vat_number' => $this->supplier->vat_number,
+                'wht_applicable' => $this->supplier->withholding_tax_applicable,
+                'wht_rate' => $this->supplier->withholding_tax_rate,
+            ];
+        }
+        return null;
+    }
 
     
 
