@@ -416,6 +416,8 @@ return [
     'phone' => 'Phone',
     'job_title' => 'Job Title',
     'salary' => 'Salary',
+    'select_department' => 'Select department',
+    'select_location' => 'Select location',
     'gross_amount' => 'Gross Amount',
     'hire_date' => 'Hire Date',
     'term_date' => 'Termination Date',
