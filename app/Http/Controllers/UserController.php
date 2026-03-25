@@ -179,7 +179,7 @@ class UserController extends Controller
         }
 
         // Check if user has protected roles using Spatie Permission
-        if ($authUser->hasAnyRole(['super_admin', 'admin'])) {
+        if ($authUser->hasAnyRole(['super_admin'])) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.user_not_updatable'),
@@ -311,7 +311,7 @@ class UserController extends Controller
         }
 
         // Check if user has protected roles using Spatie Permission
-        if ($userToUpdate->hasAnyRole(['super_admin', 'admin'])) {
+        if ($userToUpdate->hasAnyRole(['super_admin'])) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.user_not_updatable'),
