@@ -367,6 +367,54 @@ return [
     'please_enter_customer' => 'Please enter a new customer name.',
     'please_select_existing_customer' => 'Please select an existing customer',
     
+    'import_modal_title'       => 'Bulk Import Catalog via Excel',
+ 
+    // Step indicator
+    'import_step_download'     => 'Download',
+    'import_step_fill'         => 'Fill',
+    'import_step_upload'       => 'Upload',
+ 
+    // Step 1 — template download notice
+    'import_step1_heading'     => 'Step 1 — Download the template',
+    'import_step1_desc'        => 'Fill in the four coloured sheets in order:',
+    'import_sheet_order'       => 'Categories → Sub-Categories → Products → Variants',
+    'import_step1_tip'         => 'Each sheet has sample data and inline tooltips to guide you.',
+    'import_template_btn'      => 'Template',
+ 
+    // Step 3 — upload
+    'import_step3_label'       => 'Step 3 — Upload your completed file',
+    'import_dropzone_title'    => 'Drag & drop your Excel file here',
+    'import_dropzone_or'       => 'or',
+    'import_dropzone_browse'   => 'browse',
+    'import_dropzone_hint'     => '.xlsx / .xls only, max 10 MB',
+ 
+    // Progress
+    'import_processing'        => 'Processing…',
+ 
+    // Report
+    'import_report_heading'    => 'Import Report',
+ 
+    // Footer buttons
+    'import_btn_cancel'        => 'Cancel',
+    'import_btn_submit'        => 'Upload & Import',
+    'import_btn_importing'     => 'Importing…',
+ 
+    // JS-side strings (injected via window._importLang)
+    'import_js_select_file'    => 'Please select an Excel file before uploading.',
+    'import_js_invalid_type'   => 'Invalid file type. Only .xlsx and .xls files are accepted.',
+    'import_js_network_error'  => 'Network error',
+    'import_js_import_failed'  => 'Import failed. Please try again.',
+    'import_js_file_prefix'    => '📎',
+    'import_js_created'        => 'created',
+    'import_js_skipped'        => 'skipped',
+    'import_js_errors'         => 'errors',
+    'import_js_issues_suffix'  => 'issue(s)',
+ 
+    // Report section labels
+    'import_section_categories'     => 'Categories',
+    'import_section_sub_categories' => 'Sub-Categories',
+    'import_section_products'       => 'Products',
+    'import_section_variants'       => 'Variants',
 
 
 
@@ -414,6 +462,7 @@ return [
     'department' => 'Department',
     'email' => 'Email',
     'phone' => 'Phone',
+    'import_excel' => 'Import Excel',
     'job_title' => 'Job Title',
     'salary' => 'Salary',
     'select_department' => 'Select department',

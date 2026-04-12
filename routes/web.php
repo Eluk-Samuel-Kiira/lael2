@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
     EmployeePaymentController, TenantController, EmployeeAdvanceController, LeaveController };
 use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, 
-    InventoryAdjustmentsController, ProductController, ProductCategoryController};
+    InventoryAdjustmentsController, ProductController, ProductCategoryController, ProductImportController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
@@ -227,7 +227,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::put('/assignment/{product}', [ProductVariantController::class, 'updateVariantAssignments'])
             ->name('assign.variant');
             
+        Route::get('/catalog/import/template', [ProductImportController::class, 'downloadTemplate'])->name('catalog.import.template');
+        Route::post('/catalog/import',          [ProductImportController::class, 'store'])->name('catalog.import.store');
 
+        
         // Stores and Inventory
         Route::resource('items', InventoryItemController::class);
         Route::resource('stocks', InventoryAdjustmentsController::class);
@@ -235,6 +238,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('transfer.stock');
 
         Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
+
 
         
         // Location

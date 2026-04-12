@@ -15,6 +15,21 @@
             <div class="app-header-menu app-header-mobile-drawer align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="app-header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="250px" data-kt-drawer-direction="end" data-kt-drawer-toggle="#kt_app_header_menu_toggle" data-kt-swapper="true" data-kt-swapper-mode="{default: 'append', lg: 'prepend'}" data-kt-swapper-parent="{default: '#kt_app_body', lg: '#kt_app_header_wrapper'}">
                 <!-- header -->
             </div>
+            @php $sync = \DB::table('sync_status')->where('tenant_id', current_tenant_id())->first(); @endphp
+
+            <span class="badge badge-{{ match($sync?->status) {
+                'online'  => 'success',
+                'syncing' => 'warning',
+                'offline' => 'danger',
+                default   => 'secondary'
+            } }}">
+                <i class="ki-duotone ki-wifi fs-7 me-1"></i>
+                {{ ucfirst($sync?->status ?? 'unknown') }}
+                @if($sync?->pending_count > 0)
+                    · {{ $sync->pending_count }} pending
+                @endif
+            </span>
+				
             <div class="app-navbar flex-shrink-0">
                 <div class="app-navbar-item ms-1 ms-md-4">
                     <a href="#" class="btn btn-icon btn-custom btn-icon-muted btn-active-light btn-active-color-primary w-35px h-35px" data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-attach="parent" data-kt-menu-placement="bottom-end">
