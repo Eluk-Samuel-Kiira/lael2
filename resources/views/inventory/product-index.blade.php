@@ -51,9 +51,18 @@
                     <span class="d-none d-sm-inline">{{__('pagination.new_products')}}</span>
                     <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
                 </button>
+                <button type="button"
+                        class="btn btn-light-success flex-shrink-0"
+                        data-bs-toggle="modal"
+                        data-bs-target="#kt_modal_catalog_import">
+                    <i class="ki-duotone ki-file-up fs-2 me-2"></i>
+                    <span class="d-none d-sm-inline">{{ __('pagination.import_excel') }}</span>
+                    <span class="d-inline d-sm-none">Import</span>
+                </button>
                 @endcan
 
                 @include('inventory.product.create')
+                @include('inventory.product.excel-import')
             </div>
         </div>
     </div>
