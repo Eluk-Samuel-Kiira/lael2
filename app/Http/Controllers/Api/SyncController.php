@@ -1,193 +1,204 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Http\Controllers\Api;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\{ DB, Log, Http };
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
-class SyncToRemote extends Command
+class SyncController extends Controller
 {
-    protected $signature   = 'pos:sync {--tenant=}';
-    protected $description = 'Push pending changes to remote server via API';
-
-    private $remoteUrl;
-    private $syncToken;
-    private $tenantId;
+    private $tenantTokens = [];
 
     public function __construct()
     {
-        parent::__construct();
-        $this->remoteUrl = rtrim(env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org'), '/');
-        $this->syncToken = env('SYNC_TOKEN', '');
-        $this->tenantId = env('TENANT_ID', 2);  // Changed default to 2
+        // Load tenant tokens from .env
+        $tokensJson = env('TENANT_TOKENS', '{}');
+        $this->tenantTokens = json_decode($tokensJson, true) ?: [];
+        
+        Log::info('SyncController initialized', ['tokens' => array_keys($this->tenantTokens)]);
     }
 
-    public function handle(): void
+    private function validateToken(Request $request)
     {
-        $tenantId = $this->option('tenant') ?? $this->tenantId;
+        $token = $request->header('X-Sync-Token');
+        $tenantId = $request->header('X-Tenant-Id');
         
-        $this->info("Starting sync for tenant #{$tenantId}...");
+        Log::info('Validating token', [
+            'has_token' => !empty($token),
+            'tenant_id' => $tenantId,
+            'url' => $request->fullUrl()
+        ]);
         
-        // Validate token
-        if (empty($this->syncToken)) {
-            $this->error('SYNC_TOKEN not configured in .env');
-            return;
+        if (!$token || !$tenantId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Missing authentication headers'
+            ], 401);
         }
         
-        $this->info("Remote URL: {$this->remoteUrl}");
-        $this->info("Using token: " . substr($this->syncToken, 0, 10) . '...');
-        
-        // 1. Check remote connectivity
-        if (!$this->remoteIsReachable($tenantId)) {
-            $this->updateStatus((int)$tenantId, 'offline', 0, 'Remote server unreachable');
-            $this->notify('offline', "No connection — offline mode");
-            return;
+        if (!isset($this->tenantTokens[$tenantId]) || $this->tenantTokens[$tenantId] !== $token) {
+            Log::warning('Invalid token', [
+                'tenant_id' => $tenantId,
+                'provided_token' => substr($token, 0, 10) . '...',
+            ]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Invalid authentication credentials'
+            ], 401);
         }
-
-        // 2. Get pending changes
-        $pending = DB::table('change_log')
-            ->where('tenant_id', $tenantId)
-            ->whereNull('synced_at')
-            ->where('retry_count', '<', 5)
-            ->orderBy('logged_at')
-            ->limit(500)
-            ->get();
-
-        if ($pending->isEmpty()) {
-            $this->info("No pending changes for tenant #{$tenantId}");
-            $this->updateStatus((int)$tenantId, 'online', 0);
-            return;
-        }
-
-        $this->info("Found {$pending->count()} pending changes");
-        $this->updateStatus((int)$tenantId, 'syncing', $pending->count());
         
-        $pushed = 0;
-        $errors = 0;
+        $request->merge(['authenticated_tenant_id' => $tenantId]);
+        return null;
+    }
 
-        DB::beginTransaction();
+    public function status(Request $request)
+    {
         try {
-            foreach ($pending as $entry) {
+            Log::info('Status endpoint called');
+            
+            $authError = $this->validateToken($request);
+            if ($authError) return $authError;
+            
+            $tenantId = $request->authenticated_tenant_id;
+            
+            return response()->json([
+                'success' => true,
+                'status' => 'online',
+                'tenant_id' => $tenantId,
+                'server_time' => now()->toDateTimeString(),
+                'version' => '1.0'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Status endpoint error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function push(Request $request)
+    {
+        try {
+            $authError = $this->validateToken($request);
+            if ($authError) return $authError;
+            
+            $tenantId = $request->authenticated_tenant_id;
+            $data = $request->json()->all();
+            
+            Log::info('Push endpoint called', [
+                'tenant_id' => $tenantId,
+                'entries' => count($data)
+            ]);
+            
+            $results = [
+                'success' => true,
+                'pushed' => 0,
+                'errors' => []
+            ];
+            
+            DB::beginTransaction();
+            try {
+                foreach ($data as $entry) {
+                    $payload = json_decode($entry['payload'], true);
+                    
+                    if (in_array($entry['table_name'], ['change_log', 'sync_status'])) {
+                        continue;
+                    }
+                    
+                    switch ($entry['operation']) {
+                        case 'INSERT':
+                            DB::table($entry['table_name'])
+                                ->updateOrInsert(
+                                    ['id' => $payload['id']],
+                                    array_merge($payload, ['tenant_id' => $tenantId])
+                                );
+                            break;
+                            
+                        case 'UPDATE':
+                            DB::table($entry['table_name'])
+                                ->where('id', $entry['row_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->update($payload);
+                            break;
+                            
+                        case 'DELETE':
+                            DB::table($entry['table_name'])
+                                ->where('id', $entry['row_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->delete();
+                            break;
+                    }
+                    $results['pushed']++;
+                }
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+            
+            return response()->json($results);
+        } catch (\Exception $e) {
+            Log::error('Push endpoint error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function pull(Request $request)
+    {
+        try {
+            $authError = $this->validateToken($request);
+            if ($authError) return $authError;
+            
+            $tenantId = $request->authenticated_tenant_id;
+            $since = $request->input('since', '2000-01-01 00:00:00');
+            
+            Log::info('Pull endpoint called', [
+                'tenant_id' => $tenantId,
+                'since' => $since
+            ]);
+            
+            $masterTables = [
+                'categories', 'product_categories', 'products',
+                'taxes', 'promotions', 'unit_of_measures',
+                'locations', 'departments'
+            ];
+            
+            $data = [];
+            
+            foreach ($masterTables as $table) {
                 try {
-                    $response = Http::timeout(30)
-                        ->withHeaders([
-                            'X-Sync-Token' => $this->syncToken,
-                            'X-Tenant-Id' => (string) $tenantId,
-                            'Content-Type' => 'application/json',
-                            'Accept' => 'application/json',
-                        ])
-                        ->post($this->remoteUrl . '/sync/push', [$entry]);
-                    
-                    $this->info("Response status: " . $response->status());
-                    
-                    if ($response->successful()) {
-                        $result = $response->json();
-                        if ($result['success'] ?? false) {
-                            DB::table('change_log')
-                                ->where('id', $entry->id)
-                                ->update(['synced_at' => now(), 'sync_error' => null]);
-                            $pushed++;
-                            $this->info("✓ Pushed entry #{$entry->id}");
-                        } else {
-                            throw new \Exception($result['error'] ?? 'Unknown error');
+                    if (DB::getSchemaBuilder()->hasTable($table)) {
+                        $rows = DB::table($table)
+                            ->where('tenant_id', $tenantId)
+                            ->where('updated_at', '>', $since)
+                            ->get();
+                            
+                        if ($rows->count() > 0) {
+                            $data[$table] = $rows;
                         }
-                    } else {
-                        $this->error("HTTP {$response->status()}: " . $response->body());
-                        throw new \Exception('HTTP ' . $response->status());
                     }
                 } catch (\Exception $e) {
-                    DB::table('change_log')
-                        ->where('id', $entry->id)
-                        ->increment('retry_count', 1, [
-                            'sync_error' => substr($e->getMessage(), 0, 500)
-                        ]);
-                    $errors++;
-                    $this->error("✗ Failed entry #{$entry->id}: " . $e->getMessage());
-                    Log::error('Sync row failed', [
-                        'tenant_id' => $tenantId,
-                        'change_log_id' => $entry->id,
-                        'error' => $e->getMessage()
-                    ]);
+                    Log::warning("Pull failed for table {$table}: " . $e->getMessage());
                 }
             }
             
-            DB::commit();
-            
+            return response()->json([
+                'success' => true,
+                'data' => $data,
+                'server_time' => now()->toDateTimeString()
+            ]);
         } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Sync transaction failed', ['error' => $e->getMessage()]);
-            $this->updateStatus((int)$tenantId, 'error', $pending->count(), $e->getMessage());
-            $this->notify('error', "Sync failed: " . $e->getMessage());
-            return;
+            Log::error('Pull endpoint error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Update status
-        $remaining = DB::table('change_log')
-            ->where('tenant_id', $tenantId)
-            ->whereNull('synced_at')
-            ->count();
-
-        $status = $errors > 0 ? 'error' : 'online';
-        $this->updateStatus((int)$tenantId, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
-
-        // Notification
-        if ($errors > 0) {
-            $this->notify('error', "Sync finished with {$errors} error(s). Pushed {$pushed} row(s).");
-        } else {
-            $this->notify('success', "Sync complete — pushed {$pushed} row(s)");
-        }
-        
-        $this->info("Sync completed - Pushed: {$pushed}, Errors: {$errors}, Remaining: {$remaining}");
-    }
-
-    private function remoteIsReachable(int $tenantId): bool
-    {
-        try {
-            $url = $this->remoteUrl . '/sync/status';
-            $this->info("Checking connectivity: {$url}");
-            
-            $response = Http::timeout(10)
-                ->withHeaders([
-                    'X-Sync-Token' => $this->syncToken,
-                    'X-Tenant-Id' => (string) $tenantId,
-                    'Accept' => 'application/json',
-                ])
-                ->get($url);
-            
-            $this->info("Status response code: " . $response->status());
-            $this->info("Status response body: " . $response->body());
-            
-            return $response->successful();
-        } catch (\Exception $e) {
-            $this->error('Connection failed: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    private function updateStatus(int $tenantId, string $status, int $pendingCount = 0, ?string $error = null): void
-    {
-        DB::table('sync_status')->updateOrInsert(
-            ['tenant_id' => $tenantId],
-            [
-                'status' => $status,
-                'last_synced_at' => $status === 'online' ? now() : DB::raw('last_synced_at'),
-                'pending_count' => $pendingCount,
-                'last_error' => $error,
-                'updated_at' => now(),
-                'created_at' => DB::raw('COALESCE(created_at, NOW())'),
-            ]
-        );
-    }
-
-    private function notify(string $type, string $message): void
-    {
-        $icon = match ($type) {
-            'success' => '✅',
-            'error'   => '❌',
-            'offline' => '📡',
-            default   => 'ℹ️',
-        };
-        
-        $this->line("{$icon} [{$type}] {$message}");
     }
 }

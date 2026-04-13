@@ -19,7 +19,7 @@ class SyncToRemote extends Command
         parent::__construct();
         $this->remoteUrl = rtrim(env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org'), '/');
         $this->syncToken = env('SYNC_TOKEN', '');
-        $this->tenantId = env('TENANT_ID', 1);
+        $this->tenantId = env('TENANT_ID', 2);  // Changed default to 2
     }
 
     public function handle(): void
@@ -34,7 +34,10 @@ class SyncToRemote extends Command
             return;
         }
         
-        // 1. Check remote connectivity (NO /api prefix)
+        $this->info("Remote URL: {$this->remoteUrl}");
+        $this->info("Using token: " . substr($this->syncToken, 0, 10) . '...');
+        
+        // 1. Check remote connectivity
         if (!$this->remoteIsReachable($tenantId)) {
             $this->updateStatus((int)$tenantId, 'offline', 0, 'Remote server unreachable');
             $this->notify('offline', "No connection — offline mode");
@@ -66,14 +69,16 @@ class SyncToRemote extends Command
         try {
             foreach ($pending as $entry) {
                 try {
-                    // NO /api prefix in URL
                     $response = Http::timeout(30)
                         ->withHeaders([
                             'X-Sync-Token' => $this->syncToken,
                             'X-Tenant-Id' => (string) $tenantId,
                             'Content-Type' => 'application/json',
+                            'Accept' => 'application/json',
                         ])
                         ->post($this->remoteUrl . '/sync/push', [$entry]);
+                    
+                    $this->info("Response status: " . $response->status());
                     
                     if ($response->successful()) {
                         $result = $response->json();
@@ -82,11 +87,13 @@ class SyncToRemote extends Command
                                 ->where('id', $entry->id)
                                 ->update(['synced_at' => now(), 'sync_error' => null]);
                             $pushed++;
+                            $this->info("✓ Pushed entry #{$entry->id}");
                         } else {
                             throw new \Exception($result['error'] ?? 'Unknown error');
                         }
                     } else {
-                        throw new \Exception('HTTP ' . $response->status() . ': ' . $response->body());
+                        $this->error("HTTP {$response->status()}: " . $response->body());
+                        throw new \Exception('HTTP ' . $response->status());
                     }
                 } catch (\Exception $e) {
                     DB::table('change_log')
@@ -95,6 +102,7 @@ class SyncToRemote extends Command
                             'sync_error' => substr($e->getMessage(), 0, 500)
                         ]);
                     $errors++;
+                    $this->error("✗ Failed entry #{$entry->id}: " . $e->getMessage());
                     Log::error('Sync row failed', [
                         'tenant_id' => $tenantId,
                         'change_log_id' => $entry->id,
@@ -113,7 +121,7 @@ class SyncToRemote extends Command
             return;
         }
 
-        // 4. Update status
+        // Update status
         $remaining = DB::table('change_log')
             ->where('tenant_id', $tenantId)
             ->whereNull('synced_at')
@@ -122,7 +130,7 @@ class SyncToRemote extends Command
         $status = $errors > 0 ? 'error' : 'online';
         $this->updateStatus((int)$tenantId, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
 
-        // 5. Notification
+        // Notification
         if ($errors > 0) {
             $this->notify('error', "Sync finished with {$errors} error(s). Pushed {$pushed} row(s).");
         } else {
@@ -135,17 +143,23 @@ class SyncToRemote extends Command
     private function remoteIsReachable(int $tenantId): bool
     {
         try {
-            // NO /api prefix
+            $url = $this->remoteUrl . '/sync/status';
+            $this->info("Checking connectivity: {$url}");
+            
             $response = Http::timeout(10)
                 ->withHeaders([
                     'X-Sync-Token' => $this->syncToken,
                     'X-Tenant-Id' => (string) $tenantId,
+                    'Accept' => 'application/json',
                 ])
-                ->get($this->remoteUrl . '/sync/status');
+                ->get($url);
+            
+            $this->info("Status response code: " . $response->status());
+            $this->info("Status response body: " . $response->body());
             
             return $response->successful();
         } catch (\Exception $e) {
-            $this->warn('Connection failed: ' . $e->getMessage());
+            $this->error('Connection failed: ' . $e->getMessage());
             return false;
         }
     }
@@ -167,7 +181,6 @@ class SyncToRemote extends Command
 
     private function notify(string $type, string $message): void
     {
-        // Only show in console
         $icon = match ($type) {
             'success' => '✅',
             'error'   => '❌',
