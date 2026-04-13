@@ -3,71 +3,40 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\{ DB, Log };
+use Illuminate\Support\Facades\{ DB, Log, Http };
 
 class SyncToRemote extends Command
 {
-    protected $signature   = 'pos:sync';
-    protected $description = 'Push pending change_log entries to remote MySQL — all tenants';
+    protected $signature   = 'pos:sync {--tenant=}';
+    protected $description = 'Push pending changes to remote server via API';
+
+    // Get these from .env
+    private $remoteUrl;
+    private $syncToken;
+    private $tenantId;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->remoteUrl = env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org');
+        $this->syncToken = env('SYNC_TOKEN', 'your-hardcoded-token-here');
+        $this->tenantId = env('TENANT_ID', 1);
+    }
 
     public function handle(): void
     {
-        // ── 1. Check remote connectivity once (not per tenant) ────────────────
+        $tenantId = $this->option('tenant') ?? $this->tenantId;
+        
+        $this->info("Starting sync for tenant #{$tenantId}...");
+        
+        // 1. Check remote connectivity
         if (!$this->remoteIsReachable()) {
-            // Mark ALL tenants offline and fire one notification
-            $pendingTenants = DB::table('change_log')
-                ->whereNull('synced_at')
-                ->distinct()
-                ->pluck('tenant_id');
-
-            foreach ($pendingTenants as $tid) {
-                $this->updateStatus($tid, null, 'offline', 0, 'Remote unreachable');
-            }
-
-            $total = DB::table('change_log')->whereNull('synced_at')->count();
-            $this->notify('offline', "No connection — {$total} row(s) queued locally");
+            $this->updateStatus($tenantId, 'offline', 'Remote server unreachable');
+            $this->notify('offline', "No connection — offline mode");
             return;
         }
 
-        // ── 2. Get all tenant IDs that have pending rows ──────────────────────
-        $tenantIds = DB::table('change_log')
-            ->whereNull('synced_at')
-            ->where('retry_count', '<', 5)
-            ->distinct()
-            ->pluck('tenant_id');
-
-        if ($tenantIds->isEmpty()) {
-            // Nothing pending — still mark as online so the badge stays green
-            $this->updateStatus(current_tenant_id(), null, 'online', 0);
-            return;
-        }
-
-        $remote          = DB::connection('mysql_remote');
-        $totalPushed     = 0;
-        $totalErrors     = 0;
-
-        foreach ($tenantIds as $tenantId) {
-            [$pushed, $errors] = $this->syncTenant($remote, $tenantId);
-            $totalPushed += $pushed;
-            $totalErrors += $errors;
-        }
-
-        // ── 3. Pull master/catalog data from remote → local ───────────────────
-        $this->pullMasterData($remote);
-
-        // ── 4. Windows toast notification ─────────────────────────────────────
-        if ($totalErrors > 0) {
-            $this->notify('error', "Sync finished with {$totalErrors} error(s). Pushed {$totalPushed} row(s).");
-        } else {
-            $this->notify('success', "Sync complete — pushed {$totalPushed} row(s) across " . count($tenantIds) . " tenant(s).");
-        }
-    }
-
-    // ── Per-tenant sync ───────────────────────────────────────────────────────
-    private function syncTenant($remote, int $tenantId): array
-    {
-        $this->updateStatus($tenantId, null, 'syncing', 0);
-
+        // 2. Get pending changes
         $pending = DB::table('change_log')
             ->where('tenant_id', $tenantId)
             ->whereNull('synced_at')
@@ -76,155 +45,145 @@ class SyncToRemote extends Command
             ->limit(500)
             ->get();
 
+        if ($pending->isEmpty()) {
+            $this->info("No pending changes for tenant #{$tenantId}");
+            $this->updateStatus($tenantId, 'online', 0);
+            return;
+        }
+
+        $this->info("Found {$pending->count()} pending changes");
+
+        // 3. Push changes via API
+        $this->updateStatus($tenantId, 'syncing', $pending->count());
+        
         $pushed = 0;
         $errors = 0;
 
         DB::beginTransaction();
         try {
-            foreach ($pending as $entry) {
-                try {
-                    $payload = json_decode($entry->payload, true);
-
-                    // Safety: never sync change_log or sync_status themselves
-                    if (in_array($entry->table_name, ['change_log', 'sync_status'])) {
-                        DB::table('change_log')->where('id', $entry->id)
-                          ->update(['synced_at' => now()]);
-                        continue;
+            $chunks = $pending->chunk(50);
+            
+            foreach ($chunks as $chunk) {
+                $response = Http::timeout(30)
+                    ->withHeaders([
+                        'X-Sync-Token' => $this->syncToken,
+                        'X-Tenant-Id' => $tenantId,
+                    ])
+                    ->post($this->remoteUrl . '/api/sync/push', $chunk->toArray());
+                
+                if ($response->successful()) {
+                    $result = $response->json();
+                    $pushed += $result['pushed'] ?? 0;
+                    
+                    // Mark as synced
+                    foreach ($chunk as $entry) {
+                        DB::table('change_log')
+                            ->where('id', $entry->id)
+                            ->update(['synced_at' => now(), 'sync_error' => null]);
                     }
-
-                    match ($entry->operation) {
-                        'INSERT' => $remote->table($entry->table_name)
-                                           ->insertOrIgnore($payload),
-
-                        'UPDATE' => $remote->table($entry->table_name)
-                                           ->where('id', $entry->row_id)
-                                           ->where('tenant_id', $tenantId) // never touch another tenant
-                                           ->update($payload),             // last-write-wins on updated_at
-
-                        'DELETE' => $remote->table($entry->table_name)
-                                           ->where('id', $entry->row_id)
-                                           ->where('tenant_id', $tenantId)
-                                           ->delete(),
-                    };
-
-                    DB::table('change_log')->where('id', $entry->id)
-                      ->update(['synced_at' => now(), 'sync_error' => null]);
-
-                    $pushed++;
-
-                } catch (\Exception $e) {
-                    DB::table('change_log')->where('id', $entry->id)
-                      ->increment('retry_count', 1, [
-                          'sync_error' => substr($e->getMessage(), 0, 500),
-                      ]);
-
-                    Log::error('Sync row failed', [
-                        'tenant_id'     => $tenantId,
-                        'change_log_id' => $entry->id,
-                        'table'         => $entry->table_name,
-                        'error'         => $e->getMessage(),
-                    ]);
-                    $errors++;
+                } else {
+                    $errors += $chunk->count();
+                    Log::error('Sync push failed', ['response' => $response->body()]);
                 }
             }
+            
             DB::commit();
+            
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Sync transaction failed', ['tenant_id' => $tenantId, 'error' => $e->getMessage()]);
-            $this->updateStatus($tenantId, null, 'error', 0, $e->getMessage());
-            return [0, 1];
+            Log::error('Sync transaction failed', ['error' => $e->getMessage()]);
+            $this->updateStatus($tenantId, 'error', $pending->count(), $e->getMessage());
+            $this->notify('error', "Sync failed: " . $e->getMessage());
+            return;
         }
 
+        // 4. Pull master data
+        $this->pullMasterData($tenantId);
+
+        // 5. Update status
         $remaining = DB::table('change_log')
             ->where('tenant_id', $tenantId)
             ->whereNull('synced_at')
             ->count();
 
         $status = $errors > 0 ? 'error' : 'online';
-        $this->updateStatus($tenantId, null, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
+        $this->updateStatus($tenantId, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
 
-        Log::info("Tenant {$tenantId} sync — pushed: {$pushed}, errors: {$errors}, remaining: {$remaining}");
-
-        return [$pushed, $errors];
+        // 6. Notification
+        if ($errors > 0) {
+            $this->notify('error', "Sync finished with {$errors} error(s). Pushed {$pushed} row(s).");
+        } else {
+            $this->notify('success', "Sync complete — pushed {$pushed} row(s)");
+        }
+        
+        $this->info("Sync completed - Pushed: {$pushed}, Errors: {$errors}, Remaining: {$remaining}");
     }
 
-    // ── Pull master/catalog data ──────────────────────────────────────────────
-    private function pullMasterData($remote): void
+    private function pullMasterData(int $tenantId): void
     {
-        // Only pull lookup/catalog tables — NEVER pull transaction tables
         $masterTables = [
             'categories', 'product_categories', 'products',
             'taxes', 'promotions', 'unit_of_measures',
-            'locations', 'departments',
+            'locations', 'departments'
         ];
 
-        // Per-tenant last sync times
-        $lastSyncTimes = DB::table('sync_status')
-            ->whereNotNull('last_synced_at')
-            ->pluck('last_synced_at', 'tenant_id');
+        $lastSync = DB::table('sync_status')
+            ->where('tenant_id', $tenantId)
+            ->value('last_synced_at') ?? '2000-01-01 00:00:00';
 
-        foreach ($masterTables as $table) {
-            try {
-                // Get the oldest last_synced_at across all tenants on this machine
-                $since = $lastSyncTimes->min() ?? '2000-01-01 00:00:00';
-
-                $remoteRows = $remote->table($table)
-                    ->where('updated_at', '>', $since)
-                    ->get()
-                    ->toArray();
-
-                foreach ($remoteRows as $row) {
-                    // Only pull rows belonging to tenants on THIS machine
-                    $localTenants = DB::table('sync_status')->pluck('tenant_id');
-                    $row = (array) $row;
-
-                    if (isset($row['tenant_id']) && !$localTenants->contains($row['tenant_id'])) {
-                        continue; // don't pull other tenants' master data
+        try {
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'X-Sync-Token' => $this->syncToken,
+                    'X-Tenant-Id' => $tenantId,
+                ])
+                ->post($this->remoteUrl . '/api/sync/pull', ['since' => $lastSync]);
+            
+            if ($response->successful()) {
+                $data = $response->json()['data'] ?? [];
+                
+                foreach ($data as $table => $rows) {
+                    foreach ($rows as $row) {
+                        DB::table($table)->updateOrInsert(
+                            ['id' => $row['id']],
+                            (array) $row
+                        );
                     }
-
-                    DB::table($table)->upsert($row, ['id'], array_keys($row));
                 }
-            } catch (\Exception $e) {
-                Log::warning("Pull failed for table {$table}: " . $e->getMessage());
+                
+                $this->info("Pulled master data from remote");
             }
+        } catch (\Exception $e) {
+            Log::warning("Pull master data failed: " . $e->getMessage());
         }
     }
 
-    // ── Remote connectivity check (TCP only — fast) ───────────────────────────
     private function remoteIsReachable(): bool
     {
-        $host = config('database.connections.mysql_remote.host');
-        $port = (int) config('database.connections.mysql_remote.port', 3306);
-
         try {
-            $socket = @fsockopen($host, $port, $errno, $errstr, 5);
-            if ($socket) {
-                fclose($socket);
-                return true;
-            }
-            return false;
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'X-Sync-Token' => $this->syncToken,
+                    'X-Tenant-Id' => $this->tenantId,
+                ])
+                ->get($this->remoteUrl . '/api/sync/status');
+            
+            return $response->successful();
         } catch (\Exception $e) {
             return false;
         }
     }
 
-    // ── sync_status upsert ────────────────────────────────────────────────────
-    private function updateStatus(
-        int     $tenantId,
-        ?int    $locationId,
-        string  $status,
-        int     $pendingCount,
-        ?string $error = null
-    ): void {
+    private function updateStatus(int $tenantId, string $status, int $pendingCount = 0, ?string $error = null): void
+    {
         DB::table('sync_status')->updateOrInsert(
-            ['tenant_id' => $tenantId, 'location_id' => $locationId],
+            ['tenant_id' => $tenantId],
             [
-                'status'         => $status,
+                'status' => $status,
                 'last_synced_at' => $status === 'online' ? now() : DB::raw('last_synced_at'),
-                'pending_count'  => $pendingCount,
-                'last_error'     => $error,
-                'updated_at'     => now(),
-                'created_at'     => DB::raw('COALESCE(created_at, NOW())'),
+                'pending_count' => $pendingCount,
+                'last_error' => $error,
+                'updated_at' => now(),
             ]
         );
     }
