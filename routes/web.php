@@ -555,3 +555,4 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
 require __DIR__.'/auth.php';
+require __DIR__.'/remote.php';
