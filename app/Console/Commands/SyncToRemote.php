@@ -20,7 +20,7 @@ class SyncToRemote extends Command
         parent::__construct();
         $this->remoteUrl = env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org');
         $this->syncToken = env('SYNC_TOKEN', 'your-hardcoded-token-here');
-        $this->tenantId = env('TENANT_ID', 1);
+        $this->tenantId = env('TENANT_ID', 2);
     }
 
     public function handle(): void
@@ -31,7 +31,7 @@ class SyncToRemote extends Command
         
         // 1. Check remote connectivity
         if (!$this->remoteIsReachable()) {
-            $this->updateStatus($tenantId, 'offline', 'Remote server unreachable');
+            $this->updateStatus($tenantId, 'offline', 0, 'Remote server unreachable');
             $this->notify('offline', "No connection — offline mode");
             return;
         }
@@ -166,7 +166,7 @@ class SyncToRemote extends Command
                     'X-Sync-Token' => $this->syncToken,
                     'X-Tenant-Id' => $this->tenantId,
                 ])
-                ->get($this->remoteUrl . '/api/sync/status');
+                ->get($this->remoteUrl . '/sync/status');
             
             return $response->successful();
         } catch (\Exception $e) {
@@ -184,6 +184,7 @@ class SyncToRemote extends Command
                 'pending_count' => $pendingCount,
                 'last_error' => $error,
                 'updated_at' => now(),
+                'created_at' => DB::raw('COALESCE(created_at, NOW())'),
             ]
         );
     }

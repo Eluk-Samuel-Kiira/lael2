@@ -1,96 +1,37 @@
 <?php
-// test-sync.php - Run with: php test-sync.php
+// test-api.php - Run with: php test-api.php
 
-require __DIR__ . '/vendor/autoload.php';
+$remoteUrl = 'https://lael-pos.stardena.org';
+$token = 'your-hardcoded-token-here'; // Use same token as in .env
+$tenantId = 1;
 
-$app = require_once __DIR__ . '/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
+echo "Testing API connectivity...\n\n";
 
-echo "=== POS Sync Test Suite ===\n\n";
+// Test 1: Check status endpoint
+echo "Test 1: GET /sync/status\n";
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, $remoteUrl . '/sync/status');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'X-Sync-Token: ' . $token,
+    'X-Tenant-Id: ' . $tenantId
+]);
+curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
-// Test 1: Check if sync tables exist
-echo "Test 1: Checking sync tables...\n";
-try {
-    $hasChangeLog = Schema::hasTable('change_log');
-    $hasSyncStatus = Schema::hasTable('sync_status');
-    
-    echo $hasChangeLog ? "✅ change_log table exists\n" : "❌ change_log table missing\n";
-    echo $hasSyncStatus ? "✅ sync_status table exists\n" : "❌ sync_status table missing\n";
-} catch (Exception $e) {
-    echo "❌ Error: " . $e->getMessage() . "\n";
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+
+echo "HTTP Code: " . $httpCode . "\n";
+echo "Response: " . $response . "\n\n";
+
+// Test 2: Check if domain resolves
+echo "Test 2: DNS resolution\n";
+$ip = gethostbyname('lael-pos.stardena.org');
+echo "IP Address: " . $ip . "\n";
+
+if ($ip === 'lael-pos.stardena.org') {
+    echo "❌ DNS resolution failed\n";
+} else {
+    echo "✅ DNS resolved\n";
 }
-
-// Test 2: Create a test change log entry
-echo "\nTest 2: Creating test change log entry...\n";
-try {
-    $testId = DB::table('change_log')->insertGetId([
-        'table_name' => 'test_sync',
-        'row_id' => 999,
-        'operation' => 'INSERT',
-        'payload' => json_encode(['test' => 'data', 'created_at' => now()]),
-        'tenant_id' => 1,
-        'logged_at' => now(),
-        'retry_count' => 0
-    ]);
-    
-    echo "✅ Created test entry with ID: {$testId}\n";
-} catch (Exception $e) {
-    echo "❌ Error: " . $e->getMessage() . "\n";
-}
-
-// Test 3: Check pending sync items
-echo "\nTest 3: Checking pending sync items...\n";
-try {
-    $pending = DB::table('change_log')
-        ->whereNull('synced_at')
-        ->count();
-    
-    echo "📊 Pending items: {$pending}\n";
-} catch (Exception $e) {
-    echo "❌ Error: " . $e->getMessage() . "\n";
-}
-
-// Test 4: Test remote API connectivity
-echo "\nTest 4: Testing remote API connectivity...\n";
-$remoteUrl = env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org');
-$token = env('SYNC_TOKEN', 'your-hardcoded-token-here');
-$tenantId = env('TENANT_ID', 1);
-
-try {
-    $client = new GuzzleHttp\Client(['timeout' => 10]);
-    $response = $client->get($remoteUrl . '/api/sync/status', [
-        'headers' => [
-            'X-Sync-Token' => $token,
-            'X-Tenant-Id' => $tenantId
-        ]
-    ]);
-    
-    if ($response->getStatusCode() === 200) {
-        echo "✅ Remote API is reachable\n";
-        $data = json_decode($response->getBody(), true);
-        echo "   Server time: " . ($data['server_time'] ?? 'unknown') . "\n";
-    } else {
-        echo "⚠️ Remote returned status: " . $response->getStatusCode() . "\n";
-    }
-} catch (Exception $e) {
-    echo "❌ Cannot reach remote API: " . $e->getMessage() . "\n";
-}
-
-// Test 5: Check sync_status table
-echo "\nTest 5: Checking sync_status...\n";
-try {
-    $status = DB::table('sync_status')->where('tenant_id', 1)->first();
-    if ($status) {
-        echo "✅ Sync status found:\n";
-        echo "   Status: {$status->status}\n";
-        echo "   Pending: {$status->pending_count}\n";
-        echo "   Last synced: {$status->last_synced_at}\n";
-    } else {
-        echo "ℹ️ No sync_status record for tenant 1\n";
-    }
-} catch (Exception $e) {
-    echo "❌ Error: " . $e->getMessage() . "\n";
-}
-
-echo "\n=== Test Complete ===\n";
