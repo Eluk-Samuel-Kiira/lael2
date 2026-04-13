@@ -10,7 +10,6 @@ class SyncToRemote extends Command
     protected $signature   = 'pos:sync {--tenant=}';
     protected $description = 'Push pending changes to remote server via API';
 
-    // Get these from .env
     private $remoteUrl;
     private $syncToken;
     private $tenantId;
@@ -18,9 +17,9 @@ class SyncToRemote extends Command
     public function __construct()
     {
         parent::__construct();
-        $this->remoteUrl = env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org');
-        $this->syncToken = env('SYNC_TOKEN', 'your-hardcoded-token-here');
-        $this->tenantId = env('TENANT_ID', 2);
+        $this->remoteUrl = rtrim(env('SYNC_REMOTE_URL', 'https://lael-pos.stardena.org'), '/');
+        $this->syncToken = env('SYNC_TOKEN', '');
+        $this->tenantId = env('TENANT_ID', 1);
     }
 
     public function handle(): void
@@ -29,9 +28,15 @@ class SyncToRemote extends Command
         
         $this->info("Starting sync for tenant #{$tenantId}...");
         
-        // 1. Check remote connectivity
-        if (!$this->remoteIsReachable()) {
-            $this->updateStatus($tenantId, 'offline', 0, 'Remote server unreachable');
+        // Validate token
+        if (empty($this->syncToken)) {
+            $this->error('SYNC_TOKEN not configured in .env');
+            return;
+        }
+        
+        // 1. Check remote connectivity (NO /api prefix)
+        if (!$this->remoteIsReachable($tenantId)) {
+            $this->updateStatus((int)$tenantId, 'offline', 0, 'Remote server unreachable');
             $this->notify('offline', "No connection — offline mode");
             return;
         }
@@ -47,43 +52,54 @@ class SyncToRemote extends Command
 
         if ($pending->isEmpty()) {
             $this->info("No pending changes for tenant #{$tenantId}");
-            $this->updateStatus($tenantId, 'online', 0);
+            $this->updateStatus((int)$tenantId, 'online', 0);
             return;
         }
 
         $this->info("Found {$pending->count()} pending changes");
-
-        // 3. Push changes via API
-        $this->updateStatus($tenantId, 'syncing', $pending->count());
+        $this->updateStatus((int)$tenantId, 'syncing', $pending->count());
         
         $pushed = 0;
         $errors = 0;
 
         DB::beginTransaction();
         try {
-            $chunks = $pending->chunk(50);
-            
-            foreach ($chunks as $chunk) {
-                $response = Http::timeout(30)
-                    ->withHeaders([
-                        'X-Sync-Token' => $this->syncToken,
-                        'X-Tenant-Id' => $tenantId,
-                    ])
-                    ->post($this->remoteUrl . '/api/sync/push', $chunk->toArray());
-                
-                if ($response->successful()) {
-                    $result = $response->json();
-                    $pushed += $result['pushed'] ?? 0;
+            foreach ($pending as $entry) {
+                try {
+                    // NO /api prefix in URL
+                    $response = Http::timeout(30)
+                        ->withHeaders([
+                            'X-Sync-Token' => $this->syncToken,
+                            'X-Tenant-Id' => (string) $tenantId,
+                            'Content-Type' => 'application/json',
+                        ])
+                        ->post($this->remoteUrl . '/sync/push', [$entry]);
                     
-                    // Mark as synced
-                    foreach ($chunk as $entry) {
-                        DB::table('change_log')
-                            ->where('id', $entry->id)
-                            ->update(['synced_at' => now(), 'sync_error' => null]);
+                    if ($response->successful()) {
+                        $result = $response->json();
+                        if ($result['success'] ?? false) {
+                            DB::table('change_log')
+                                ->where('id', $entry->id)
+                                ->update(['synced_at' => now(), 'sync_error' => null]);
+                            $pushed++;
+                        } else {
+                            throw new \Exception($result['error'] ?? 'Unknown error');
+                        }
+                    } else {
+                        throw new \Exception('HTTP ' . $response->status() . ': ' . $response->body());
                     }
-                } else {
-                    $errors += $chunk->count();
-                    Log::error('Sync push failed', ['response' => $response->body()]);
+                } catch (\Exception $e) {
+                    DB::table('change_log')
+                        ->where('id', $entry->id)
+                        ->increment('retry_count', 1, [
+                            'sync_error' => substr($e->getMessage(), 0, 500)
+                        ]);
+                    $errors++;
+                    Log::error('Sync row failed', [
+                        'tenant_id' => $tenantId,
+                        'change_log_id' => $entry->id,
+                        'error' => $e->getMessage()
+                    ]);
                 }
             }
             
@@ -92,24 +108,21 @@ class SyncToRemote extends Command
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Sync transaction failed', ['error' => $e->getMessage()]);
-            $this->updateStatus($tenantId, 'error', $pending->count(), $e->getMessage());
+            $this->updateStatus((int)$tenantId, 'error', $pending->count(), $e->getMessage());
             $this->notify('error', "Sync failed: " . $e->getMessage());
             return;
         }
 
-        // 4. Pull master data
-        $this->pullMasterData($tenantId);
-
-        // 5. Update status
+        // 4. Update status
         $remaining = DB::table('change_log')
             ->where('tenant_id', $tenantId)
             ->whereNull('synced_at')
             ->count();
 
         $status = $errors > 0 ? 'error' : 'online';
-        $this->updateStatus($tenantId, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
+        $this->updateStatus((int)$tenantId, $status, $remaining, $errors > 0 ? "{$errors} row(s) failed" : null);
 
-        // 6. Notification
+        // 5. Notification
         if ($errors > 0) {
             $this->notify('error', "Sync finished with {$errors} error(s). Pushed {$pushed} row(s).");
         } else {
@@ -119,57 +132,20 @@ class SyncToRemote extends Command
         $this->info("Sync completed - Pushed: {$pushed}, Errors: {$errors}, Remaining: {$remaining}");
     }
 
-    private function pullMasterData(int $tenantId): void
-    {
-        $masterTables = [
-            'categories', 'product_categories', 'products',
-            'taxes', 'promotions', 'unit_of_measures',
-            'locations', 'departments'
-        ];
-
-        $lastSync = DB::table('sync_status')
-            ->where('tenant_id', $tenantId)
-            ->value('last_synced_at') ?? '2000-01-01 00:00:00';
-
-        try {
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'X-Sync-Token' => $this->syncToken,
-                    'X-Tenant-Id' => $tenantId,
-                ])
-                ->post($this->remoteUrl . '/api/sync/pull', ['since' => $lastSync]);
-            
-            if ($response->successful()) {
-                $data = $response->json()['data'] ?? [];
-                
-                foreach ($data as $table => $rows) {
-                    foreach ($rows as $row) {
-                        DB::table($table)->updateOrInsert(
-                            ['id' => $row['id']],
-                            (array) $row
-                        );
-                    }
-                }
-                
-                $this->info("Pulled master data from remote");
-            }
-        } catch (\Exception $e) {
-            Log::warning("Pull master data failed: " . $e->getMessage());
-        }
-    }
-
-    private function remoteIsReachable(): bool
+    private function remoteIsReachable(int $tenantId): bool
     {
         try {
-            $response = Http::timeout(5)
+            // NO /api prefix
+            $response = Http::timeout(10)
                 ->withHeaders([
                     'X-Sync-Token' => $this->syncToken,
-                    'X-Tenant-Id' => $this->tenantId,
+                    'X-Tenant-Id' => (string) $tenantId,
                 ])
                 ->get($this->remoteUrl . '/sync/status');
             
             return $response->successful();
         } catch (\Exception $e) {
+            $this->warn('Connection failed: ' . $e->getMessage());
             return false;
         }
     }
@@ -189,47 +165,16 @@ class SyncToRemote extends Command
         );
     }
 
-    // ── Windows toast notification via PowerShell ─────────────────────────────
     private function notify(string $type, string $message): void
     {
-        // Only attempt on Windows
-        if (PHP_OS_FAMILY !== 'Windows') {
-            return;
-        }
-
+        // Only show in console
         $icon = match ($type) {
-            'success' => 'Info',
-            'error'   => 'Error',
-            default   => 'Warning',
+            'success' => '✅',
+            'error'   => '❌',
+            'offline' => '📡',
+            default   => 'ℹ️',
         };
-
-        $title   = addslashes('Stardena POS — Sync ' . ucfirst($type));
-        $message = addslashes($message);
-
-        // PowerShell BurntToast-style toast (works without extra modules on Win10+)
-        $ps = <<<PS
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
-        \$template = @"
-        <toast>
-          <visual>
-            <binding template="ToastGeneric">
-              <text>Stardena POS Sync</text>
-              <text>{$message}</text>
-            </binding>
-          </visual>
-        </toast>
-        "@
-        \$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-        \$xml.LoadXml(\$template)
-        \$toast = [Windows.UI.Notifications.ToastNotification]::new(\$xml)
-        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Stardena POS").Show(\$toast)
-        PS;
-
-        $escaped = str_replace('"', '\\"', $ps);
-        $cmd = "powershell -WindowStyle Hidden -Command \"{$escaped}\"";
-
-        // Fire and forget — don't block the sync if notification fails
-        pclose(popen("start /b {$cmd}", 'r'));
+        
+        $this->line("{$icon} [{$type}] {$message}");
     }
 }
