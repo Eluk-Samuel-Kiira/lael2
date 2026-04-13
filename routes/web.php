@@ -553,6 +553,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         ], 404);
     });
 
+    
+
 
 require __DIR__.'/auth.php';
 require __DIR__.'/remote.php';
