@@ -117,7 +117,7 @@
 		<script>
 			// Auto-refresh sync status every 10 seconds
 			function updateSyncStatus() {
-				fetch('/api/sync/status')
+				fetch('/sync/status')
 					.then(response => response.json())
 					.then(data => {
 						const badge = document.getElementById('syncStatusBadge');
