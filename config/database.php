@@ -63,7 +63,7 @@ return [
         ],
 
         // Remote sync connection
-        'sync_remote' => [
+        'mysql_remote' => [
             'driver' => 'mysql',
             'host' => env('SYNC_REMOTE_HOST', 'lael-pos.stardena.org'),
             'port' => env('SYNC_REMOTE_PORT', '3306'),

@@ -114,6 +114,31 @@
 				</div>
 			</div>
 		</div>
+		<script>
+			// Auto-refresh sync status every 10 seconds
+			function updateSyncStatus() {
+				fetch('/api/sync/status')
+					.then(response => response.json())
+					.then(data => {
+						const badge = document.getElementById('syncStatusBadge');
+						const statusClass = {
+							'online': 'bg-success',
+							'offline': 'bg-secondary', 
+							'syncing': 'bg-warning',
+							'error': 'bg-danger'
+						};
+						
+						badge.className = `badge ${statusClass[data.status]} d-inline-flex align-items-center gap-1 px-2 py-1`;
+						badge.innerHTML = `<i class="fas fa-${getStatusIcon(data.status)} fs-10"></i><span>${data.status.toUpperCase()}</span>`;
+						
+						if (data.pending_count > 0) {
+							document.getElementById('pendingCount').innerHTML = `${data.pending_count} pending`;
+						}
+					});
+			}
+
+			setInterval(updateSyncStatus, 10000);
+		</script>
 		@stack('scripts')
 
 		<script>

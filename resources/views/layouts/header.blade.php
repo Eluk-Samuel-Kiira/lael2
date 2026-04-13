@@ -15,32 +15,18 @@
             <div class="app-header-menu app-header-mobile-drawer align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="app-header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="250px" data-kt-drawer-direction="end" data-kt-drawer-toggle="#kt_app_header_menu_toggle" data-kt-swapper="true" data-kt-swapper-mode="{default: 'append', lg: 'prepend'}" data-kt-swapper-parent="{default: '#kt_app_body', lg: '#kt_app_header_wrapper'}">
                 <!-- header -->
             </div>
-            @php
-                $syncRows = \DB::table('sync_status')
-                    ->whereIn('tenant_id', \DB::table('tenants')->pluck('id'))
-                    ->get();
-
-                $worstStatus = $syncRows->contains('status', 'error') ? 'error'
-                    : ($syncRows->contains('status', 'offline') ? 'offline'
-                    : ($syncRows->contains('status', 'syncing') ? 'syncing' : 'online'));
-
-                $totalPending = $syncRows->sum('pending_count');
-            @endphp
-
-            <span class="badge badge-{{ match($worstStatus) {
-                'online'  => 'success',
-                'syncing' => 'primary',
-                'offline' => 'warning',
-                'error'   => 'danger',
-            } }} d-flex align-items-center gap-1"
-                data-bs-toggle="tooltip"
-                title="{{ $syncRows->map(fn($r) => 'Tenant '.$r->tenant_id.': '.$r->status)->join(' | ') }}">
-                <i class="ki-duotone ki-wifi fs-7"></i>
-                {{ ucfirst($worstStatus) }}
-                @if($totalPending > 0)
-                    · {{ $totalPending }} pending
-                @endif
-            </span>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Sync Status</h3>
+                    <div class="card-toolbar">
+                        <x-sync-status 
+                            :status="$syncStatus['status'] ?? 'offline'" 
+                            :pendingCount="$syncStatus['pending_count'] ?? 0"
+                            :lastSync="$syncStatus['last_synced_at'] ?? null"
+                        />
+                    </div>
+                </div>
+            </div>
 				
             <div class="app-navbar flex-shrink-0">
                 <div class="app-navbar-item ms-1 ms-md-4">
