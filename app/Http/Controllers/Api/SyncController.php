@@ -201,4 +201,24 @@ class SyncController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get sync status for frontend
+     */
+    public function getFrontendStatus(Request $request)
+    {
+        $tenantId = auth()->user()->tenant_id ?? 2;
+        
+        $status = DB::table('sync_status')
+            ->where('tenant_id', $tenantId)
+            ->first();
+        
+        return response()->json([
+            'status' => $status->status ?? 'offline',
+            'pending_count' => $status->pending_count ?? 0,
+            'last_synced_at' => $status->last_synced_at,
+            'last_error' => $status->last_error,
+            'updated_at' => $status->updated_at,
+        ]);
+    }
 }

@@ -114,31 +114,158 @@
 				</div>
 			</div>
 		</div>
+
 		<script>
-			// Auto-refresh sync status every 10 seconds
+			// Helper function to get status icon
+			function getStatusIcon(status) {
+				const icons = {
+					'online': 'fa-check-circle',
+					'offline': 'fa-wifi-off',
+					'syncing': 'fa-sync-alt',
+					'error': 'fa-exclamation-triangle'
+				};
+				return icons[status] || 'fa-circle';
+			}
+
+			// Get status color class
+			function getStatusClass(status) {
+				const classes = {
+					'online': 'bg-success',
+					'offline': 'bg-secondary', 
+					'syncing': 'bg-warning',
+					'error': 'bg-danger'
+				};
+				return classes[status] || 'bg-secondary';
+			}
+
+			// Update sync status display
 			function updateSyncStatus() {
-				fetch('/sync/status')
+				fetch('/sync/frontend-status')
 					.then(response => response.json())
 					.then(data => {
 						const badge = document.getElementById('syncStatusBadge');
-						const statusClass = {
-							'online': 'bg-success',
-							'offline': 'bg-secondary', 
-							'syncing': 'bg-warning',
-							'error': 'bg-danger'
-						};
+						const pendingSpan = document.getElementById('pendingCount');
 						
-						badge.className = `badge ${statusClass[data.status]} d-inline-flex align-items-center gap-1 px-2 py-1`;
-						badge.innerHTML = `<i class="fas fa-${getStatusIcon(data.status)} fs-10"></i><span>${data.status.toUpperCase()}</span>`;
+						if (badge) {
+							const status = data.status || 'offline';
+							const statusClass = getStatusClass(status);
+							const statusIcon = getStatusIcon(status);
+							
+							badge.className = `badge ${statusClass} d-inline-flex align-items-center gap-1 px-2 py-1`;
+							badge.style.fontSize = '11px';
+							badge.innerHTML = `<i class="fas ${statusIcon} fs-10 me-1"></i><span>${status.toUpperCase()}</span>`;
+						}
 						
-						if (data.pending_count > 0) {
-							document.getElementById('pendingCount').innerHTML = `${data.pending_count} pending`;
+						if (pendingSpan) {
+							if (data.pending_count > 0) {
+								pendingSpan.innerHTML = `<span class="badge bg-info ms-1">${data.pending_count}</span>`;
+							} else {
+								pendingSpan.innerHTML = '';
+							}
+						}
+						
+						// Update last sync time in tooltip
+						const syncBtn = document.getElementById('manualSyncBtn');
+						if (syncBtn && data.last_synced_at) {
+							const lastSync = new Date(data.last_synced_at);
+							const now = new Date();
+							const diffMinutes = Math.floor((now - lastSync) / 60000);
+							
+							let tooltipText = 'Sync Now';
+							if (diffMinutes < 1) {
+								tooltipText = 'Sync Now (Just synced)';
+							} else if (diffMinutes < 60) {
+								tooltipText = `Sync Now (${diffMinutes} min ago)`;
+							} else {
+								tooltipText = `Sync Now (${lastSync.toLocaleTimeString()})`;
+							}
+							syncBtn.title = tooltipText;
+						}
+						
+						// Show error toast if there's an error
+						if (data.status === 'error' && data.last_error) {
+							if (typeof toastr !== 'undefined') {
+								toastr.warning(data.last_error, 'Sync Issue');
+							}
+						}
+					})
+					.catch(error => {
+						console.error('Sync status fetch error:', error);
+						const badge = document.getElementById('syncStatusBadge');
+						if (badge) {
+							badge.className = 'badge bg-secondary d-inline-flex align-items-center gap-1 px-2 py-1';
+							badge.style.fontSize = '11px';
+							badge.innerHTML = '<i class="fas fa-wifi-off fs-10 me-1"></i><span>OFFLINE</span>';
 						}
 					});
 			}
 
-			setInterval(updateSyncStatus, 10000);
+			// Trigger manual sync
+			function triggerManualSync() {
+				const btn = document.getElementById('manualSyncBtn');
+				if (!btn) return;
+				
+				const originalIcon = btn.innerHTML;
+				
+				btn.disabled = true;
+				btn.innerHTML = '<i class="fas fa-spinner fa-spin fs-5"></i>';
+				
+				// Get current tenant ID (you can adjust this)
+				const tenantId = {{ auth()->user()->tenant_id ?? 2 }};
+				
+				fetch(`/pos:sync?tenant=${tenantId}`, {
+					method: 'POST',
+					headers: {
+						'X-Requested-With': 'XMLHttpRequest',
+						'Content-Type': 'application/json',
+						'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+					}
+				})
+				.then(response => response.json())
+				.then(data => {
+					if (data.success) {
+						if (typeof toastr !== 'undefined') {
+							toastr.success('Sync completed successfully!', 'Sync Status');
+						}
+						updateSyncStatus(); // Refresh status immediately
+					} else {
+						if (typeof toastr !== 'undefined') {
+							toastr.error(data.error || 'Sync failed', 'Sync Error');
+						}
+					}
+				})
+				.catch(error => {
+					console.error('Sync error:', error);
+					if (typeof toastr !== 'undefined') {
+						toastr.error('Sync failed: ' + error.message, 'Sync Error');
+					}
+				})
+				.finally(() => {
+					btn.disabled = false;
+					btn.innerHTML = originalIcon;
+					
+					// Re-enable after 30 seconds (prevent spam)
+					setTimeout(() => {
+						if (btn) btn.disabled = false;
+					}, 30000);
+				});
+			}
+
+			// Auto-refresh sync status every 15 seconds
+			let syncInterval;
+			
+			function startSyncStatusRefresh() {
+				if (syncInterval) clearInterval(syncInterval);
+				updateSyncStatus(); // Run immediately
+				syncInterval = setInterval(updateSyncStatus, 15000);
+			}
+			
+			// Initialize when page loads
+			document.addEventListener('DOMContentLoaded', function() {
+				startSyncStatusRefresh();
+			});
 		</script>
+		
 		@stack('scripts')
 
 		<script>

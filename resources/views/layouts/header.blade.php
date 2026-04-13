@@ -15,17 +15,18 @@
             <div class="app-header-menu app-header-mobile-drawer align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="app-header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="250px" data-kt-drawer-direction="end" data-kt-drawer-toggle="#kt_app_header_menu_toggle" data-kt-swapper="true" data-kt-swapper-mode="{default: 'append', lg: 'prepend'}" data-kt-swapper-parent="{default: '#kt_app_body', lg: '#kt_app_header_wrapper'}">
                 <!-- header -->
             </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">Sync Status</h3>
-                    <div class="card-toolbar">
-                        <x-sync-status 
-                            :status="$syncStatus['status'] ?? 'offline'" 
-                            :pendingCount="$syncStatus['pending_count'] ?? 0"
-                            :lastSync="$syncStatus['last_synced_at'] ?? null"
-                        />
-                    </div>
+            <!-- Add this in your header, near the user menu or notification area -->
+            <div class="d-flex align-items-center gap-2 me-3">
+                <div class="sync-status-container">
+                    <span id="syncStatusBadge" class="badge bg-secondary d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size: 11px;">
+                        <i class="fas fa-wifi-off fs-10"></i>
+                        <span>CHECKING...</span>
+                    </span>
+                    <span id="pendingCount" class="ms-1"></span>
                 </div>
+                <button id="manualSyncBtn" class="btn btn-sm btn-icon btn-light-primary" onclick="triggerManualSync()" title="Sync Now">
+                    <i class="fas fa-sync-alt fs-5"></i>
+                </button>
             </div>
 				
             <div class="app-navbar flex-shrink-0">
