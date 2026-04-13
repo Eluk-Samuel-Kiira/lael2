@@ -62,6 +62,26 @@ return [
             ]) : [],
         ],
 
+        // Remote sync connection
+        'sync_remote' => [
+            'driver' => 'mysql',
+            'host' => env('SYNC_REMOTE_HOST', 'lael-pos.stardena.org'),
+            'port' => env('SYNC_REMOTE_PORT', '3306'),
+            'database' => env('SYNC_REMOTE_DATABASE', 'stardena_lael_pos'),
+            'username' => env('SYNC_REMOTE_USERNAME', 'stardena_lael_pos'),
+            'password' => env('SYNC_REMOTE_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => false,
+            'engine' => null,
+            'options' => [
+                PDO::ATTR_TIMEOUT => 10,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
@@ -168,20 +188,6 @@ return [
             'database' => env('REDIS_CACHE_DB', '1'),
         ],
 
-    ],
-
-    'mysql_remote' => [
-        'driver'   => 'mysql',
-        'host'     => env('REMOTE_DB_HOST'),     // your cPanel hostname
-        'port'     => env('REMOTE_DB_PORT', '3306'),
-        'database' => env('REMOTE_DB_DATABASE'),
-        'username' => env('REMOTE_DB_USERNAME'),
-        'password' => env('REMOTE_DB_PASSWORD'),
-        'charset'  => 'utf8mb4',
-        'collation'=> 'utf8mb4_unicode_ci',
-        'options'  => [
-            PDO::ATTR_TIMEOUT => 5, // fail fast if remote is unreachable
-        ],
     ],
 
 ];
