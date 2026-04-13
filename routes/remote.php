@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\Api\SyncController;
 
-// Sync routes (no /api prefix)
 Route::post('/sync/push', [SyncController::class, 'push']);
 Route::post('/sync/pull', [SyncController::class, 'pull']);
 Route::get('/sync/status', [SyncController::class, 'status']);
+Route::middleware(['auth'])->group(function () {
+    Route::get('/sync/frontend-status', [SyncController::class, 'getFrontendStatus']);
+});
 
 // Route::get('/test-remote-db', function () {
 //     try {
