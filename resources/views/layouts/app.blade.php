@@ -138,11 +138,14 @@
 				return classes[status] || 'bg-secondary';
 			}
 
-			// Update sync status display
+			// Update sync status display - Use frontend-status endpoint (no auth required)
 			function updateSyncStatus() {
+				// Use the frontend endpoint, not the remote sync/status
 				fetch('/sync/frontend-status')
 					.then(response => response.json())
 					.then(data => {
+						console.log('Sync status:', data); // Debug log
+						
 						const badge = document.getElementById('syncStatusBadge');
 						const pendingSpan = document.getElementById('pendingCount');
 						
@@ -156,37 +159,10 @@
 							badge.innerHTML = `<i class="fas ${statusIcon} fs-10 me-1"></i><span>${status.toUpperCase()}</span>`;
 						}
 						
-						if (pendingSpan) {
-							if (data.pending_count > 0) {
-								pendingSpan.innerHTML = `<span class="badge bg-info ms-1">${data.pending_count}</span>`;
-							} else {
-								pendingSpan.innerHTML = '';
-							}
-						}
-						
-						// Update last sync time in tooltip
-						const syncBtn = document.getElementById('manualSyncBtn');
-						if (syncBtn && data.last_synced_at) {
-							const lastSync = new Date(data.last_synced_at);
-							const now = new Date();
-							const diffMinutes = Math.floor((now - lastSync) / 60000);
-							
-							let tooltipText = 'Sync Now';
-							if (diffMinutes < 1) {
-								tooltipText = 'Sync Now (Just synced)';
-							} else if (diffMinutes < 60) {
-								tooltipText = `Sync Now (${diffMinutes} min ago)`;
-							} else {
-								tooltipText = `Sync Now (${lastSync.toLocaleTimeString()})`;
-							}
-							syncBtn.title = tooltipText;
-						}
-						
-						// Show error toast if there's an error
-						if (data.status === 'error' && data.last_error) {
-							if (typeof toastr !== 'undefined') {
-								toastr.warning(data.last_error, 'Sync Issue');
-							}
+						if (pendingSpan && data.pending_count > 0) {
+							pendingSpan.innerHTML = `<span class="badge bg-info ms-1">${data.pending_count}</span>`;
+						} else if (pendingSpan) {
+							pendingSpan.innerHTML = '';
 						}
 					})
 					.catch(error => {
@@ -206,12 +182,10 @@
 				if (!btn) return;
 				
 				const originalIcon = btn.innerHTML;
+				const tenantId = {{ auth()->user()->tenant_id ?? 2 }};
 				
 				btn.disabled = true;
 				btn.innerHTML = '<i class="fas fa-spinner fa-spin fs-5"></i>';
-				
-				// Get current tenant ID (you can adjust this)
-				const tenantId = {{ auth()->user()->tenant_id ?? 2 }};
 				
 				fetch(`/pos:sync?tenant=${tenantId}`, {
 					method: 'POST',
@@ -243,11 +217,6 @@
 				.finally(() => {
 					btn.disabled = false;
 					btn.innerHTML = originalIcon;
-					
-					// Re-enable after 30 seconds (prevent spam)
-					setTimeout(() => {
-						if (btn) btn.disabled = false;
-					}, 30000);
 				});
 			}
 
