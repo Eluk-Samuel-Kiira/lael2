@@ -62,26 +62,6 @@ return [
             ]) : [],
         ],
 
-        // Remote sync connection
-        'mysql_remote' => [
-            'driver' => 'mysql',
-            'host' => env('SYNC_REMOTE_HOST', 'lael-pos.stardena.org'),
-            'port' => env('SYNC_REMOTE_PORT', '3306'),
-            'database' => env('SYNC_REMOTE_DATABASE', 'stardena_lael_pos'),
-            'username' => env('SYNC_REMOTE_USERNAME', 'stardena_lael_pos'),
-            'password' => env('SYNC_REMOTE_PASSWORD', ''),
-            'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix' => '',
-            'strict' => false,
-            'engine' => null,
-            'options' => [
-                PDO::ATTR_TIMEOUT => 10,
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ],
-        ],
-
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

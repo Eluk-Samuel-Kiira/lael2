@@ -169,7 +169,7 @@ class SyncController extends Controller
 
     public function getSyncStatus()
     {
-        $tenantId = auth()->user()->tenant_id ?? 1;
+        $tenantId = auth()->user()->tenant_id ?? 2;
         
         $status = DB::table('sync_status')
             ->where('tenant_id', $tenantId)
