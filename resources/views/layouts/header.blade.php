@@ -15,19 +15,225 @@
             <div class="app-header-menu app-header-mobile-drawer align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="app-header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="250px" data-kt-drawer-direction="end" data-kt-drawer-toggle="#kt_app_header_menu_toggle" data-kt-swapper="true" data-kt-swapper-mode="{default: 'append', lg: 'prepend'}" data-kt-swapper-parent="{default: '#kt_app_body', lg: '#kt_app_header_wrapper'}">
                 <!-- header -->
             </div>
-            <!-- Add this in your header, near the user menu or notification area -->
-            <div class="d-flex align-items-center gap-2 me-3">
-                <div class="sync-status-container">
-                    <span id="syncStatusBadge" class="badge bg-secondary d-inline-flex align-items-center gap-1 px-2 py-1" style="font-size: 11px;">
-                        <i class="fas fa-wifi-off fs-10"></i>
-                        <span>CHECKING...</span>
-                    </span>
-                    <span id="pendingCount" class="ms-1"></span>
+            {{--
+                resources/views/partials/sync-badge.blade.php
+                Include once in your main layout header, e.g.:
+                    @include('partials.sync-badge')
+
+                On LOCAL machine  (IS_LOCAL_POS=true in .env):
+                    - Badge polls /sync/frontend-status every 15 s
+                    - Manual sync button fires /sync/trigger → artisan pos:sync
+                    - Shows pending count + last synced time
+
+                On REMOTE/cPanel (IS_LOCAL_POS=false or absent):
+                    - Badge is hidden completely — no polling, no button
+                    - The remote app has no local sync_status to display
+            --}}
+
+            @php
+                $isLocal = filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN);
+            @endphp
+
+            @if($isLocal)
+            <div class="d-flex align-items-center gap-2 me-3" id="syncWidget">
+
+                {{-- Status badge --}}
+                <div class="d-flex flex-column align-items-end" style="line-height:1.1">
+                    <div id="syncStatusBadge"
+                        class="badge badge-secondary d-inline-flex align-items-center gap-1 px-2 py-1"
+                        style="font-size:10px; min-width:72px; justify-content:center; cursor:default"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="bottom"
+                        title="Checking sync status…">
+                        <span class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1px"></span>
+                        <span id="syncStatusText">CHECKING</span>
+                    </div>
+                    <span id="syncPendingCount" class="text-muted" style="font-size:9px; margin-top:2px"></span>
                 </div>
-                <button id="manualSyncBtn" class="btn btn-sm btn-icon btn-light-primary" onclick="triggerManualSync()" title="Sync Now">
-                    <i class="fas fa-sync-alt fs-5"></i>
+
+                {{-- Manual sync button --}}
+                <button id="manualSyncBtn"
+                        type="button"
+                        class="btn btn-sm btn-icon btn-light-primary"
+                        onclick="triggerManualSync()"
+                        title="Sync now"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="bottom">
+                    <i id="syncBtnIcon" class="ki-duotone ki-arrows-circle fs-4">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
                 </button>
+
             </div>
+            @endif
+
+            {{-- ── Script (only rendered on local machine) ──────────────────────────── --}}
+            @if($isLocal)
+            @push('scripts')
+                <script>
+                (function () {
+                    'use strict';
+
+                    const STATUS_POLL_MS = 15000;
+                    let _pollTimer       = null;
+                    let _isSyncing       = false;
+
+                    // ── Badge config ──────────────────────────────────────────────────────────
+                    const STATUS_CONFIG = {
+                        online:  { badgeClass: 'badge-success',   label: 'ONLINE',   icon: 'ki-wifi',           spin: false },
+                        offline: { badgeClass: 'badge-warning',   label: 'OFFLINE',  icon: 'ki-wifi-slash',     spin: false },
+                        syncing: { badgeClass: 'badge-primary',   label: 'SYNCING',  icon: 'ki-arrows-circle',  spin: true  },
+                        error:   { badgeClass: 'badge-danger',    label: 'ERROR',    icon: 'ki-cross-circle',   spin: false },
+                        unknown: { badgeClass: 'badge-secondary', label: 'CHECKING', icon: 'ki-information',    spin: false },
+                    };
+
+                    // ── Poll /sync/frontend-status ────────────────────────────────────────────
+                    function updateSyncStatus() {
+                        fetch('/sync/frontend-status', {
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'same-origin',
+                        })
+                        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                        .then(renderBadge)
+                        .catch(() => renderBadge({ status: 'offline', pending_count: 0 }));
+                    }
+
+                    function renderBadge(data) {
+                        const status    = data.status || 'unknown';
+                        const cfg       = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
+                        const badge     = document.getElementById('syncStatusBadge');
+                        const text      = document.getElementById('syncStatusText');
+                        const pending   = document.getElementById('syncPendingCount');
+
+                        if (!badge) return;
+
+                        // Swap badge colour class
+                        badge.className = badge.className
+                            .replace(/badge-\w+/g, '')
+                            .trim() + ' ' + cfg.badgeClass;
+
+                        // Icon
+                        const iconHtml = cfg.spin
+                            ? `<span class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1.5px"></span>`
+                            : `<i class="ki-duotone ${cfg.icon} fs-8"><span class="path1"></span><span class="path2"></span></i>`;
+
+                        badge.innerHTML = `${iconHtml}<span id="syncStatusText">${cfg.label}</span>`;
+
+                        // Tooltip: show last synced time or error
+                        let tip = '';
+                        if (data.last_synced_at) {
+                            tip = 'Last sync: ' + formatRelative(data.last_synced_at);
+                        }
+                        if (data.last_error) {
+                            tip += (tip ? ' · ' : '') + 'Error: ' + data.last_error;
+                        }
+                        if (tip) {
+                            badge.setAttribute('title', tip);
+                            // Re-init tooltip if KT bootstrap tooltips are loaded
+                            if (window.bootstrap?.Tooltip) {
+                                bootstrap.Tooltip.getInstance(badge)?.dispose();
+                                new bootstrap.Tooltip(badge);
+                            }
+                        }
+
+                        // Pending count sub-label
+                        if (pending) {
+                            if (data.pending_count > 0) {
+                                pending.textContent = data.pending_count + ' pending';
+                                pending.style.display = 'block';
+                            } else {
+                                pending.style.display = 'none';
+                            }
+                        }
+                    }
+
+                    // ── Manual sync trigger ───────────────────────────────────────────────────
+                    window.triggerManualSync = function () {
+                        if (_isSyncing) return;
+                        _isSyncing = true;
+
+                        const btn      = document.getElementById('manualSyncBtn');
+                        const iconEl   = document.getElementById('syncBtnIcon');
+                        if (btn)    btn.disabled = true;
+                        if (iconEl) iconEl.className = 'ki-duotone ki-arrows-circle fs-4 spin-anim';
+
+                        // Show syncing badge immediately
+                        renderBadge({ status: 'syncing', pending_count: 0 });
+
+                        fetch('/sync/trigger', {
+                            method: 'POST',
+                            headers: {
+                                'Accept':       'application/json',
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+                            },
+                            credentials: 'same-origin',
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Poll after 3 s to give artisan time to run
+                                setTimeout(updateSyncStatus, 3000);
+                                if (typeof toastr !== 'undefined') {
+                                    toastr.success(data.message || 'Sync triggered successfully.', 'Sync');
+                                }
+                            } else {
+                                renderBadge({ status: 'error', pending_count: 0, last_error: data.error });
+                                if (typeof toastr !== 'undefined') {
+                                    toastr.error(data.error || 'Sync trigger failed.', 'Sync Error');
+                                }
+                            }
+                        })
+                        .catch(err => {
+                            renderBadge({ status: 'error', pending_count: 0, last_error: err.message });
+                            if (typeof toastr !== 'undefined') {
+                                toastr.error('Sync request failed: ' + err.message, 'Sync Error');
+                            }
+                        })
+                        .finally(() => {
+                            _isSyncing = false;
+                            if (btn)    btn.disabled = false;
+                            if (iconEl) iconEl.className = 'ki-duotone ki-arrows-circle fs-4';
+                        });
+                    };
+
+                    // ── Helpers ───────────────────────────────────────────────────────────────
+                    function formatRelative(dateStr) {
+                        if (!dateStr) return 'never';
+                        const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+                        if (diff < 60)   return diff + 's ago';
+                        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                        return Math.floor(diff / 3600) + 'h ago';
+                    }
+
+                    // ── Init ──────────────────────────────────────────────────────────────────
+                    document.addEventListener('DOMContentLoaded', function () {
+                        updateSyncStatus();
+                        _pollTimer = setInterval(updateSyncStatus, STATUS_POLL_MS);
+                    });
+
+                    // Stop polling when tab is hidden, resume when visible (save requests)
+                    document.addEventListener('visibilitychange', function () {
+                        if (document.hidden) {
+                            clearInterval(_pollTimer);
+                        } else {
+                            updateSyncStatus();
+                            _pollTimer = setInterval(updateSyncStatus, STATUS_POLL_MS);
+                        }
+                    });
+                })();
+            </script>
+
+            <style>
+                @keyframes spin-anim { to { transform: rotate(360deg); } }
+                .spin-anim { display: inline-block; animation: spin-anim 1s linear infinite; }
+            </style>
+            @endpush
+            @endif
 				
             <div class="app-navbar flex-shrink-0">
                 <div class="app-navbar-item ms-1 ms-md-4">

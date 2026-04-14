@@ -2,18 +2,23 @@
 
 use App\Http\Controllers\Api\SyncController;
 
-Route::post('/sync/push', [SyncController::class, 'push']);
-Route::post('/sync/pull', [SyncController::class, 'pull']);
-Route::get('/sync/status', [SyncController::class, 'status']);
-Route::middleware(['auth'])->group(function () {
-    Route::get('/sync/frontend-status', [SyncController::class, 'getFrontendStatus']);
+// ── Public sync API (authenticated via X-Sync-Token header) ──────────────────
+// These are called by the local machine's SyncToRemote command.
+// No Laravel auth middleware — token validation happens inside the controller.
+Route::prefix('sync')->group(function () {
+    Route::get( '/status', [SyncController::class, 'status']);
+    Route::post('/push',   [SyncController::class, 'push']);
+    Route::post('/pull',   [SyncController::class, 'pull']);
 });
 
-// Route::get('/test-remote-db', function () {
-//     try {
-//         $pdo = DB::connection('mysql_remote')->getPdo();
-//         return "✅ Connected successfully to remote database!";
-//     } catch (\Exception $e) {
-//         return "❌ Connection failed: " . $e->getMessage();
-//     }
-// });
+// ── Frontend routes (require Laravel session auth) ────────────────────────────
+// These are called by the browser JS on the LOCAL machine only.
+Route::middleware(['auth'])->prefix('sync')->group(function () {
+
+    // Polled every 15s by the badge — reads local sync_status table
+    Route::get('/frontend-status', [SyncController::class, 'getFrontendStatus']);
+
+    // Manual sync button — fires artisan pos:sync in background
+    // Blocked on remote/cPanel by isLocalMachine() check inside controller
+    Route::post('/trigger', [SyncController::class, 'trigger']);
+});
