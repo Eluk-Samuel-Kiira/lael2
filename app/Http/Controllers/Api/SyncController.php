@@ -4,233 +4,319 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\{ DB, Log };
+use Illuminate\Support\Arr;
 
 class SyncController extends Controller
 {
-    private $tenantTokens = [];
+    private array $tenantTokens = [];
 
     public function __construct()
     {
-        // Load tenant tokens from .env
-        $tokensJson = env('TENANT_TOKENS', '{}');
-        $this->tenantTokens = json_decode($tokensJson, true) ?: [];
-        
-        Log::info('SyncController initialized', ['tokens' => array_keys($this->tenantTokens)]);
+        // ── FIX: env() with special chars (;%!) breaks json_decode
+        // Use config() instead — set TENANT_TOKENS in config/sync.php
+        // Fallback: read directly and handle malformed JSON gracefully
+        $raw = config('sync.tenant_tokens', env('TENANT_TOKENS', '{}'));
+
+        if (is_array($raw)) {
+            $this->tenantTokens = $raw;
+        } else {
+            // Strip surrounding quotes if shell escaped them
+            $raw = trim($raw, "'\"");
+            $decoded = json_decode($raw, true);
+            $this->tenantTokens = is_array($decoded) ? $decoded : [];
+        }
+
+        if (empty($this->tenantTokens)) {
+            Log::warning('SyncController: TENANT_TOKENS is empty or could not be parsed. Check config/sync.php or .env quoting.');
+        }
     }
 
-    private function validateToken(Request $request)
+    // ── Token validation ────────────────────────────────────────────────────
+    private function validateToken(Request $request): ?\Illuminate\Http\JsonResponse
     {
-        $token = $request->header('X-Sync-Token');
+        $token    = $request->header('X-Sync-Token');
         $tenantId = $request->header('X-Tenant-Id');
-        
-        Log::info('Validating token', [
-            'has_token' => !empty($token),
-            'tenant_id' => $tenantId,
-            'url' => $request->fullUrl()
-        ]);
-        
+
         if (!$token || !$tenantId) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Missing authentication headers'
-            ], 401);
+            return response()->json(['success' => false, 'error' => 'Missing authentication headers'], 401);
         }
-        
-        if (!isset($this->tenantTokens[$tenantId]) || $this->tenantTokens[$tenantId] !== $token) {
-            Log::warning('Invalid token', [
-                'tenant_id' => $tenantId,
-                'provided_token' => substr($token, 0, 10) . '...',
-            ]);
-            return response()->json([
-                'success' => false,
-                'error' => 'Invalid authentication credentials'
-            ], 401);
+
+        $expected = $this->tenantTokens[(string) $tenantId] ?? null;
+
+        if (!$expected || !hash_equals($expected, $token)) {
+            Log::warning('SyncController: Invalid token', ['tenant_id' => $tenantId]);
+            return response()->json(['success' => false, 'error' => 'Invalid authentication credentials'], 401);
         }
-        
-        $request->merge(['authenticated_tenant_id' => $tenantId]);
+
+        $request->merge(['authenticated_tenant_id' => (int) $tenantId]);
         return null;
     }
 
-    public function status(Request $request)
+    // ── GET /sync/status — remote reachability check ────────────────────────
+    public function status(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
-            Log::info('Status endpoint called');
-            
             $authError = $this->validateToken($request);
             if ($authError) return $authError;
-            
-            $tenantId = $request->authenticated_tenant_id;
-            
+
             return response()->json([
-                'success' => true,
-                'status' => 'online',
-                'tenant_id' => $tenantId,
+                'success'     => true,
+                'status'      => 'online',
+                'tenant_id'   => $request->authenticated_tenant_id,
                 'server_time' => now()->toDateTimeString(),
-                'version' => '1.0'
+                'version'     => '1.0',
             ]);
         } catch (\Exception $e) {
-            Log::error('Status endpoint error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('SyncController@status: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 
-    public function push(Request $request)
+    // ── POST /sync/push — receive change_log rows from local machine ─────────
+    public function push(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $authError = $this->validateToken($request);
             if ($authError) return $authError;
-            
+
             $tenantId = $request->authenticated_tenant_id;
-            $data = $request->json()->all();
-            
-            Log::info('Push endpoint called', [
-                'tenant_id' => $tenantId,
-                'entries' => count($data)
-            ]);
-            
-            $results = [
-                'success' => true,
-                'pushed' => 0,
-                'errors' => []
-            ];
-            
+            $data     = $request->json()->all();
+
+            if (empty($data)) {
+                return response()->json(['success' => true, 'pushed' => 0, 'errors' => []]);
+            }
+
+            $pushed = 0;
+            $errors = [];
+
+            // Forbidden tables — never written to remotely via sync
+            $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens'];
+
             DB::beginTransaction();
             try {
                 foreach ($data as $entry) {
-                    $payload = json_decode($entry['payload'], true);
-                    
-                    if (in_array($entry['table_name'], ['change_log', 'sync_status'])) {
+                    if (in_array($entry['table_name'], $forbidden, true)) {
                         continue;
                     }
-                    
-                    switch ($entry['operation']) {
-                        case 'INSERT':
-                            DB::table($entry['table_name'])
-                                ->updateOrInsert(
-                                    ['id' => $payload['id']],
-                                    array_merge($payload, ['tenant_id' => $tenantId])
-                                );
-                            break;
-                            
-                        case 'UPDATE':
-                            DB::table($entry['table_name'])
-                                ->where('id', $entry['row_id'])
-                                ->where('tenant_id', $tenantId)
-                                ->update($payload);
-                            break;
-                            
-                        case 'DELETE':
-                            DB::table($entry['table_name'])
-                                ->where('id', $entry['row_id'])
-                                ->where('tenant_id', $tenantId)
-                                ->delete();
-                            break;
+
+                    $payload = is_array($entry['payload'])
+                        ? $entry['payload']
+                        : json_decode($entry['payload'], true);
+
+                    if (!$payload) {
+                        $errors[] = "Row #{$entry['id']}: could not decode payload";
+                        continue;
                     }
-                    $results['pushed']++;
+
+                    // Force tenant isolation — never trust the payload's tenant_id
+                    $payload['tenant_id'] = $tenantId;
+
+                    try {
+                        match ($entry['operation']) {
+                            'INSERT' => DB::table($entry['table_name'])
+                                ->updateOrInsert(['id' => $payload['id']], $payload),
+
+                            'UPDATE' => DB::table($entry['table_name'])
+                                ->where('id', $entry['row_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->update($payload),
+
+                            'DELETE' => DB::table($entry['table_name'])
+                                ->where('id', $entry['row_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->delete(),
+
+                            default => throw new \InvalidArgumentException("Unknown operation: {$entry['operation']}"),
+                        };
+                        $pushed++;
+                    } catch (\Exception $e) {
+                        $errors[] = "Row #{$entry['id']} ({$entry['table_name']}): " . $e->getMessage();
+                        Log::error('SyncController@push row failed', [
+                            'tenant_id' => $tenantId,
+                            'entry_id'  => $entry['id'] ?? null,
+                            'table'     => $entry['table_name'] ?? null,
+                            'error'     => $e->getMessage(),
+                        ]);
+                    }
                 }
                 DB::commit();
             } catch (\Exception $e) {
                 DB::rollBack();
                 throw $e;
             }
-            
-            return response()->json($results);
-        } catch (\Exception $e) {
-            Log::error('Push endpoint error: ' . $e->getMessage());
+
             return response()->json([
-                'success' => false,
-                'error' => $e->getMessage()
-            ], 500);
+                'success' => count($errors) === 0,
+                'pushed'  => $pushed,
+                'errors'  => $errors,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('SyncController@push: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 
-    public function pull(Request $request)
+    // ── POST /sync/pull — send master data back to local machine ─────────────
+    public function pull(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
             $authError = $this->validateToken($request);
             if ($authError) return $authError;
-            
+
             $tenantId = $request->authenticated_tenant_id;
-            $since = $request->input('since', '2000-01-01 00:00:00');
-            
-            Log::info('Pull endpoint called', [
-                'tenant_id' => $tenantId,
-                'since' => $since
-            ]);
-            
+            $since    = $request->input('since', '2000-01-01 00:00:00');
+
             $masterTables = [
                 'categories', 'product_categories', 'products',
                 'taxes', 'promotions', 'unit_of_measures',
-                'locations', 'departments'
+                'locations', 'departments',
             ];
-            
+
             $data = [];
-            
             foreach ($masterTables as $table) {
                 try {
-                    if (DB::getSchemaBuilder()->hasTable($table)) {
-                        $rows = DB::table($table)
-                            ->where('tenant_id', $tenantId)
-                            ->where('updated_at', '>', $since)
-                            ->get();
-                            
-                        if ($rows->count() > 0) {
-                            $data[$table] = $rows;
-                        }
+                    if (!DB::getSchemaBuilder()->hasTable($table)) continue;
+
+                    $rows = DB::table($table)
+                        ->where('tenant_id', $tenantId)
+                        ->where('updated_at', '>', $since)
+                        ->get();
+
+                    if ($rows->isNotEmpty()) {
+                        $data[$table] = $rows;
                     }
                 } catch (\Exception $e) {
-                    Log::warning("Pull failed for table {$table}: " . $e->getMessage());
+                    Log::warning("SyncController@pull table {$table}: " . $e->getMessage());
                 }
             }
-            
+
             return response()->json([
-                'success' => true,
-                'data' => $data,
-                'server_time' => now()->toDateTimeString()
+                'success'     => true,
+                'data'        => $data,
+                'server_time' => now()->toDateTimeString(),
             ]);
+
         } catch (\Exception $e) {
-            Log::error('Pull endpoint error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('SyncController@pull: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 
+    // ── GET /sync/frontend-status — local badge polling ──────────────────────
+    // Called by the browser on the LOCAL machine only.
+    // FIX: was crashing when sync_status row doesn't exist yet (null->property).
+    public function getFrontendStatus(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $tenantId = auth()->check() ? auth()->user()->tenant_id : null;
+
+            if (!$tenantId) {
+                return response()->json($this->emptyStatus());
+            }
+
+            // ── FIX: use ->first() but guard against null ─────────────────────
+            $status = DB::table('sync_status')
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if (!$status) {
+                // No sync has ever run — create a baseline row so future runs update it
+                DB::table('sync_status')->insertOrIgnore([
+                    'tenant_id'      => $tenantId,
+                    'status'         => 'offline',
+                    'pending_count'  => DB::table('change_log')
+                                          ->where('tenant_id', $tenantId)
+                                          ->whereNull('synced_at')
+                                          ->count(),
+                    'last_synced_at' => null,
+                    'last_error'     => null,
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
+                ]);
+
+                return response()->json($this->emptyStatus(
+                    DB::table('change_log')
+                        ->where('tenant_id', $tenantId)
+                        ->whereNull('synced_at')
+                        ->count()
+                ));
+            }
+
+            return response()->json([
+                'status'         => $status->status         ?? 'offline',
+                'pending_count'  => $status->pending_count  ?? 0,
+                'last_synced_at' => $status->last_synced_at ?? null,
+                'last_error'     => $status->last_error     ?? null,
+                'updated_at'     => $status->updated_at     ?? null,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('SyncController@getFrontendStatus: ' . $e->getMessage());
+            return response()->json($this->emptyStatus());
+        }
+    }
+
+    // ── POST /sync/trigger — fire artisan pos:sync from the browser ──────────
+    // Only available on LOCAL machine (APP_ENV=local or IS_LOCAL_POS=true)
+    public function trigger(Request $request): \Illuminate\Http\JsonResponse
+    {
+        // Only allow on local machines — block on production/remote
+        if (!$this->isLocalMachine()) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Manual sync trigger is only available on local POS machines.',
+            ], 403);
+        }
+
+        try {
+            $tenantId = auth()->check() ? auth()->user()->tenant_id : 2;
+
+            // Run artisan command in background so HTTP response returns immediately
+            $artisan  = base_path('artisan');
+            $php      = PHP_BINARY;
+            $logFile  = storage_path('logs/sync-trigger.log');
+
+            if (PHP_OS_FAMILY === 'Windows') {
+                pclose(popen(
+                    "start /b \"{$php}\" \"{$artisan}\" pos:sync --tenant={$tenantId} >> \"{$logFile}\" 2>&1",
+                    'r'
+                ));
+            } else {
+                exec("\"{$php}\" \"{$artisan}\" pos:sync --tenant={$tenantId} >> \"{$logFile}\" 2>&1 &");
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Sync triggered for tenant #{$tenantId}. Check status badge.",
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('SyncController@trigger: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function emptyStatus(int $pendingCount = 0): array
+    {
+        return [
+            'status'         => 'offline',
+            'pending_count'  => $pendingCount,
+            'last_synced_at' => null,
+            'last_error'     => null,
+            'updated_at'     => null,
+        ];
+    }
 
     /**
-     * Get sync status for frontend (local database status)
+     * Determines if this request is coming from a local POS machine.
+     * Set IS_LOCAL_POS=true in the local .env, leave it false/absent on cPanel.
      */
-    public function getFrontendStatus(Request $request)
+    private function isLocalMachine(): bool
     {
-        $tenantId = auth()->user()->tenant_id ?? 2;
-        
-        $status = DB::table('sync_status')
-            ->where('tenant_id', $tenantId)
-            ->first();
-        
-        // Handle case when no status record exists
-        if (!$status) {
-            return response()->json([
-                'status' => 'offline',
-                'pending_count' => 0,
-                'last_synced_at' => null,
-                'last_error' => null,
-                'updated_at' => null,
-            ]);
-        }
-        
-        return response()->json([
-            'status' => $status->status ?? 'offline',
-            'pending_count' => $status->pending_count ?? 0,
-            'last_synced_at' => $status->last_synced_at,
-            'last_error' => $status->last_error,
-            'updated_at' => $status->updated_at,
-        ]);
+        return filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN);
     }
 }
