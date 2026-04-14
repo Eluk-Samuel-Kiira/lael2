@@ -70,7 +70,7 @@
             {{-- ── Script (only rendered on local machine) ──────────────────────────── --}}
             @if($isLocal)
             @push('scripts')
-                <script>
+            <script>
                 (function () {
                     'use strict';
 

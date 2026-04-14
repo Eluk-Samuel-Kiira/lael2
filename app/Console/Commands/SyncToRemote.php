@@ -241,12 +241,12 @@ class SyncToRemote extends Command
 
         $msg = addslashes($message);
         $ps  = <<<PS
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]|Out-Null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType=WindowsRuntime]|Out-Null
-\$xml=New-Object Windows.Data.Xml.Dom.XmlDocument
-\$xml.LoadXml('<toast><visual><binding template="ToastGeneric"><text>Stardena POS Sync</text><text>{$msg}</text></binding></visual></toast>')
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Stardena POS").Show([Windows.UI.Notifications.ToastNotification]::new(\$xml))
-PS;
+        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]|Out-Null
+        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType=WindowsRuntime]|Out-Null
+        \$xml=New-Object Windows.Data.Xml.Dom.XmlDocument
+        \$xml.LoadXml('<toast><visual><binding template="ToastGeneric"><text>Stardena POS Sync</text><text>{$msg}</text></binding></visual></toast>')
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Stardena POS").Show([Windows.UI.Notifications.ToastNotification]::new(\$xml))
+        PS;
         $escaped = str_replace(["\n", '"'], [' ', '\\"'], $ps);
         pclose(popen("start /b powershell -WindowStyle Hidden -Command \"{$escaped}\"", 'r'));
     }
