@@ -66,14 +66,73 @@ return [
     ],
 
     // Tables pulled from remote → local (master/catalog data only)
+
     'master_tables' => [
+        // Product Catalog (Centrally Managed)
         'categories',
-        'product_categories',
+        'product_categories', 
         'products',
-        'taxes',
-        'promotions',
+        'product_variants',
+        'variant_taxes',
         'unit_of_measures',
+        
+        // Tax Configuration
+        'taxes',
+        'tax_product',
+        
+        // Promotions
+        'promotions',
+        'promotion_products',
+        
+        // Master Data
+        'currencies',
+        'payment_methods',
+        'expense_categories',
+        'customer_groups',
+        'billing_plans',
         'locations',
         'departments',
+        
+        // Financial Templates
+        'financial_report_templates',
+        'report_sections',
+        
+        // Roles & Permissions (Pull from central)
+        'roles',
+        'permissions',
+        'role_has_permissions',
+        
+        // System Tables (Never Sync)
+        // 'migrations',           // Already in skip list
+        // 'failed_jobs',          // Already in skip list
+        // 'jobs',                 // Already in skip list
+        // 'job_batches',          // Already in skip list
+        // 'sessions',             // Already in skip list
+        // 'cache',                // Already in skip list
+        // 'cache_locks',          // Already in skip list
+        // 'password_reset_tokens',// Already in skip list
+        // 'change_log',           // Already in skip list
+        // 'sync_status',          // Already in skip list
+    ],
+
+    // Transactional tables - pushed from local to remote
+    'transactional_tables' => [
+        'orders', 'order_items', 'order_payments', 'order_taxes',
+        'purchase_orders', 'purchase_order_items', 'purchase_receipts',
+        'purchase_receipt_items', 'received_product_variants',
+        'inventory_adjustments', 'inventory_items', 'inventory_transactions',
+        'single_shop_inventory_logs', 'accounting_periods', 'account_balances',
+        'chart_of_accounts', 'general_ledger', 'journal_entries',
+        'journal_entry_lines', 'expenses', 'expense_categories', 'employees',
+        'employee_advances', 'employee_documents', 'employee_payments',
+        'leaves', 'customers', 'customer_groups', 'suppliers',
+        'supplier_tax_liabilities', 'products', 'product_variants',
+        'variant_taxes', 'promotions', 'promotion_products', 'currencies',
+        'payment_methods', 'payment_transaction_logs', 'tax_liabilities',
+        'tenants', 'tenant_configurations', 'tenant_settings',
+        'tenant_usage_tracking', 'users', 'billing_plans', 'settings',
+        'departments', 'department_product', 'department_user', 'locations',
+        'location_product', 'financial_report_templates', 'report_sections',
+        'tax_product', 'model_has_roles', 'model_has_permissions',
     ],
 ];
