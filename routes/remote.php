@@ -22,3 +22,7 @@ Route::middleware(['auth'])->prefix('sync')->group(function () {
     // Blocked on remote/cPanel by isLocalMachine() check inside controller
     Route::post('/trigger', [SyncController::class, 'trigger']);
 });
+
+
+
+

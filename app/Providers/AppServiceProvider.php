@@ -139,5 +139,237 @@ class AppServiceProvider extends ServiceProvider
                 \Config::set('app.name', $app_mails->app_name); 
             }
         }
+
+
+           // ── ONLY run sync observers on LOCAL POS machines ─────────────────────
+        if (!filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
+        foreach ($this->getSyncModels() as $modelClass) {
+            // Skip if model class doesn't exist (prevents errors during deploy)
+            if (!class_exists($modelClass)) {
+                \Log::warning("SyncObserver skipped: Model class not found: {$modelClass}");
+                continue;
+            }
+            
+            // Register the observer — period.
+            $modelClass::observe(\App\Observers\SyncObserver::class);
+        }
+
+        // ── Optional: Register Query Builder macro for raw-table logging ──────
+        // Use ONLY if you cannot install database triggers
+        // $this->registerSyncMacros();
+
+    }
+
+    private function getSyncModels(): array
+    {
+        // ============================================================
+        // TRANSACTIONAL TABLES (Need Sync - Push to Remote)
+        // These tables contain business transactions that must sync
+        // ============================================================
+        return [
+            // Sales & Orders
+            \App\Models\Order::class,
+            \App\Models\OrderItem::class,
+            \App\Models\OrderPayment::class,
+            \App\Models\OrderTax::class,
+            
+            // Purchasing
+            \App\Models\PurchaseOrder::class,
+            \App\Models\PurchaseOrderItem::class,
+            \App\Models\PurchaseReceipt::class,
+            \App\Models\PurchaseReceiptItem::class,
+            \App\Models\ReceivedProductVariant::class,
+            
+            // Inventory
+            \App\Models\InventoryAdjustments::class,
+            \App\Models\InventoryItems::class,
+            \App\Models\InventoryTransactions::class,
+            \App\Models\SingleShopInventoryLog::class,
+            
+            // Accounting
+            \App\Models\AccountingPeriod::class,
+            \App\Models\AccountBalance::class,
+            \App\Models\ChartOfAccount::class,
+            \App\Models\GeneralLedger::class,
+            \App\Models\JournalEntry::class,
+            \App\Models\JournalEntryLine::class,
+            
+            // Expenses
+            \App\Models\Expense::class,
+            \App\Models\ExpenseCategory::class,
+            
+            // HR / Employees
+            \App\Models\Employee::class,
+            \App\Models\EmployeeAdvance::class,
+            \App\Models\EmployeeDocument::class,
+            \App\Models\EmployeePayment::class,
+            \App\Models\Leave::class,
+            
+            // Customers & Suppliers
+            \App\Models\Customer::class,
+            \App\Models\CustomerGroup::class,
+            \App\Models\Supplier::class,
+            \App\Models\SupplierTaxLiability::class,
+            
+            // Products (transactional variants only — master data is pull-only)
+            \App\Models\Product::class,          // Only if local edits allowed
+            \App\Models\ProductCategory::class,  // Only if local edits allowed
+            \App\Models\ProductVariant::class,   // Only if local edits allowed
+            \App\Models\VariantTax::class,
+            
+            // Promotions (local overrides only)
+            \App\Models\Promotion::class,
+            \App\Models\PromotionProduct::class,
+            
+            // Financial
+            \App\Models\Currency::class,
+            \App\Models\PaymentMethod::class,
+            \App\Models\PaymentTransactionLog::class,
+            \App\Models\Tax::class,
+            \App\Models\TaxLiability::class,
+            
+            // Tenant related
+            \App\Models\Tenant::class,
+            \App\Models\TenantConfiguration::class,
+            \App\Models\TenantSetting::class,
+            \App\Models\TenantUsageTracking::class,
+            
+            // Users & Roles
+            \App\Models\User::class,
+            
+            // Billing
+            \App\Models\BillingPlan::class,
+            
+            // Settings
+            \App\Models\Setting::class,
+            
+            // Departments & Locations (if locally editable)
+            \App\Models\Department::class,
+            \App\Models\Location::class,
+        ];
+    }
+
+
+    
+    /**
+     * Register DB::syncInsert(), syncUpdate(), syncDelete() macros
+     * for tables without Eloquent models.
+     * 
+     * ⚠️  WARNING: These are NOT transaction-safe. 
+     *     Prefer database triggers where possible.
+     */
+    private function registerSyncMacros(): void
+    {
+        // Tables without models that still need sync (push to remote)
+        $rawPushTables = [
+            'stock_ledger',
+            'inventory_snapshots', 
+            'stock_transfer_logs',
+            'ledger_entries',
+            'user_activity_logs',
+            'pos_session_logs',
+            'device_heartbeats',
+            'import_staging',
+            'export_queue',
+            // Add your raw tables here
+        ];
+
+        // Macro: DB::syncInsert('table', $data)
+        DB::macro('syncInsert', function (string $table, array $data) use ($rawPushTables) {
+            // Skip if not a tracked raw table
+            if (!in_array($table, $rawPushTables, true)) {
+                return DB::table($table)->insertGetId($data);
+            }
+
+            // Perform the insert
+            $id = DB::table($table)->insertGetId($data);
+
+            // Log to change_log (best-effort, outside transaction)
+            try {
+                DB::table('change_log')->insert([
+                    'table_name'  => $table,
+                    'row_id'      => $id,
+                    'operation'   => 'INSERT',
+                    'payload'     => json_encode($data, JSON_THROW_ON_ERROR),
+                    'old_payload' => null,
+                    'tenant_id'   => $data['tenant_id'] ?? config('sync.tenant_id', 2),
+                    'location_id' => $data['location_id'] ?? null,
+                    'logged_at'   => now(),
+                    'retry_count' => 0,
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning("SyncObserver macro failed for {$table}#{$id}: " . $e->getMessage());
+                // Don't fail the main operation — sync is best-effort
+            }
+
+            return $id;
+        });
+
+        // Macro: DB::syncUpdate('table', $id, $data)
+        DB::macro('syncUpdate', function (string $table, $id, array $data) use ($rawPushTables) {
+            if (!in_array($table, $rawPushTables, true)) {
+                return DB::table($table)->where('id', $id)->update($data);
+            }
+
+            // Fetch old values for diff logging (optional but recommended)
+            $old = DB::table($table)->where('id', $id)->first();
+
+            $affected = DB::table($table)->where('id', $id)->update($data);
+
+            if ($affected > 0) {
+                try {
+                    DB::table('change_log')->insert([
+                        'table_name'  => $table,
+                        'row_id'      => $id,
+                        'operation'   => 'UPDATE',
+                        'payload'     => json_encode($data, JSON_THROW_ON_ERROR),
+                        'old_payload' => $old ? json_encode($old, JSON_THROW_ON_ERROR) : null,
+                        'tenant_id'   => $data['tenant_id'] ?? config('sync.tenant_id', 2),
+                        'location_id' => $data['location_id'] ?? null,
+                        'logged_at'   => now(),
+                        'retry_count' => 0,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning("SyncObserver macro failed for {$table}#{$id} update: " . $e->getMessage());
+                }
+            }
+            
+            return $affected;
+        });
+
+        // Macro: DB::syncDelete('table', $id)
+        DB::macro('syncDelete', function (string $table, $id) use ($rawPushTables) {
+            if (!in_array($table, $rawPushTables, true)) {
+                return DB::table($table)->where('id', $id)->delete();
+            }
+
+            // Fetch row before delete for logging
+            $old = DB::table($table)->where('id', $id)->first();
+
+            $deleted = DB::table($table)->where('id', $id)->delete();
+
+            if ($deleted > 0 && $old) {
+                try {
+                    DB::table('change_log')->insert([
+                        'table_name'  => $table,
+                        'row_id'      => $id,
+                        'operation'   => 'DELETE',
+                        'payload'     => null,
+                        'old_payload' => json_encode($old, JSON_THROW_ON_ERROR),
+                        'tenant_id'   => $old->tenant_id ?? config('sync.tenant_id', 2),
+                        'location_id' => $old->location_id ?? null,
+                        'logged_at'   => now(),
+                        'retry_count' => 0,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning("SyncObserver macro failed for {$table}#{$id} delete: " . $e->getMessage());
+                }
+            }
+
+            return $deleted;
+        });
     }
 }

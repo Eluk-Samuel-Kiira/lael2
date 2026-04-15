@@ -42,6 +42,14 @@ return new class extends Migration
 
             $table->unique(['tenant_id', 'location_id']);
         });
+
+        Schema::create('sync_processed', function (Blueprint $table) {
+            $table->id();
+            $table->string('sync_key', 64)->unique(); // sha256 hash
+            $table->unsignedBigInteger('tenant_id');
+            $table->timestamp('processed_at');
+            $table->index(['tenant_id', 'processed_at']);
+        });
     }
 
     /**
@@ -49,6 +57,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('sync_processed');
         Schema::dropIfExists('change_log');
         Schema::dropIfExists('sync_status');
     }
