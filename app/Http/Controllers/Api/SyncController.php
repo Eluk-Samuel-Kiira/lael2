@@ -300,38 +300,27 @@ class SyncController extends Controller
     // Only available on LOCAL machine (APP_ENV=local or IS_LOCAL_POS=true)
     public function trigger(Request $request): \Illuminate\Http\JsonResponse
     {
-        // Only allow on local machines — block on production/remote
         if (!$this->isLocalMachine()) {
-            return response()->json([
-                'success' => false,
-                'error'   => 'Manual sync trigger is only available on local POS machines.',
-            ], 403);
+            return response()->json(['success' => false, 'error' => 'Only available on local POS.'], 403);
         }
 
         try {
-            $tenantId = auth()->check() ? auth()->user()->tenant_id : 2;
-
-            // Run artisan command in background so HTTP response returns immediately
-            $artisan  = base_path('artisan');
-            $php      = PHP_BINARY;
-            $logFile  = storage_path('logs/sync-trigger.log');
-
-            if (PHP_OS_FAMILY === 'Windows') {
-                pclose(popen(
-                    "start /b \"{$php}\" \"{$artisan}\" pos:sync --tenant={$tenantId} >> \"{$logFile}\" 2>&1",
-                    'r'
-                ));
-            } else {
-                exec("\"{$php}\" \"{$artisan}\" pos:sync --tenant={$tenantId} >> \"{$logFile}\" 2>&1 &");
+            // Path to the batch file we created
+            $batchFile = base_path('sync_now.bat');
+            
+            if (!file_exists($batchFile)) {
+                return response()->json(['success' => false, 'error' => 'sync_now.bat not found.'], 500);
             }
+
+            // Run silently on Windows
+            pclose(popen("start /B \"\" \"{$batchFile}\"", "r"));
 
             return response()->json([
                 'success' => true,
-                'message' => "Sync triggered for tenant #{$tenantId}. Check status badge.",
+                'message' => "Sync triggered.",
             ]);
 
         } catch (\Exception $e) {
-            Log::error('SyncController@trigger: ' . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
