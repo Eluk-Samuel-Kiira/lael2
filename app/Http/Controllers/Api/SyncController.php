@@ -90,14 +90,13 @@ class SyncController extends Controller
             $pushed = 0;
             $errors = [];
             $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens', 'sessions'];
-
-            // Cache column lists to avoid querying schema for every single row
+            
+            // Cache schema to avoid repeated DB calls
             $schemaCache = [];
 
             DB::beginTransaction();
             try {
                 foreach ($data as $entry) {
-                    // 1. Basic Validation
                     $entryId = $entry['id'] ?? 'unknown';
                     $tableName = $entry['table_name'] ?? null;
                     $operation = $entry['operation'] ?? null;
@@ -113,7 +112,7 @@ class SyncController extends Controller
                         continue;
                     }
 
-                    // 2. Decode Payload
+                    // Decode Payload
                     $rawPayload = $entry['payload'] ?? null;
                     $payload = null;
 
@@ -131,8 +130,7 @@ class SyncController extends Controller
                         continue;
                     }
 
-                    // 3. ⚠️ DYNAMIC SCHEMA FILTERING ⚠️
-                    // Get columns for this table (cached)
+                    // ⚠️ DYNAMIC SCHEMA FILTERING ⚠️
                     if (!isset($schemaCache[$tableName])) {
                         $schemaCache[$tableName] = DB::getSchemaBuilder()->getColumnListing($tableName);
                     }
@@ -146,12 +144,12 @@ class SyncController extends Controller
                         }
                     }
 
-                    // If table HAS tenant_id, force it to the authenticated tenant (Security)
+                    // If table HAS tenant_id, force it to the authenticated tenant
                     if (in_array('tenant_id', $validColumns)) {
                         $filteredPayload['tenant_id'] = $tenantId;
                     }
 
-                    // 4. Apply Operation
+                    // Apply Operation
                     try {
                         if ($operation === 'INSERT') {
                             DB::table($tableName)->updateOrInsert(
@@ -160,7 +158,6 @@ class SyncController extends Controller
                             );
                         } elseif ($operation === 'UPDATE') {
                             $query = DB::table($tableName)->where('id', $rowId);
-                            // Add tenant safety check if column exists
                             if (in_array('tenant_id', $validColumns)) {
                                 $query->where('tenant_id', $tenantId);
                             }
@@ -171,20 +168,12 @@ class SyncController extends Controller
                                 $query->where('tenant_id', $tenantId);
                             }
                             $query->delete();
-                        } else {
-                            throw new \InvalidArgumentException("Unknown op: {$operation}");
                         }
                         
                         $pushed++;
 
                     } catch (\Exception $e) {
-                        $errorMsg = "{$tableName} #{$rowId}: " . substr($e->getMessage(), 0, 150);
-                        $errors[] = $errorMsg;
-                        Log::error('Sync Row Failed', [
-                            'table' => $tableName,
-                            'id' => $rowId,
-                            'error' => $e->getMessage()
-                        ]);
+                        $errors[] = "{$tableName} #{$rowId}: " . substr($e->getMessage(), 0, 150);
                     }
                 }
                 DB::commit();
