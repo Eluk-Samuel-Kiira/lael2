@@ -122,13 +122,12 @@ class SyncToRemote extends Command
     // ── Push entire batch in one request ─────────────────────────────────────
     private function pushBatch(int $tenantId, $rows): array
     {
-        // Serialize rows for the API
         $payload = $rows->map(fn($r) => [
             'id'         => $r->id,
             'table_name' => $r->table_name,
             'row_id'     => $r->row_id,
             'operation'  => $r->operation,
-            'payload'    => $r->payload, // already JSON string from change_log
+            'payload'    => $r->payload,
         ])->values()->all();
 
         try {
@@ -144,39 +143,40 @@ class SyncToRemote extends Command
                 throw new \Exception("HTTP {$response->status()}: " . $response->body());
             }
 
-            $result  = $response->json();
-            $pushed  = (int) ($result['pushed'] ?? 0);
-            $errList = (array) ($result['errors'] ?? []);
+            $result     = $response->json();
+            $pushed     = (int) ($result['pushed'] ?? 0);
+            $errList    = (array) ($result['errors'] ?? []);
+            $failedIds  = (array) ($result['failed_ids'] ?? []);
 
-            // Mark successfully pushed rows
-            // The remote returns pushed count — mark the first $pushed rows as synced
-            // (remote skips forbidden tables silently, so we trust the count)
-            $ids = $rows->pluck('id')->take($pushed + count($errList))->all();
+            // 1. Mark SUCCESSFUL rows as synced
+            // All rows in this batch EXCEPT the failed ones are considered successful
+            $allIds = $rows->pluck('id')->all();
+            $successIds = array_diff($allIds, $failedIds);
 
-            DB::table('change_log')
-                ->whereIn('id', $ids)
-                ->whereNull('synced_at')
-                ->update(['synced_at' => now(), 'sync_error' => null]);
-
-            // If remote reported errors, increment retry on those
-            if (!empty($errList)) {
-                // We don't know which IDs failed from a batch response,
-                // so mark ALL rows that aren't confirmed synced
-                $remaining = $rows->whereNotIn('id', $ids);
-                foreach ($remaining as $row) {
-                    DB::table('change_log')->where('id', $row->id)
-                        ->increment('retry_count', 1, [
-                            'sync_error' => 'Batch push: unconfirmed row',
-                        ]);
-                }
+            if (!empty($successIds)) {
+                DB::table('change_log')
+                    ->whereIn('id', $successIds)
+                    ->update(['synced_at' => now(), 'sync_error' => null]);
             }
 
-            return [$pushed, count($errList)];
+            // 2. Handle FAILED rows
+            if (!empty($failedIds)) {
+                // Log the errors explicitly
+                Log::warning("pos:sync tenant#{$tenantId} Failures:", $errList);
+
+                DB::table('change_log')
+                    ->whereIn('id', $failedIds)
+                    ->increment('retry_count', 1, [
+                        'sync_error' => implode('; ', array_slice($errList, 0, 3)) // Save first 3 errors
+                    ]);
+            }
+
+            return [$pushed, count($failedIds)];
 
         } catch (\Exception $e) {
             Log::error("pos:sync pushBatch failed tenant#{$tenantId}: " . $e->getMessage());
 
-            // Increment retry on all rows in this batch
+            // If HTTP fails completely, mark ALL as retry
             DB::table('change_log')
                 ->whereIn('id', $rows->pluck('id')->all())
                 ->increment('retry_count', 1, ['sync_error' => substr($e->getMessage(), 0, 500)]);
