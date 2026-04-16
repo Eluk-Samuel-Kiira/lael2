@@ -91,51 +91,85 @@ class SyncController extends Controller
             $errors = [];
 
             // Forbidden tables — never written to remotely via sync
-            $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens'];
+            $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens', 'sessions'];
 
             DB::beginTransaction();
             try {
                 foreach ($data as $entry) {
-                    if (in_array($entry['table_name'], $forbidden, true)) {
+                    // 1. Safe Validation (Compatible with PHP 7.4+)
+                    $entryId = isset($entry['id']) ? $entry['id'] : 'unknown';
+                    $tableName = isset($entry['table_name']) ? $entry['table_name'] : null;
+                    $operation = isset($entry['operation']) ? $entry['operation'] : null;
+                    $rowId = isset($entry['row_id']) ? $entry['row_id'] : null;
+
+                    if (!$tableName || !$operation || !$rowId) {
+                        $errors[] = "Row #{$entryId}: Missing required fields (table_name, operation, row_id)";
                         continue;
                     }
 
-                    $payload = is_array($entry['payload'])
-                        ? $entry['payload']
-                        : json_decode($entry['payload'], true);
-
-                    if (!$payload) {
-                        $errors[] = "Row #{$entry['id']}: could not decode payload";
+                    if (in_array($tableName, $forbidden, true)) {
+                        $pushed++; 
                         continue;
                     }
 
-                    // Force tenant isolation — never trust the payload's tenant_id
+                    // 2. Safely Decode Payload
+                    $rawPayload = isset($entry['payload']) ? $entry['payload'] : null;
+                    $payload = null;
+
+                    if (is_array($rawPayload)) {
+                        $payload = $rawPayload;
+                    } elseif (is_string($rawPayload)) {
+                        $decoded = json_decode($rawPayload, true);
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                            $payload = $decoded;
+                        } else {
+                            $errors[] = "Row #{$entryId}: Invalid JSON payload";
+                            Log::warning("SyncController: Invalid JSON for row {$entryId}", ['payload' => substr($rawPayload, 0, 100)]);
+                            continue;
+                        }
+                    }
+
+                    if (!is_array($payload)) {
+                        $errors[] = "Row #{$entryId}: Payload could not be parsed into an array";
+                        continue;
+                    }
+
+                    // 3. Force Tenant Isolation
                     $payload['tenant_id'] = $tenantId;
+                    
+                    // Ensure ID matches row_id for consistency
+                    $payload['id'] = $rowId;
 
+                    // 4. Apply Operation
                     try {
-                        match ($entry['operation']) {
-                            'INSERT' => DB::table($entry['table_name'])
-                                ->updateOrInsert(['id' => $payload['id']], $payload),
-
-                            'UPDATE' => DB::table($entry['table_name'])
-                                ->where('id', $entry['row_id'])
+                        if ($operation === 'INSERT') {
+                            DB::table($tableName)->updateOrInsert(
+                                ['id' => $rowId], 
+                                $payload
+                            );
+                        } elseif ($operation === 'UPDATE') {
+                            DB::table($tableName)
+                                ->where('id', $rowId)
                                 ->where('tenant_id', $tenantId)
-                                ->update($payload),
-
-                            'DELETE' => DB::table($entry['table_name'])
-                                ->where('id', $entry['row_id'])
+                                ->update($payload);
+                        } elseif ($operation === 'DELETE') {
+                            DB::table($tableName)
+                                ->where('id', $rowId)
                                 ->where('tenant_id', $tenantId)
-                                ->delete(),
-
-                            default => throw new \InvalidArgumentException("Unknown operation: {$entry['operation']}"),
-                        };
+                                ->delete();
+                        } else {
+                            throw new \InvalidArgumentException("Unknown operation: {$operation}");
+                        }
+                        
                         $pushed++;
+
                     } catch (\Exception $e) {
-                        $errors[] = "Row #{$entry['id']} ({$entry['table_name']}): " . $e->getMessage();
+                        $errorMsg = substr($e->getMessage(), 0, 200);
+                        $errors[] = "Row #{$entryId} ({$tableName}): {$errorMsg}";
                         Log::error('SyncController@push row failed', [
                             'tenant_id' => $tenantId,
-                            'entry_id'  => $entry['id'] ?? null,
-                            'table'     => $entry['table_name'] ?? null,
+                            'entry_id'  => $entryId,
+                            'table'     => $tableName,
                             'error'     => $e->getMessage(),
                         ]);
                     }
@@ -153,7 +187,7 @@ class SyncController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('SyncController@push: ' . $e->getMessage());
+            Log::error('SyncController@push global error: ' . $e->getMessage());
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
