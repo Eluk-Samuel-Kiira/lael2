@@ -84,26 +84,27 @@ class SyncController extends Controller
             $data     = $request->json()->all();
 
             if (empty($data)) {
-                return response()->json(['success' => true, 'pushed' => 0, 'errors' => []]);
+                return response()->json(['success' => true, 'pushed' => 0, 'errors' => [], 'failed_ids' => []]);
             }
 
             $pushed = 0;
             $errors = [];
+            $failedIds = []; // Track IDs that failed
             $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens', 'sessions'];
             
-            // Cache schema to avoid repeated DB calls
             $schemaCache = [];
 
             DB::beginTransaction();
             try {
                 foreach ($data as $entry) {
-                    $entryId = $entry['id'] ?? 'unknown';
+                    $entryId = $entry['id'] ?? null; // This is the change_log ID
                     $tableName = $entry['table_name'] ?? null;
                     $operation = $entry['operation'] ?? null;
                     $rowId = $entry['row_id'] ?? null;
 
-                    if (!$tableName || !$operation || !$rowId) {
-                        $errors[] = "Row #{$entryId}: Missing fields";
+                    if (!$tableName || !$operation || !$rowId || !$entryId) {
+                        $errors[] = "Unknown Row: Missing fields";
+                        if ($entryId) $failedIds[] = $entryId;
                         continue;
                     }
 
@@ -127,16 +128,16 @@ class SyncController extends Controller
 
                     if (!is_array($payload)) {
                         $errors[] = "Row #{$entryId}: Invalid payload";
+                        $failedIds[] = $entryId;
                         continue;
                     }
 
-                    // ⚠️ DYNAMIC SCHEMA FILTERING ⚠️
+                    // Dynamic Schema Filtering
                     if (!isset($schemaCache[$tableName])) {
                         $schemaCache[$tableName] = DB::getSchemaBuilder()->getColumnListing($tableName);
                     }
                     $validColumns = $schemaCache[$tableName];
 
-                    // Filter payload: Keep ONLY keys that exist in the remote table
                     $filteredPayload = [];
                     foreach ($payload as $key => $value) {
                         if (in_array($key, $validColumns)) {
@@ -144,7 +145,6 @@ class SyncController extends Controller
                         }
                     }
 
-                    // If table HAS tenant_id, force it to the authenticated tenant
                     if (in_array('tenant_id', $validColumns)) {
                         $filteredPayload['tenant_id'] = $tenantId;
                     }
@@ -152,28 +152,29 @@ class SyncController extends Controller
                     // Apply Operation
                     try {
                         if ($operation === 'INSERT') {
-                            DB::table($tableName)->updateOrInsert(
-                                ['id' => $rowId], 
-                                $filteredPayload
-                            );
+                            DB::table($tableName)->updateOrInsert(['id' => $rowId], $filteredPayload);
                         } elseif ($operation === 'UPDATE') {
                             $query = DB::table($tableName)->where('id', $rowId);
-                            if (in_array('tenant_id', $validColumns)) {
-                                $query->where('tenant_id', $tenantId);
-                            }
+                            if (in_array('tenant_id', $validColumns)) $query->where('tenant_id', $tenantId);
                             $query->update($filteredPayload);
                         } elseif ($operation === 'DELETE') {
                             $query = DB::table($tableName)->where('id', $rowId);
-                            if (in_array('tenant_id', $validColumns)) {
-                                $query->where('tenant_id', $tenantId);
-                            }
+                            if (in_array('tenant_id', $validColumns)) $query->where('tenant_id', $tenantId);
                             $query->delete();
                         }
                         
                         $pushed++;
 
                     } catch (\Exception $e) {
-                        $errors[] = "{$tableName} #{$rowId}: " . substr($e->getMessage(), 0, 150);
+                        $errorMsg = "{$tableName} #{$rowId}: " . substr($e->getMessage(), 0, 100);
+                        $errors[] = $errorMsg;
+                        $failedIds[] = $entryId; // Mark this specific change_log ID as failed
+                        
+                        Log::error('Sync Row Failed', [
+                            'change_log_id' => $entryId,
+                            'table' => $tableName,
+                            'error' => $e->getMessage()
+                        ]);
                     }
                 }
                 DB::commit();
@@ -183,9 +184,10 @@ class SyncController extends Controller
             }
 
             return response()->json([
-                'success' => count($errors) === 0,
-                'pushed'  => $pushed,
-                'errors'  => $errors,
+                'success'    => count($errors) === 0,
+                'pushed'     => $pushed,
+                'errors'     => $errors,
+                'failed_ids' => $failedIds, // Return exact IDs to local
             ]);
 
         } catch (\Exception $e) {
