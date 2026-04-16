@@ -27,18 +27,14 @@ class SyncToRemote extends Command
 
     public function handle(): void
     {
-        $this->info("🚀 Starting Sync for Tenant #2...");
-
         // Allow --tenant flag to override config
         $tenantId = (int) ($this->option('tenant') ?? $this->tenantId);
 
         if (empty($this->syncToken)) {
-            $this->error('❌ SYNC_TOKEN not configured in .env / config/sync.php');
             Log::error('pos:sync: SYNC_TOKEN not configured.');
+            $this->error('SYNC_TOKEN not configured in .env / config/sync.php');
             return;
         }
-
-        $this->info("📡 Checking connectivity to: {$this->remoteUrl}");
 
         // ── 1. Check connectivity ─────────────────────────────────────────────
         if (!$this->remoteIsReachable($tenantId)) {
@@ -48,12 +44,10 @@ class SyncToRemote extends Command
                 ->count();
 
             $this->updateStatus($tenantId, 'offline', $pending, 'Remote server unreachable');
-            $this->error("❌ Offline — {$pending} row(s) queued. Remote unreachable.");
+            $this->notify('offline', "Offline — {$pending} row(s) queued");
             Log::info("pos:sync tenant#{$tenantId}: offline, {$pending} queued");
             return;
         }
-
-        $this->info("✅ Remote is Online.");
 
         // ── 2. Fetch pending rows ─────────────────────────────────────────────
         $pending = DB::table('change_log')
@@ -66,28 +60,17 @@ class SyncToRemote extends Command
 
         if ($pending->isEmpty()) {
             $this->updateStatus($tenantId, 'online', 0);
-            $this->info("✨ Nothing pending. All synced!");
             Log::info("pos:sync tenant#{$tenantId}: nothing pending.");
             return;
         }
 
-        $this->info("📦 Found {$pending->count()} rows to sync. Pushing...");
         $this->updateStatus($tenantId, 'syncing', $pending->count());
+        Log::info("pos:sync tenant#{$tenantId}: pushing {$pending->count()} rows");
 
-        // ── 3. Push in a single batch ─────────────────────────────────────────
-        try {
-            [$pushed, $errors] = $this->pushBatch($tenantId, $pending);
-            
-            $this->info("📤 Push Result: {$pushed} Success, {$errors} Errors.");
-
-        } catch (\Exception $e) {
-            $this->error("💥 Critical Push Error: " . $e->getMessage());
-            Log::error("pos:sync pushBatch CRITICAL FAIL: " . $e->getMessage());
-            return;
-        }
+        // ── 3. Push in a single batch (one HTTP call, not one per row) ─────────
+        [$pushed, $errors] = $this->pushBatch($tenantId, $pending);
 
         // ── 4. Pull master data remote → local ────────────────────────────────
-        $this->info("⬇️ Pulling master data updates...");
         $this->pullMasterData($tenantId);
 
         // ── 5. Update status + notify ─────────────────────────────────────────
@@ -97,24 +80,14 @@ class SyncToRemote extends Command
             ->count();
 
         $status = $errors > 0 ? 'error' : 'online';
-        $errMsg = null;
-        
-        if ($errors > 0) {
-            $lastError = DB::table('change_log')
-                ->where('tenant_id', $tenantId)
-                ->whereNotNull('sync_error')
-                ->orderBy('id', 'desc')
-                ->value('sync_error');
-            $errMsg = $lastError ?: "{$errors} rows failed";
-        }
-
+        $errMsg = $errors > 0 ? "{$errors} row(s) failed — check change_log.sync_error" : null;
         $this->updateStatus($tenantId, $status, $remaining, $errMsg);
 
         if ($errors > 0) {
-            $this->warn("⚠️ Sync done with {$errors} error(s). Pushed {$pushed}. Remaining: {$remaining}");
+            $this->notify('error', "Sync done with {$errors} error(s). Pushed {$pushed}.");
             Log::warning("pos:sync tenant#{$tenantId}: {$errors} errors, pushed {$pushed}, remaining {$remaining}");
         } else {
-            $this->info("🎉 Synced {$pushed} row(s). Remaining: {$remaining}");
+            $this->notify('success', "Synced {$pushed} row(s) for tenant #{$tenantId}");
             Log::info("pos:sync tenant#{$tenantId}: pushed {$pushed}, remaining {$remaining}");
         }
     }
