@@ -301,23 +301,27 @@ class SyncController extends Controller
     public function trigger(Request $request): \Illuminate\Http\JsonResponse
     {
         if (!$this->isLocalMachine()) {
-            return response()->json(['success' => false, 'error' => 'Only available on local POS.'], 403);
+            return response()->json(['success' => false, 'error' => 'Only on local POS.'], 403);
         }
 
         try {
-            // Path to the batch file we created
-            $batchFile = base_path('sync_now.bat');
+            // We simply create a "flag" file. 
+            // The Task Scheduler (or a separate watcher) will see this and run the batch.
+            // BUT, for immediate JS feedback, we will try to run the batch file directly 
+            // using cmd.exe which is more reliable than popen on Windows.
             
-            if (!file_exists($batchFile)) {
-                return response()->json(['success' => false, 'error' => 'sync_now.bat not found.'], 500);
+            $batchPath = base_path('sync_now.bat');
+            
+            if (!file_exists($batchPath)) {
+                return response()->json(['success' => false, 'error' => 'sync_now.bat missing.'], 500);
             }
 
-            // Run silently on Windows
-            pclose(popen("start /B \"\" \"{$batchFile}\"", "r"));
+            // Use cmd /c start to run it completely detached and silent
+            pclose(popen('start /b cmd /c "' . $batchPath . '"', 'r'));
 
             return response()->json([
                 'success' => true,
-                'message' => "Sync triggered.",
+                'message' => 'Sync started in background.',
             ]);
 
         } catch (\Exception $e) {

@@ -73,20 +73,15 @@
             <script>
                 (function () {
                     'use strict';
-
-                    const STATUS_POLL_MS = 15000; // Check status every 15s
-                    const AUTO_SYNC_MS = 60000;   // Auto-sync every 60s
-                    
-                    let _pollTimer       = null;
-                    let _autoSyncTimer   = null;
-                    let _isSyncing       = false;
+                    const STATUS_POLL_MS = 10000; // Poll every 10s
+                    let _pollTimer = null;
+                    let _isSyncing = false;
 
                     const STATUS_CONFIG = {
                         online:  { badgeClass: 'badge-success',   label: 'ONLINE',   icon: 'ki-wifi',           spin: false },
                         offline: { badgeClass: 'badge-warning',   label: 'OFFLINE',  icon: 'ki-wifi-slash',     spin: false },
                         syncing: { badgeClass: 'badge-primary',   label: 'SYNCING',  icon: 'ki-arrows-circle',  spin: true  },
                         error:   { badgeClass: 'badge-danger',    label: 'ERROR',    icon: 'ki-cross-circle',   spin: false },
-                        unknown: { badgeClass: 'badge-secondary', label: 'CHECKING', icon: 'ki-information',    spin: false },
                     };
 
                     function updateSyncStatus() {
@@ -94,38 +89,24 @@
                             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                             credentials: 'same-origin',
                         })
-                        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                        .then(r => r.ok ? r.json() : Promise.reject())
                         .then(renderBadge)
                         .catch(() => renderBadge({ status: 'offline', pending_count: 0 }));
                     }
 
                     function renderBadge(data) {
-                        const status    = data.status || 'unknown';
-                        const cfg       = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
-                        const badge     = document.getElementById('syncStatusBadge');
-                        const pending   = document.getElementById('syncPendingCount');
-
+                        const status = data.status || 'unknown';
+                        const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
+                        const badge = document.getElementById('syncStatusBadge');
+                        const pending = document.getElementById('syncPendingCount');
                         if (!badge) return;
 
                         badge.className = badge.className.replace(/badge-\w+/g, '').trim() + ' ' + cfg.badgeClass;
-
                         const iconHtml = cfg.spin
                             ? `<span class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1.5px"></span>`
                             : `<i class="ki-duotone ${cfg.icon} fs-8"><span class="path1"></span><span class="path2"></span></i>`;
-
-                        badge.innerHTML = `${iconHtml}<span id="syncStatusText">${cfg.label}</span>`;
-
-                        let tip = '';
-                        if (data.last_synced_at) tip = 'Last sync: ' + formatRelative(data.last_synced_at);
-                        if (data.last_error) tip += (tip ? ' · ' : '') + 'Error: ' + data.last_error;
                         
-                        if (tip) {
-                            badge.setAttribute('title', tip);
-                            if (window.bootstrap?.Tooltip) {
-                                bootstrap.Tooltip.getInstance(badge)?.dispose();
-                                new bootstrap.Tooltip(badge);
-                            }
-                        }
+                        badge.innerHTML = `${iconHtml}<span id="syncStatusText">${cfg.label}</span>`;
 
                         if (pending) {
                             if (data.pending_count > 0) {
@@ -135,93 +116,62 @@
                                 pending.style.display = 'none';
                             }
                         }
-                    }
-
-                    function triggerSync(isAuto = false) {
-                        if (_isSyncing) return;
-                        _isSyncing = true;
-
-                        const btn      = document.getElementById('manualSyncBtn');
-                        const iconEl   = document.getElementById('syncBtnIcon');
                         
-                        if (btn) btn.disabled = true;
-                        if (iconEl) iconEl.className = 'ki-duotone ki-arrows-circle fs-4 spin-anim';
-                        renderBadge({ status: 'syncing', pending_count: 0 });
-
-                        // CALL THE BATCH FILE SILENTLY
-                        fetch('/sync/trigger', {
-                            method: 'POST',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
-                            },
-                            credentials: 'same-origin',
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.success) {
-                                if (!isAuto && typeof toastr !== 'undefined') {
-                                    toastr.success('Sync started in background.', 'Sync');
-                                }
-                                setTimeout(updateSyncStatus, 5000); // Wait 5s for batch to finish
-                            } else {
-                                renderBadge({ status: 'error', last_error: data.error });
-                            }
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            renderBadge({ status: 'error', last_error: 'Trigger failed' });
-                        })
-                        .finally(() => {
-                            _isSyncing = false;
-                            if (btn) btn.disabled = false;
-                            if (iconEl) iconEl.className = 'ki-duotone ki-arrows-circle fs-4';
-                        });
+                        // Tooltip
+                        let tip = '';
+                        if (data.last_synced_at) tip = 'Last sync: ' + new Date(data.last_synced_at).toLocaleTimeString();
+                        if (data.last_error) tip += ' | Err: ' + data.last_error;
+                        badge.setAttribute('title', tip);
                     }
 
                     window.triggerManualSync = function () {
-                        triggerSync(false);
+                        if (_isSyncing) return;
+                        _isSyncing = true;
+                        const btn = document.getElementById('manualSyncBtn');
+                        const icon = document.getElementById('syncBtnIcon');
+                        if(btn) btn.disabled = true;
+                        if(icon) icon.classList.add('spin-anim');
+                        
+                        renderBadge({ status: 'syncing', pending_count: 0 });
+
+                        fetch('/sync/trigger', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if(data.success) {
+                                if(typeof toastr !== 'undefined') toastr.success('Sync triggered!', 'Success');
+                                setTimeout(updateSyncStatus, 4000); // Check status after 4s
+                            } else {
+                                if(typeof toastr !== 'undefined') toastr.error(data.error, 'Failed');
+                                _isSyncing = false;
+                                if(btn) btn.disabled = false;
+                                if(icon) icon.classList.remove('spin-anim');
+                            }
+                        })
+                        .catch(() => {
+                            _isSyncing = false;
+                            if(btn) btn.disabled = false;
+                            if(icon) icon.classList.remove('spin-anim');
+                        });
                     };
 
                     document.addEventListener('DOMContentLoaded', function () {
                         updateSyncStatus();
                         _pollTimer = setInterval(updateSyncStatus, STATUS_POLL_MS);
-                        
-                        // Auto-Sync Every 60 Seconds
-                        _autoSyncTimer = setInterval(() => {
-                            if (!_isSyncing) triggerSync(true);
-                        }, AUTO_SYNC_MS);
                     });
-
-                    document.addEventListener('visibilitychange', function () {
-                        if (document.hidden) {
-                            clearInterval(_pollTimer);
-                            clearInterval(_autoSyncTimer);
-                        } else {
-                            updateSyncStatus();
-                            _pollTimer = setInterval(updateSyncStatus, STATUS_POLL_MS);
-                            _autoSyncTimer = setInterval(() => {
-                                if (!_isSyncing) triggerSync(true);
-                            }, AUTO_SYNC_MS);
-                        }
-                    });
-
-                    function formatRelative(dateStr) {
-                        if (!dateStr) return 'never';
-                        const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-                        if (diff < 60)   return diff + 's ago';
-                        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-                        return Math.floor(diff / 3600) + 'h ago';
-                    }
                 })();
             </script>
-
             <style>
+                .spin-anim { animation: spin-anim 1s linear infinite; }
                 @keyframes spin-anim { to { transform: rotate(360deg); } }
-                .spin-anim { display: inline-block; animation: spin-anim 1s linear infinite; }
             </style>
+
             @endpush
             @endif
 				
