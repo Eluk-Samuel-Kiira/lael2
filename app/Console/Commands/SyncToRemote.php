@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\{ DB, Log, Http };
 class SyncToRemote extends Command
 {
     protected $signature   = 'pos:sync {--tenant= : Override the tenant ID from config}';
+    // eg php artisan pos:sync --tenant=2
+
     protected $description = 'Push pending change_log entries to remote server via HTTP API';
 
     private string $remoteUrl;
