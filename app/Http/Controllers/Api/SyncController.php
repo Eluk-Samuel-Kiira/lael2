@@ -300,6 +300,7 @@ class SyncController extends Controller
     // Only available on LOCAL machine (APP_ENV=local or IS_LOCAL_POS=true)
     public function trigger(Request $request): \Illuminate\Http\JsonResponse
     {
+        \Log::info('We reached');
         if (!$this->isLocalMachine()) {
             return response()->json(['success' => false, 'error' => 'Only on local POS.'], 403);
         }

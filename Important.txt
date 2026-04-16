@@ -1,0 +1,41 @@
+php -S 127.0.0.1:8000 -t public/ - to run lael
+
+curl -O https://raw.githubusercontent.com/laravel/laravel/master/artisan
+
+
+C:\xampp\htdocs\Stardena\LAEL\
+
+Stardena POS - Automatic Sync Setup Instructions
+This guide sets up the POS system to sync data with the remote server automatically every minute. 
+It requires NO user intervention after setup. It will start automatically when the computer turns on.
+Prerequisites
+
+    Ensure XAMPP is installed at C:\xampp.
+    Ensure the project is located at C:\xampp\htdocs\Stardena\LAEL.
+    Ensure IS_LOCAL_POS=true is set in your .env file.
+
+
+@echo off
+title Stardena POS Sync Service
+color 0A
+
+:START
+echo [%date% %time%] Checking for Apache...
+
+REM Wait until Apache is responding on port 80
+curl -s http://localhost > nul
+if errorlevel 1 (
+    echo Apache not ready. Waiting 10 seconds...
+    timeout /t 10 > nul
+    goto START
+)
+
+echo Apache is Online. Starting Sync Scheduler...
+
+:LOOP
+REM Run the Laravel Scheduler
+C:\xampp\php\php.exe C:\xampp\htdocs\Stardena\LAEL\artisan schedule:run >> C:\xampp\htdocs\Stardena\LAEL\storage\logs\sync_service.log 2>&1
+
+REM Wait 60 seconds before checking again
+timeout /t 60 > nul
+goto LOOP

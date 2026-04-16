@@ -8,13 +8,16 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
-Schedule::command('pos:sync')
-        ->everyThirtySeconds()
-        ->withoutOverlapping(2)
-        ->runInBackground();
+// ── Auto-Sync Every Minute ──────────────────────────────────────────────────
+// Only runs if this machine is marked as a Local POS
+if (filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN)) {
+    
+    Schedule::command('pos:sync --tenant=2')
+        ->everyMinute()
+        ->withoutOverlapping() // Prevents running twice if previous sync is slow
+        ->appendOutputTo(storage_path('logs/sync-auto.log')); // Keeps a log history
+}
 
-// Disable-ScheduledTask -TaskName "LaravelPOSScheduler"
-// Enable-ScheduledTask -TaskName "LaravelPOSScheduler"
 
 
 

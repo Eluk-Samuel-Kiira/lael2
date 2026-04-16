@@ -73,16 +73,7 @@
             <script>
                 (function () {
                     'use strict';
-                    const STATUS_POLL_MS = 10000; // Poll every 10s
-                    let _pollTimer = null;
-                    let _isSyncing = false;
-
-                    const STATUS_CONFIG = {
-                        online:  { badgeClass: 'badge-success',   label: 'ONLINE',   icon: 'ki-wifi',           spin: false },
-                        offline: { badgeClass: 'badge-warning',   label: 'OFFLINE',  icon: 'ki-wifi-slash',     spin: false },
-                        syncing: { badgeClass: 'badge-primary',   label: 'SYNCING',  icon: 'ki-arrows-circle',  spin: true  },
-                        error:   { badgeClass: 'badge-danger',    label: 'ERROR',    icon: 'ki-cross-circle',   spin: false },
-                    };
+                    const POLL_MS = 10000; // Check every 10 seconds
 
                     function updateSyncStatus() {
                         fetch('/sync/frontend-status', {
@@ -96,74 +87,50 @@
 
                     function renderBadge(data) {
                         const status = data.status || 'unknown';
-                        const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.unknown;
                         const badge = document.getElementById('syncStatusBadge');
                         const pending = document.getElementById('syncPendingCount');
                         if (!badge) return;
 
-                        badge.className = badge.className.replace(/badge-\w+/g, '').trim() + ' ' + cfg.badgeClass;
-                        const iconHtml = cfg.spin
-                            ? `<span class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1.5px"></span>`
-                            : `<i class="ki-duotone ${cfg.icon} fs-8"><span class="path1"></span><span class="path2"></span></i>`;
+                        // Colors
+                        const colors = {
+                            online: 'badge-success',
+                            offline: 'badge-warning',
+                            syncing: 'badge-primary',
+                            error: 'badge-danger'
+                        };
                         
-                        badge.innerHTML = `${iconHtml}<span id="syncStatusText">${cfg.label}</span>`;
+                        // Icons
+                        const icons = {
+                            online: '<i class="ki-duotone ki-wifi fs-8"></i>',
+                            offline: '<i class="ki-duotone ki-wifi-slash fs-8"></i>',
+                            syncing: '<span class="spinner-border spinner-border-sm" style="width:8px;height:8px"></span>',
+                            error: '<i class="ki-duotone ki-cross-circle fs-8"></i>'
+                        };
 
+                        badge.className = `badge ${colors[status] || 'badge-secondary'} d-inline-flex align-items-center gap-1 px-2 py-1`;
+                        badge.innerHTML = `${icons[status] || ''} <span id="syncStatusText">${status.toUpperCase()}</span>`;
+
+                        // Pending Count
                         if (pending) {
                             if (data.pending_count > 0) {
-                                pending.textContent = data.pending_count + ' pending';
+                                pending.textContent = `${data.pending_count} pending`;
                                 pending.style.display = 'block';
                             } else {
                                 pending.style.display = 'none';
                             }
                         }
-                        
+
                         // Tooltip
-                        let tip = '';
-                        if (data.last_synced_at) tip = 'Last sync: ' + new Date(data.last_synced_at).toLocaleTimeString();
-                        if (data.last_error) tip += ' | Err: ' + data.last_error;
+                        let tip = `Status: ${status}`;
+                        if (data.last_synced_at) tip += `\nLast Sync: ${new Date(data.last_synced_at).toLocaleString()}`;
+                        if (data.last_error) tip += `\nError: ${data.last_error}`;
                         badge.setAttribute('title', tip);
                     }
 
-                    window.triggerManualSync = function () {
-                        if (_isSyncing) return;
-                        _isSyncing = true;
-                        const btn = document.getElementById('manualSyncBtn');
-                        const icon = document.getElementById('syncBtnIcon');
-                        if(btn) btn.disabled = true;
-                        if(icon) icon.classList.add('spin-anim');
-                        
-                        renderBadge({ status: 'syncing', pending_count: 0 });
-
-                        fetch('/sync/trigger', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
-                                'X-Requested-With': 'XMLHttpRequest'
-                            },
-                        })
-                        .then(r => r.json())
-                        .then(data => {
-                            if(data.success) {
-                                if(typeof toastr !== 'undefined') toastr.success('Sync triggered!', 'Success');
-                                setTimeout(updateSyncStatus, 4000); // Check status after 4s
-                            } else {
-                                if(typeof toastr !== 'undefined') toastr.error(data.error, 'Failed');
-                                _isSyncing = false;
-                                if(btn) btn.disabled = false;
-                                if(icon) icon.classList.remove('spin-anim');
-                            }
-                        })
-                        .catch(() => {
-                            _isSyncing = false;
-                            if(btn) btn.disabled = false;
-                            if(icon) icon.classList.remove('spin-anim');
-                        });
-                    };
-
+                    // Start polling
                     document.addEventListener('DOMContentLoaded', function () {
                         updateSyncStatus();
-                        _pollTimer = setInterval(updateSyncStatus, STATUS_POLL_MS);
+                        setInterval(updateSyncStatus, POLL_MS);
                     });
                 })();
             </script>
