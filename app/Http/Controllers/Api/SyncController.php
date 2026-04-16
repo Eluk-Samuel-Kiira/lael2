@@ -89,22 +89,21 @@ class SyncController extends Controller
 
             $pushed = 0;
             $errors = [];
-            $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens', 'sessions'];
 
-            // Cache column lists to avoid querying schema for every single row
-            $schemaCache = [];
+            // Forbidden tables — never written to remotely via sync
+            $forbidden = ['change_log', 'sync_status', 'migrations', 'password_reset_tokens', 'sessions'];
 
             DB::beginTransaction();
             try {
                 foreach ($data as $entry) {
-                    // 1. Basic Validation
-                    $entryId = $entry['id'] ?? 'unknown';
-                    $tableName = $entry['table_name'] ?? null;
-                    $operation = $entry['operation'] ?? null;
-                    $rowId = $entry['row_id'] ?? null;
+                    // 1. Safe Validation (Compatible with PHP 7.4+)
+                    $entryId = isset($entry['id']) ? $entry['id'] : 'unknown';
+                    $tableName = isset($entry['table_name']) ? $entry['table_name'] : null;
+                    $operation = isset($entry['operation']) ? $entry['operation'] : null;
+                    $rowId = isset($entry['row_id']) ? $entry['row_id'] : null;
 
                     if (!$tableName || !$operation || !$rowId) {
-                        $errors[] = "Row #{$entryId}: Missing fields";
+                        $errors[] = "Row #{$entryId}: Missing required fields (table_name, operation, row_id)";
                         continue;
                     }
 
@@ -113,8 +112,8 @@ class SyncController extends Controller
                         continue;
                     }
 
-                    // 2. Decode Payload
-                    $rawPayload = $entry['payload'] ?? null;
+                    // 2. Safely Decode Payload
+                    $rawPayload = isset($entry['payload']) ? $entry['payload'] : null;
                     $payload = null;
 
                     if (is_array($rawPayload)) {
@@ -123,67 +122,55 @@ class SyncController extends Controller
                         $decoded = json_decode($rawPayload, true);
                         if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                             $payload = $decoded;
+                        } else {
+                            $errors[] = "Row #{$entryId}: Invalid JSON payload";
+                            Log::warning("SyncController: Invalid JSON for row {$entryId}", ['payload' => substr($rawPayload, 0, 100)]);
+                            continue;
                         }
                     }
 
                     if (!is_array($payload)) {
-                        $errors[] = "Row #{$entryId}: Invalid payload";
+                        $errors[] = "Row #{$entryId}: Payload could not be parsed into an array";
                         continue;
                     }
 
-                    // 3. ⚠️ DYNAMIC SCHEMA FILTERING ⚠️
-                    // Get columns for this table (cached)
-                    if (!isset($schemaCache[$tableName])) {
-                        $schemaCache[$tableName] = DB::getSchemaBuilder()->getColumnListing($tableName);
-                    }
-                    $validColumns = $schemaCache[$tableName];
-
-                    // Filter payload: Keep ONLY keys that exist in the remote table
-                    $filteredPayload = [];
-                    foreach ($payload as $key => $value) {
-                        if (in_array($key, $validColumns)) {
-                            $filteredPayload[$key] = $value;
-                        }
-                    }
-
-                    // If table HAS tenant_id, force it to the authenticated tenant (Security)
-                    if (in_array('tenant_id', $validColumns)) {
-                        $filteredPayload['tenant_id'] = $tenantId;
-                    }
+                    // 3. Force Tenant Isolation
+                    $payload['tenant_id'] = $tenantId;
+                    
+                    // Ensure ID matches row_id for consistency
+                    $payload['id'] = $rowId;
 
                     // 4. Apply Operation
                     try {
                         if ($operation === 'INSERT') {
                             DB::table($tableName)->updateOrInsert(
                                 ['id' => $rowId], 
-                                $filteredPayload
+                                $payload
                             );
                         } elseif ($operation === 'UPDATE') {
-                            $query = DB::table($tableName)->where('id', $rowId);
-                            // Add tenant safety check if column exists
-                            if (in_array('tenant_id', $validColumns)) {
-                                $query->where('tenant_id', $tenantId);
-                            }
-                            $query->update($filteredPayload);
+                            DB::table($tableName)
+                                ->where('id', $rowId)
+                                ->where('tenant_id', $tenantId)
+                                ->update($payload);
                         } elseif ($operation === 'DELETE') {
-                            $query = DB::table($tableName)->where('id', $rowId);
-                            if (in_array('tenant_id', $validColumns)) {
-                                $query->where('tenant_id', $tenantId);
-                            }
-                            $query->delete();
+                            DB::table($tableName)
+                                ->where('id', $rowId)
+                                ->where('tenant_id', $tenantId)
+                                ->delete();
                         } else {
-                            throw new \InvalidArgumentException("Unknown op: {$operation}");
+                            throw new \InvalidArgumentException("Unknown operation: {$operation}");
                         }
                         
                         $pushed++;
 
                     } catch (\Exception $e) {
-                        $errorMsg = "{$tableName} #{$rowId}: " . substr($e->getMessage(), 0, 150);
-                        $errors[] = $errorMsg;
-                        Log::error('Sync Row Failed', [
-                            'table' => $tableName,
-                            'id' => $rowId,
-                            'error' => $e->getMessage()
+                        $errorMsg = substr($e->getMessage(), 0, 200);
+                        $errors[] = "Row #{$entryId} ({$tableName}): {$errorMsg}";
+                        Log::error('SyncController@push row failed', [
+                            'tenant_id' => $tenantId,
+                            'entry_id'  => $entryId,
+                            'table'     => $tableName,
+                            'error'     => $e->getMessage(),
                         ]);
                     }
                 }
