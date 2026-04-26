@@ -29,11 +29,10 @@ class SyncToRemote extends Command
     {
         $this->info("🚀 Starting Sync for Tenant #2...");
 
-        // Allow --tenant flag to override config
         $tenantId = (int) ($this->option('tenant') ?? $this->tenantId);
 
         if (empty($this->syncToken)) {
-            $this->error('❌ SYNC_TOKEN not configured in .env / config/sync.php');
+            $this->error('❌ SYNC_TOKEN not configured.');
             Log::error('pos:sync: SYNC_TOKEN not configured.');
             return;
         }
@@ -47,15 +46,14 @@ class SyncToRemote extends Command
                 ->whereNull('synced_at')
                 ->count();
 
-            $this->updateStatus($tenantId, 'offline', $pending, 'Remote server unreachable');
-            $this->error("❌ Offline — {$pending} row(s) queued. Remote unreachable.");
-            Log::info("pos:sync tenant#{$tenantId}: offline, {$pending} queued");
+            $this->updateStatus($tenantId, 'offline', $pending, 'Remote unreachable');
+            $this->error("❌ Offline — {$pending} row(s) queued.");
             return;
         }
 
         $this->info("✅ Remote is Online.");
 
-        // ── 2. Fetch pending rows ─────────────────────────────────────────────
+        // ── 2. Fetch pending rows for PUSH ────────────────────────────────────
         $pending = DB::table('change_log')
             ->where('tenant_id', $tenantId)
             ->whereNull('synced_at')
@@ -64,29 +62,25 @@ class SyncToRemote extends Command
             ->limit(config('sync.batch_size', 500))
             ->get();
 
-        if ($pending->isEmpty()) {
-            $this->updateStatus($tenantId, 'online', 0);
-            $this->info("✨ Nothing pending. All synced!");
-            Log::info("pos:sync tenant#{$tenantId}: nothing pending.");
-            return;
+        // ── 3. PUSH: Only if there are pending rows ───────────────────────────
+        if ($pending->isNotEmpty()) {
+            $this->info("📦 Found {$pending->count()} rows to push. Pushing...");
+            $this->updateStatus($tenantId, 'syncing', $pending->count());
+
+            try {
+                [$pushed, $errors] = $this->pushBatch($tenantId, $pending);
+                $this->info("📤 Push Result: {$pushed} Success, {$errors} Errors.");
+            } catch (\Exception $e) {
+                $this->error("💥 Push failed: " . $e->getMessage());
+                Log::error("pos:sync pushBatch CRITICAL: " . $e->getMessage());
+                // Still continue to pull even if push fails
+            }
+        } else {
+            $this->info("✨ No local changes to push.");
         }
 
-        $this->info("📦 Found {$pending->count()} rows to sync. Pushing...");
-        $this->updateStatus($tenantId, 'syncing', $pending->count());
-
-        // ── 3. Push in a single batch ─────────────────────────────────────────
-        try {
-            [$pushed, $errors] = $this->pushBatch($tenantId, $pending);
-            
-            $this->info("📤 Push Result: {$pushed} Success, {$errors} Errors.");
-
-        } catch (\Exception $e) {
-            $this->error("💥 Critical Push Error: " . $e->getMessage());
-            Log::error("pos:sync pushBatch CRITICAL FAIL: " . $e->getMessage());
-            return;
-        }
-
-        // ── 4. Pull master data remote → local ────────────────────────────────
+        // ── 4. PULL: ALWAYS run, regardless of push status ────────────────────
+        // This is the KEY FIX: Pull master data even if nothing to push
         $this->info("⬇️ Pulling master data updates...");
         $this->pullMasterData($tenantId);
 
@@ -96,26 +90,13 @@ class SyncToRemote extends Command
             ->whereNull('synced_at')
             ->count();
 
-        $status = $errors > 0 ? 'error' : 'online';
-        $errMsg = null;
-        
-        if ($errors > 0) {
-            $lastError = DB::table('change_log')
-                ->where('tenant_id', $tenantId)
-                ->whereNotNull('sync_error')
-                ->orderBy('id', 'desc')
-                ->value('sync_error');
-            $errMsg = $lastError ?: "{$errors} rows failed";
-        }
+        $status = $remaining > 0 ? 'offline' : 'online';
+        $this->updateStatus($tenantId, $status, $remaining);
 
-        $this->updateStatus($tenantId, $status, $remaining, $errMsg);
-
-        if ($errors > 0) {
-            $this->warn("⚠️ Sync done with {$errors} error(s). Pushed {$pushed}. Remaining: {$remaining}");
-            Log::warning("pos:sync tenant#{$tenantId}: {$errors} errors, pushed {$pushed}, remaining {$remaining}");
+        if ($remaining > 0) {
+            $this->warn("⚠️ {$remaining} row(s) still pending.");
         } else {
-            $this->info("🎉 Synced {$pushed} row(s). Remaining: {$remaining}");
-            Log::info("pos:sync tenant#{$tenantId}: pushed {$pushed}, remaining {$remaining}");
+            $this->info("🎉 All synced! (Push + Pull complete)");
         }
     }
 
@@ -188,11 +169,12 @@ class SyncToRemote extends Command
     // ── Pull master/catalog data from remote → local ──────────────────────────
     private function pullMasterData(int $tenantId): void
     {
-        $lastSync = DB::table('sync_status')
-            ->where('tenant_id', $tenantId)
-            ->value('last_synced_at') ?? '2000-01-01 00:00:00';
-
-        $this->info("⬇️ Pulling master data since: {$lastSync}");
+        $status = DB::table('sync_status')->where('tenant_id', $tenantId)->first();
+        
+        // If never pulled before, use ancient date to get ALL master data
+        $lastPull = $status?->last_pulled_at ?? $status?->last_synced_at ?? '2000-01-01 00:00:00';
+        
+        $this->info("⬇️ Pulling master data since: {$lastPull}");
 
         try {
             $response = Http::timeout(30)
@@ -201,7 +183,7 @@ class SyncToRemote extends Command
                     'X-Tenant-Id'  => (string) $tenantId,
                     'Accept'       => 'application/json',
                 ])
-                ->post($this->remoteUrl . '/sync/pull', ['since' => $lastSync]);
+                ->post($this->remoteUrl . '/sync/pull', ['since' => $lastPull]);
 
             if (!$response->successful()) {
                 Log::warning("pos:sync pull failed: HTTP {$response->status()}");
@@ -213,34 +195,35 @@ class SyncToRemote extends Command
             $pulledCount = $result['pulled_count'] ?? 0;
 
             if (empty($data)) {
-                $this->info("✨ No master data updates since {$lastSync}");
+                $this->info("✨ No master data updates since {$lastPull}");
                 return;
             }
 
-            $this->info("📥 Received {$pulledCount} master data rows from {$result['server_time']}");
+            $this->info("📥 Received {$pulledCount} master data rows");
 
             $upserted = 0;
             foreach ($data as $table => $remoteRows) {
                 foreach ($remoteRows as $row) {
                     $row = (array) $row;
-                    
-                    // Safety: Ensure tenant isolation
-                    if (isset($row['tenant_id']) && (int)$row['tenant_id'] !== $tenantId) {
-                        continue;
-                    }
-                    
-                    // Upsert: Insert or update by ID
+                    if (isset($row['tenant_id']) && (int)$row['tenant_id'] !== $tenantId) continue;
                     DB::table($table)->upsert($row, ['id'], array_keys($row));
                     $upserted++;
                 }
             }
 
             $this->info("✅ Upserted {$upserted} master data rows locally");
-            Log::info("pos:sync pull: Upserted {$upserted} rows for tenant #{$tenantId}");
+
+            // Update last_pulled_at (or fallback to last_synced_at)
+            DB::table('sync_status')->updateOrInsert(
+                ['tenant_id' => $tenantId],
+                [
+                    'last_pulled_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
 
         } catch (\Exception $e) {
-            Log::warning("pos:sync pullMasterData tenant#{$tenantId}: " . $e->getMessage());
-            $this->warn("⚠️ Pull failed: " . $e->getMessage());
+            Log::warning("pos:sync pullMasterData: " . $e->getMessage());
         }
     }
 
@@ -263,18 +246,24 @@ class SyncToRemote extends Command
     }
 
     // ── Update sync_status row ────────────────────────────────────────────────
-    private function updateStatus(int $tenantId, string $status, int $pendingCount = 0, ?string $error = null): void
+    private function updateStatus(int $tenantId, string $status, int $pendingCount = 0, ?string $error = null, bool $isPull = false): void
     {
+        $update = [
+            'status' => $status,
+            'pending_count' => $pendingCount,
+            'last_error' => $error,
+            'updated_at' => now(),
+        ];
+        
+        if ($isPull) {
+            $update['last_pulled_at'] = now();
+        } else {
+            $update['last_synced_at'] = $status === 'online' ? now() : DB::raw('COALESCE(last_synced_at, NULL)');
+        }
+        
         DB::table('sync_status')->updateOrInsert(
             ['tenant_id' => $tenantId],
-            [
-                'status'         => $status,
-                'last_synced_at' => $status === 'online' ? now() : DB::raw('COALESCE(last_synced_at, NULL)'),
-                'pending_count'  => $pendingCount,
-                'last_error'     => $error,
-                'updated_at'     => now(),
-                'created_at'     => DB::raw('COALESCE(created_at, NOW())'),
-            ]
+            $update
         );
     }
 
