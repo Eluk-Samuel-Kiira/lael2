@@ -51,7 +51,7 @@
                     <span id="syncPendingCount" class="text-muted" style="font-size:9px; margin-top:2px"></span>
                 </div>
 
-                {{-- Manual sync button --}}
+                {{-- Manual sync button 
                 <button id="manualSyncBtn"
                         type="button"
                         class="btn btn-sm btn-icon btn-light-primary"
@@ -62,7 +62,7 @@
                     <i id="syncBtnIcon" class="ki-duotone ki-arrows-circle fs-4">
                         <span class="path1"></span><span class="path2"></span>
                     </i>
-                </button>
+                </button> --}}
 
             </div>
             @endif

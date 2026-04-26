@@ -156,10 +156,7 @@ class AppServiceProvider extends ServiceProvider
             // Register the observer — period.
             $modelClass::observe(\App\Observers\SyncObserver::class);
         }
-
-        // ── Optional: Register Query Builder macro for raw-table logging ──────
-        // Use ONLY if you cannot install database triggers
-        // $this->registerSyncMacros();
+        
 
     }
 
@@ -253,123 +250,5 @@ class AppServiceProvider extends ServiceProvider
     }
 
 
-    
-    /**
-     * Register DB::syncInsert(), syncUpdate(), syncDelete() macros
-     * for tables without Eloquent models.
-     * 
-     * ⚠️  WARNING: These are NOT transaction-safe. 
-     *     Prefer database triggers where possible.
-     */
-    private function registerSyncMacros(): void
-    {
-        // Tables without models that still need sync (push to remote)
-        $rawPushTables = [
-            'stock_ledger',
-            'inventory_snapshots', 
-            'stock_transfer_logs',
-            'ledger_entries',
-            'user_activity_logs',
-            'pos_session_logs',
-            'device_heartbeats',
-            'import_staging',
-            'export_queue',
-            // Add your raw tables here
-        ];
 
-        // Macro: DB::syncInsert('table', $data)
-        DB::macro('syncInsert', function (string $table, array $data) use ($rawPushTables) {
-            // Skip if not a tracked raw table
-            if (!in_array($table, $rawPushTables, true)) {
-                return DB::table($table)->insertGetId($data);
-            }
-
-            // Perform the insert
-            $id = DB::table($table)->insertGetId($data);
-
-            // Log to change_log (best-effort, outside transaction)
-            try {
-                DB::table('change_log')->insert([
-                    'table_name'  => $table,
-                    'row_id'      => $id,
-                    'operation'   => 'INSERT',
-                    'payload'     => json_encode($data, JSON_THROW_ON_ERROR),
-                    'old_payload' => null,
-                    'tenant_id'   => $data['tenant_id'] ?? config('sync.tenant_id', 2),
-                    'location_id' => $data['location_id'] ?? null,
-                    'logged_at'   => now(),
-                    'retry_count' => 0,
-                ]);
-            } catch (\Throwable $e) {
-                \Log::warning("SyncObserver macro failed for {$table}#{$id}: " . $e->getMessage());
-                // Don't fail the main operation — sync is best-effort
-            }
-
-            return $id;
-        });
-
-        // Macro: DB::syncUpdate('table', $id, $data)
-        DB::macro('syncUpdate', function (string $table, $id, array $data) use ($rawPushTables) {
-            if (!in_array($table, $rawPushTables, true)) {
-                return DB::table($table)->where('id', $id)->update($data);
-            }
-
-            // Fetch old values for diff logging (optional but recommended)
-            $old = DB::table($table)->where('id', $id)->first();
-
-            $affected = DB::table($table)->where('id', $id)->update($data);
-
-            if ($affected > 0) {
-                try {
-                    DB::table('change_log')->insert([
-                        'table_name'  => $table,
-                        'row_id'      => $id,
-                        'operation'   => 'UPDATE',
-                        'payload'     => json_encode($data, JSON_THROW_ON_ERROR),
-                        'old_payload' => $old ? json_encode($old, JSON_THROW_ON_ERROR) : null,
-                        'tenant_id'   => $data['tenant_id'] ?? config('sync.tenant_id', 2),
-                        'location_id' => $data['location_id'] ?? null,
-                        'logged_at'   => now(),
-                        'retry_count' => 0,
-                    ]);
-                } catch (\Throwable $e) {
-                    \Log::warning("SyncObserver macro failed for {$table}#{$id} update: " . $e->getMessage());
-                }
-            }
-            
-            return $affected;
-        });
-
-        // Macro: DB::syncDelete('table', $id)
-        DB::macro('syncDelete', function (string $table, $id) use ($rawPushTables) {
-            if (!in_array($table, $rawPushTables, true)) {
-                return DB::table($table)->where('id', $id)->delete();
-            }
-
-            // Fetch row before delete for logging
-            $old = DB::table($table)->where('id', $id)->first();
-
-            $deleted = DB::table($table)->where('id', $id)->delete();
-
-            if ($deleted > 0 && $old) {
-                try {
-                    DB::table('change_log')->insert([
-                        'table_name'  => $table,
-                        'row_id'      => $id,
-                        'operation'   => 'DELETE',
-                        'payload'     => null,
-                        'old_payload' => json_encode($old, JSON_THROW_ON_ERROR),
-                        'tenant_id'   => $old->tenant_id ?? config('sync.tenant_id', 2),
-                        'location_id' => $old->location_id ?? null,
-                        'logged_at'   => now(),
-                        'retry_count' => 0,
-                    ]);
-                } catch (\Throwable $e) {
-                    \Log::warning("SyncObserver macro failed for {$table}#{$id} delete: " . $e->getMessage());
-                }
-            }
-
-            return $deleted;
-        });
-    }
 }

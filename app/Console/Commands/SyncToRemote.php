@@ -192,6 +192,8 @@ class SyncToRemote extends Command
             ->where('tenant_id', $tenantId)
             ->value('last_synced_at') ?? '2000-01-01 00:00:00';
 
+        $this->info("⬇️ Pulling master data since: {$lastSync}");
+
         try {
             $response = Http::timeout(30)
                 ->withHeaders([
@@ -201,22 +203,44 @@ class SyncToRemote extends Command
                 ])
                 ->post($this->remoteUrl . '/sync/pull', ['since' => $lastSync]);
 
-            if (!$response->successful()) return;
+            if (!$response->successful()) {
+                Log::warning("pos:sync pull failed: HTTP {$response->status()}");
+                return;
+            }
 
-            $data = $response->json('data', []);
+            $result = $response->json();
+            $data = $result['data'] ?? [];
+            $pulledCount = $result['pulled_count'] ?? 0;
 
+            if (empty($data)) {
+                $this->info("✨ No master data updates since {$lastSync}");
+                return;
+            }
+
+            $this->info("📥 Received {$pulledCount} master data rows from {$result['server_time']}");
+
+            $upserted = 0;
             foreach ($data as $table => $remoteRows) {
                 foreach ($remoteRows as $row) {
                     $row = (array) $row;
-                    // Only upsert if it belongs to this tenant
+                    
+                    // Safety: Ensure tenant isolation
                     if (isset($row['tenant_id']) && (int)$row['tenant_id'] !== $tenantId) {
                         continue;
                     }
+                    
+                    // Upsert: Insert or update by ID
                     DB::table($table)->upsert($row, ['id'], array_keys($row));
+                    $upserted++;
                 }
             }
+
+            $this->info("✅ Upserted {$upserted} master data rows locally");
+            Log::info("pos:sync pull: Upserted {$upserted} rows for tenant #{$tenantId}");
+
         } catch (\Exception $e) {
             Log::warning("pos:sync pullMasterData tenant#{$tenantId}: " . $e->getMessage());
+            $this->warn("⚠️ Pull failed: " . $e->getMessage());
         }
     }
 

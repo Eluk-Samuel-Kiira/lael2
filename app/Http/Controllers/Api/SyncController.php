@@ -206,16 +206,22 @@ class SyncController extends Controller
             $tenantId = $request->authenticated_tenant_id;
             $since    = $request->input('since', '2000-01-01 00:00:00');
 
-            $masterTables = [
+            // ✅ Use the SAME master_tables list from config/sync.php
+            $masterTables = config('sync.master_tables', [
                 'categories', 'product_categories', 'products',
                 'taxes', 'promotions', 'unit_of_measures',
                 'locations', 'departments',
-            ];
+            ]);
 
             $data = [];
+            $totalRows = 0;
+            
             foreach ($masterTables as $table) {
                 try {
-                    if (!DB::getSchemaBuilder()->hasTable($table)) continue;
+                    if (!DB::getSchemaBuilder()->hasTable($table)) {
+                        Log::debug("SyncController@pull: Table {$table} not found on remote");
+                        continue;
+                    }
 
                     $rows = DB::table($table)
                         ->where('tenant_id', $tenantId)
@@ -224,16 +230,21 @@ class SyncController extends Controller
 
                     if ($rows->isNotEmpty()) {
                         $data[$table] = $rows;
+                        $totalRows += $rows->count();
+                        Log::info("SyncController@pull: Found {$rows->count()} updated rows in {$table}");
                     }
                 } catch (\Exception $e) {
                     Log::warning("SyncController@pull table {$table}: " . $e->getMessage());
                 }
             }
 
+            Log::info("SyncController@pull: Returning {$totalRows} total rows for tenant #{$tenantId}");
+
             return response()->json([
                 'success'     => true,
                 'data'        => $data,
                 'server_time' => now()->toDateTimeString(),
+                'pulled_count'=> $totalRows,
             ]);
 
         } catch (\Exception $e) {
