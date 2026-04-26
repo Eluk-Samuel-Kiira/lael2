@@ -10,7 +10,6 @@ use Spatie\Permission\Models\Role;
 
 class ArtisanCommandController extends Controller
 {
-
     // Whitelist of allowed commands for security
     protected $allowedCommands = [
         'storage:link'         => 'Create storage symlink',
@@ -23,10 +22,17 @@ class ArtisanCommandController extends Controller
         'optimize:clear'       => 'Clear all cached data',
         'optimize'             => 'Cache config, routes & views',
         'queue:restart'        => 'Restart queue workers',
-        'migrate'              => 'Run database migrations',
+        'migrate'              => 'Run database migrations (forced in production)',
         'migrate:status'       => 'Show migration status',
         'db:seed'              => 'Seed the database',
-        'migrate:fresh --seed' => 'Migrate and Seed the database a fresh',
+        'migrate:fresh --seed' => '⚠️ DANGER: Migrate and Seed fresh (force required)',
+    ];
+
+    // Commands that automatically get --force in production
+    protected $forceInProduction = [
+        'migrate',
+        'migrate:fresh --seed',
+        'db:seed',
     ];
 
     public function index()
@@ -42,7 +48,6 @@ class ArtisanCommandController extends Controller
 
     public function run(Request $request)
     {
-        
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
             return response()->json([
@@ -56,6 +61,7 @@ class ArtisanCommandController extends Controller
         ]);
 
         $command = $request->input('command');
+        $actualCommand = $command;
 
         // Security check — only allow whitelisted commands
         if (!array_key_exists($command, $this->allowedCommands)) {
@@ -65,19 +71,45 @@ class ArtisanCommandController extends Controller
             ], 403);
         }
 
+        // Force flag for specific commands in production
+        if (app()->environment('production') && in_array($command, $this->forceInProduction)) {
+            // Check if command already has --force
+            if (!str_contains($command, '--force')) {
+                $actualCommand = $command . ' --force';
+            }
+            
+            // Special warning for destructive commands
+            if ($command === 'migrate:fresh --seed') {
+                // Log who is doing this dangerous operation
+                \Log::warning('DANGEROUS: migrate:fresh --seed triggered by user', [
+                    'user_id' => auth()->id(),
+                    'user_email' => auth()->user()->email,
+                    'ip' => request()->ip()
+                ]);
+            }
+        }
+
         try {
-            Artisan::call($command);
+            // Run the command with force flag if applicable
+            Artisan::call($actualCommand);
             $output = Artisan::output();
+
+            $message = $output ?: '✅ Command executed successfully with no output.';
+            
+            // Add note about --force if it was applied
+            if ($actualCommand !== $command) {
+                $message = "⚠️ Production mode: Added --force flag.\n\n" . $message;
+            }
 
             return response()->json([
                 'success' => true,
-                'command' => 'php artisan ' . $command,
-                'output'  => $output ?: '✅ Command executed successfully with no output.',
+                'command' => 'php artisan ' . $actualCommand,
+                'output'  => $message,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'command' => 'php artisan ' . $command,
+                'command' => 'php artisan ' . ($actualCommand ?? $command),
                 'output'  => '❌ Error: ' . $e->getMessage(),
             ], 500);
         }
