@@ -18,6 +18,13 @@ if (filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN)) {
         ->appendOutputTo(storage_path('logs/sync-auto.log')); // Keeps a log history
 }
 
+// ── Deactivate Expired Promotions ────────────────────────────────────────
+// Check for expired promotions and mark them as inactive
+Schedule::command('promotions:deactivate-expired')
+    ->everyThirtyMinutes() // Run every 30 minutes
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/promotions-deactivate.log'));
+
 
 
 
