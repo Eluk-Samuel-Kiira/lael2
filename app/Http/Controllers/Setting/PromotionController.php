@@ -152,6 +152,26 @@ class PromotionController extends Controller
             ]);
         }
 
+        // // ── CHECK IF PROMOTION IS EXPIRED ─────────────────────────────────────
+        // if ($promotion->end_date && now()->gt($promotion->end_date)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => __('auth.cannot_update_expired'),
+        //         // 'error_code' => 'PROMOTION_EXPIRED',
+        //         'expired_at' => $promotion->end_date->format('Y-m-d H:i:s'),
+        //     ]);
+        // }
+
+        // // Also check if start_date is in the past but promotion is still active
+        // if ($promotion->start_date && now()->lt($promotion->start_date)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => __('auth.cannot_update_not_started'),
+        //         // 'error_code' => 'PROMOTION_NOT_STARTED',
+        //         'starts_at' => $promotion->start_date->format('Y-m-d H:i:s'),
+        //     ]);
+        // }
+
         $request->validate([
             'name' => [
                 'required',

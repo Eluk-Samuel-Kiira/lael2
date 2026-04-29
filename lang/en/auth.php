@@ -197,6 +197,8 @@ return [
     '_creater' => 'Creater',
     '_currency' => 'Currency',
     '_dashboard' => 'Dashboards',
+    'cannot_update_expired' => 'Cannot update expired promotion. Please create a new promotion instead.',
+    'cannot_update_not_started' => 'Cannot update promotion that has not started yet. Please wait until the start date or delete and recreate.',
 
     'cannot_pay_unapproved_expense' => 'Cannot pay an expense that has not been approved.',
     'cannot_reimburse_unpaid_expense' => 'Cannot reimburse an expense that has not been paid first.',

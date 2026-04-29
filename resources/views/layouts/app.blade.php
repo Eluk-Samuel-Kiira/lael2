@@ -32,7 +32,7 @@
         <script>
             if (window.top != window.self) { window.top.location.replace(window.self.location.href); }
         </script>
-        {{-- laravel bladeLive.js library --}}
+        {{-- laravel LiveBlade.js library --}}
 		@include('layouts.liveblade-imports') 
     </head>
 	@php
