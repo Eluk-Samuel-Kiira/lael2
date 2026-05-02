@@ -1,537 +1,517 @@
-// form-logic.js
+/**
+ * formLogic (internal)
+ * --------------------
+ * All AJAX mechanics for LiveBlade. Vanilla JS only — zero jQuery,
+ * zero SweetAlert2, zero external imports beyond LiveBladeResponse.
+ *
+ * @version 2.0.0
+ * @license MIT
+ */
+
 import LiveBladeResponse from '../responses/liveblade-responses.js';
 
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+/**
+ * Read the CSRF token from either a meta tag or a hidden input.
+ * @returns {string}
+ */
+function getCsrf() {
+    const meta  = document.querySelector('meta[name="csrf-token"]');
+    const input = document.querySelector('input[name="_token"]');
+    return (meta?.getAttribute('content') || input?.value || '').trim();
+}
+
+/**
+ * Return a debounced version of fn that fires after `wait` ms of silence.
+ * @param {Function} fn
+ * @param {number} wait
+ * @returns {Function}
+ */
+function debounce(fn, wait = 300) {
+    let timer;
+    return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+/**
+ * Sanitize a value for safe insertion as text (not HTML).
+ * Prefer textContent. This is a belt-and-suspenders helper for
+ * places where we must build a string attribute value.
+ * @param {*} val
+ * @returns {string}
+ */
+function esc(val) {
+    if (val === null || val === undefined) return '';
+    return String(val)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ─── formLogic ───────────────────────────────────────────────────────────────
 
 const formLogic = {
 
+    // ── Error display ────────────────────────────────────────────────────────
+
     handleError(error) {
-        let errorMessage = `
-        <table border="1" cellpadding="5" cellspacing="0" style="width:100%;border-collapse:collapse;text-align:left;">
-            <style>
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-bottom: 20px;
-                }
-                th, td {
-                    padding: 10px;
-                    text-align: left;
-                    border: 1px solid #ddd;
-                    vertical-align: top; /* Ensure content aligns properly */
-                }
-                th {
-                    background-color: #f8f8f8;
-                    color: #333;
-                    font-weight: bold;
-                    width: 20%; /* Set the width for the first column */
-                }
-                td {
-                    background-color: #fafafa;
-                    color: #555;
-                    width: 80%; /* Set the width for the second column */
-                }
-                tr:nth-child(even) td {
-                    background-color: #f2f2f2; /* Lighter background for even rows */
-                }
-                
-                /* Styling for the inner trace table */
-                table.trace-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 10px; /* Add a margin between inner and outer tables */
-                }
-                table.trace-table th, table.trace-table td {
-                    padding: 8px; /* Adjust padding to be smaller for trace table */
-                    border: 1px solid #ddd;
-                    text-align: left;
-                    vertical-align: top;
-                }
-                table.trace-table th {
-                    background-color: #e8e8e8;
-                    color: #000;
-                    font-weight: bold;
-                }
-                table.trace-table td {
-                    background-color: #f9f9f9;
-                    color: #555;
-                }
-                table.trace-table tr:nth-child(even) td {
-                    background-color: #f0f0f0; /* Lighter background for even rows */
-                }
-                
-                /* Set column widths for the inner trace table */
-                table.trace-table th:nth-child(1),
-                table.trace-table td:nth-child(1) {
-                    width: 5%; /* Index */
-                }
-                table.trace-table th:nth-child(2),
-                table.trace-table td:nth-child(2) {
-                    width: 60%; /* File path */
-                }
-                table.trace-table th:nth-child(3),
-                table.trace-table td:nth-child(3) {
-                    width: 10%; /* Line number */
-                }
-                table.trace-table th:nth-child(4),
-                table.trace-table td:nth-child(4) {
-                    width: 25%; /* Function name */
-                }
-            </style>
-
-        `;
-    
-        // Check for various properties and build the error message in table rows
-        if (error.message) {
-            errorMessage += `<tr><th>Message</th><td>${error.message}</td></tr>`;
-        }
-        if (error.exception) {
-            errorMessage += `<tr><th>Exception</th><td>${error.exception}</td></tr>`;
-        }
-        if (error.file) {
-            errorMessage += `<tr><th>File</th><td>${error.file}</td></tr>`;
-        }
-        if (error.line) {
-            errorMessage += `<tr><th>Line</th><td>${error.line}</td></tr>`;
-        }
-        
-        // Handle trace array of objects in a separate table section
-        if (error.trace && Array.isArray(error.trace)) {
-            errorMessage += `
-                <tr><th>Trace</th><td>
-                    <table class="trace-table" border="1" cellpadding="5" cellspacing="0">
-                        <tr>
-                            <th>#</th>
-                            <th>File</th>
-                            <th>Line</th>
-                            <th>Function</th>
-                        </tr>
-            `;
-    
-            error.trace.forEach((traceObj, index) => {
-                errorMessage += `
-                    <tr>
-                        <td>${index}</td>
-                        <td>${traceObj.file || 'unknown file'}</td>
-                        <td>${traceObj.line || 'unknown line'}</td>
-                        <td>${traceObj.function || 'unknown function'}</td>
-                    </tr>
-                `;
-            });
-    
-            errorMessage += `</table></td></tr>`;
-        }
-        
-        errorMessage += `</table>`;
-    
-        // Display the constructed error message using SweetAlert2
-        LiveBladeResponse.displayErrorMessage(errorMessage);
+        console.error('[LiveBlade] Error:', error);
+        LiveBladeResponse.displayErrorMessage(error);
     },
-      
+
+    // ── Delete ───────────────────────────────────────────────────────────────
+
+    /**
+     * Send a DELETE request to deleteUrl.
+     * Resolves true on success, false on failure.
+     * @param {string} deleteUrl
+     * @returns {Promise<boolean>}
+     */
     loopDeleteForms(deleteUrl) {
-        return new Promise((resolve, reject) => {
-            // Send AJAX request to delete the role
-            fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(response => {
-                if (response.success) {
-                    // Display success message using Swal
-                    Swal.fire({
-                        title: 'Success!',
-                        text: response.message,  // Display the message from the server
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    }).then(() => {
-                        // Reload the component or remove the row dynamically
-                        LiveBladeResponse.reloadOrRedirect(response);
-                    });
-                    
-                    resolve(true);
-                } else {
-                    // Display error message using Swal
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',  // Places the alert at the top-right corner
-                        icon: 'error',        // Error icon
-                        title: `<span style="color: red;">${response.message}</span>`,       // The message to display
-                        showConfirmButton: false,
-                        timer: 2000,          // Auto close after 5 seconds
-                        timerProgressBar: true, // Show a progress bar
-                        customClass: {
-                            popup: 'swal2-show', // Adds a fade-in effect for the popup
-                        }
-                    });
-                    console.log('Failed to delete');
-                    
-                    // Return false for failure
-                    resolve(false);
-                }
-            })
-            .catch(error => {
-                // Handle error
-                console.error('An error occurred. Please try again.', error);
-                formLogic.handleError(error);
-                
-                // Return false on error
-                resolve(false);
-            });
+        return fetch(deleteUrl, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': getCsrf(),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (response.success) {
+                LiveBladeResponse.reloadOrRedirect(response);
+                return true;
+            }
+            LiveBladeResponse.displayErrorMessage(response.message || 'Delete failed');
+            return false;
+        })
+        .catch(err => {
+            this.handleError(err);
+            return false;
         });
     },
 
-    getLastSegment(url) {
-        const segments = url.split('/').filter(segment => segment.length > 0);
-        return segments[segments.length - 1];
-    },
+    // ── Update (loop rows) ────────────────────────────────────────────────────
 
+    /**
+     * PUT/PATCH an existing resource.
+     * Resolves true on success, false on validation/server error.
+     * @param {Object} data       Must include _method (PUT|PATCH)
+     * @param {string} updateUrl
+     * @returns {Promise<boolean>}
+     */
     loopUpdateForms(data, updateUrl) {
-        const uniqueId = formLogic.getLastSegment(updateUrl);
-        
-        // Return a promise
-        return new Promise((resolve, reject) => {
-            $.ajax({
-                url: updateUrl, // Use the provided update URL
-                type: data._method, // Extract the method from the data object (PUT, POST, etc.)
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), // Include CSRF token for security
-                    'Content-Type': 'application/json'
-                },
-                data: JSON.stringify(data), // Send the entire data object as JSON
-                success: function(response) {
-                    if (response.success) {
-                        // If the request is successful
-                        LiveBladeResponse.reloadOrRedirect(response);
-                        resolve(true); // Resolve the promise with true on success
-                    } else {
-                        // Show error message for failed requests
-                        Swal.fire({
-                            toast: true,
-                            position: 'top-end',  // Places the alert at the top-right corner
-                            icon: 'error',        // Error icon
-                            title: `<span style="color: red;">${response.message}</span>`,       // The message to display
-                            showConfirmButton: false,
-                            timer: 2000,          // Auto close after 5 seconds
-                            timerProgressBar: true, // Show a progress bar
-                            customClass: {
-                                popup: 'swal2-show', // Adds a fade-in effect for the popup
-                            }
-                        });
-                        resolve(false); // Resolve with false if the response indicates an error
-                    }
-                },
-                error: function(xhr, status, error) {
-                    // Handle validation errors
-                    if (xhr.status === 422) { // HTTP 422 corresponds to validation errors
-                        const response = xhr.responseJSON; // Extract the response containing validation errors
-                
-                        if (response && response.errors) {
-                            LiveBladeResponse.displayValidationErrorsForInstances(response.errors, uniqueId); // Display validation errors
-                        }// Resolve with false for validation errors
-                    } else if (xhr.status >= 500 && xhr.status < 600) { // Only handle server-side errors (HTTP 500 and above)
-                        const response = xhr.responseJSON || {};
-                        // console.log(response)
-                        const errorMessage = response.message || 'An unexpected error occurred.';
-                        formLogic.handleError(response);
-                    } else {
-                        const response = xhr.responseJSON || {};
-                        // console.log(response)
-                        const errorMessage = response.message || 'An unexpected error occurred.';
-                        formLogic.handleError(response);
-                    }
-                    resolve(false); 
+        const uniqueId = this._lastSegment(updateUrl);
+
+        return fetch(updateUrl, {
+            method: 'POST', // Laravel method spoofing via _method field
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': getCsrf(),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-HTTP-Method-Override': data._method || 'PUT',
+            },
+            body: JSON.stringify(data),
+        })
+        .then(async res => {
+            const json = await res.json();
+
+            if (res.status === 422) {
+                if (json.errors) {
+                    LiveBladeResponse.displayValidationErrorsForInstances(json.errors, uniqueId);
                 }
-                
-            });
+                return false;
+            }
+
+            if (!res.ok) {
+                this.handleError(json);
+                return false;
+            }
+
+            if (json.success) {
+                LiveBladeResponse.reloadOrRedirect(json);
+                return true;
+            }
+
+            LiveBladeResponse.displayErrorMessage(json.message || 'Update failed');
+            return false;
+        })
+        .catch(err => {
+            this.handleError(err);
+            return false;
         });
     },
-    
+
+    // ── Create (generic form submit) ─────────────────────────────────────────
+
+    /**
+     * POST a new resource.
+     * Resolves true on success, false otherwise.
+     * @param {Object} data   Must include routeName and _method
+     * @returns {Promise<boolean>}
+     */
     submitFormEntities(data) {
-        // console.log(data);
-        
-        // Return a promise
-        return new Promise((resolve, reject) => {
-            $.ajax({
-                url: data.routeName, 
-                type: data._method,
-                headers: {
-                    'X-CSRF-TOKEN': data._token, // Include CSRF token for security
-                    'Content-Type': 'application/json'
-                },
-                data: JSON.stringify(data), // Send the entire data object as JSON
-                success: function(response) {
-                    if (response.success) {
-                        LiveBladeResponse.reloadOrRedirect(response);
-                        resolve(true);
-                    } else {
-                        // Show error message for failed requests
-                        
-                        Swal.fire({
-                            toast: true,
-                            position: 'top-end',  
-                            icon: 'error',     
-                            title: `<span style="color: red;">${response.message}</span>`,     
-                            showConfirmButton: false,
-                            timer: 2000,        
-                            timerProgressBar: true, 
-                            customClass: {
-                                popup: 'swal2-show', 
-                            }
-                        });
-                        resolve(false); 
-                    }
-                },
-                error: function(xhr, status, error) {
-                    // Handle validation errors
-                    if (xhr.status === 422) { 
-                        const response = xhr.responseJSON; 
-    
-                        if (response && response.errors) {
-                            LiveBladeResponse.displayValidationErrors(response.errors); // Display validation errors
-                        }// Resolve with false for validation errors
-                    } else if (xhr.status >= 500 && xhr.status < 600) { // Only handle server-side errors (HTTP 500 and above)
-                        const response = xhr.responseJSON || {};
-                        // console.log(response)
-                        const errorMessage = response.message || 'An unexpected error occurred.';
-                        formLogic.handleError(response);
-                    } else {
-                        const response = xhr.responseJSON || {};
-                        // console.log(response)
-                        const errorMessage = response.message || 'An unexpected error occurred.';
-                        formLogic.handleError(response);
-                    }
-                    resolve(false); 
-                }
-                
-            });
+        return fetch(data.routeName, {
+            method: data._method || 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': data._token || getCsrf(),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(data),
+        })
+        .then(async res => {
+            const json = await res.json();
+
+            if (res.status === 422) {
+                if (json.errors) LiveBladeResponse.displayValidationErrors(json.errors);
+                return false;
+            }
+
+            if (!res.ok) {
+                this.handleError(json);
+                return false;
+            }
+
+            if (json.success) {
+                LiveBladeResponse.reloadOrRedirect(json);
+                return true;
+            }
+
+            LiveBladeResponse.displayErrorMessage(json.message || 'Submission failed');
+            return false;
+        })
+        .catch(err => {
+            this.handleError(err);
+            return false;
         });
     },
 
-    beginTableSearch(inputId, tableId) {
-        const inputElement = document.getElementById(inputId);
-        if (!inputElement) return; // Exit if input element is not found
+    // ── Status toggle ────────────────────────────────────────────────────────
 
-        inputElement.addEventListener('keyup', function() {
-            let searchQuery = this.value.toLowerCase();
-            let rows = document.querySelectorAll(`#${tableId} tbody tr`);
-
-            rows.forEach(row => {
-                let rowData = row.textContent.toLowerCase();
-                row.style.display = rowData.includes(searchQuery) ? '' : 'none'; // Show or hide row
-            });
+    /**
+     * POST a status update (active / inactive toggle).
+     * @param {string} updateUrl
+     * @param {0|1}    selectedStatus
+     */
+    loopUpdateStatusForms(updateUrl, selectedStatus) {
+        const body = new URLSearchParams({
+            status: selectedStatus,
+            _token: getCsrf(),
         });
-    },
-    
-    beginCardSearch(inputId, cardSelector, attributeName, titleSelector) {
-        
-        const searchBar = document.getElementById(inputId); // Get the search input by ID
-        const roleCards = document.querySelectorAll(cardSelector); // Get all the role cards
 
-        // Add event listener for the search bar input
-        searchBar.addEventListener('input', function() {
-            const searchTerm = searchBar.value.toLowerCase(); // Get the search term and convert to lowercase
-
-            // Loop through all the cards and filter them by name or title
-            roleCards.forEach(card => {
-                const entityValue = card.getAttribute(attributeName).toLowerCase(); // Get the value from the entity attribute (e.g., data-role)
-                const cardTitle = card.querySelector(titleSelector).textContent.toLowerCase(); // Get the title from the card
-
-                // If the entity or title matches the search term, show the card, else hide it
-                if (entityValue.includes(searchTerm) || cardTitle.includes(searchTerm)) {
-                    card.style.display = 'block'; // Show matching card
-                } else {
-                    card.style.display = 'none'; // Hide non-matching card
-                }
-            });
-        });
+        fetch(updateUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+            body,
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (response.success) {
+                LiveBladeResponse.reloadOrRedirect(response);
+            } else {
+                LiveBladeResponse.displayErrorMessage(response.message || 'Status update failed');
+            }
+        })
+        .catch(err => this.handleError(err));
     },
 
+    // ── Image upload ─────────────────────────────────────────────────────────
+
+    /**
+     * Upload a file via multipart/form-data POST.
+     * @param {File}   file
+     * @param {string} uploadRoute
+     * @param {string} fileInputName   The form field name expected by the server
+     */
     beginUploadImage(file, uploadRoute, fileInputName) {
-        // console.log(file);
-        
         const formData = new FormData();
         formData.append(fileInputName, file);
 
         fetch(uploadRoute, {
             method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
+            credentials: 'same-origin',
+            headers: { 'X-CSRF-TOKEN': getCsrf(), 'Accept': 'application/json' },
             body: formData,
         })
-        .then(response => {
-            // console.log('Response status:', response.status);
-            // console.log('Response headers:', response.headers);
-            
-            // Get the response as text first to see what we're dealing with
-            return response.text().then(text => {
-                console.log('Raw response:', text);
-                
-                if (!response.ok) {
-                    throw new Error('Failed to upload image');
-                }
-                
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    console.error('JSON parse error:', e);
-                    console.error('Response that failed to parse:', text);
-                    throw new Error('Invalid JSON response: ' + text.substring(0, 100));
-                }
-            });
-        })
-        .then(data => {
-            if (data.success) {
-                Swal.fire({
-                    toast: true,
-                    position: 'top-end',  
-                    icon: 'success',
-                    title: `<span style="color: green;">${data.message}</span>`, 
-                    showConfirmButton: false,
-                    timer: 2000,          
-                    timerProgressBar: true,
-                    customClass: {
-                        popup: 'swal2-show',
-                    }
-                });
+        .then(async res => {
+            const text = await res.text();
+            let json;
+            try { json = JSON.parse(text); }
+            catch { throw new Error(`Non-JSON response: ${text.slice(0, 120)}`); }
+
+            if (!res.ok) throw json;
+
+            if (json.success) {
+                LiveBladeResponse.displaySuccessMessage(json.message || 'File uploaded');
+            } else {
+                LiveBladeResponse.displayErrorMessage(json.message || 'Upload failed');
             }
         })
-        .catch(error => {
-            formLogic.handleError(error);
-            console.log('An error occurred. Please try again.', error);
+        .catch(err => this.handleError(err));
+    },
+
+    // ── Action-driven GET call ───────────────────────────────────────────────
+
+    /**
+     * Fire a GET request to elementUrl and react to the JSON response.
+     * Resolves true on success, false otherwise.
+     * @param {string} elementUrl
+     * @returns {Promise<boolean>}
+     */
+    actionDrivenCall(elementUrl) {
+        return fetch(elementUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': getCsrf(),
+                'Accept': 'application/json',
+            },
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (response.success) {
+                LiveBladeResponse.reloadOrRedirect(response);
+                return true;
+            }
+            LiveBladeResponse.displayErrorMessage(response.message || 'Action failed');
+            return false;
+        })
+        .catch(err => {
+            this.handleError(err);
+            return false;
         });
     },
 
-    loopUpdateStatusForms(updateUrl, selectedStatus) {
-        
-        $.ajax({
-            url: updateUrl,
-            method: 'POST',
-            data: {
-                status: selectedStatus,
-                _token: document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-            },
-            success: function(response) {
-                LiveBladeResponse.reloadOrRedirect(response);
-                if(response.success) {
-                    // Swal.fire({
-                    //     toast: true,
-                    //     position: 'top-end',  
-                    //     icon: 'success',        // Error icon
-                    //     title: `<span style="color: green;">${response.message}</span>`, 
-                    //     showConfirmButton: false,
-                    //     timer: 2000,          
-                    //     timerProgressBar: true, // Show a progress bar
-                    //     customClass: {
-                    //         popup: 'swal2-show', // Adds a fade-in effect for the popup
-                    //     }
-                    // });
-                    const componentToReload = response.component;
-                    LiveBladeResponse.loadComponent('', response.redirect, response.component, componentToReload, response.message);
-                } else {
-                    // Show error message for failed requests
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',  // Places the alert at the top-right corner
-                        icon: 'error',        // Error icon
-                        title: `<span style="color: red;">${response.message}</span>`,       // The message to display
-                        showConfirmButton: false,
-                        timer: 2000,          // Auto close after 5 seconds
-                        timerProgressBar: true, // Show a progress bar
-                        customClass: {
-                            popup: 'swal2-show', // Adds a fade-in effect for the popup
-                        }
-                    });
-                }
-            },
-            error: function(xhr, status, error) {
-                formLogic.handleError(error);
-                console.log('An error occurred. Please try again.', error);
-            }
+    // ── Client-side DOM search ───────────────────────────────────────────────
+
+    /**
+     * Filter visible table rows by matching a text query against all cell content.
+     * Use this only for small datasets (<200 rows). For larger tables use
+     * beginServerSearch() instead.
+     * @param {string} inputId   id of the <input> element
+     * @param {string} tableId   id of the <table> element
+     */
+    beginTableSearch(inputId, tableId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        input.addEventListener('keyup', function () {
+            const q = this.value.toLowerCase();
+            document.querySelectorAll(`#${tableId} tbody tr`).forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
         });
     },
-    
+
+    // ── Server-side (DB) search with pagination ───────────────────────────────
+
+    /**
+     * Wire up a search input to hit a server endpoint and re-render table rows
+     * plus a pagination bar inside the given container.
+     *
+     * Expected server response shape:
+     * {
+     *   success: true,
+     *   data: [ { /* row fields *\/ } ],
+     *   pagination: {
+     *     current_page: 1, last_page: 5,
+     *     per_page: 15, total: 73,
+     *     from: 1, to: 15,
+     *   },
+     *   row_template: 'function(row){ return `<tr>...</tr>`; }' // optional — see docs
+     * }
+     *
+     * @param {Object} opts
+     * @param {string}   opts.inputId          id of the search <input>
+     * @param {string}   opts.tableId          id of the <table>
+     * @param {string}   opts.searchUrl        GET endpoint (e.g. /api/users/search)
+     * @param {Function} opts.rowRenderer      fn(rowData) → HTML string for one <tr>
+     * @param {string}   [opts.paginationId]   id of a <div> where pagination is injected
+     * @param {number}   [opts.debounceMs=350]
+     */
+    beginServerSearch({ inputId, tableId, searchUrl, rowRenderer, paginationId, debounceMs = 350 }) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+
+        let currentPage = 1;
+
+        const doSearch = (page = 1) => {
+            currentPage = page;
+            const q   = input.value.trim();
+            const url = new URL(searchUrl, window.location.origin);
+            url.searchParams.set('q', q);
+            url.searchParams.set('page', page);
+
+            fetch(url.toString(), {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': getCsrf() },
+            })
+            .then(res => res.json())
+            .then(response => {
+                if (!response.success) {
+                    LiveBladeResponse.displayErrorMessage(response.message || 'Search failed');
+                    return;
+                }
+                this._renderTableRows(tableId, response.data, rowRenderer);
+                if (paginationId && response.pagination) {
+                    this._renderPagination(paginationId, response.pagination, p => doSearch(p));
+                }
+            })
+            .catch(err => this.handleError(err));
+        };
+
+        input.addEventListener('keyup', debounce(() => doSearch(1), debounceMs));
+        // Also trigger on clear
+        input.addEventListener('search', () => doSearch(1));
+    },
+
+    /**
+     * Inject pagination UI into a container.
+     * @param {string}   containerId
+     * @param {Object}   p   { current_page, last_page, from, to, total }
+     * @param {Function} onPageClick  fn(pageNumber)
+     */
+    _renderPagination(containerId, p, onPageClick) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (p.last_page <= 1) { container.innerHTML = ''; return; }
+
+        const pages  = [];
+        const radius = 2; // pages each side of current
+
+        // Always show first page
+        pages.push(1);
+
+        const start = Math.max(2, p.current_page - radius);
+        const end   = Math.min(p.last_page - 1, p.current_page + radius);
+
+        if (start > 2)              pages.push('…');
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (end < p.last_page - 1) pages.push('…');
+
+        // Always show last page
+        if (p.last_page > 1) pages.push(p.last_page);
+
+        const items = pages.map(pg => {
+            if (pg === '…') return `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+            const active = pg === p.current_page ? 'active' : '';
+            return `<li class="page-item ${active}">
+                        <button class="page-link" data-lb-page="${pg}">${pg}</button>
+                    </li>`;
+        });
+
+        container.innerHTML = `
+            <nav aria-label="Table navigation">
+                <ul class="pagination pagination-sm mb-0 flex-wrap">
+                    <li class="page-item ${p.current_page === 1 ? 'disabled' : ''}">
+                        <button class="page-link" data-lb-page="${p.current_page - 1}">&laquo;</button>
+                    </li>
+                    ${items.join('')}
+                    <li class="page-item ${p.current_page === p.last_page ? 'disabled' : ''}">
+                        <button class="page-link" data-lb-page="${p.current_page + 1}">&raquo;</button>
+                    </li>
+                </ul>
+                <small class="text-muted ms-2">
+                    Showing ${esc(p.from)}–${esc(p.to)} of ${esc(p.total)}
+                </small>
+            </nav>`;
+
+        container.querySelectorAll('[data-lb-page]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pg = parseInt(btn.dataset.lbPage, 10);
+                if (!isNaN(pg) && pg >= 1 && pg <= p.last_page) onPageClick(pg);
+            });
+        });
+    },
+
+    /**
+     * Re-render tbody rows using a rowRenderer function.
+     * @param {string}   tableId
+     * @param {Array}    rows
+     * @param {Function} rowRenderer fn(rowData) → HTML string
+     */
+    _renderTableRows(tableId, rows, rowRenderer) {
+        const tbody = document.querySelector(`#${tableId} tbody`);
+        if (!tbody) return;
+
+        if (!rows || rows.length === 0) {
+            const cols = document.querySelectorAll(`#${tableId} thead th`).length || 1;
+            tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center text-muted py-4">No results found.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = rows.map(rowRenderer).join('');
+    },
+
+    // ── Card search (client-side) ────────────────────────────────────────────
+
+    /**
+     * Filter card-style elements by matching a data attribute or title text.
+     * @param {string} inputId
+     * @param {string} cardSelector       CSS selector for each card
+     * @param {string} attributeName      data-* attribute to match against
+     * @param {string} titleSelector      CSS selector of the title inside each card
+     */
+    beginCardSearch(inputId, cardSelector, attributeName, titleSelector) {
+        const searchBar = document.getElementById(inputId);
+        if (!searchBar) return;
+
+        const cards = document.querySelectorAll(cardSelector);
+
+        searchBar.addEventListener('input', function () {
+            const q = this.value.toLowerCase();
+            cards.forEach(card => {
+                const attrVal  = (card.getAttribute(attributeName) || '').toLowerCase();
+                const titleVal = (card.querySelector(titleSelector)?.textContent || '').toLowerCase();
+                card.style.display = (attrVal.includes(q) || titleVal.includes(q)) ? '' : 'none';
+            });
+        });
+    },
+
+    // ── Table filter (dropdown) ──────────────────────────────────────────────
+
+    /**
+     * Filter table rows by matching a dropdown value against a row's data attribute.
+     * @param {string} dropdownSelector   CSS selector for the <select>
+     * @param {string} tableSelector      CSS selector for the <table>
+     * @param {string} dataAttribute      dataset key on each <tr> (without "data-")
+     */
     beginTableFilter(dropdownSelector, tableSelector, dataAttribute) {
         const dropdown = document.querySelector(dropdownSelector);
-        const tableRows = document.querySelectorAll(`${tableSelector} tbody tr`);
-    
-        if (!dropdown || tableRows.length === 0) return;
-    
+        if (!dropdown) return;
+
         dropdown.addEventListener('change', function () {
-            const selectedValue = this.value.toLowerCase();
-    
-            tableRows.forEach(row => {
-                const rowValue = row.dataset[dataAttribute]?.toLowerCase();
-    
-                if (selectedValue === "" || rowValue === selectedValue) {
-                    row.style.display = ""; // Show the row
-                } else {
-                    row.style.display = "none"; // Hide the row
-                }
+            const val = this.value.toLowerCase();
+            document.querySelectorAll(`${tableSelector} tbody tr`).forEach(row => {
+                const rowVal = (row.dataset[dataAttribute] || '').toLowerCase();
+                row.style.display = (!val || rowVal === val) ? '' : 'none';
             });
         });
     },
-      
-    actionDrivenCall(elementUrl) {
-        return new Promise((resolve, reject) => {
-            // Send AJAX request to delete the role
-            fetch(elementUrl, {
-                method: 'GET',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(response => {
-                if (response.success) {
-                    // Display success message using Swal
-                    Swal.fire({
-                        title: 'Success!',
-                        text: response.message,  // Display the message from the server
-                        icon: 'success',
-                        confirmButtonText: 'OK'
-                    }).then(() => {
-                        // Reload the component or remove the row dynamically
-                        LiveBladeResponse.reloadOrRedirect(response);
-                    });
-                    
-                    resolve(true);
-                } else {
-                    // Display error message using Swal
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',  // Places the alert at the top-right corner
-                        icon: 'error',        // Error icon
-                        title: `<span style="color: red;">${response.message}</span>`,       // The message to display
-                        showConfirmButton: false,
-                        timer: 2000,          // Auto close after 5 seconds
-                        timerProgressBar: true, // Show a progress bar
-                        customClass: {
-                            popup: 'swal2-show', // Adds a fade-in effect for the popup
-                        }
-                    });
-                    console.log('Failed');
-                    
-                    // Return false for failure
-                    resolve(false);
-                }
-            })
-            .catch(error => {
-                // Handle error
-                console.error('An error occurred. Please try again.', error);
-                formLogic.handleError(error);
-                
-                // Return false on error
-                resolve(false);
-            });
-        });
+
+    // ── Internal helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Return the last path segment of a URL string.
+     * e.g. '/promotions/42' → '42'
+     * @param {string} url
+     * @returns {string}
+     */
+    _lastSegment(url) {
+        return url.split('/').filter(Boolean).pop() || '';
     },
-       
 };
 
-// Export the implementation for internal use
 export default formLogic;

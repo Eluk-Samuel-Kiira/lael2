@@ -1,6 +1,6 @@
 <div class="card-body py-4" id="reloadEmployeeComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -124,9 +124,9 @@
                                         </div>
                                     </div>
                                 </div>
+                                @include('human-resource.partial.create-user')
                                 @include('human-resource.partial.edit-user')
                                 @include('human-resource.partial.user-dept')
-
                             </td>
                         </tr>
                     @endforeach
@@ -134,5 +134,16 @@
             </tbody>
         </table>
     </div>
+    <!-- Use the reusable pagination component -->
+    <x-pagination 
+        :paginator="$all_employees" 
+        id="usersPagination"
+        :show-info="true"
+        :show-per-page="true"
+        :compact="false"
+        :per-page-options="[15, 25, 50, 100]"
+        class="pagination-wrapper"
+    />
 </div>
+
 

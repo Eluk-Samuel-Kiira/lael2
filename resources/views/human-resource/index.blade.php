@@ -1,73 +1,35 @@
 <x-app-layout>
-    @section('title', __('auth._users_index'))
     @section('content')
     
+    <!-- Toolbar -->
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
-            <!-- Left side - Title and Breadcrumb -->
-            <div class="page-title d-flex flex-column">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
-                    {{__('auth._users_table')}}
-                </h1>
-                <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                    <li class="breadcrumb-item text-muted">
-                        @php
-                            $previousUrl = url()->previous();
-                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
-                                : __('auth._back');
-                        @endphp
-                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
-                            {{ $formattedRouteName }}
-                        </a>
-                    </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
-                    <li class="breadcrumb-item text-muted">{{__('auth._users_table')}}</li>
-                </ul>
-            </div>
-
-            <!-- Right side - Actions -->
-            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
-                <div class="w-100 w-sm-250px">
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                               id="searchInput" 
-                               class="form-control form-control-solid border-0 ps-0" 
-                               placeholder="{{__('auth._search')}} {{__('auth._users')}}"
-                               onkeyup="searchTable(this.value, 'kt_table_users')">
-                    </div>
+        <div id="kt_app_toolbar_container" class="app-container container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="page-heading">{{__('auth._users_table')}}</h1>
+                
+                <div class="d-flex gap-3">
+                    {{-- Reusable search component --}}
+                    <x-liveblade-search 
+                        id="employeeSearchInput"
+                        componentId="reloadEmployeeComponent"
+                        route="{{ route('employee.index') }}"
+                        placeholder="{{__('auth._search')}} {{__('auth._users')}}"
+                    />
+                    
+                    @can('create user')
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_employee">
+                        <i class="ki-duotone ki-plus"></i> {{__('auth.new_user')}}
+                    </button>
+                    @endcan
                 </div>
-
-                @can('create user')
-                <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_employee">
-                    <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                    <span class="d-none d-sm-inline">{{__('auth.new_user')}}</span>
-                    <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
-                </button>
-                @endcan
-
-                @include('human-resource.partial.create-user')
             </div>
         </div>
     </div>
     
-    <div class="d-flex flex-column flex-column-fluid">
-        <div id="kt_app_content" class="app-content flex-column-fluid">
-            <div id="kt_app_content_container" class="app-container container-xxl">
-                <div id="status"></div>
-                <div class="card">
-                    @include('human-resource.partial.user-componenet')
-                </div>
-            </div>
-        </div>
+    <!-- Table Component -->
+    <div class="card">
+        @include('human-resource.partial.user-componenet')
     </div>
- 
+    
     @endsection
 </x-app-layout>
