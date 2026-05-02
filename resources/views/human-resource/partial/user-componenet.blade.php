@@ -135,7 +135,7 @@
         </table>
     </div>
     <!-- Use the reusable pagination component -->
-    <x-pagination 
+    <x-liveblade-pagination 
         :paginator="$all_employees" 
         id="usersPagination"
         :show-info="true"
