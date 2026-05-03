@@ -1401,6 +1401,8 @@
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
 </script>
+
+
 <script>
 
     function submitEmployeeForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
@@ -2261,29 +2263,29 @@
         // initialize stock adjustment inputs
         initializeStockInputs();
 
-        const tableId = '#kt_table_users';
+        // const tableId = '#kt_table_users';
 
-        // Destroy the existing DataTable instance if it exists
-        if ($.fn.DataTable.isDataTable(tableId)) {
-            $(tableId).DataTable().destroy();
-        }
+        // // Destroy the existing DataTable instance if it exists
+        // if ($.fn.DataTable.isDataTable(tableId)) {
+        //     $(tableId).DataTable().destroy();
+        // }
 
-        // Reinitialize the DataTable
-        $(tableId).DataTable({
-            paging: false,
-            searching: true,
-            ordering: true,
-            responsive: false, // Disable responsive behavior
-            autoWidth: false, // Prevent automatic column resizing
-            language: {
-                emptyTable: "No data available",
-            },
-            columnDefs: [
-                // Specify widths for specific columns (optional)
-                { targets: 0, width: "10%" }, // Example for first column
-                { targets: 1, width: "15%" },
-            ],
-        });
+        // // Reinitialize the DataTable
+        // $(tableId).DataTable({
+        //     paging: false,
+        //     searching: true,
+        //     ordering: true,
+        //     responsive: false, // Disable responsive behavior
+        //     autoWidth: false, // Prevent automatic column resizing
+        //     language: {
+        //         emptyTable: "No data available",
+        //     },
+        //     columnDefs: [
+        //         // Specify widths for specific columns (optional)
+        //         { targets: 0, width: "10%" }, // Example for first column
+        //         { targets: 1, width: "15%" },
+        //     ],
+        // });
 
         
         @if ( @json_decode(request()->routeIs('role.*')) )

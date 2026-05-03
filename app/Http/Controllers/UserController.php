@@ -24,35 +24,65 @@ class UserController extends Controller
         $user = Auth::user();
         
         if (!$user->hasPermissionTo('view user')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query with tenant relationship for super_admin
-        $query = User::with(['userRole', 'userDepartment']);
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
         
-        // Add tenant relationship for super_admin to see which tenant users belong to
-        if ($user->hasRole('super_admin')) {
-            $query->with('tenant');
-        } else {
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build query
+        $query = User::with(['userRole', 'userDepartment', 'userLocation']);
+        
+        if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $user->tenant_id);
+        } else {
+            $query->with('tenant');
         }
         
-        $employees = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadEmployeeComponent':
-                return view('human-resource.partial.user-componenet', [
-                    'all_employees' => $employees,
-                ]);
-            default:
-                return view('human-resource.index', [
-                    'all_employees' => $employees,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('telephone_number', 'like', "%{$search}%")
+                ->orWhereHas('userRole', fn($r) => $r->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('userDepartment', fn($d) => $d->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $employees = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page in pagination links
+        $employees->appends(['per_page' => $perPage]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadEmployeeComponent') {
+            return view('human-resource.partial.user-component', [
+                'all_employees' => $employees,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('human-resource.index', [
+            'all_employees' => $employees,
+        ]);
     }
 
     /**

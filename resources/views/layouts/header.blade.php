@@ -211,3 +211,154 @@
         </div>
     </div>
 </div>
+
+
+<!-- All tables to industry standard -->
+<style>
+    /* ============================================
+       Industry Standard Table Sizes
+       Used by GitHub, Stripe, Vercel, and Bootstrap
+       ============================================ */
+    
+    /* Standard table cell padding - Industry standard */
+    .table:not(.table-bordered):not(.table-borderless) > :not(caption) > * > * {
+        padding: 0.75rem 1rem !important;
+        vertical-align: middle;
+    }
+    
+    /* Standard font sizes */
+    .table td, 
+    .table th {
+        font-size: 0.875rem; /* 14px - standard */
+        line-height: 1.5;
+    }
+    
+    /* Headers - slightly smaller and uppercase */
+    .table thead th {
+        font-size: 0.75rem; /* 12px */
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        padding: 0.875rem 1rem !important;
+    }
+    
+    /* Standard badge sizing */
+    .table .badge {
+        font-size: 0.75rem; /* 12px */
+        font-weight: 500;
+        padding: 0.25rem 0.5rem;
+        line-height: 1.2;
+        border-radius: 6px;
+    }
+    
+    /* Standard button sizing */
+    .table .btn-sm {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        line-height: 1.5;
+        border-radius: 6px;
+    }
+    
+    /* Icon-only buttons */
+    .table .btn-icon.btn-sm {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Standard select dropdown */
+    .table select.form-select-sm {
+        min-width: 95px;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        line-height: 1.5;
+        border-radius: 6px;
+    }
+    
+    /* Standard avatar size */
+    .table .symbol {
+        width: 36px !important;
+        height: 36px !important;
+    }
+    
+    .table .symbol-50px {
+        width: 36px !important;
+        height: 36px !important;
+    }
+    
+    /* Standard spacing between elements */
+    .table .gap-2 {
+        gap: 0.5rem !important;
+    }
+    
+    /* Standard form checks */
+    .table .form-check-input {
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0;
+    }
+    
+    /* Row hover effect - standard */
+    .table tbody tr {
+        transition: background-color 0.15s ease;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    /* Responsive - tablet */
+    @media (max-width: 992px) {
+        .table > :not(caption) > * > * {
+            padding: 0.6rem 0.75rem !important;
+        }
+        
+        .table .symbol,
+        .table .symbol-50px {
+            width: 32px !important;
+            height: 32px !important;
+        }
+    }
+    
+    /* Responsive - mobile */
+    @media (max-width: 768px) {
+        .table > :not(caption) > * > * {
+            padding: 0.5rem 0.6rem !important;
+        }
+        
+        .table td, 
+        .table th {
+            font-size: 0.8125rem; /* 13px */
+        }
+        
+        .table .btn-sm span:not(.d-none) {
+            display: none;
+        }
+        
+        .table .btn-sm i {
+            margin: 0 !important;
+        }
+        
+        .table .symbol,
+        .table .symbol-50px {
+            width: 28px !important;
+            height: 28px !important;
+        }
+        
+        .table .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+        }
+    }
+    
+    /* Dark mode support (if needed) */
+    @media (prefers-color-scheme: dark) {
+        .table tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+    }
+</style>
