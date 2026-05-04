@@ -1,8 +1,8 @@
 <!-- important imports for laravel liveblades -->
-<script src="{{ asset('blade-live/forms/forms.min.js') }}" type="module"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<!-- <script src="{{ asset('blade-live/forms/forms.min.js') }}" type="module"></script> -->
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> -->
 
 <style>
     /* ── Google/YouTube-style top progress bar ── */
@@ -210,6 +210,13 @@
                     document.title = titleMatch ? titleMatch[1] : 'Default Title';
                     document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
                     updateActiveMenuLink(url);
+
+                    
+                    // console.log('Auu Falls here');
+                    if (typeof window.LiveBladeRefresh === 'function') {
+                        window.LiveBladeRefresh();
+                    }
+
                 } else {
                     console.error('Error: #kt_app_main not found in the fetched content.');
                 }
@@ -2262,6 +2269,12 @@
     function initializeComponentScripts() {
         // initialize stock adjustment inputs
         initializeStockInputs();
+        
+        // Initialize pagination and search capibilities
+        if (typeof window.LiveBladeRefresh === 'function') {
+            window.LiveBladeRefresh();
+        }
+        
 
         // const tableId = '#kt_table_users';
 

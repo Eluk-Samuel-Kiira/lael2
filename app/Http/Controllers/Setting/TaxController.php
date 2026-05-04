@@ -17,34 +17,65 @@ class TaxController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        
         if (!$user->hasPermissionTo('view tax')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = Tax::query();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Tax::with('taxCreater');
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $user->tenant_id);
         }
         
-        $taxes = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadTaxComponent':
-                return view('promotion.tax.component', [
-                    'all_taxes' => $taxes,
-                ]);
-            default:
-                return view('promotion.tax-index', [
-                    'all_taxes' => $taxes,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('code', 'like', "%{$search}%")
+                ->orWhere('rate', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%")
+                ->orWhereHas('taxCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $taxes = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $taxes->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadTaxComponent') {
+            return view('promotion.tax.component', [
+                'all_taxes' => $taxes,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('promotion.tax-index', [
+            'all_taxes' => $taxes,
+        ]);
     }
 
     /**

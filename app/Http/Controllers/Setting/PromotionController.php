@@ -19,35 +19,63 @@ class PromotionController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('view tax')) {
-            // abort(403, __('payments.not_authorized'));
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+        if (!$user->hasPermissionTo('view promotion')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = Promotion::query();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Promotion::with('Promotioncreator');
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $tenantId);
         }
         
-        $promotions = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadPromotionComponent':
-                return view('promotion.promotion.component', [
-                    'all_promotions' => $promotions,
-                ]);
-            default:
-                return view('promotion.promotion-index', [
-                    'all_promotions' => $promotions,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('discount_type', 'like', "%{$search}%")
+                ->orWhere('discount_value', 'like', "%{$search}%")
+                ->orWhereHas('Promotioncreator', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $promotions = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $promotions->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadPromotionComponent') {
+            return view('promotion.promotion.component', [
+                'all_promotions' => $promotions,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('promotion.promotion-index', [
+            'all_promotions' => $promotions,
+        ]);
     }
 
     /**

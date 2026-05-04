@@ -11,7 +11,10 @@
                     <div class="d-flex align-items-center">
                         <div class="symbol symbol-50px me-5">
                             <span class="symbol-label bg-white">
-                                <i class="ki-duotone ki-dollar fs-2x text-primary"></i>
+                                <i class="ki-duotone ki-dollar fs-2x text-primary">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
                             </span>
                         </div>
                         <div class="d-flex flex-column">
@@ -30,7 +33,10 @@
                     <div class="d-flex align-items-center">
                         <div class="symbol symbol-50px me-5">
                             <span class="symbol-label bg-white">
-                                <i class="ki-duotone ki-chart-line-down fs-2x text-success"></i>
+                                <i class="ki-duotone ki-chart-simple fs-2x text-success">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
                             </span>
                         </div>
                         <div class="d-flex flex-column">
@@ -49,7 +55,10 @@
                     <div class="d-flex align-items-center">
                         <div class="symbol symbol-50px me-5">
                             <span class="symbol-label bg-white">
-                                <i class="ki-duotone ki-calendar fs-2x text-warning"></i>
+                                <i class="ki-duotone ki-calendar-8 fs-2x text-warning">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
                             </span>
                         </div>
                         <div class="d-flex flex-column">
@@ -69,7 +78,10 @@
                     <div class="d-flex align-items-center">
                         <div class="symbol symbol-50px me-5">
                             <span class="symbol-label bg-white">
-                                <i class="ki-duotone ki-time fs-2x text-danger"></i>
+                                <i class="ki-duotone ki-time fs-2x text-danger">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
                             </span>
                         </div>
                         <div class="d-flex flex-column">

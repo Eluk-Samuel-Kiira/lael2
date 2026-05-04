@@ -8,7 +8,7 @@
                     <div class="d-flex align-items-center">
                         <div class="symbol symbol-50px me-5">
                             <span class="symbol-label bg-white">
-                                <i class="ki-duotone ki-hand-holding-usd fs-2x text-warning">
+                                <i class="ki-duotone ki-bank fs-2x text-warning">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
                                 </i>

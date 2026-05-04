@@ -134,15 +134,14 @@
             </tbody>
         </table>
     </div>
-    <!-- Use the reusable pagination component -->
-    <x-liveblade-pagination 
-        :paginator="$all_employees" 
-        id="usersPagination"
+    <x-liveblade-pagination
+        :paginator="$all_employees"
+        id="reloadEmployeePagination"
+        route="{{ route('employee.index') }}"
+        search-input-id="employeeSearchInput"
         :show-info="true"
-        :show-per-page="true"
-        :compact="false"
+        :show-per-page="true"    
         :per-page-options="[15, 25, 50, 100]"
-        class="pagination-wrapper"
     />
 </div>
 

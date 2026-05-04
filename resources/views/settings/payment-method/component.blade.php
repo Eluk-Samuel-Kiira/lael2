@@ -139,4 +139,14 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_payment_methods"
+        id="paymentMethodPagination"
+        route="{{ route('paymentmethod.index') }}"
+        search-input-id="paymentMethodSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="paymentMethodIndexTable"
+    />
 </div>

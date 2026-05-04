@@ -18,30 +18,61 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('view payment method')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Get payment methods for current tenant
-        $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
-            ->with('creator')
-            ->latest()
-            ->get();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build query with relationships
+        $query = PaymentMethod::with('creator')
+            ->where('tenant_id', $tenantId);
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%")
+                ->orWhere('provider', 'like', "%{$search}%")
+                ->orWhere('account_number', 'like', "%{$search}%")
+                ->orWhereHas('creator', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $paymentMethods = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $paymentMethods->appends(['per_page' => $perPage, 'search' => $request->search]);
         
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'paymentMethodIndexTable':
-                return view('settings.payment-method.component', [
-                    'all_payment_methods' => $paymentMethods,
-                ]);
-            default:
-                return view('settings.payment-method-index', [
-                    'all_payment_methods' => $paymentMethods,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'paymentMethodIndexTable') {
+            return view('settings.payment-method.component', [
+                'all_payment_methods' => $paymentMethods,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('settings.payment-method-index', [
+            'all_payment_methods' => $paymentMethods,
+        ]);
     }
 
     /**

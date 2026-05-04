@@ -118,5 +118,15 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_currencies"
+        id="currencyPagination"
+        route="{{ route('currency.index') }}"
+        search-input-id="currencySearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="currencyIndexTable"
+    />
 </div>
 @endcan

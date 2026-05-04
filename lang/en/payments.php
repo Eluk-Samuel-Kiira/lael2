@@ -10,6 +10,7 @@ return [
     // Table headers
     'payment_id' => 'ID',
     'employee' => 'Employee',
+    'leave_requests' => 'Leave Requests',
     'payment_type' => 'Type',
     'description' => 'Description',
     'amount' => 'Amount',

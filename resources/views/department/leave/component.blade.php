@@ -1,4 +1,3 @@
-
 <!-- BEGIN: STATISTICS CARDS -->
 <div class="row g-5 g-xl-8 mb-6">
     <!-- Pending Requests -->
@@ -8,7 +7,10 @@
                 <div class="d-flex align-items-center">
                     <div class="symbol symbol-50px me-5">
                         <span class="symbol-label bg-white">
-                            <i class="ki-duotone ki-time fs-2x text-warning"></i>
+                            <i class="ki-duotone ki-time fs-2x text-warning">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                            </i>
                         </span>
                     </div>
                     <div class="d-flex flex-column">
@@ -27,7 +29,11 @@
                 <div class="d-flex align-items-center">
                     <div class="symbol symbol-50px me-5">
                         <span class="symbol-label bg-white">
-                            <i class="ki-duotone ki-profile-circle fs-2x text-primary"></i>
+                            <i class="ki-duotone ki-profile-circle fs-2x text-primary">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                                <span class="path3"></span>
+                            </i>
                         </span>
                     </div>
                     <div class="d-flex flex-column">
@@ -46,7 +52,14 @@
                 <div class="d-flex align-items-center">
                     <div class="symbol symbol-50px me-5">
                         <span class="symbol-label bg-white">
-                            <i class="ki-duotone ki-calendar fs-2x text-info"></i>
+                            <i class="ki-duotone ki-calendar-8 fs-2x text-info">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                                <span class="path3"></span>
+                                <span class="path4"></span>
+                                <span class="path5"></span>
+                                <span class="path6"></span>
+                            </i>
                         </span>
                     </div>
                     <div class="d-flex flex-column">
@@ -65,11 +78,15 @@
                 <div class="d-flex align-items-center">
                     <div class="symbol symbol-50px me-5">
                         <span class="symbol-label bg-white">
-                            <i class="ki-duotone ki-cloud fs-2x text-success"></i>
+                            <i class="ki-duotone ki-cloud fs-2x text-success">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                            </i>
                         </span>
                     </div>
                     <div class="d-flex flex-column">
-                        <span class="fw-bold fs-2x" id="total_days">{{ number_format($statistics['total_days_this_month'], 3) }}</span>                        <span class="opacity-75">{{ __('payments.days_this_month') }}</span>
+                        <span class="fw-bold fs-2x" id="total_days">{{ number_format($statistics['total_days_this_month'], 3) }}</span>
+                        <span class="opacity-75">{{ __('payments.days_this_month') }}</span>
                     </div>
                 </div>
             </div>
@@ -78,24 +95,25 @@
 </div>
 <!-- END: STATISTICS CARDS -->
 
-<!-- BEGIN: FILTER CARD -->
+<!-- BEGIN: FILTER CARD - Compact -->
 <div class="card card-flush mb-6">
     <div class="card-header">
         <div class="card-title">
+            <i class="ki-duotone ki-filter fs-2 me-2"></i>
             <h3 class="card-label">{{ __('payments.filters') }}</h3>
         </div>
         <div class="card-toolbar">
             <button type="button" class="btn btn-sm btn-light" onclick="resetFilters()">
-                <i class="ki-duotone ki-cross-circle fs-2 me-2"></i>
+                <i class="ki-duotone ki-arrow-rotate-left fs-3 me-1"></i>
                 {{ __('payments.reset') }}
             </button>
         </div>
     </div>
     <div class="card-body">
-        <div class="row g-5">
+        <!-- Row 1: Main Filters -->
+        <div class="row g-4 mb-4">
             <div class="col-md-3">
-                <label class="form-label">{{ __('payments.status') }}</label>
-                <select class="form-select" id="status_filter" data-control="select2" data-placeholder="All Status">
+                <select class="form-select" id="status_filter">
                     <option value="">{{ __('payments.all_status') }}</option>
                     <option value="pending">{{ __('payments.pending') }}</option>
                     <option value="approved">{{ __('payments.approved') }}</option>
@@ -106,8 +124,7 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">{{ __('payments.employee') }}</label>
-                <select class="form-select" id="employee_filter" data-control="select2" data-placeholder="All Employees">
+                <select class="form-select" id="employee_filter">
                     <option value="">{{ __('payments.all_employees') }}</option>
                     @foreach($employees as $employee)
                         <option value="{{ $employee->id }}">{{ $employee->first_name }} {{ $employee->last_name }}</option>
@@ -115,8 +132,7 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">{{ __('payments.type') }}</label>
-                <select class="form-select" id="type_filter" data-control="select2" data-placeholder="All Types">
+                <select class="form-select" id="type_filter">
                     <option value="">{{ __('payments.all_types') }}</option>
                     <option value="annual">{{ __('payments.annual') }}</option>
                     <option value="sick">{{ __('payments.sick') }}</option>
@@ -129,17 +145,22 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">{{ __('payments.date_range') }}</label>
                 <div class="d-flex gap-2">
-                    <input type="date" class="form-control" id="date_from" placeholder="From">
-                    <input type="date" class="form-control" id="date_to" placeholder="To">
+                    <input type="date" class="form-control" id="date_from" placeholder="From Date">
+                    <input type="date" class="form-control" id="date_to" placeholder="To Date">
                 </div>
             </div>
-            <div class="col-12 mt-4">
-                <button class="btn btn-primary w-100" onclick="applyFilters()">
-                    <i class="ki-duotone ki-filter fs-3 me-2"></i>
-                    {{ __('payments.apply_filters') }}
-                </button>
+        </div>
+        
+        <!-- Row 2: Action Buttons -->
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1 flex-md-grow-0" onclick="applyFilters()">
+                        <i class="ki-duotone ki-search fs-3 me-1"></i>
+                        {{ __('payments.apply_filters') }}
+                    </button>
+                </div>
             </div>
         </div>
     </div>

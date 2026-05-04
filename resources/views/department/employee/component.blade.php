@@ -12,11 +12,6 @@
                     <th class="min-w-125px">{{ __('pagination.id') }}</th>
                     <th class="min-w-125px">{{ __('pagination.employee') }}</th>
                     <th class="min-w-125px">{{ __('pagination.department') }}</th>
-                    {{-- 
-                    <th class="min-w-125px">{{ __('pagination.email') }}</th>
-                    <th class="min-w-125px">{{ __('pagination.phone') }}</th>
-                    <th class="min-w-125px">{{ __('pagination.job_title') }}</th>
-                    --}}
                     <th class="min-w-125px">{{ __('pagination.salary') }}</th>
                     <th class="min-w-125px">{{ __('pagination.hire_date') }}</th>
                     <th class="min-w-125px">{{ __('pagination.term_date') }}</th>
@@ -40,7 +35,7 @@
                                 <div class="symbol symbol-circle symbol-50px overflow-hidden me-3">
                                     <a href="#">
                                         <div class="symbol-label">
-                                            <img src="{{ employeeProfileImage($employee->user->profile_image) }}" alt="{{ $employee->first_name }}" class="w-100" />
+                                            <img src="{{ employeeProfileImage($employee->user->profile_image ?? null) }}" alt="{{ $employee->first_name }}" class="w-100" />
                                         </div>
                                     </a>
                                 </div>
@@ -48,24 +43,19 @@
                                     <a href="#" class="text-gray-800 text-hover-primary mb-1">{{ $employee->first_name . ' ' . $employee->last_name }}</a>
                                     <span>{{ $employee->email }}</span>
                                 </div>
-                            </td>
+                        </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $employee->department->name ?? __('payments.none') }}</div>
                             </td>
-                            {{-- 
-                            <td>{{ $employee->email }}</td> 
-                            <td>{{ $employee->phone ?? 'N/A' }}</td>
-                            <td>{{ $employee->job_title ?? 'N/A' }}</td>
-                            --}}
                             <td>
                                 <div class="d-flex flex-column">
-                                    <span class="badge badge-light fw-bold">{{ $employee->salary }} - {{ currency_symbol() }}</span>
+                                    <span class="badge badge-light fw-bold">{{ number_format($employee->salary) }} - {{ currency_symbol() }}</span>
                                     @if($employee->salary_type)
                                         <small class="text-muted mt-1">({{ $employee->salary_type }})</small>
                                     @endif
                                 </div>
                             </td>
-                            <td>{{ $employee->hire_date->format('d M Y') }}</td>
+                            <td>{{ $employee->hire_date?->format('d M Y') ?? 'N/A' }}</td>
                             <td>
                                 @if($employee->termination_date)
                                     {{ $employee->termination_date->format('d M Y') }}
@@ -74,7 +64,7 @@
                                 @endif
                             </td>
                             <td>
-                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateUserStatus({{ $employee->id }}, this.value)"
+                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateEmployeeStatus({{ $employee->id }}, this.value)"
                                 @cannot('update employee') disabled @endcannot>
                                     <option value="1" {{ $employee->is_active == 1 ? 'selected' : '' }}>{{__('payments.active') }}</option>
                                     <option value="0" {{ $employee->is_active == 0 ? 'selected' : '' }}>{{__('payments.inactive') }}</option>
@@ -96,7 +86,7 @@
                                         data-bs-target="#documentsModal{{$employee->id}}">
                                         <i class="bi bi-file-earmark-text me-1 fs-5"></i> 
                                         <span>{{ __('auth.documents') }}</span>
-                                        @if($employee->documents && count(json_decode($employee->documents, true)) > 0)
+                                        @if($employee->documents && count(json_decode($employee->documents, true) ?? []) > 0)
                                             <span class="badge badge-primary ms-1">{{ count(json_decode($employee->documents, true)) }}</span>
                                         @endif
                                     </button>
@@ -104,9 +94,8 @@
 
                                 @include('department.employee.edit')
                                 @include('department.employee.documents')
-                                
-                            </td>
-                        </tr>
+                            </td
+                        </table>
                     @endforeach
                 @else
                     <tr>
@@ -116,5 +105,16 @@
             </tbody>
         </table>
     </div>
+    
+    <x-liveblade-pagination
+        :paginator="$employees"
+        id="employeePagination"
+        route="{{ route('user.index') }}"
+        search-input-id="employeeSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="employeeUserIndexTable"
+    />
 </div>
 @endcan

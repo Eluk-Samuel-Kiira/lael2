@@ -16,35 +16,65 @@ class LocationController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        
         if (!$user->hasPermissionTo('view location')) {
-            // abort(403, __('payments.not_authorized'));
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Start the query with relationships
-        $query = Location::with('locationCreater', 'locationManager', 'departments');
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build query with relationships
+        $query = Location::with('locationCreater', 'locationManager', 'departments', 'currency');
         
         // Apply tenant filter only if not super_admin
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $user->tenant_id);
         }
         
-        $locations = $query->latest()->get();
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('address', 'like', "%{$search}%")
+                  ->orWhereHas('locationCreater', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('locationManager', fn($m) => $m->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('currency', fn($cur) => $cur->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $locations = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $locations->appends(['per_page' => $perPage, 'search' => $request->search]);
         
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'locationIndexTable':
-                return view('unit-of-measure.location.component', [
-                    'all_locations' => $locations,
-                ]);
-            default:
-                return view('unit-of-measure.location-index', [
-                    'all_locations' => $locations,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'locationIndexTable') {
+            return view('unit-of-measure.location.component', [
+                'all_locations' => $locations,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('unit-of-measure.location-index', [
+            'all_locations' => $locations,
+        ]);
     }
 
     /**

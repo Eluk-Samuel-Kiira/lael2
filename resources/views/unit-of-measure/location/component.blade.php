@@ -210,5 +210,15 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_locations"
+        id="locationPagination"
+        route="{{ route('locations.index') }}"
+        search-input-id="locationSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="locationIndexTable"
+    />
 </div>
 @endcan
