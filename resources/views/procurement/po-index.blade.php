@@ -33,16 +33,12 @@
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
                 <!-- Search Bar -->
                 <div class="w-100 w-sm-250px">
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                               id="searchInput" 
-                               class="form-control form-control-solid border-0 ps-0" 
-                               placeholder="{{__('auth._search')}} {{__('passwords.purchase_order')}}"
-                               onkeyup="searchTable(this.value, 'kt_table_users')">
-                    </div>
+                    <x-liveblade-search 
+                        id="purchaseOrderSearchInput"
+                        componentId="reloadPurchasesComponent"
+                        route="{{ route('purchase_order.index') }}"
+                        placeholder="{{__('auth._search')}} {{__('passwords.purchase_order')}}"
+                    />
                 </div>
 
                 @can('create tax')

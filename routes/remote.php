@@ -25,4 +25,10 @@ Route::middleware(['auth'])->prefix('sync')->group(function () {
 
 
 
+use App\Http\Controllers\Api\DependentController;
+
+Route::get('/api/dependent/options', [DependentController::class, 'getOptions'])->name('api.dependent.options');
+Route::get('/get-departments', [DependentController::class, 'getDepartmentsByLocation'])->name('get.departments');
+
+
 

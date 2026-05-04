@@ -194,5 +194,15 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$purchaseOrders"
+        id="purchaseOrderPagination"
+        route="{{ route('purchase_order.index') }}"
+        search-input-id="purchaseOrderSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadPurchasesComponent"
+    />
 </div>
 @endcan

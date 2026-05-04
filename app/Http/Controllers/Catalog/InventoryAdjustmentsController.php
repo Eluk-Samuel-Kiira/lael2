@@ -20,33 +20,93 @@ class InventoryAdjustmentsController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('update stock levels')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
-
-        // Retrieve only those items that have its variants is active
-        $items = InventoryItems::with(['variant', 'itemCreater'])
-                ->whereHas('variant', function ($query) use ($tenantId) {
-                    $query->where('is_active', 1)
-                        ->where('tenant_id', $tenantId);
+        
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Retrieve only those items that have its variants active
+        $query = InventoryItems::with(['variant', 'itemCreater', 'itemLocation', 'departmentItem']);
+        
+        $query->whereHas('variant', function ($query) use ($tenantId) {
+            $query->where('is_active', 1)
+                ->where('tenant_id', $tenantId);
+        })
+        ->where('tenant_id', $tenantId);
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->whereHas('variant', function($v) use ($search) {
+                    $v->where('name', 'like', "%{$search}%")
+                    ->orWhere('sku', 'like', "%{$search}%");
                 })
-                ->where('tenant_id', $tenantId)
-                ->latest()
-                ->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadStockComponent':
-                return view('store.inventory-adjustment.component', [
-                    'items' => $items,
-                ]);
-            default:
-                return view('store.adjustment-index', [
-                    'items' => $items,
-                ]);
+                ->orWhereHas('itemLocation', fn($l) => $l->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('departmentItem', fn($d) => $d->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Apply location filter if provided
+        if ($request->filled('location_id')) {
+            $query->where('location_id', $request->location_id);
+        }
+        
+        // Apply department filter if provided
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+        
+        // Paginate with dynamic per_page
+        $items = $query->latest()->paginate($perPage);
+        
+        // Preserve filters in pagination links
+        $items->appends([
+            'per_page' => $perPage, 
+            'search' => $request->search,
+            'location_id' => $request->location_id,
+            'department_id' => $request->department_id
+        ]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadStockComponent') {
+            return view('store.inventory-adjustment.component', [
+                'items' => $items,
+            ])->render();
+        }
+        
+        // For filter requests
+        if ($request->ajax() && ($request->filled('location_id') || $request->filled('department_id'))) {
+            return view('store.inventory-adjustment.component', [
+                'items' => $items,
+            ])->render();
+        }
+        
+        // Get locations and departments for filters
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        $departments = \App\Models\Department::where('tenant_id', $tenantId)->get();
+        
+        // Regular page load
+        return view('store.adjustment-index', [
+            'items' => $items,
+            'locations' => $locations,
+            'departments' => $departments,
+        ]);
     }
 
     /**

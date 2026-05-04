@@ -1,7 +1,7 @@
 @can('view category-expense')
 <div class="card-body py-4" id="reloadExpenseCategoryComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -38,7 +38,7 @@
                                 <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateExpenseCategoryStatus({{ $category->id }}, this.value)"
                                     @cannot('update category-expense') disabled @endcannot>
                                     <option value="1" {{ $category->is_active == 1 ? 'selected' : '' }}><span>{{__('payments.active')}}</option>
-                                    <option value="0" {{ $category->is_active == 0 ? 'selected' : '' }}>{{__('payments._id.inactive')}}</option>
+                                    <option value="0" {{ $category->is_active == 0 ? 'selected' : '' }}>{{__('payments.inactive')}}</option>
                                 </select>
                             </td>
                             <td>
@@ -100,6 +100,16 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$expense_categories"
+        id="expenseCategoryPagination"
+        route="{{ route('expense-category.index') }}"
+        search-input-id="expenseCategorySearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadExpenseCategoryComponent"
+    />
 </div>
 @endcan
 

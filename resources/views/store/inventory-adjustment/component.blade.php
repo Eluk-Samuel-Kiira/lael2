@@ -1,7 +1,7 @@
 @can('update stock levels')
 <div class="card-body py-4" id="reloadStockComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -83,5 +83,15 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$items"
+        id="stockPagination"
+        route="{{ route('stocks.index') }}"
+        search-input-id="stockSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadStockComponent"
+    />
 </div>
 @endcan

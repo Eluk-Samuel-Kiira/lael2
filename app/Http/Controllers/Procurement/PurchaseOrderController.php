@@ -12,19 +12,32 @@ use Illuminate\Support\Facades\{ Auth, DB };
 
 class PurchaseOrderController extends Controller
 {
+    
     public function index(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         
         if (!$user->hasPermissionTo('view purchase_orders')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
         $query = PurchaseOrder::with(['items', 'supplier', 'location', 'creator']);
         
         // If user is NOT super_admin, filter by tenant
@@ -32,19 +45,36 @@ class PurchaseOrderController extends Controller
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $purchaseOrders = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadPurchasesComponent':
-                return view('procurement.purchase-order.component', [
-                    'purchaseOrders' => $purchaseOrders,
-                ]);
-            default:
-                return view('procurement.po-index', [
-                    'purchaseOrders' => $purchaseOrders,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('po_number', 'like', "%{$search}%")
+                ->orWhere('status', 'like', "%{$search}%")
+                ->orWhereHas('supplier', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('creator', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $purchaseOrders = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $purchaseOrders->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadPurchasesComponent') {
+            return view('procurement.purchase-order.component', [
+                'purchaseOrders' => $purchaseOrders,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('procurement.po-index', [
+            'purchaseOrders' => $purchaseOrders,
+        ]);
     }
 
     

@@ -394,6 +394,132 @@
                 const sel = wrap.querySelector('.lb-per-page-select');
                 if (sel) sel.addEventListener('change', () => goToPage(1));
             });
+
+            // ───────────────────────────────────────────────────────────────────────
+            // 3. FILTER SELECTS
+            // ───────────────────────────────────────────────────────────────────────
+            document.querySelectorAll('.lb-filter-select:not([data-lb-initialized])').forEach(select => {
+                select.setAttribute('data-lb-initialized', '1');
+                
+                const componentId = select.dataset.lbComponent;
+                const baseUrl = select.dataset.lbUrl || window.location.pathname;
+                
+                select.addEventListener('change', function() {
+                    const filterValue = this.value;
+                    const filterName = this.dataset.lbFilter;
+                    
+                    // Get current search term
+                    const searchInput = document.querySelector(`.lb-search-input[data-lb-component="${componentId}"]`);
+                    const searchTerm = searchInput?.value?.trim() || '';
+                    
+                    // Get current pagination per_page
+                    const paginationWrap = document.querySelector(`[data-lb-component="${componentId}"]`);
+                    const perPage = paginationWrap?.querySelector('.lb-per-page-select')?.value || 15;
+                    
+                    // Build params
+                    const params = { page: 1, per_page: perPage };
+                    if (searchTerm) params.search = searchTerm;
+                    if (filterValue) params[filterName] = filterValue;
+                    
+                    // Collect all other active filters
+                    document.querySelectorAll(`.lb-filter-select[data-lb-component="${componentId}"]`).forEach(otherSelect => {
+                        const otherValue = otherSelect.value;
+                        const otherFilterName = otherSelect.dataset.lbFilter;
+                        if (otherValue && otherFilterName && otherFilterName !== filterName) {
+                            params[otherFilterName] = otherValue;
+                        }
+                    });
+                    
+                    loadComponent(baseUrl, componentId, params);
+                });
+            });
+
+            // 4. DEPENDENT DROPDOWNS
+            document.querySelectorAll('.lb-dep-parent:not([data-lb-initialized])').forEach(parent => {
+                parent.setAttribute('data-lb-initialized', '1');
+                
+                const childId = parent.dataset.lbChild;
+                const childSelect = document.getElementById(childId);
+                const route = parent.dataset.lbRoute;
+                const loadingId = childId + '_loading';
+                const loadingSpinner = document.getElementById(loadingId);
+                
+                if (!childSelect) return;
+                
+                function loadChildOptions(parentValue) {
+                    if (!parentValue) {
+                        childSelect.innerHTML = '<option value="">Select options first</option>';
+                        childSelect.disabled = true;
+                        childSelect.style.opacity = '0.7';
+                        if (childSelect.select2) $(childSelect).trigger('change');
+                        return;
+                    }
+                    
+                    if (loadingSpinner) loadingSpinner.style.display = 'block';
+                    childSelect.disabled = true;
+                    childSelect.style.opacity = '0.7';
+                    childSelect.innerHTML = '<option value="">Loading...</option>';
+                    
+                    const fetchUrl = new URL(route, window.location.origin);
+                    fetchUrl.searchParams.set('parent_id', parentValue);
+                    
+                    fetch(fetchUrl.toString(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        let options = '<option value="">Select option</option>';
+                        
+                        if (data.success && data.data && data.data.length > 0) {
+                            data.data.forEach(item => {
+                                const value = item.id || item.value;
+                                const label = item.name || item.label;
+                                options += `<option value="${value}">${label}</option>`;
+                            });
+                            childSelect.disabled = false;
+                            childSelect.style.opacity = '1';
+                        } else {
+                            options = '<option value="">No options available</option>';
+                            childSelect.disabled = true;
+                            childSelect.style.opacity = '0.5';
+                        }
+                        
+                        childSelect.innerHTML = options;
+                        
+                        // Refresh Select2 if present
+                        if (typeof $ !== 'undefined' && $.fn.select2) {
+                            $(childSelect).trigger('change');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Dependent dropdown error:', error);
+                        childSelect.innerHTML = '<option value="">Error loading options</option>';
+                        childSelect.disabled = true;
+                    })
+                    .finally(() => {
+                        if (loadingSpinner) loadingSpinner.style.display = 'none';
+                    });
+                }
+                
+                // Initial load if parent has value
+                if (parent.value) {
+                    loadChildOptions(parent.value);
+                }
+                
+                // Remove existing listener to avoid duplicates
+                parent.removeEventListener('change', parent._lbHandler);
+                
+                // Create and store handler
+                parent._lbHandler = function() {
+                    loadChildOptions(this.value);
+                };
+                
+                parent.addEventListener('change', parent._lbHandler);
+            });
+
         };
 
         // ── SPA navigation ────────────────────────────────────────────────────────

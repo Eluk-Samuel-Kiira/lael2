@@ -2,7 +2,7 @@
 <!-- resources/views/procurement/expense/expense-component.blade.php -->
 <div class="card-body py-4" id="reloadExpenseComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -11,6 +11,7 @@
                         </div>
                     </th>
                     <th class="min-w-125px">{{__('pagination.expense_id')}}</th>
+                    <th class="min-w-125px">{{__('payments.description')}}</th>
                     <th class="min-w-125px">{{__('auth.supplier')}}</th>
                     <th class="min-w-125px">{{__('pagination.amount')}}</th> 
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
@@ -32,9 +33,12 @@
                             <td>
                                 <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $expense->id }}</div>
                             </td>
+                            <td>
+                                <div class="badge badge-light fw-bold">{{ $expense->description }}</div>
+                            </td>
                             <td>{{ $expense->vendor_name ?? '' }}</td>
                             <td>
-                                <div class="badge badge-light fw-bold">${{ number_format($expense->net_amount, 2) }}</div>
+                                <div class="badge badge-light fw-bold">{{ number_format($expense->net_amount, 2) }} {{currency_symbol()}}</div>
                             </td>
                             <td>
                                 @php
@@ -204,5 +208,16 @@
             </tbody>
         </table>
     </div>
+
+    <x-liveblade-pagination
+        :paginator="$expenses"
+        id="expensePagination"
+        route="{{ route('expense.index') }}"
+        search-input-id="expenseSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadExpenseComponent"
+    />
 </div>
 @endcan

@@ -73,30 +73,21 @@
 
                         
                         <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination._location')}}</span>
-                                </label>
-                                <select name="location_id" class="form-select form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option></option>
-                                    @foreach ($locations as $location)
-                                        <option value="{{ $location->id }}">{{ $location->name }}</option>
-                                    @endforeach
-                                </select>
-                                <div id="location_id"></div>
-                            </div> 
-                            
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('auth._department')}}</span>
-                                </label>
-                                <div class="position-relative">
-                                    <select name="department_id" class="form-select form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                        <option></option>
-                                    </select>
-                                </div>
-                                <div id="department_id"></div>
-                            </div>
+                            <x-liveblade-dependent-dropdown 
+                                id="location_department"
+                                parentName="location_id"
+                                childName="department_id"
+                                parentLabel="pagination._location"
+                                childLabel="auth._department"
+                                :parentOptions="$locations"
+                                parentValueKey="id"
+                                parentLabelKey="name"
+                                childValueKey="id"
+                                childLabelKey="name"
+                                route="{{ route('get.departments') }}"
+                                componentId="reloadItemComponent"
+                                :required="true"
+                            />
                         </div>
 
                         <button type="reset" id="discardButton" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>

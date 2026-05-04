@@ -24,6 +24,7 @@ return [
     '_category_table' => 'Category Table',
     '_category_new' => 'New Category',
     'edit_category' => 'Edit Category',
+    'no_items_found' => 'No items found!',
     'category_id' => 'Category ID',
 
     // Payment Modal
