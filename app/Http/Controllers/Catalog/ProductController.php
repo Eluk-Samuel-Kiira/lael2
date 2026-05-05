@@ -21,33 +21,88 @@ class ProductController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('view product')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = Product::with('category', 'productCreater');
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Product::with(['category', 'productCreater']);
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $products = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadProductComponent':
-                return view('inventory.product.component', [
-                    'all_products' => $products,
-                ]);
-            default:
-                return view('inventory.product-index', [
-                    'all_products' => $products,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%")
+                ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('productCreater', fn($cr) => $cr->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Apply category filter if provided
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+        
+        // Apply type filter if provided
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+        
+        // Paginate with dynamic per_page
+        $products = $query->latest()->paginate($perPage);
+        
+        // Preserve filters in pagination links
+        $products->appends([
+            'per_page' => $perPage, 
+            'search' => $request->search,
+            'category_id' => $request->category_id,
+            'type' => $request->type
+        ]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadProductComponent') {
+            return view('inventory.product.component', [
+                'all_products' => $products,
+            ])->render();
+        }
+        
+        // Get categories for filter
+        $categories = ProductCategory::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->get(['id', 'name']);
+        
+        // Get product types for filter
+        $productTypes = ['simple' => 'Simple', 'variable' => 'Variable', 'digital' => 'Digital', 'service' => 'Service'];
+        
+        // Regular page load
+        return view('inventory.product-index', [
+            'all_products' => $products,
+            'categories' => $categories,
+            'productTypes' => $productTypes,
+        ]);
     }
 
     /**

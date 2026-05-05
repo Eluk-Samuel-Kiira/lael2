@@ -80,15 +80,12 @@
                                 parentLabel="pagination._location"
                                 childLabel="auth._department"
                                 :parentOptions="$locations"
-                                parentValueKey="id"
-                                parentLabelKey="name"
-                                childValueKey="id"
-                                childLabelKey="name"
                                 route="{{ route('get.departments') }}"
-                                componentId="reloadItemComponent"
-                                :required="true"
                             />
                         </div>
+                        <div id="location_id"></div>
+                        <div id="department_id"></div>
+
 
                         <button type="reset" id="discardButton" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
                         

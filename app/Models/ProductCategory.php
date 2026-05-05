@@ -5,14 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-
 class ProductCategory extends Model
 {
     use HasFactory;
 
+    protected $table = 'product_categories';
+    
     protected $fillable = [
         'tenant_id',
-        'parent_category_id',
+        'parent_category_id',  // ← This is the correct column name
         'name',
         'description',
         'image_url',
@@ -28,7 +29,12 @@ class ProductCategory extends Model
 
     public function parentCategory()
     {
-        return $this->belongsTo(Category::class, 'parent_category_id', 'id');
+        return $this->belongsTo(ProductCategory::class, 'parent_category_id', 'id');
+    }
+    
+    public function childCategories()
+    {
+        return $this->hasMany(ProductCategory::class, 'parent_category_id', 'id');
     }
 
     public function products()

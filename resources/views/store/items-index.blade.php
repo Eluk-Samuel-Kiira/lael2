@@ -43,15 +43,15 @@
                             'name' => 'location_id', 
                             'label' => __('pagination._location'), 
                             'options' => $locations,
-                            'value_key' => 'id',
-                            'label_key' => 'name'
+                            'searchable' => true 
                         ],
                         [
                             'name' => 'department_id', 
                             'label' => __('auth._department'), 
                             'options' => $departments,
-                            'value_key' => 'id',
-                            'label_key' => 'name'
+                            'depends_on' => 'location_id',  // ← Only update department filter when location changes
+                            'parent_id_field' => 'location_id',  // ← The field in department that links to location
+                            'searchable' => true 
                         ]
                     ]"
                 />

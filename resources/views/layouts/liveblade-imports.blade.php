@@ -395,70 +395,296 @@
                 if (sel) sel.addEventListener('change', () => goToPage(1));
             });
 
-            // ───────────────────────────────────────────────────────────────────────
-            // 3. FILTER SELECTS
-            // ───────────────────────────────────────────────────────────────────────
-            document.querySelectorAll('.lb-filter-select:not([data-lb-initialized])').forEach(select => {
-                select.setAttribute('data-lb-initialized', '1');
+            // 3. FILTER SELECTS with Searchable Support
+            function initFilters() {
+                // Store original options for dependent filters
+                const originalOptions = new Map();
+                let debounceTimer;
                 
-                const componentId = select.dataset.lbComponent;
-                const baseUrl = select.dataset.lbUrl || window.location.pathname;
+                // Handle both searchable inputs and regular selects
+                document.querySelectorAll('.lb-filter-input, .lb-filter-select').forEach(element => {
+                    if (element.classList.contains('lb-filter-input')) {
+                        initSearchableFilter(element);
+                    } else {
+                        initRegularFilter(element);
+                    }
+                });
                 
-                select.addEventListener('change', function() {
-                    const filterValue = this.value;
-                    const filterName = this.dataset.lbFilter;
+                function initSearchableFilter(input) {
+                    if (input.getAttribute('data-lb-initialized')) return;
+                    input.setAttribute('data-lb-initialized', '1');
                     
-                    // Get current search term
-                    const searchInput = document.querySelector(`.lb-search-input[data-lb-component="${componentId}"]`);
-                    const searchTerm = searchInput?.value?.trim() || '';
+                    const componentId = input.dataset.lbComponent;
+                    const baseUrl = input.dataset.lbUrl || window.location.pathname;
+                    const filterName = input.dataset.lbFilter;
+                    const dependsOn = input.dataset.lbDependsOn;
+                    const hiddenInput = document.getElementById(input.id.replace('_input', ''));
+                    const datalistId = input.getAttribute('list');
+                    const datalist = document.getElementById(datalistId);
                     
-                    // Get current pagination per_page
-                    const paginationWrap = document.querySelector(`[data-lb-component="${componentId}"]`);
-                    const perPage = paginationWrap?.querySelector('.lb-per-page-select')?.value || 15;
+                    if (!hiddenInput) return;
                     
-                    // Build params
-                    const params = { page: 1, per_page: perPage };
-                    if (searchTerm) params.search = searchTerm;
-                    if (filterValue) params[filterName] = filterValue;
+                    // Store original options for dependent filtering
+                    if (datalist) {
+                        const options = [];
+                        datalist.querySelectorAll('option').forEach(opt => {
+                            if (opt.value && !opt.value.includes('- All')) {
+                                options.push({
+                                    value: opt.getAttribute('data-value'),
+                                    text: opt.value,
+                                    parentId: opt.getAttribute('data-parent-id') || ''
+                                });
+                            }
+                        });
+                        originalOptions.set(datalistId, options);
+                    }
                     
-                    // Collect all other active filters
-                    document.querySelectorAll(`.lb-filter-select[data-lb-component="${componentId}"]`).forEach(otherSelect => {
-                        const otherValue = otherSelect.value;
-                        const otherFilterName = otherSelect.dataset.lbFilter;
-                        if (otherValue && otherFilterName && otherFilterName !== filterName) {
-                            params[otherFilterName] = otherValue;
+                    // Function to filter dependent options
+                    function filterDependentOptions() {
+                        if (!dependsOn) return;
+                        
+                        const parentSelect = document.querySelector(`.lb-filter-input[data-lb-filter="${dependsOn}"], .lb-filter-select[data-lb-filter="${dependsOn}"]`);
+                        if (!parentSelect) return;
+                        
+                        let parentValue;
+                        if (parentSelect.classList.contains('lb-filter-input')) {
+                            const parentHidden = document.getElementById(parentSelect.id.replace('_input', ''));
+                            parentValue = parentHidden?.value;
+                        } else {
+                            parentValue = parentSelect.value;
                         }
+                        
+                        const originalOpts = originalOptions.get(datalistId) || [];
+                        
+                        // Clear current datalist (keep the "All" option)
+                        datalist.innerHTML = '';
+                        
+                        // Add "All" option first
+                        const allOption = document.createElement('option');
+                        allOption.value = `${filterName} - All`;
+                        allOption.setAttribute('data-value', '');
+                        datalist.appendChild(allOption);
+                        
+                        // Filter options based on parent value
+                        let filteredOpts = originalOpts;
+                        if (parentValue) {
+                            filteredOpts = originalOpts.filter(opt => opt.parentId == parentValue);
+                        }
+                        
+                        // Add filtered options
+                        filteredOpts.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.value = opt.text;
+                            option.setAttribute('data-value', opt.value);
+                            option.setAttribute('data-parent-id', opt.parentId);
+                            datalist.appendChild(option);
+                        });
+                    }
+                    
+                    // Sync hidden input with visible input
+                    function syncHiddenValue() {
+                        const inputValue = input.value.trim();
+                        let matchedValue = '';
+                        let matchedText = inputValue;
+                        
+                        if (datalist && inputValue) {
+                            const options = datalist.querySelectorAll('option');
+                            for (let i = 0; i < options.length; i++) {
+                                const optionValue = options[i].value;
+                                if (optionValue === inputValue) {
+                                    matchedValue = options[i].getAttribute('data-value');
+                                    matchedText = optionValue;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        hiddenInput.value = matchedValue;
+                        return { value: matchedValue, text: matchedText };
+                    }
+                    
+                    // Trigger filter change (with debounce)
+                    let triggerTimeout;
+                    function triggerFilter() {
+                        clearTimeout(triggerTimeout);
+                        triggerTimeout = setTimeout(() => {
+                            const { value: filterValue } = syncHiddenValue();
+                            
+                            // Get current search term
+                            const searchInput = document.querySelector(`.lb-search-input[data-lb-component="${componentId}"]`);
+                            const searchTerm = searchInput?.value?.trim() || '';
+                            
+                            // Get current pagination per_page
+                            const paginationWrap = document.querySelector(`[data-lb-pagination][data-lb-component="${componentId}"]`);
+                            const perPage = paginationWrap?.querySelector('.lb-per-page-select')?.value || 15;
+                            
+                            // Build params
+                            const params = { page: 1, per_page: perPage };
+                            if (searchTerm) params.search = searchTerm;
+                            
+                            // Collect all active filters
+                            document.querySelectorAll(`.lb-filter-input[data-lb-component="${componentId}"], .lb-filter-select[data-lb-component="${componentId}"]`).forEach(otherFilter => {
+                                let otherValue;
+                                if (otherFilter.classList.contains('lb-filter-input')) {
+                                    const otherHidden = document.getElementById(otherFilter.id.replace('_input', ''));
+                                    otherValue = otherHidden?.value;
+                                } else {
+                                    otherValue = otherFilter.value;
+                                }
+                                const otherFilterName = otherFilter.dataset.lbFilter;
+                                if (otherValue && otherFilterName && otherFilterName !== filterName) {
+                                    params[otherFilterName] = otherValue;
+                                }
+                            });
+                            
+                            // Add current filter
+                            if (filterValue) {
+                                params[filterName] = filterValue;
+                            }
+                            
+                            loadComponent(baseUrl, componentId, params);
+                        }, 300);
+                    }
+                    
+                    // Handle input changes (typing)
+                    input.addEventListener('input', function(e) {
+                        e.stopPropagation();
+                        const { value: matchedValue, text: matchedText } = syncHiddenValue();
+                        
+                        // Update dependent filters if needed
+                        if (dependsOn) {
+                            filterDependentOptions();
+                        }
+                        
+                        // Trigger filter after debounce
+                        triggerFilter();
                     });
                     
-                    loadComponent(baseUrl, componentId, params);
-                });
-            });
+                    // Handle selection from datalist (clicking an option)
+                    input.addEventListener('change', function() {
+                        syncHiddenValue();
+                        if (dependsOn) filterDependentOptions();
+                        triggerFilter();
+                    });
+                    
+                    // Handle blur (when user leaves the field)
+                    input.addEventListener('blur', function() {
+                        syncHiddenValue();
+                    });
+                    
+                    // Initial sync and filter
+                    syncHiddenValue();
+                    if (dependsOn) filterDependentOptions();
+                    
+                    // If there's an initial value that matches, trigger filter
+                    if (hiddenInput.value) {
+                        setTimeout(() => triggerFilter(), 100);
+                    }
+                    
+                    // Listen for parent changes
+                    if (dependsOn) {
+                        const parentElement = document.querySelector(`.lb-filter-input[data-lb-filter="${dependsOn}"], .lb-filter-select[data-lb-filter="${dependsOn}"]`);
+                        if (parentElement) {
+                            const parentHandler = function() {
+                                filterDependentOptions();
+                                // Clear current input value if it no longer matches
+                                if (input.value) {
+                                    syncHiddenValue();
+                                    if (!hiddenInput.value) {
+                                        input.value = '';
+                                    }
+                                }
+                            };
+                            parentElement.addEventListener('change', parentHandler);
+                            if (parentElement.classList.contains('lb-filter-input')) {
+                                parentElement.addEventListener('input', parentHandler);
+                            }
+                        }
+                    }
+                }
+                
+                function initRegularFilter(select) {
+                    if (select.getAttribute('data-lb-initialized')) return;
+                    select.setAttribute('data-lb-initialized', '1');
+                    
+                    const componentId = select.dataset.lbComponent;
+                    const baseUrl = select.dataset.lbUrl || window.location.pathname;
+                    
+                    select.addEventListener('change', function() {
+                        const filterValue = this.value;
+                        const filterName = this.dataset.lbFilter;
+                        
+                        const searchInput = document.querySelector(`.lb-search-input[data-lb-component="${componentId}"]`);
+                        const searchTerm = searchInput?.value?.trim() || '';
+                        
+                        const paginationWrap = document.querySelector(`[data-lb-pagination][data-lb-component="${componentId}"]`);
+                        const perPage = paginationWrap?.querySelector('.lb-per-page-select')?.value || 15;
+                        
+                        const params = { page: 1, per_page: perPage };
+                        if (searchTerm) params.search = searchTerm;
+                        
+                        document.querySelectorAll(`.lb-filter-input[data-lb-component="${componentId}"], .lb-filter-select[data-lb-component="${componentId}"]`).forEach(otherFilter => {
+                            let otherValue;
+                            if (otherFilter.classList.contains('lb-filter-input')) {
+                                const otherHidden = document.getElementById(otherFilter.id.replace('_input', ''));
+                                otherValue = otherHidden?.value;
+                            } else {
+                                otherValue = otherFilter.value;
+                            }
+                            const otherFilterName = otherFilter.dataset.lbFilter;
+                            if (otherValue && otherFilterName) {
+                                params[otherFilterName] = otherValue;
+                            }
+                        });
+                        
+                        loadComponent(baseUrl, componentId, params);
+                    });
+                    
+                    // Initial load if has value
+                    if (select.value) {
+                        setTimeout(() => {
+                            const event = new Event('change', { bubbles: true });
+                            select.dispatchEvent(event);
+                        }, 100);
+                    }
+                }
+            }
 
-            // 4. DEPENDENT DROPDOWNS
+            // Call initFilters inside LiveBladeRefresh
+            initFilters();
+
+            // 4. DEPENDENT DROPDOWNS with Typable Inputs
             document.querySelectorAll('.lb-dep-parent:not([data-lb-initialized])').forEach(parent => {
                 parent.setAttribute('data-lb-initialized', '1');
                 
+                const parentInput = document.getElementById(parent.id + '_input');
                 const childId = parent.dataset.lbChild;
-                const childSelect = document.getElementById(childId);
+                const childHidden = document.getElementById(childId);
+                const childInput = document.getElementById(childId + '_input');
+                const childDatalist = document.getElementById(childId + '_list');
                 const route = parent.dataset.lbRoute;
-                const loadingId = childId + '_loading';
+                const loadingId = parent.dataset.lbLoading;
                 const loadingSpinner = document.getElementById(loadingId);
                 
-                if (!childSelect) return;
+                if (!childInput || !childHidden) return;
+                
+                // Store current options for filtering
+                let currentChildOptions = [];
                 
                 function loadChildOptions(parentValue) {
                     if (!parentValue) {
-                        childSelect.innerHTML = '<option value="">Select options first</option>';
-                        childSelect.disabled = true;
-                        childSelect.style.opacity = '0.7';
-                        if (childSelect.select2) $(childSelect).trigger('change');
+                        childInput.value = '';
+                        childHidden.value = '';
+                        childInput.disabled = true;
+                        childHidden.disabled = true;
+                        childDatalist.innerHTML = '';
+                        currentChildOptions = [];
                         return;
                     }
                     
                     if (loadingSpinner) loadingSpinner.style.display = 'block';
-                    childSelect.disabled = true;
-                    childSelect.style.opacity = '0.7';
-                    childSelect.innerHTML = '<option value="">Loading...</option>';
+                    childInput.disabled = true;
+                    childInput.placeholder = 'Loading...';
                     
                     const fetchUrl = new URL(route, window.location.origin);
                     fetchUrl.searchParams.set('parent_id', parentValue);
@@ -471,53 +697,190 @@
                     })
                     .then(res => res.json())
                     .then(data => {
-                        let options = '<option value="">Select option</option>';
+                        let options = '';
+                        currentChildOptions = [];
                         
                         if (data.success && data.data && data.data.length > 0) {
                             data.data.forEach(item => {
                                 const value = item.id || item.value;
                                 const label = item.name || item.label;
-                                options += `<option value="${value}">${label}</option>`;
+                                options += `<option value="${label}" data-id="${value}"></option>`;
+                                currentChildOptions.push({ id: value, name: label });
                             });
-                            childSelect.disabled = false;
-                            childSelect.style.opacity = '1';
+                            childInput.disabled = false;
+                            childHidden.disabled = false;
+                            childInput.placeholder = 'Type or select ' + childInput.getAttribute('data-placeholder') + '...';
                         } else {
                             options = '<option value="">No options available</option>';
-                            childSelect.disabled = true;
-                            childSelect.style.opacity = '0.5';
+                            childInput.disabled = true;
+                            childHidden.disabled = true;
                         }
                         
-                        childSelect.innerHTML = options;
-                        
-                        // Refresh Select2 if present
-                        if (typeof $ !== 'undefined' && $.fn.select2) {
-                            $(childSelect).trigger('change');
-                        }
+                        childDatalist.innerHTML = options;
                     })
                     .catch(error => {
                         console.error('Dependent dropdown error:', error);
-                        childSelect.innerHTML = '<option value="">Error loading options</option>';
-                        childSelect.disabled = true;
+                        childDatalist.innerHTML = '<option value="">Error loading options</option>';
+                        childInput.disabled = true;
+                        childHidden.disabled = true;
                     })
                     .finally(() => {
                         if (loadingSpinner) loadingSpinner.style.display = 'none';
                     });
                 }
                 
-                // Initial load if parent has value
-                if (parent.value) {
-                    loadChildOptions(parent.value);
+                // Sync parent hidden input with text input
+                function syncParentHidden() {
+                    const inputValue = parentInput.value.trim();
+                    const datalist = document.getElementById(parentInput.getAttribute('list'));
+                    let matchedId = '';
+                    
+                    if (datalist && inputValue) {
+                        const options = datalist.options;
+                        for (let i = 0; i < options.length; i++) {
+                            const optionValue = options[i].value;
+                            if (optionValue === inputValue) {
+                                matchedId = options[i].getAttribute('data-id');
+                                break;
+                            }
+                        }
+                    }
+                    
+                    parent.value = matchedId;
+                    
+                    if (matchedId) {
+                        loadChildOptions(matchedId);
+                    } else if (!inputValue) {
+                        loadChildOptions('');
+                    }
                 }
                 
-                // Remove existing listener to avoid duplicates
-                parent.removeEventListener('change', parent._lbHandler);
+                // Sync child hidden input with text input
+                function syncChildHidden() {
+                    const inputValue = childInput.value.trim();
+                    let matchedId = '';
+                    
+                    if (inputValue && currentChildOptions.length > 0) {
+                        const matched = currentChildOptions.find(opt => opt.name === inputValue);
+                        if (matched) {
+                            matchedId = matched.id;
+                        }
+                    }
+                    
+                    childHidden.value = matchedId;
+                }
                 
-                // Create and store handler
-                parent._lbHandler = function() {
-                    loadChildOptions(this.value);
-                };
+                // Handle parent input - prevent backspace issues
+                parentInput.addEventListener('keydown', function(e) {
+                    // Allow normal backspace behavior
+                    e.stopPropagation();
+                });
                 
-                parent.addEventListener('change', parent._lbHandler);
+                parentInput.addEventListener('input', function(e) {
+                    // Use requestAnimationFrame to avoid freezing
+                    requestAnimationFrame(() => {
+                        syncParentHidden();
+                    });
+                });
+                
+                parentInput.addEventListener('change', function() {
+                    syncParentHidden();
+                });
+                
+                // Handle child input - searchable/filterable
+                childInput.addEventListener('keydown', function(e) {
+                    e.stopPropagation();
+                });
+                
+                childInput.addEventListener('input', function(e) {
+                    requestAnimationFrame(() => {
+                        syncChildHidden();
+                        
+                        // Filter datalist options based on input
+                        const inputValue = this.value.trim().toLowerCase();
+                        if (childDatalist && inputValue && currentChildOptions.length > 0) {
+                            const filtered = currentChildOptions.filter(opt => 
+                                opt.name.toLowerCase().includes(inputValue)
+                            );
+                            let options = '';
+                            filtered.forEach(item => {
+                                options += `<option value="${item.name}" data-id="${item.id}"></option>`;
+                            });
+                            childDatalist.innerHTML = options;
+                        } else if (childDatalist && currentChildOptions.length > 0) {
+                            // Reset to all options
+                            let options = '';
+                            currentChildOptions.forEach(item => {
+                                options += `<option value="${item.name}" data-id="${item.id}"></option>`;
+                            });
+                            childDatalist.innerHTML = options;
+                        }
+                    });
+                });
+                
+                childInput.addEventListener('change', function() {
+                    syncChildHidden();
+                });
+                
+                // Initial sync
+                if (parentInput.value) {
+                    syncParentHidden();
+                }
+            });
+
+            // 5. TYPABLE SELECTS (Datalist - No Select2)
+            // Initialize all typable select inputs
+            document.querySelectorAll('.typable-select-input:not([data-lb-initialized])').forEach(input => {
+                input.setAttribute('data-lb-initialized', '1');
+                
+                const hiddenId = input.getAttribute('data-hidden-id');
+                const hidden = document.getElementById(hiddenId);
+                const listId = input.getAttribute('data-list-id');
+                const datalist = document.getElementById(listId);
+                
+                if (!hidden) return;
+                
+                function syncTypableValue() {
+                    const inputValue = input.value.trim();
+                    let matchedId = '';
+                    
+                    if (datalist && inputValue) {
+                        const options = datalist.querySelectorAll('option');
+                        for (let i = 0; i < options.length; i++) {
+                            if (options[i].value === inputValue) {
+                                matchedId = options[i].getAttribute('data-id');
+                                break;
+                            }
+                        }
+                    }
+                    
+                    hidden.value = matchedId;
+                    
+                    // Trigger change event on hidden input for any listeners
+                    const changeEvent = new Event('change', { bubbles: true });
+                    hidden.dispatchEvent(changeEvent);
+                }
+                
+                // Remove old listeners to avoid duplicates
+                input.removeEventListener('input', syncTypableValue);
+                input.removeEventListener('change', syncTypableValue);
+                
+                // Add new listeners
+                input.addEventListener('input', syncTypableValue);
+                input.addEventListener('change', syncTypableValue);
+                
+                // Initial sync
+                syncTypableValue();
+                
+                // Add focus styling
+                input.addEventListener('focus', function() {
+                    this.classList.add('border-primary');
+                });
+                
+                input.addEventListener('blur', function() {
+                    this.classList.remove('border-primary');
+                    syncTypableValue();
+                });
             });
 
         };

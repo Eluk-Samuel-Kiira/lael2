@@ -1,7 +1,7 @@
 @can('view category')
 <div class="card-body py-4" id="reloadCategoryComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -99,6 +99,18 @@
                 @endif
             </tbody>
         </table>
+    </div>
+    <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$all_categories"
+            id="categoryPagination"
+            route="{{ route('category.index') }}"
+            search-input-id="categorySearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="reloadCategoryComponent"
+        />
     </div>
 </div>
 @endcan

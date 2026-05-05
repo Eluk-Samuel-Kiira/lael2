@@ -28,21 +28,19 @@
 
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
-                                <label class="required form-label">{{__('pagination._category')}}</span></label>
-                                <select name="parent_category_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option></option>
-                                    @foreach ($categories as $cat)
-                                        <option value="{{ $cat->id }}" {{ (old('parent_category_id', $category->parent_category_id) == $cat->id) ? 'selected' : '' }}>
-                                            {{ $cat->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                <x-typable-select 
+                                    name="parent_category_id"
+                                    label="pagination.parent_category"
+                                    :options="$categories"
+                                    selected="{{ $category->parent_category_id }}"
+                                    placeholder="Type or select parent category..."
+                                />
                                 <div id="parent_category_id{{ $category->id }}"></div>
                             </div>
                             
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('auth._status')}}</label>
-                                <select name="is_active" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="is_active" class="form-select">
                                     <option></option>
                                     <option value="1" {{ (old('is_active', $category->is_active) == 1) ? 'selected' : '' }}>{{__('auth._active')}}</option>
                                     <option value="0" {{ (old('is_active', $category->is_active) == 0) ? 'selected' : '' }}>{{__('auth._inactive')}}</option>

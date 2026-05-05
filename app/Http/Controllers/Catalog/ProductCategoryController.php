@@ -22,33 +22,70 @@ class ProductCategoryController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('view subcategory')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = ProductCategory::with('productCategoryCreater', 'parentCategory');
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = ProductCategory::with(['productCategoryCreater', 'parentCategory']);
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $products_categories = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadProductCategoryComponent':
-                return view('inventory.product-category.component', [
-                    'products_categories' => $products_categories,
-                ]);
-            default:
-                return view('inventory.product-category-index', [
-                    'products_categories' => $products_categories,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhereHas('parentCategory', fn($p) => $p->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('productCategoryCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $products_categories = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $products_categories->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadProductCategoryComponent') {
+            return view('inventory.product-category.component', [
+                'products_categories' => $products_categories,
+            ])->render();
+        }
+        
+        // Get parent categories for create modal (FIXED: use parent_category_id column)
+        $parentCategories = ProductCategory::where('tenant_id', $tenantId)
+            ->where(function($q) {
+                $q->whereNull('parent_category_id')
+                ->orWhere('parent_category_id', 0);
+            })
+            ->get(['id', 'name']);
+        
+        // Regular page load
+        return view('inventory.product-category-index', [
+            'products_categories' => $products_categories,
+            'parentCategories' => $parentCategories,
+        ]);
     }
 
     /**
