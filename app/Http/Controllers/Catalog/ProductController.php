@@ -200,30 +200,67 @@ class ProductController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
-        if (!$user->hasPermissionTo('create product')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+        if (!$user->hasPermissionTo('view variant')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
 
-        // Build the query
-        $query = Product::with('variants')->where('id', $id);
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Get the parent product first
+        $product = Product::where('id', $id);
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $tenantId);
+            $product->where('tenant_id', $tenantId);
         }
         
-        $product_variants = $query->firstOrFail();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadVariantComponent':
-                return view('inventory.product-variant.component', compact('product_variants'));
-            default:
-                return view('inventory.product-variant.index', compact('product_variants'));
+        $product_variants = $product->firstOrFail();
+        
+        // Build query for variants with relationships
+        $query = ProductVariant::with(['variantCreater', 'unitMeasure'])
+            ->where('product_id', $id);
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('barcode', 'like', "%{$search}%")
+                ->orWhereHas('variantCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $variants = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $variants->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        // Attach variants to product object
+        $product_variants->setRelation('variants', $variants);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadVariantComponent') {
+            return view('inventory.product-variant.component', compact('product_variants'));
+        }
+        
+        return view('inventory.product-variant.index', compact('product_variants'));
     }
 
     /**

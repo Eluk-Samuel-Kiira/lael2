@@ -18,31 +18,77 @@ class OrderController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('view order')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
-        $orders = Order::with([
+        
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Order::with([
             'orderItems',
             'customer',
             'orderCreater',
             'location',
-            'department'
-        ])->latest()->get();
-
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'ordersIndexTable':
-                return view('orders.order.component', [
-                    'orders' => $orders,
-                ]);
-            default:
-                return view('orders.order-index', [
-                    'orders' => $orders,
-                ]);
+            'department',
+            'orderPayments'
+        ]);
+        
+        // If user is NOT super_admin, filter by tenant
+        if (!$user->hasRole('super_admin')) {
+            $query->where('tenant_id', $tenantId);
         }
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('order_number', 'like', "%{$search}%")
+                ->orWhere('customer_name', 'like', "%{$search}%")
+                ->orWhere('status', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%")
+                ->orWhere('source', 'like', "%{$search}%")
+                ->orWhereHas('customer', function($c) use ($search) {
+                    $c->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                })
+                ->orWhereHas('orderCreater', fn($cr) => $cr->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $orders = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $orders->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'ordersIndexTable') {
+            return view('orders.order.component', [
+                'orders' => $orders,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('orders.order-index', [
+            'orders' => $orders,
+        ]);
     }
 
     /**

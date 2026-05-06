@@ -25,6 +25,7 @@ return [
     '_category_new' => 'New Category',
     'edit_category' => 'Edit Category',
     'no_items_found' => 'No items found!',
+    'cash_tendered' => 'Cash Tendered',
     'category_id' => 'Category ID',
 
     // Payment Modal

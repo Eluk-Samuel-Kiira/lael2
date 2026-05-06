@@ -97,15 +97,15 @@ class POSController extends Controller
             ->get();
 
             // DEBUG: Check what inventory is actually being loaded
-            \Log::info("=== INVENTORY DEBUG ===");
-            foreach ($products as $product) {
-                foreach ($product->variants as $variant) {
-                    \Log::info("Variant {$variant->id} inventory count: " . $variant->inventory->count());
-                    foreach ($variant->inventory as $inv) {
-                        \Log::info("  - Inventory ID: {$inv->id}, Dept: {$inv->department_id}, Loc: {$inv->location_id}");
-                    }
-                }
-            }
+            // \Log::info("=== INVENTORY DEBUG ===");
+            // foreach ($products as $product) {
+            //     foreach ($product->variants as $variant) {
+            //         \Log::info("Variant {$variant->id} inventory count: " . $variant->inventory->count());
+            //         foreach ($variant->inventory as $inv) {
+            //             \Log::info("  - Inventory ID: {$inv->id}, Dept: {$inv->department_id}, Loc: {$inv->location_id}");
+            //         }
+            //     }
+            // }
 
             // Also check if there are any inventory records that should match but aren't being loaded
             $expectedInventory = \DB::table('inventory_items')

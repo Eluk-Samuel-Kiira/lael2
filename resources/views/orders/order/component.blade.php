@@ -1,7 +1,7 @@
 @can('view order')
 <div class="card-body py-4" id="ordersIndexTable">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -145,6 +145,18 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+    <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$orders"
+            id="orderPagination"
+            route="{{ route('orders.index') }}"
+            search-input-id="orderSearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="ordersIndexTable"
+        />
     </div>
 </div>
 

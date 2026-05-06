@@ -32,6 +32,7 @@ return [
     'ngo' => 'NGO',
     'timeline' => 'Timeline',
     'foreign' => 'Foreign',
+    'no_orders' => 'No Orders',
 
     'order_created' => 'Order Created',
     'created' => 'Created',
