@@ -504,7 +504,24 @@
         // Set up the URL dynamically
         var updateUrl = '/transfer-stock/' + uniqueId;
         // console.log(updateUrl);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
+        handleTransferStock(data, updateUrl, uniqueId, submitButton);
+    }
+
+        // General Update or Edit Function 
+    function handleTransferStock(data, updateUrl, uniqueId, submitButton) {
+        LiveBlade.editLoopForms(data, updateUrl)
+        .then(noErrorStatus => {
+            if (noErrorStatus) {
+                const closeButton = document.getElementById(`closeTransferModalButton${uniqueId}`);
+                if (closeButton) closeButton.click();
+            }
+        })
+        .catch(error => {
+            console.error('An unexpected error occurred:', error);
+        })
+        .finally(() => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+        });
     }
     
     function initializeStockInputs() {
@@ -572,84 +589,113 @@
         handleEditResponse(data, updateUrl, uniqueId, submitButton);
     }
 
-    
-    $(document).ready(function() {
-        // ========== REUSABLE FUNCTIONS ==========
-        
-        // ========== CREATE MODAL ==========
-        $('#kt_modal_add_inventory').on('shown.bs.modal', function() {
-            const modal = $(this);
-            const locationSelect = modal.find('select[name="location_id"]');
-            const departmentSelect = modal.find('select[name="department_id"]');
-            
-            modal.find('form')[0]?.reset();
-            departmentSelect.html('<option value=""></option>');
-            initModalSelects(modal, locationSelect, departmentSelect);
-        });
-        
-        // ========== EDIT MODALS ==========
-        $(document).on('show.bs.modal', '[id^="editItem"]', function() {
-            const modal = $(this);
-            initModalSelects(
-                modal,
-                modal.find('select[name="location_id"]'),
-                modal.find('select[name="department_id"]')
-            );
-        });
-        
-        // ========== STOCK TRANSFER MODALS ==========
-        $(document).on('show.bs.modal', '[id^="stockTransfer"]', function() {
-            const modal = $(this);
-            const locationSelect = modal.find('select[name="location_id"]');
-            const departmentSelect = modal.find('select[name="department_id"]');
-            
-            initModalSelects(modal, locationSelect, departmentSelect);
-        });
-        
-    });
+</script>
 
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const variantSearch = document.getElementById('variant_search');
+        const variantHidden = document.getElementById('variant_id');
+        const quantityInput = document.getElementById('quantity_on_hand');
+        const allocatedInput = document.getElementById('quantity_allocated');
+        const variantList = document.getElementById('variant_list');
+        
+        if (!variantSearch || !variantHidden || !quantityInput || !allocatedInput) return;
+        
+        // Store variant data for quick lookup
+        const variants = [];
+        if (variantList) {
+            const options = variantList.querySelectorAll('option');
+            options.forEach(opt => {
+                if (opt.value && opt.value !== 'Select product variant') {
+                    variants.push({
+                        id: opt.getAttribute('data-id'),
+                        name: opt.value,
+                        quantity: parseInt(opt.getAttribute('data-quantity')) || 0
+                    });
+                }
+            });
+        }
+        
+        function updateQuantity() {
+            const searchValue = variantSearch.value.trim();
+            const allocated = parseInt(allocatedInput.value) || 0;
+            
+            // Find matching variant
+            let matchedVariant = null;
+            for (let i = 0; i < variants.length; i++) {
+                if (variants[i].name === searchValue) {
+                    matchedVariant = variants[i];
+                    break;
+                }
+            }
+            
+            if (matchedVariant) {
+                // Set hidden input value
+                variantHidden.value = matchedVariant.id;
+                // Calculate available quantity
+                const available = Math.max(0, matchedVariant.quantity - allocated);
+                quantityInput.value = available;
+            } else {
+                variantHidden.value = '';
+                quantityInput.value = 0;
+            }
+        }
+        
+        // Update when variant is selected from datalist
+        variantSearch.addEventListener('change', function() {
+            setTimeout(updateQuantity, 10);
+        });
+        
+        // Update when typing (with debounce)
+        let debounceTimer;
+        variantSearch.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                updateQuantity();
+            }, 300);
+        });
+        
+        // Update when allocated quantity changes
+        allocatedInput.addEventListener('input', function() {
+            updateQuantity();
+        });
+        
+        // Set initial value if editing
+        const initialVariantId = variantHidden.value;
+        if (initialVariantId) {
+            const initialVariant = variants.find(v => v.id == initialVariantId);
+            if (initialVariant) {
+                variantSearch.value = initialVariant.name;
+                updateQuantity();
+            }
+        }
+        
+        // Initialize
+        updateQuantity();
+        
+        // Also handle blur to ensure value is correct
+        variantSearch.addEventListener('blur', function() {
+            const currentValue = this.value;
+            let isValid = false;
+            for (let i = 0; i < variants.length; i++) {
+                if (variants[i].name === currentValue) {
+                    isValid = true;
+                    break;
+                }
+            }
+            if (!isValid && currentValue !== '') {
+                this.value = '';
+                variantHidden.value = '';
+                quantityInput.value = 0;
+            }
+        });
+    });
 </script>
 
 
 <script>
     
-    document.addEventListener('DOMContentLoaded', function() {
-        // Wait for Select2 to initialize
-        setTimeout(function() {
-            const variantSelect = document.getElementById('variant-select');
-            const quantityInput = document.querySelector('input[name="quantity_on_hand"]');
-            const allocatedInput = document.querySelector('input[name="quantity_allocated"]');
-            
-            if (!variantSelect || !quantityInput || !allocatedInput) return;
-            
-            function updateAvailableQuantity() {
-                const selectedOption = variantSelect.options[variantSelect.selectedIndex];
-                if (selectedOption && selectedOption.value !== '') {
-                    const variantQuantity = selectedOption.getAttribute('data-quantity') || 0;
-                    const allocated = parseInt(allocatedInput.value) || 0;
-                    const available = Math.max(0, parseInt(variantQuantity) - allocated);
-                    
-                    quantityInput.value = available;
-                } else {
-                    quantityInput.value = 0;
-                }
-            }
-            
-            // Update when variant changes
-            if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
-                jQuery(variantSelect).on('change', updateAvailableQuantity);
-            } else {
-                variantSelect.addEventListener('change', updateAvailableQuantity);
-            }
-            
-            // Update when allocated quantity changes
-            allocatedInput.addEventListener('input', updateAvailableQuantity);
-            
-            // Initialize on page load
-            updateAvailableQuantity();
-        }, 300);
-    });
-
 
     function editItemInstanceLoop(uniqueId) {
         const submitButton = document.getElementById('updateItemButton' + uniqueId);

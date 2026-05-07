@@ -112,7 +112,7 @@
                             <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                 <span>{{__('auth.department')}}</span>
                             </label>
-                            <select class="form-select form-select-solid" name="department_id" readonly>
+                            <select class="form-select form-select-solid" name="department_id" disabled>
                                 <option value="">{{ __('auth.select_department') }}</option>
                                 @foreach($departments ?? [] as $department)
                                     <option value="{{ $department->id }}" {{ $employee->department_id == $department->id ? 'selected' : '' }}>{{ $department->name }}</option>

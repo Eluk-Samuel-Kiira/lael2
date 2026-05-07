@@ -20,14 +20,12 @@
                         
                         <div class="col-md-6">
                             <label class="form-label required">{{ __('pagination.category') }}</label>
-                            <select name="category_id" class="form-select" required>
-                                <option value="">{{ __('pagination.select_category') }}</option>
-                                @foreach($expenseCategories as $category)
-                                    <option value="{{ $category->id }}" {{ $expense->category_id == $category->id ? 'selected' : '' }}>
-                                        {{ $category->name }} ({{ $category->code }})
-                                    </option>
-                                @endforeach
-                            </select>
+                            <x-typable-select 
+                                name="category_id"
+                                :options="$expenseCategories"
+                                selected="{{ $expense->category_id }}"
+                                placeholder="Type or select category..."
+                            />
                             <div id="category_id{{ $expense->id }}"></div>
                         </div>
                         
@@ -37,34 +35,36 @@
                             <div id="description{{ $expense->id }}"></div>
                         </div>
                         
-                        <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                        <div class="col-md-6">
                             <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                 <span class="required">{{ __('passwords.supplier') }}</span>
                             </label>
-                            <select name="supplier_id" class="form-select" data-control="select2" data-placeholder="{{ __('passwords._select_supplier') }}">
-                                <option value="">{{ __('passwords._select_supplier') }}</option>
-                                @foreach($suppliers as $supplier)
-                                    <option value="{{ $supplier->id }}" {{ ($expense->supplier_id ?? old('supplier_id')) == $supplier->id ? 'selected' : '' }}>
-                                        {{ $supplier->name }}
-                                        @if($supplier->tax_number)
-                                            (TIN: {{ $supplier->tax_number }})
-                                        @endif
-                                    </option>
-                                @endforeach
-                            </select>
+                            <x-typable-select 
+                                name="supplier_id"
+                                :options="$suppliers"
+                                selected="{{ $expense->supplier_id }}"
+                                placeholder="Type or select supplier..."
+                            />
                             <div id="supplier_id{{ $expense->id }}"></div>
                         </div>
                         
                         <div class="col-md-6">
                             <label class="form-label">{{ __('pagination.employee') }}</label>
-                            <select name="employee_id" class="form-select">
-                                <option value="">{{ __('pagination.select_employee') }}</option>
-                                @foreach($active_employees as $employee)
-                                    <option value="{{ $employee->id }}" {{ $expense->employee_id == $employee->id ? 'selected' : '' }}>
-                                        {{ $employee->first_name }} {{ $employee->last_name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            @php
+                                $formattedEmployees = [];
+                                foreach($active_employees as $employee) {
+                                    $formattedEmployees[] = (object)[
+                                        'id' => $employee->id,
+                                        'name' => $employee->first_name . ' ' . $employee->last_name
+                                    ];
+                                }
+                            @endphp
+                            <x-typable-select 
+                                name="employee_id"
+                                :options="$formattedEmployees"
+                                selected="{{ $expense->employee_id }}"
+                                placeholder="Type or select employee..."
+                            />
                             <div id="employee_id{{ $expense->id }}"></div>
                         </div>
                         
@@ -114,25 +114,19 @@
                                     style="background-color: #f8f9fa; cursor: not-allowed;">
                                 <input type="hidden" name="payment_method_id" value="{{ $expense->payment_method_id }}">
                             @else
-                                <select name="payment_method_id" class="form-select">
-                                    <option value="">{{ __('pagination.select_payment_method') }}</option>
-                                    @foreach($active_payment_methods as $method)
-                                        <option value="{{ $method->id }}" 
-                                            {{ (isset($expense) ? $expense->payment_method_id : old('payment_method_id')) == $method->id ? 'selected' : '' }}>
-                                            {{ $method->name }}
-                                            @if($method->is_default)
-                                                ({{ __('payments._default') }})
-                                            @endif
-                                        </option>
-                                    @endforeach
-                                </select>
+                                <x-typable-select 
+                                    name="payment_method_id"
+                                    :options="$active_payment_methods"
+                                    selected="{{ $expense->payment_method_id }}"
+                                    placeholder="Type or select payment method..."
+                                />
                             @endif
-                            <div id="payment_method_id{{ isset($expense) ? $expense->id : '' }}"></div>
+                            <div id="payment_method_id{{ $expense->id }}"></div>
                         </div>
                         
                         <div class="col-md-6">
                             <label class="form-label">{{ __('pagination.payment_status') }}</label>
-                            <select name="payment_status" class="form-select">
+                            <select name="payment_status" class="form-select form-select-solid">
                                 <option value="pending" {{ $expense->payment_status == 'pending' ? 'selected' : '' }}>Pending</option>
                                 <option value="paid" {{ $expense->payment_status == 'paid' ? 'selected' : '' }}>Paid</option>
                                 <option value="reimbursed" {{ $expense->payment_status == 'reimbursed' ? 'selected' : '' }}>Reimbursed</option>
@@ -147,31 +141,25 @@
                             <div id="paid_date{{ $expense->id }}"></div>
                         </div>
                         
-                        <!-- Location & Department -->
-                        <div class="col-md-6">
-                            <label class="form-label required">{{ __('pagination.location') }}</label>
-                            <select name="location_id" class="form-select" required>
-                                <option value="">{{ __('pagination.select_location') }}</option>
-                                @foreach($locations as $location)
-                                    <option value="{{ $location->id }}" {{ $expense->location_id == $location->id ? 'selected' : '' }}>
-                                        {{ $location->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <div id="location_id{{ $expense->id }}"></div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label class="form-label required">{{ __('pagination.department') }}</label>
-                            <select name="department_id" class="form-select" required>
-                                <option value="">{{ __('pagination.select_department') }}</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}" {{ $expense->department_id == $department->id ? 'selected' : '' }}>
-                                        {{ $department->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <div id="department_id{{ $expense->id }}"></div>
+                        <!-- Location & Department - Using Dependent Dropdown -->
+                        <div class="col-12">
+                            <div class="row g-4">
+                                <x-liveblade-dependent-dropdown 
+                                    id="location_department_{{ $expense->id }}"
+                                    parentName="location_id"
+                                    childName="department_id"
+                                    parentLabel="pagination._location"
+                                    childLabel="auth._department"
+                                    :parentOptions="$locations"
+                                    :childOptions="$departments"
+                                    route="{{ route('get.departments') }}"
+                                    selectedParent="{{ $expense->location_id }}"
+                                    selectedChild="{{ $expense->department_id }}"
+                                    skipAjax="true"
+                                />
+                                <div id="location_id{{ $expense->id }}"></div>
+                                <div id="department_id{{ $expense->id }}"></div>
+                            </div>
                         </div>
                         
                         <!-- Recurring Expenses -->

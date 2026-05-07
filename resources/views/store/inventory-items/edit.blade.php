@@ -17,35 +17,21 @@
                     @method('PUT')
                     <div class="text-center pt-10">
                         <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{ __('pagination._location') }}</span>
-                                </label>
-                                <select name="location_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option value="" disabled {{ is_null($item->location_id) ? 'selected' : '' }}></option>
-                                    @foreach ($locations as $location)
-                                        <option value="{{ $location->id }}" {{ $location->id == $item->location_id ? 'selected' : '' }}>
-                                            {{ ucwords(str_replace('_', ' ', $location->name)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="location_id{{ $item->id }}"></div>
-                            </div>
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{ __('auth._department') }}</span>
-                                </label>
-                                <select name="department_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option value="" disabled {{ is_null($item->department_id) ? 'selected' : '' }}></option>
-                                    @foreach ($departments as $department)
-                                        <option value="{{ $department->id }}" {{ $department->id == $item->department_id ? 'selected' : '' }}>
-                                            {{ ucwords(str_replace('_', ' ', $department->name)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="department_id{{ $item->id }}"></div>
-                            </div>
-                            
+                            <x-liveblade-dependent-dropdown 
+                                id="location_department_{{ $item->id }}"
+                                parentName="location_id"
+                                childName="department_id"
+                                parentLabel="pagination._location"
+                                childLabel="auth._department"
+                                :parentOptions="$locations"
+                                :childOptions="$departments"
+                                route="{{ route('get.departments') }}"
+                                selectedParent="{{ $item->location_id }}"
+                                selectedChild="{{ $item->department_id }}"
+                                skipAjax="true"
+                            />
+                            <div id="location_id{{ $item->id }}"></div>
+                            <div id="department_id{{ $item->id }}"></div>
                         </div>
                         
                         <div class="row g-9 mb-8">

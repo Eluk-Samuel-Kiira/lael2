@@ -42,7 +42,7 @@
                         <!-- Supplier Type -->
                         <div class="d-flex flex-column mb-8 fv-row col-md-6">
                             <label class="required fs-6 fw-semibold mb-2">{{ __('passwords.supplier_type') }}</label>
-                            <select name="supplier_type" class="form-select form-select-solid" data-control="select2" data-placeholder="Select type">
+                            <select name="supplier_type" class="form-select form-select-solid">
                                 <option value="company">{{ __('passwords.company') }}</option>
                                 <option value="individual">{{ __('passwords.individual') }}</option>
                                 <option value="government">{{ __('passwords.government') }}</option>
@@ -157,14 +157,12 @@
                         <!-- Country Code -->
                         <div class="d-flex flex-column mb-8 fv-row col-md-6">
                             <label class="fs-6 fw-semibold mb-2">{{ __('passwords.country') }}</label>
-                            <select name="country_code" class="form-select form-select-solid" id="country_select" data-control="select2">
-                                <option value="">{{ __('auth._select_country') }}</option>
-                                @foreach(getCountries(true, true) as $code => $name)
-                                    <option value="{{ $code }}" {{ old('country_code', 'UG') == $code ? 'selected' : '' }}>
-                                        {{ $name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <x-typable-select 
+                                name="country_code"
+                                :options="collect(getCountries(true, true))->map(fn($name, $code) => (object)['id' => $code, 'name' => $name])->values()"
+                                selected="{{ old('country_code', 'UG') }}"
+                                placeholder="Type or select country..."
+                            />
                             <div id="country_code"></div>
                         </div>
                     </div>
@@ -358,13 +356,21 @@
                         <!-- Currency Code -->
                         <div class="d-flex flex-column mb-8 fv-row col-md-6">
                             <label class="fs-6 fw-semibold mb-2">{{ __('passwords.currency_code') }}</label>
-                            <select name="currency_code" class="form-select form-select-solid" data-control="select2">
-                                @foreach(config('currencies.currencies') as $code => $details)
-                                    <option value="{{ $code }}" {{ old('currency_code', 'UGX') == $code ? 'selected' : '' }}>
-                                        {{ $code }} - {{ $details['name'] }} ({{ $details['symbol'] }})
-                                    </option>
-                                @endforeach
-                            </select>
+                            @php
+                                $currencyOptions = [];
+                                foreach(config('currencies.currencies') as $code => $details) {
+                                    $currencyOptions[] = (object)[
+                                        'id' => $code, 
+                                        'name' => $code . ' - ' . $details['name'] . ' (' . $details['symbol'] . ')'
+                                    ];
+                                }
+                            @endphp
+                            <x-typable-select 
+                                name="currency_code"
+                                :options="$currencyOptions"
+                                selected="{{ old('currency_code', 'UGX') }}"
+                                placeholder="Type or select currency..."
+                            />
                             <div id="currency_code"></div>
                         </div>
                     </div>

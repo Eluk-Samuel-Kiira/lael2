@@ -653,7 +653,7 @@
             // Call initFilters inside LiveBladeRefresh
             initFilters();
 
-            // 4. DEPENDENT DROPDOWNS with Typable Inputs
+            // 4. DEPENDENT DROPDOWNS
             document.querySelectorAll('.lb-dep-parent:not([data-lb-initialized])').forEach(parent => {
                 parent.setAttribute('data-lb-initialized', '1');
                 
@@ -665,71 +665,52 @@
                 const route = parent.dataset.lbRoute;
                 const loadingId = parent.dataset.lbLoading;
                 const loadingSpinner = document.getElementById(loadingId);
+                const skipAjax = parent.dataset.skipAjax === 'true';
                 
                 if (!childInput || !childHidden) return;
                 
-                // Store current options for filtering
-                let currentChildOptions = [];
-                
-                function loadChildOptions(parentValue) {
-                    if (!parentValue) {
-                        childInput.value = '';
-                        childHidden.value = '';
-                        childInput.disabled = true;
-                        childHidden.disabled = true;
-                        childDatalist.innerHTML = '';
-                        currentChildOptions = [];
-                        return;
-                    }
-                    
-                    if (loadingSpinner) loadingSpinner.style.display = 'block';
-                    childInput.disabled = true;
-                    childInput.placeholder = 'Loading...';
-                    
-                    const fetchUrl = new URL(route, window.location.origin);
-                    fetchUrl.searchParams.set('parent_id', parentValue);
-                    
-                    fetch(fetchUrl.toString(), {
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json'
-                        }
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        let options = '';
-                        currentChildOptions = [];
-                        
-                        if (data.success && data.data && data.data.length > 0) {
-                            data.data.forEach(item => {
-                                const value = item.id || item.value;
-                                const label = item.name || item.label;
-                                options += `<option value="${label}" data-id="${value}"></option>`;
-                                currentChildOptions.push({ id: value, name: label });
+                // Store all original child options
+                let allChildOptions = [];
+                if (childDatalist) {
+                    const options = childDatalist.querySelectorAll('option');
+                    options.forEach(opt => {
+                        if (opt.value && opt.value !== 'Select Department') {
+                            allChildOptions.push({
+                                id: opt.getAttribute('data-id'),
+                                name: opt.value,
+                                locationId: opt.getAttribute('data-location') || ''
                             });
-                            childInput.disabled = false;
-                            childHidden.disabled = false;
-                            childInput.placeholder = 'Type or select ' + childInput.getAttribute('data-placeholder') + '...';
-                        } else {
-                            options = '<option value="">No options available</option>';
-                            childInput.disabled = true;
-                            childHidden.disabled = true;
                         }
-                        
-                        childDatalist.innerHTML = options;
-                    })
-                    .catch(error => {
-                        console.error('Dependent dropdown error:', error);
-                        childDatalist.innerHTML = '<option value="">Error loading options</option>';
-                        childInput.disabled = true;
-                        childHidden.disabled = true;
-                    })
-                    .finally(() => {
-                        if (loadingSpinner) loadingSpinner.style.display = 'none';
                     });
                 }
                 
-                // Sync parent hidden input with text input
+                function filterChildOptions(locationId) {
+                    if (!childDatalist) return;
+                    
+                    let filteredOptions = allChildOptions;
+                    if (locationId) {
+                        filteredOptions = allChildOptions.filter(opt => opt.locationId == locationId);
+                    }
+                    
+                    // Build new datalist
+                    let optionsHtml = '<option value="">Select Department</option>';
+                    filteredOptions.forEach(opt => {
+                        optionsHtml += `<option value="${opt.name}" data-id="${opt.id}" data-location="${opt.locationId}"></option>`;
+                    });
+                    
+                    childDatalist.innerHTML = optionsHtml;
+                    
+                    // Clear current value if it doesn't match filtered options
+                    const currentValue = childInput.value;
+                    const stillValid = filteredOptions.some(opt => opt.name === currentValue);
+                    if (!stillValid && currentValue) {
+                        childInput.value = '';
+                        childHidden.value = '';
+                    }
+                    
+                    childInput.disabled = false;
+                }
+                
                 function syncParentHidden() {
                     const inputValue = parentInput.value.trim();
                     const datalist = document.getElementById(parentInput.getAttribute('list'));
@@ -738,93 +719,131 @@
                     if (datalist && inputValue) {
                         const options = datalist.options;
                         for (let i = 0; i < options.length; i++) {
-                            const optionValue = options[i].value;
-                            if (optionValue === inputValue) {
+                            if (options[i].value === inputValue) {
                                 matchedId = options[i].getAttribute('data-id');
                                 break;
                             }
                         }
                     }
                     
+                    const oldValue = parent.value;
                     parent.value = matchedId;
                     
-                    if (matchedId) {
-                        loadChildOptions(matchedId);
-                    } else if (!inputValue) {
-                        loadChildOptions('');
+                    // If location changed, filter departments
+                    if (oldValue !== matchedId) {
+                        if (!skipAjax && matchedId) {
+                            // Use AJAX for create mode
+                            loadChildOptionsFromServer(matchedId);
+                        } else if (matchedId) {
+                            // Use client-side filtering for edit mode
+                            filterChildOptions(matchedId);
+                        } else {
+                            filterChildOptions(null);
+                        }
                     }
                 }
                 
-                // Sync child hidden input with text input
+                function loadChildOptionsFromServer(locationId) {
+                    if (!locationId) {
+                        filterChildOptions(null);
+                        return;
+                    }
+                    
+                    if (loadingSpinner) loadingSpinner.style.display = 'block';
+                    childInput.disabled = true;
+                    childInput.placeholder = 'Loading...';
+                    
+                    const fetchUrl = new URL(route, window.location.origin);
+                    fetchUrl.searchParams.set('parent_id', locationId);
+                    
+                    fetch(fetchUrl.toString(), {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        let optionsHtml = '<option value="">Select Department</option>';
+                        if (data.success && data.data && data.data.length > 0) {
+                            data.data.forEach(item => {
+                                optionsHtml += `<option value="${item.name}" data-id="${item.id}"></option>`;
+                            });
+                            childInput.disabled = false;
+                            childInput.placeholder = 'Type or select department...';
+                        } else {
+                            optionsHtml = '<option value="">No departments available</option>';
+                            childInput.disabled = true;
+                        }
+                        childDatalist.innerHTML = optionsHtml;
+                        
+                        // Update stored options
+                        allChildOptions = [];
+                        const options = childDatalist.querySelectorAll('option');
+                        options.forEach(opt => {
+                            if (opt.value && opt.value !== 'Select Department') {
+                                allChildOptions.push({
+                                    id: opt.getAttribute('data-id'),
+                                    name: opt.value,
+                                    locationId: locationId
+                                });
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        childDatalist.innerHTML = '<option value="">Error loading departments</option>';
+                    })
+                    .finally(() => {
+                        if (loadingSpinner) loadingSpinner.style.display = 'none';
+                    });
+                }
+                
                 function syncChildHidden() {
                     const inputValue = childInput.value.trim();
                     let matchedId = '';
-                    
-                    if (inputValue && currentChildOptions.length > 0) {
-                        const matched = currentChildOptions.find(opt => opt.name === inputValue);
-                        if (matched) {
-                            matchedId = matched.id;
+                    if (childDatalist && inputValue) {
+                        const options = childDatalist.querySelectorAll('option');
+                        for (let i = 0; i < options.length; i++) {
+                            if (options[i].value === inputValue) {
+                                matchedId = options[i].getAttribute('data-id');
+                                break;
+                            }
                         }
                     }
-                    
                     childHidden.value = matchedId;
                 }
                 
-                // Handle parent input - prevent backspace issues
-                parentInput.addEventListener('keydown', function(e) {
-                    // Allow normal backspace behavior
-                    e.stopPropagation();
+                // Parent input events
+                parentInput.addEventListener('input', function() {
+                    requestAnimationFrame(syncParentHidden);
                 });
+                parentInput.addEventListener('change', syncParentHidden);
                 
-                parentInput.addEventListener('input', function(e) {
-                    // Use requestAnimationFrame to avoid freezing
-                    requestAnimationFrame(() => {
-                        syncParentHidden();
-                    });
+                // Child input events
+                childInput.addEventListener('input', function() {
+                    requestAnimationFrame(syncChildHidden);
+                    
+                    // Filter datalist options based on input
+                    const inputValue = this.value.trim().toLowerCase();
+                    if (childDatalist && allChildOptions.length > 0) {
+                        const filtered = allChildOptions.filter(opt => 
+                            opt.name.toLowerCase().includes(inputValue)
+                        );
+                        let optionsHtml = '<option value="">Select Department</option>';
+                        filtered.forEach(opt => {
+                            optionsHtml += `<option value="${opt.name}" data-id="${opt.id}"></option>`;
+                        });
+                        childDatalist.innerHTML = optionsHtml;
+                    }
                 });
-                
-                parentInput.addEventListener('change', function() {
-                    syncParentHidden();
-                });
-                
-                // Handle child input - searchable/filterable
-                childInput.addEventListener('keydown', function(e) {
-                    e.stopPropagation();
-                });
-                
-                childInput.addEventListener('input', function(e) {
-                    requestAnimationFrame(() => {
-                        syncChildHidden();
-                        
-                        // Filter datalist options based on input
-                        const inputValue = this.value.trim().toLowerCase();
-                        if (childDatalist && inputValue && currentChildOptions.length > 0) {
-                            const filtered = currentChildOptions.filter(opt => 
-                                opt.name.toLowerCase().includes(inputValue)
-                            );
-                            let options = '';
-                            filtered.forEach(item => {
-                                options += `<option value="${item.name}" data-id="${item.id}"></option>`;
-                            });
-                            childDatalist.innerHTML = options;
-                        } else if (childDatalist && currentChildOptions.length > 0) {
-                            // Reset to all options
-                            let options = '';
-                            currentChildOptions.forEach(item => {
-                                options += `<option value="${item.name}" data-id="${item.id}"></option>`;
-                            });
-                            childDatalist.innerHTML = options;
-                        }
-                    });
-                });
-                
-                childInput.addEventListener('change', function() {
-                    syncChildHidden();
-                });
+                childInput.addEventListener('change', syncChildHidden);
                 
                 // Initial sync
                 if (parentInput.value) {
                     syncParentHidden();
+                }
+                
+                // For edit mode with pre-selected values
+                if (parent.value && skipAjax) {
+                    filterChildOptions(parent.value);
                 }
             });
 
@@ -881,6 +900,60 @@
                     this.classList.remove('border-primary');
                     syncTypableValue();
                 });
+            });
+
+
+            // 7. Location-Department Checkbox Sync
+            document.querySelectorAll('.location-checkbox:not([data-lb-initialized])').forEach(locationCheck => {
+                locationCheck.setAttribute('data-lb-initialized', '1');
+                
+                const locationId = locationCheck.value;
+                const productId = locationCheck.closest('.modal').id.match(/\d+/)?.[0];
+                
+                locationCheck.addEventListener('change', function() {
+                    const isChecked = this.checked;
+                    const departmentCheckboxes = document.querySelectorAll(`.department-checkbox[data-location="${locationId}"]`);
+                    
+                    departmentCheckboxes.forEach(deptCheck => {
+                        deptCheck.checked = isChecked;
+                    });
+                });
+            });
+
+            document.querySelectorAll('.department-checkbox:not([data-lb-initialized])').forEach(deptCheck => {
+                deptCheck.setAttribute('data-lb-initialized', '1');
+                
+                const locationId = deptCheck.getAttribute('data-location');
+                const locationCheck = document.querySelector(`.location-checkbox[value="${locationId}"]`);
+                
+                if (locationCheck) {
+                    deptCheck.addEventListener('change', function() {
+                        const allDepts = document.querySelectorAll(`.department-checkbox[data-location="${locationId}"]`);
+                        const checkedDepts = document.querySelectorAll(`.department-checkbox[data-location="${locationId}"]:checked`);
+                        
+                        if (checkedDepts.length === allDepts.length && allDepts.length > 0) {
+                            locationCheck.checked = true;
+                        } else if (checkedDepts.length > 0 && checkedDepts.length < allDepts.length) {
+                            locationCheck.checked = true;
+                            locationCheck.indeterminate = true;
+                        } else {
+                            locationCheck.checked = false;
+                            locationCheck.indeterminate = false;
+                        }
+                    });
+                }
+            });
+
+            // Initialize indeterminate states on page load
+            document.querySelectorAll('.location-checkbox').forEach(locationCheck => {
+                const locationId = locationCheck.value;
+                const allDepts = document.querySelectorAll(`.department-checkbox[data-location="${locationId}"]`);
+                const checkedDepts = document.querySelectorAll(`.department-checkbox[data-location="${locationId}"]:checked`);
+                
+                if (checkedDepts.length > 0 && checkedDepts.length < allDepts.length && allDepts.length > 0) {
+                    locationCheck.indeterminate = true;
+                    locationCheck.checked = false;
+                }
             });
 
         };

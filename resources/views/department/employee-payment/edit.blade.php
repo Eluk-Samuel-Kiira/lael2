@@ -50,21 +50,33 @@
                         <!-- Employee -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.employee') }} *</label>
-                            <select name="employee_id" class="form-select" required id="edit_employee_select_{{ $payment->id }}"
-                                    @if($payment->status === 'completed') disabled @endif
-                                    onchange="editLoadEmployeeAdvances({{ $payment->id }})">
-                                <option value="">{{ __('payments.select_employee') }}</option>
-                                @foreach($active_employees as $employee)
-                                    <option value="{{ $employee->id }}" 
-                                            {{ $payment->employee_id == $employee->id ? 'selected' : '' }}>
-                                        {{ $employee->first_name }} {{ $employee->last_name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <div id="employee_id{{ $payment->id }}"></div>
                             @if($payment->status === 'completed')
+                                <input type="text" 
+                                    class="form-control" 
+                                    value="{{ $payment->employee->first_name ?? '' }} {{ $payment->employee->last_name ?? '' }}" 
+                                    readonly
+                                    style="background-color: #f8f9fa;">
                                 <input type="hidden" name="employee_id" value="{{ $payment->employee_id }}">
+                            @else
+                                @php
+                                    $formattedEmployees = [];
+                                    foreach($active_employees as $emp) {
+                                        $formattedEmployees[] = (object)[
+                                            'id' => $emp->id,
+                                            'name' => $emp->first_name . ' ' . $emp->last_name
+                                        ];
+                                    }
+                                @endphp
+                                <x-typable-select 
+                                    name="employee_id"
+                                    :options="$formattedEmployees"
+                                    selected="{{ $payment->employee_id }}"
+                                    placeholder="Type or select employee..."
+                                    required="true"
+                                    onSelect="editLoadEmployeeAdvances({{ $payment->id }})"
+                                />
                             @endif
+                            <div id="employee_id{{ $payment->id }}"></div>
                         </div>
 
                         <!-- Payment Date -->

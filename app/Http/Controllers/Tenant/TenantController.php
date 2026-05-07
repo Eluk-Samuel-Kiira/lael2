@@ -23,36 +23,70 @@ class TenantController extends Controller
      */
     public function index(Request $request)
     {
-        
         $user = Auth::user();
+        
         if (!$user->hasRole('super_admin')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
             abort(403, __('payments.not_authorized'));
         }
 
-        $tenants = Tenant::with([
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+
+        // Build the query with relationships
+        $query = Tenant::with([
             'configuration', 
             'adminUsers',
             'usageTracking' => function($query) {
-                $query->latest('tracking_date')->limit(5); // Get last 5 usage records
+                $query->latest('tracking_date')->limit(5);
             }, 
             'settings' => function($query) {
                 $query->orderBy('category')->orderBy('setting_key');
             }, 
             'appSettings',
             'latestUsage'
-        ])->latest()->get();
+        ]);
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('subdomain', 'like', "%{$search}%")
+                ->orWhere('status', 'like', "%{$search}%");
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $tenants = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $tenants->appends(['per_page' => $perPage, 'search' => $request->search]);
 
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'tenantIndexTable':
-                return view('tenant.partials.component', [
-                    'tenants' => $tenants,
-                ]);
-            default:
-                return view('tenant.tenant-index', [
-                    'tenants' => $tenants,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadtenantComponent') {
+            return view('tenant.partials.component', [
+                'tenants' => $tenants,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('tenant.tenant-index', [
+            'tenants' => $tenants,
+        ]);
     }
 
     /**

@@ -38,23 +38,23 @@
                             <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                 <span class="required">{{ __('passwords.supplier') }}</span>
                             </label>
-                            <select name="supplier_id" class="form-select" data-control="select2" data-placeholder="{{ __('passwords._select_supplier') }}">
-                                <option></option>
-                                @foreach($suppliers as $supplier)
-                                    <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
-                                @endforeach
-                            </select>
+                            <x-typable-select 
+                                name="supplier_id"
+                                :options="$suppliers"
+                                selected="{{ old('supplier_id', $expense->supplier_id ?? '') }}"
+                                placeholder="Type or select supplier..."
+                            />
                             <div id="supplier_id"></div>
                         </div>
                         
                         <div class="d-flex flex-column mb-8 fv-row col-md-6">
                             <label class="required fs-6 fw-semibold mb-2">{{__('pagination.category')}}</label>
-                            <select class="form-select form-select-solid" name="category_id" id="expense_category">
-                                <option value="">{{__('pagination.select_category')}}</option>
-                                @foreach($expenseCategories as $category)
-                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
-                                @endforeach
-                            </select>
+                            <x-typable-select 
+                                name="category_id"
+                                :options="$expenseCategories"
+                                selected="{{ old('category_id', $expense->category_id ?? '') }}"
+                                placeholder="Type or select category..."
+                            />
                             <div id="category_id"></div>
                         </div>
                     </div>
@@ -177,7 +177,7 @@
                     <div class="row g-9 mb-8">
                         <div class="d-flex flex-column mb-8 fv-row col-md-6">
                             <label class="fs-6 fw-semibold mb-2">{{__('pagination.payment_method')}}</label>
-                            <select name="payment_method_id" class="form-select" data-control="select2" data-placeholder="{{ __('payments.select_payment_method') }}">
+                            <select name="payment_method_id" class="form-select">
                                 <option value="">{{ __('payments.select_payment_method') }}</option>
                                 @foreach($active_payment_methods as $method)
                                     <option value="{{ $method->id }}" {{ $method->is_default ? 'selected' : '' }}>
@@ -222,42 +222,37 @@
                     </div>
                     
                     <div class="row g-9 mb-8">
-                        <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                            <label class="required fs-6 fw-semibold mb-2">{{__('pagination._location')}}</label>
-                            <select name="location_id" class="form-select form-select-solid" data-control="select2" data-placeholder="{{__('auth._select')}}" required>
-                                <option value="">{{ __('auth._select') }}</option>
-                                @foreach ($locations as $location)
-                                    <option value="{{ $location->id }}">{{ $location->name }}</option>
-                                @endforeach
-                            </select>
-                            <div id="location_id"></div>
-                        </div> 
-                        
-                        <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                            <label class="required fs-6 fw-semibold mb-2">{{__('auth._department')}}</label>
-                            <select name="department_id" class="form-select form-select-solid" data-control="select2" data-placeholder="{{__('auth._select')}}" required>
-                                <option value="">{{ __('auth._select') }}</option>
-                                @foreach ($departments as $department)
-                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
-                                @endforeach
-                            </select>
-                            <div id="department_id"></div>
-                        </div>
+                        <x-liveblade-dependent-dropdown 
+                            id="location_department"
+                            parentName="location_id"
+                            childName="department_id"
+                            parentLabel="pagination._location"
+                            childLabel="auth._department"
+                            :parentOptions="$locations"
+                            :childOptions="$departments"
+                            route="{{ route('get.departments') }}"
+                        />
+                        <div id="location_id"></div>
+                        <div id="department_id"></div>
                     </div>
 
                     <div class="row g-9 mb-8">
-                        <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                            <label class="fs-6 fw-semibold mb-2">{{__('pagination.employee')}}</label>
-                            <select class="form-select form-select-solid" name="employee_id" data-control="select2" data-placeholder="{{__('pagination.select_employee')}}">
-                                <option value="">{{__('pagination.select_employee')}}</option>
-                                @foreach($active_employees as $employee)
-                                    <option value="{{ $employee->id }}">
-                                        {{ $employee->first_name }} {{ $employee->last_name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <div id="employee_id"></div>
-                        </div>
+                        @php
+                            $formattedEmployees = [];
+                            foreach($active_employees as $employee) {
+                                $formattedEmployees[] = (object)[
+                                    'id' => $employee->id,
+                                    'name' => $employee->first_name . ' ' . $employee->last_name
+                                ];
+                            }
+                        @endphp
+
+                        <x-typable-select 
+                            name="employee_id"
+                            :options="$formattedEmployees"
+                            selected="{{ old('employee_id', $item->employee_id ?? '') }}"
+                            placeholder="Type or select employee..."
+                        />
                     </div>
 
                     <!-- Hidden Fields -->

@@ -98,7 +98,7 @@
                                             data-bs-toggle="modal"
                                             data-bs-target="#editItem{{$item->id}}"
                                             title="{{ __('auth._update') }}">
-                                        <i class="bi bi-pencil-square fs-5"></i>
+                                        <i class="bi bi-pencil-square fs-5"></i><span>{{ __('auth._edit') }}</span>
                                     </button>
                                 @endcan
                             </div>

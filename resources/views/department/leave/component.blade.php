@@ -124,7 +124,7 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <select class="form-select" id="employee_filter">
+                <select class="form-select" id="employee_filter" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true" required>
                     <option value="">{{ __('payments.all_employees') }}</option>
                     @foreach($employees as $employee)
                         <option value="{{ $employee->id }}">{{ $employee->first_name }} {{ $employee->last_name }}</option>
@@ -132,7 +132,7 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <select class="form-select" id="type_filter">
+                <select class="form-select" id="type_filter" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true" required>
                     <option value="">{{ __('payments.all_types') }}</option>
                     <option value="annual">{{ __('payments.annual') }}</option>
                     <option value="sick">{{ __('payments.sick') }}</option>

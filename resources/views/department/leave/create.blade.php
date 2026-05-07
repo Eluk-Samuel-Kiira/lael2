@@ -16,12 +16,22 @@
                         <!-- Employee -->
                         <div class="col-md-12 fv-row mb-7">
                             <label class="required fw-semibold fs-6 mb-2">{{ __('payments.employee') }}</label>
-                            <select name="employee_id" class="form-select form-select-solid" data-control="select2" data-placeholder="Select Employee" required>
-                                <option value="">{{ __('payments.select_employee') }}</option>
-                                @foreach($employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->first_name }} {{ $employee->last_name }}</option>
-                                @endforeach
-                            </select>
+                            @php
+                                $formattedEmployees = [];
+                                foreach($employees as $emp) {
+                                    $formattedEmployees[] = (object)[
+                                        'id' => $emp->id,
+                                        'name' => $emp->first_name . ' ' . $emp->last_name
+                                    ];
+                                }
+                            @endphp
+                            <x-typable-select 
+                                name="employee_id"
+                                :options="$formattedEmployees"
+                                selected="{{ $expense->employee_id ?? '' }}"
+                                placeholder="Type or select employee..."
+                                required="true"
+                            />
                         </div>
 
                         <!-- Leave Type -->

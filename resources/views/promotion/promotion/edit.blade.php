@@ -30,7 +30,7 @@
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('pagination.discount_type')}}</span></label>
-                                <select name="discount_type" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="discount_type" class="form-select">
                                     <option></option>
                                     <option value="percentage" {{ $promotion->discount_type == 'percentage' ? 'selected' : '' }}>{{__('pagination._percentage')}}</option>
                                     <option value="fixed_amount" {{ $promotion->discount_type == 'fixed_amount' ? 'selected' : '' }}>{{__('pagination._fixed')}}</option>

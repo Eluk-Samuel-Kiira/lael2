@@ -4,8 +4,12 @@
     'parentLabel' => 'Location',
     'childLabel' => 'Department',
     'parentOptions' => [],
+    'childOptions' => [],  // Add this for pre-loaded departments
     'route' => null,
     'id' => null,
+    'selectedParent' => null,
+    'selectedChild' => null,
+    'skipAjax' => false,
 ])
 
 @php
@@ -15,14 +19,34 @@
     $loadingId = $uniqueId . '_loading';
     $parentListId = $uniqueId . '_parent_list';
     $childListId = $uniqueId . '_child_list';
+    
+    // Find selected parent name
+    $selectedParentName = '';
+    if ($selectedParent && $parentOptions) {
+        $parent = $parentOptions->firstWhere('id', $selectedParent);
+        $selectedParentName = $parent ? $parent->name : '';
+    }
+    
+    // For create mode - no selected values
+    $selectedChildName = '';
+    if ($selectedChild && $childOptions) {
+        $department = $childOptions->firstWhere('id', $selectedChild);
+        $selectedChildName = $department ? $department->name : '';
+    }
+    
+    // Build child datalist options
+    $childDatalistOptions = '';
+    if ($childOptions && $childOptions->count() > 0) {
+        foreach ($childOptions as $option) {
+            $childDatalistOptions .= '<option value="' . e($option->name) . '" data-id="' . $option->id . '" data-location="' . ($option->location_id ?? '') . '"></option>';
+        }
+    }
 @endphp
 
-<div class="row g-9 mb-8">
-    <!-- Parent Select (Typable/Filterable) -->
+<div class="row g-9 mb-8" data-lb-dependent-container="{{ $uniqueId }}">
+    <!-- Parent Select -->
     <div class="col-md-6 fv-row">
-        <label class="fs-6 fw-semibold mb-2 required">
-            {{ __($parentLabel) }}
-        </label>
+        <label class="fs-6 fw-semibold mb-2 required">{{ __($parentLabel) }}</label>
         <div class="position-relative">
             <input type="text" 
                    name="{{ $parentName }}_text"
@@ -30,14 +54,17 @@
                    class="form-control form-control-solid lb-dep-parent-input"
                    list="{{ $parentListId }}"
                    placeholder="Type or select {{ __($parentLabel) }}..."
-                   autocomplete="off">
+                   autocomplete="off"
+                   value="{{ $selectedParentName }}">
             <input type="hidden" 
                    name="{{ $parentName }}" 
                    id="{{ $parentId }}" 
                    class="lb-dep-parent"
                    data-lb-child="{{ $childId }}"
                    data-lb-route="{{ $route }}"
-                   data-lb-loading="{{ $loadingId }}">
+                   data-lb-loading="{{ $loadingId }}"
+                   data-skip-ajax="{{ $skipAjax ? 'true' : 'false' }}"
+                   value="{{ $selectedParent }}">
             <datalist id="{{ $parentListId }}">
                 @foreach ($parentOptions as $option)
                     <option value="{{ $option->name }}" data-id="{{ $option->id }}"></option>
@@ -46,11 +73,9 @@
         </div>
     </div>
 
-    <!-- Child Select (Typable/Filterable) -->
+    <!-- Child Select -->
     <div class="col-md-6 fv-row">
-        <label class="fs-6 fw-semibold mb-2 required">
-            {{ __($childLabel) }}
-        </label>
+        <label class="fs-6 fw-semibold mb-2 required">{{ __($childLabel) }}</label>
         <div class="position-relative">
             <input type="text" 
                    name="{{ $childName }}_text"
@@ -59,58 +84,19 @@
                    list="{{ $childListId }}"
                    placeholder="Type or select {{ __($childLabel) }}..."
                    autocomplete="off"
-                   disabled>
+                   value="{{ $selectedChildName }}">
             <input type="hidden" 
                    name="{{ $childName }}" 
                    id="{{ $childId }}" 
                    class="lb-dep-child"
-                   disabled>
-            <datalist id="{{ $childListId }}"></datalist>
+                   value="{{ $selectedChild }}">
+            <datalist id="{{ $childListId }}">
+                <option value="">Select {{ __($childLabel) }}</option>
+                {!! $childDatalistOptions !!}
+            </datalist>
             <div id="{{ $loadingId }}" class="position-absolute end-0 top-0 me-3 mt-2" style="display: none;">
-                <span class="spinner-border spinner-border-sm text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </span>
+                <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
             </div>
         </div>
     </div>
 </div>
-
-<style>
-    /* Dependent Dropdown Styles */
-    .lb-dep-parent-input, .lb-dep-child-input {
-        cursor: text;
-        transition: all 0.2s ease;
-    }
-    
-    .lb-dep-parent-input:focus, .lb-dep-child-input:focus {
-        border-color: var(--bs-primary, #0d6efd);
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-    }
-    
-    .position-relative {
-        position: relative;
-    }
-    
-    /* Loading spinner animation */
-    @keyframes lb-spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    
-    .spinner-border-sm {
-        animation: lb-spin 0.7s linear infinite;
-    }
-    
-    /* Datalist styling */
-    datalist {
-        max-height: 200px;
-        overflow-y: auto;
-    }
-    
-    /* Disabled input styling */
-    input:disabled {
-        background-color: #f5f8fa;
-        cursor: not-allowed;
-        opacity: 0.7;
-    }
-</style>

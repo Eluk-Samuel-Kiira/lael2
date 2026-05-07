@@ -13,12 +13,22 @@
                         <!-- Employee -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.employee') }} *</label>
-                            <select name="employee_id" class="form-select" required id="employee_select">
-                                <option value="">{{ __('payments.select_employee') }}</option>
-                                @foreach($active_employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->first_name }} {{ $employee->last_name }}</option>
-                                @endforeach
-                            </select>
+                            @php
+                                $formattedEmployees = [];
+                                foreach($active_employees as $employee) {
+                                    $formattedEmployees[] = (object)[
+                                        'id' => $employee->id,
+                                        'name' => $employee->first_name . ' ' . $employee->last_name
+                                    ];
+                                }
+                            @endphp
+                            <x-typable-select 
+                                name="employee_id"
+                                :options="$formattedEmployees"
+                                selected="{{ old('employee_id', $item->employee_id ?? '') }}"
+                                placeholder="Type or select employee..."
+                                required="true"
+                            />
                             <div id="employee_id"></div>
                         </div>
 
@@ -33,7 +43,7 @@
                         <!-- Payment Type -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.payment_type') }} *</label>
-                            <select name="payment_type" class="form-select" required id="payment_type" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                            <select name="payment_type" class="form-select" required id="payment_type">
                                 <option value="">{{ __('payments.select_payment_type') }}</option>
                                 <option value="salary">{{ __('payments.salary') }}</option>
                                 <option value="allowance">{{ __('payments.allowance') }}</option>
@@ -48,7 +58,7 @@
                         <!-- Payment Method with auto-selected default -->
                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.payment_method') }} *</label>
-                            <select name="payment_method_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true" required>
+                            <select name="payment_method_id" class="form-select" >
                                 <option value="">{{ __('payments.select_payment_method') }}</option>
                                 @foreach($active_payment_methods as $method)
                                     @php

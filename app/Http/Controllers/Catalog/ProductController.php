@@ -628,28 +628,43 @@ class ProductController extends Controller
             ],
         ]);
 
+        // Auto-calculate locations based on selected departments
+        $selectedDepartments = $validated['departments'] ?? [];
+        $autoLocations = [];
+        
+        if (!empty($selectedDepartments)) {
+            // Get all locations for the selected departments
+            $autoLocations = Department::whereIn('id', $selectedDepartments)
+                ->where('tenant_id', $tenantId)
+                ->distinct()
+                ->pluck('location_id')
+                ->filter()
+                ->toArray();
+        }
+        
+        // Merge manually selected locations with auto-detected ones
+        $manualLocations = $validated['locations'] ?? [];
+        $allLocations = array_unique(array_merge($manualLocations, $autoLocations));
+
         // Start database transaction for data consistency
         DB::beginTransaction();
 
         try {
-            // 1. Sync departments
-            $product->departments()->sync($validated['departments'] ?? []);
+            // 1. Sync departments (use selected departments only)
+            $product->departments()->sync($selectedDepartments);
 
-            // 2. Sync locations
-            $product->locations()->sync($validated['locations'] ?? []);
+            // 2. Sync locations (merged manual + auto-detected)
+            $product->locations()->sync($allLocations);
 
             // 3. Sync promotions
             $product->promotions()->sync($validated['promotions'] ?? []);
 
             // 4. Handle taxes based on product's taxable status
             if ($product->is_taxable == 1) {
-                // Product is taxable - sync taxes
                 $product->taxes()->sync($validated['taxes'] ?? []);
             } else {
-                // Product is not taxable - remove all taxes
                 $product->taxes()->sync([]);
                 
-                // Show warning message if taxes were attempted to be assigned
                 if (!empty($validated['taxes'])) {
                     session()->flash('toast', [
                         'type' => 'warning',
@@ -658,7 +673,6 @@ class ProductController extends Controller
                 }
             }
 
-            // Commit transaction
             DB::commit();
 
             session()->flash('toast', [
@@ -667,7 +681,6 @@ class ProductController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // Rollback transaction on error
             DB::rollBack();
 
             \Log::error('Product assignments update failed', [

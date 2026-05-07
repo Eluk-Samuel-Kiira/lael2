@@ -52,15 +52,24 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span>{{__('passwords._gl_account')}}</span>
                                 </label>
-                                <select class="form-select form-select-solid" name="gl_account_id" data-control="select2" data-placeholder="Select GL Account">
-                                    <option value="">Select GL Account</option>
-                                    @foreach($chartOfAccounts as $account) <!-- CORRECT! This is account definitions -->
-                                        <option value="{{ $account->id }}" {{ isset($category) && $category->gl_account_id == $account->id ? 'selected' : '' }}>
-                                            {{ $account->account_code }} - {{ $account->account_name }} ({{ $account->account_type }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="gl_account_id{{ $category->id }}"></div>
+                                @php
+                                    $formattedAccounts = [];
+                                    foreach($chartOfAccounts as $account) {
+                                        $formattedAccounts[] = (object)[
+                                            'id' => $account->id,
+                                            'name' => $account->account_code . ' - ' . $account->account_name . ' (' . $account->account_type . ')'
+                                        ];
+                                    }
+                                @endphp
+                                <x-typable-select 
+                                    name="gl_account_id"
+                                    :options="$formattedAccounts"
+                                    selected="{{ $category->gl_account_id ?? '' }}"
+                                    placeholder="Type or select GL Account..."
+                                    valueKey="id"
+                                    labelKey="name"
+                                />
+                                <div id="gl_account_id{{ $category->id ?? '' }}"></div>
                             </div>
                             
                             <!-- Status Field -->

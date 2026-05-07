@@ -37,6 +37,7 @@ return [
     'order_created' => 'Order Created',
     'created' => 'Created',
     'submitted' => 'Submitted',
+    'country' => 'Country',
     'approved' => 'Approved',
     'sent' => 'Sent',
     'sent_to_supplier' => 'Sent to supplier by',

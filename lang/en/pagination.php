@@ -20,6 +20,8 @@ return [
     //Store  and Inventory 
     'store_catalog' => 'Store Catalog',
     '_category' => 'Category',
+    'no_departments_in_location' => 'No Department in this Location',
+    'allocate_locations_departments' => 'Allocate Product to Locations and Departments',
     '_category_index' => 'Category Index',
     '_category_table' => 'Category Table',
     '_category_new' => 'New Category',

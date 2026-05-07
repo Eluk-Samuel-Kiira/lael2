@@ -16,43 +16,66 @@
                 <form id="kt_modal_add_inventory_form" class="form">
                     @csrf
                         <div class="row g-9 mb-8">
-                            <!-- Variant -->
+                            <!-- Variant (Typable/Filterable) -->
                             <div class="col-md-6 fv-row">
                                 <label class="fs-6 fw-semibold mb-2 required">{{ __('pagination.product_variant') }}</label>
-                                <select name="variant_id" class="form-select" id="variant-select" data-control="select2" data-placeholder="{{__('auth._select')}}">
-                                    <option></option>
-                                    @foreach ($variants as $variant)
-                                        <option value="{{ $variant->id }}" data-quantity="{{ $variant->overal_quantity_at_hand }}">
-                                            {{ $variant->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="variant_id"></div>
+                                <div class="position-relative">
+                                    <input type="text" 
+                                        id="variant_search"
+                                        class="form-control form-control-solid"
+                                        list="variant_list"
+                                        placeholder="Type or select variant..."
+                                        autocomplete="off">
+                                    <input type="hidden" 
+                                        name="variant_id" 
+                                        id="variant_id" 
+                                        value="{{ old('variant_id', $item->variant_id ?? '') }}">
+                                    <datalist id="variant_list">
+                                        <option value="">{{ __('auth._select') }} {{ __('pagination.product_variant') }}</option>
+                                        @foreach ($variants as $variant)
+                                            <option value="{{ $variant->name }}" 
+                                                    data-id="{{ $variant->id }}"
+                                                    data-quantity="{{ $variant->overal_quantity_at_hand }}">
+                                            </option>
+                                        @endforeach
+                                    </datalist>
+                                </div>
+                                <div id="variant_id_error"></div>
                             </div>
                             
                             <!-- Quantity on hand -->
                             <div class="col-md-6 fv-row">
                                 <label class="fs-6 fw-semibold mb-2 required">{{ __('pagination.quantity_on_hand') }}</label>
-                                <input type="number" class="form-control form-control-solid" name="quantity_on_hand" min="0" value="0" readonly />
-                                <div id="quantity_on_hand"></div>
+                                <input type="number" 
+                                    id="quantity_on_hand"
+                                    class="form-control form-control-solid" 
+                                    name="quantity_on_hand" 
+                                    min="0" 
+                                    value="0" 
+                                    readonly />
                             </div>
                         </div>
-                        
 
                         <div class="row g-9 mb-8">
                             <!-- Allocated -->
                             <div class="col-md-6 fv-row">
                                 <label class="fs-6 fw-semibold mb-2">{{ __('pagination.quantity_allocated') }}</label>
-                                <input type="number" class="form-control form-control-solid" name="quantity_allocated" min="0" value="0" />
-                                <div id="quantity_allocated"></div>
+                                <input type="number" 
+                                    id="quantity_allocated"
+                                    class="form-control form-control-solid" 
+                                    name="quantity_allocated" 
+                                    min="0" 
+                                    value="0" />
                             </div>
                             <!-- Preferred Stock -->
                             <div class="col-md-6 fv-row">
                                 <label class="fs-6 fw-semibold mb-2">{{ __('pagination.preferred_stock_level') }}</label>
-                                <input type="number" class="form-control form-control-solid" name="preferred_stock_level" min="0" value="0"/>
-                                <div id="preferred_stock_level"></div>
+                                <input type="number" 
+                                    class="form-control form-control-solid" 
+                                    name="preferred_stock_level" 
+                                    min="0" 
+                                    value="0"/>
                             </div>
-
                         </div>
 
                         <div class="row g-9 mb-8">
@@ -72,17 +95,16 @@
                         </div>
 
                         
-                        <div class="row g-9 mb-8">
-                            <x-liveblade-dependent-dropdown 
-                                id="location_department"
-                                parentName="location_id"
-                                childName="department_id"
-                                parentLabel="pagination._location"
-                                childLabel="auth._department"
-                                :parentOptions="$locations"
-                                route="{{ route('get.departments') }}"
-                            />
-                        </div>
+                        <x-liveblade-dependent-dropdown 
+                            id="location_department"
+                            parentName="location_id"
+                            childName="department_id"
+                            parentLabel="pagination._location"
+                            childLabel="auth._department"
+                            :parentOptions="$locations"
+                            :childOptions="$departments"
+                            route="{{ route('get.departments') }}"
+                        />
                         <div id="location_id"></div>
                         <div id="department_id"></div>
 
@@ -106,4 +128,6 @@
         </div>
     </div>
 </div>
+
+
 

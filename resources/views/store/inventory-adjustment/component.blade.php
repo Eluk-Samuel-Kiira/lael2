@@ -41,7 +41,7 @@
                                         <img src="{{ productImage($item->variant->image_url ?? '') }}" alt="" class="symbol-label">
                                     </a>
                                     <div class="ms-5">
-                                        <a href="#" class="text-gray-800 text-hover-primary fs-5 fw-bold" data-kt-ecommerce-product-filter="product_name">{{ $item->variant->name ?? __('pagination._none')}}</a>
+                                        <a href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $item->variant->name ?? __('pagination._none')}}</a>
                                     </div>
                                 </div>
                             </td>

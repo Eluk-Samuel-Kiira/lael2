@@ -142,6 +142,7 @@ return [
     
     // Notes
     'notes' => 'Notes',
+    '_none' => 'None',
     'additional_notes' => 'Additional notes or comments...',
 
 

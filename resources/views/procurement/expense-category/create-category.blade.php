@@ -50,14 +50,22 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span>{{__('passwords._gl_account')}}</span>
                                 </label>
-                                <select class="form-select form-select-solid" name="gl_account_id" data-control="select2" data-placeholder="Select GL Account">
-                                    <option value="">Select GL Account</option>
-                                    @foreach($chartOfAccounts as $account) <!-- CORRECT! This is account definitions -->
-                                        <option value="{{ $account->id }}">
-                                            {{ $account->account_code }} - {{ $account->account_name }} ({{ $account->account_type }})
-                                        </option>
-                                    @endforeach
-                                </select>
+                                @php
+                                    $formattedAccounts = [];
+                                    foreach($chartOfAccounts as $account) {
+                                        $formattedAccounts[] = (object)[
+                                            'id' => $account->id,
+                                            'name' => $account->account_code . ' - ' . $account->account_name . ' (' . $account->account_type . ')'
+                                        ];
+                                    }
+                                @endphp
+                                <x-typable-select 
+                                    name="gl_account_id"
+                                    :options="$formattedAccounts"
+                                    placeholder="Type or select GL Account..."
+                                    valueKey="id"
+                                    labelKey="name"
+                                />
                                 <div id="gl_account_id"></div>
                             </div>
                             
