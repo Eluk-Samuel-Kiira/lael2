@@ -24,29 +24,33 @@
 
             <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Date Filter -->
-                <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
-                    <input type="date" id="startDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $startDate }}" onchange="updateFilters()">
-                    <span class="d-none d-sm-inline text-gray-500 align-self-center">to</span>
-                    <span class="d-inline d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                    <input type="date" id="endDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $endDate }}" onchange="updateFilters()">
-                </div>
-                
-                <!-- Action Buttons -->
-                <div class="d-flex flex-row gap-2">
-                    <button class="btn btn-sm btn-primary flex-grow-1 flex-sm-grow-0" onclick="applyFilters()">
-                        <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                        <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                        <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                    </button>
-                    <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
-                        <i class="ki-duotone ki-printer fs-2 me-1 me-sm-2"></i>
-                        <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
-                        <span class="d-inline d-sm-none">{{ __('accounting.print') }}</span>
-                    </button>
-                </div>
+                <form method="GET" action="{{ route('accounting.cash-flow') }}" class="w-100">
+                    <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
+                        <div class="w-100 w-sm-auto" style="min-width: 140px;">
+                            <input type="date" name="start_date" class="form-control form-control-solid w-100" 
+                                value="{{ request('start_date', $startDate) }}"
+                                style="cursor: pointer; height: 42px;">
+                        </div>
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="text-gray-500 px-2">{{ __('accounting.to') }}</span>
+                        </div>
+                        <div class="w-100 w-sm-auto" style="min-width: 140px;">
+                            <input type="date" name="end_date" class="form-control form-control-solid w-100" 
+                                value="{{ request('end_date', $endDate) }}"
+                                style="cursor: pointer; height: 42px;">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 w-sm-auto d-flex align-items-center justify-content-center gap-2"
+                            style="height: 42px; padding: 0 24px;">
+                            <i class="ki-duotone ki-filter fs-3"></i>
+                            <span>{{ __('accounting.apply_filters') }}</span>
+                        </button>
+                        <button type="button" class="btn btn-light w-100 w-sm-auto d-flex align-items-center justify-content-center gap-2" onclick="printReport()"
+                            style="height: 42px; padding: 0 24px;">
+                            <i class="ki-duotone ki-printer fs-3"></i>
+                            <span>{{ __('accounting.print') }}</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -67,7 +71,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">${{ number_format($summary['total_cash_in'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }}{{ number_format($summary['total_cash_in'], 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_received') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -90,7 +94,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">${{ number_format($summary['total_cash_out'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ currency_symbol() }}{{ number_format($summary['total_cash_out'], 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_paid') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -114,7 +118,7 @@
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
                                     <span class="fs-2hx fw-bold {{ $summary['net_cash_flow'] >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        ${{ number_format($summary['net_cash_flow'], 2) }}
+                                        {{ currency_symbol() }}{{ number_format($summary['net_cash_flow'], 2) }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.net_movement') }}</span>
                                 </div>
@@ -150,9 +154,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @php
-                                        $runningBalance = 0;
-                                    @endphp
+                                    @php $runningBalance = 0; @endphp
                                     @foreach($dailyCashFlow as $day)
                                     <tr>
                                         <td>
@@ -160,18 +162,15 @@
                                             <span class="fs-8 text-gray-500 d-block">{{ \Carbon\Carbon::parse($day->date)->format('D') }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-success">${{ number_format($day->cash_in, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-success">{{ currency_symbol() }}{{ number_format($day->cash_in, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-danger">${{ number_format($day->cash_out, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($day->cash_out, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            @php
-                                                $netFlow = $day->cash_in - $day->cash_out;
-                                                $runningBalance += $netFlow;
-                                            @endphp
+                                            @php $netFlow = $day->cash_in - $day->cash_out; $runningBalance += $netFlow; @endphp
                                             <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($netFlow, 2) }}
+                                                {{ currency_symbol() }}{{ number_format($netFlow, 2) }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -201,7 +200,7 @@
                                             @endif
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">${{ number_format($runningBalance, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($runningBalance, 2) }}</span>
                                         </td>
                                     </tr>
                                     @endforeach
@@ -209,12 +208,12 @@
                                 <tfoot>
                                     <tr class="fw-bold text-gray-700">
                                         <td>{{ __('accounting.total') }}</td>
-                                        <td class="text-end">${{ number_format($dailyCashFlow->sum('cash_in'), 2) }}</td>
-                                        <td class="text-end">${{ number_format($dailyCashFlow->sum('cash_out'), 2) }}</td>
-                                        <td class="text-end">${{ number_format($summary['net_cash_flow'], 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($dailyCashFlow->sum('cash_in'), 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($dailyCashFlow->sum('cash_out'), 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($summary['net_cash_flow'], 2) }}</td>
                                         <td class="text-end">{{ number_format($dailyCashFlow->sum('transaction_count')) }}</td>
                                         <td></td>
-                                        <td class="text-end">${{ number_format($runningBalance, 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($runningBalance, 2) }}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -264,17 +263,15 @@
                                             </div>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-success">${{ number_format($flow->cash_in, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-success">{{ currency_symbol() }}{{ number_format($flow->cash_in, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-danger">${{ number_format($flow->cash_out, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($flow->cash_out, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            @php
-                                                $netFlow = $flow->cash_in - $flow->cash_out;
-                                            @endphp
+                                            @php $netFlow = $flow->cash_in - $flow->cash_out; @endphp
                                             <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($netFlow, 2) }}
+                                                {{ currency_symbol() }}{{ number_format($netFlow, 2) }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -306,7 +303,7 @@
                                         <td class="text-end">
                                             @if($flow->transaction_count > 0)
                                                 <span class="fs-6 text-gray-700">
-                                                    ${{ number_format(($flow->cash_in + $flow->cash_out) / $flow->transaction_count, 2) }}
+                                                    {{ currency_symbol() }}{{ number_format(($flow->cash_in + $flow->cash_out) / $flow->transaction_count, 2) }}
                                                 </span>
                                             @else
                                                 <span class="fs-7 text-gray-500">-</span>
@@ -326,32 +323,9 @@
     
     @push('scripts')
     <script>
-        function updateFilters() {
-            // This function updates the filter values
-        }
-        
-        function applyFilters() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            // Redirect with new filter parameters
-            window.location.href = '{{ route("accounting.cash-flow") }}' + 
-                '?start_date=' + startDate + '&end_date=' + endDate;
-        }
-        
         function printReport() {
             window.print();
         }
-        
-        // Initialize date inputs with default values
-        document.addEventListener('DOMContentLoaded', function() {
-            if (!document.getElementById('startDate').value) {
-                document.getElementById('startDate').value = new Date().toISOString().split('T')[0];
-            }
-            if (!document.getElementById('endDate').value) {
-                document.getElementById('endDate').value = new Date().toISOString().split('T')[0];
-            }
-        });
     </script>
     @endpush
     

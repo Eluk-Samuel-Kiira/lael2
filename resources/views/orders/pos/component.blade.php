@@ -299,7 +299,7 @@
                         <!-- Panel: Existing Customer -->
                         <div id="panel-existing-cust" class="d-none">
                             <label class="form-label fw-semibold text-gray-700">{{ __('pagination.choose_customer') }}</label>
-                            <select class="form-select form-select-lg" id="cust-existing-select">
+                            <select class="form-select form-select-lg" id="cust-existing-select" style="width: 100%">
                                 <option value="">— {{ __('pagination.choose_customer') }} —</option>
                                 @foreach ($customers as $customer)
                                     <option value="{{ $customer->id }}">
@@ -374,17 +374,32 @@
                             setTimeout(() => { inputNew.focus(); inputNew.select(); }, 100);
                         }
                     });
+
+                    document.addEventListener('DOMContentLoaded', function () {
+                        $('#cust-existing-select').select2({
+                            placeholder: '— {{ __("pagination.choose_customer") }} —',
+                            allowClear: true,
+                            width: '100%',
+                        });
+                    });
                 </script>
                 
                 <div class="m-0">
-                    <!-- Process Bill Button -->
                     @can('create order')
                     <div class="mt-8">
                         <button 
                             id="processBill" 
                             type="button" 
-                            class="btn btn-primary fs-1 w-100 py-4"
+                            class="btn btn-primary w-100 py-4 d-flex align-items-center justify-content-center gap-3"
+                            style="font-size: 1.15rem; font-weight: 600;"
                             onclick="processPayment()">
+                            <i class="ki-duotone ki-printer fs-2">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                                <span class="path3"></span>
+                                <span class="path4"></span>
+                                <span class="path5"></span>
+                            </i>
                             <span class="indicator-label">{{__('pagination.print_bill')}}</span>
                             <span class="indicator-progress">{{__('pagination.processing_payments')}}
                                 <span class="spinner-border spinner-border-sm align-middle ms-2"></span>

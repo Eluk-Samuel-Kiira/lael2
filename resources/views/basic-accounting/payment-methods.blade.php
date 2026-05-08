@@ -112,7 +112,7 @@
                                     @foreach($types as $type => $methods)
                                     <div class="d-flex flex-column me-7 mb-5">
                                         <span class="fs-4 fw-bold text-gray-800">{{ ucfirst($type) }}</span>
-                                        <span class="fs-6 fw-semibold text-gray-500">{{ $methods->count() }} {{ __('accounting.methods') }}</span>
+                                        <span class="fs-6 fw-semibold text-gray-500">{{ $methods->count() }} {{ __('accounting.accounts') }}</span>
                                         <div class="d-flex align-items-center mt-2">
                                             <div class="progress h-6px w-100 me-3">
                                                 <div class="progress-bar bg-primary" role="progressbar" 

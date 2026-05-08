@@ -45,8 +45,8 @@ class DashboardController extends Controller
             'profit' => $this->calculateTodayProfit($tenantId, $today),
         ];
         
-        // Weekly sales trend (last 7 days)
-        $weeklySales = Order::where('tenant_id', $tenantId)
+        // Weekly sales trend (last 7 days) - padded with zeros for missing days
+        $salesRaw = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [Carbon::now()->subDays(6)->startOfDay(), Carbon::now()->endOfDay()])
             ->whereIn('status', ['completed', 'processing'])
             ->select(
@@ -57,11 +57,28 @@ class DashboardController extends Controller
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('date')
             ->get()
-            ->map(function($item) {
+            ->keyBy('date'); // key by date for easy lookup
+
+        // Build full 7-day collection with zeros for missing days
+        $weeklySales = collect();
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i)->format('Y-m-d');
+            $dayName = Carbon::now()->subDays($i)->format('D');
+
+            if ($salesRaw->has($date)) {
+                $item = $salesRaw->get($date);
                 $item->total_sales = $item->total_sales / 100;
-                $item->day_name = Carbon::parse($item->date)->format('D');
-                return $item;
-            });
+                $item->day_name = $dayName;
+                $weeklySales->push($item);
+            } else {
+                $weeklySales->push((object)[
+                    'date'        => $date,
+                    'total_sales' => 0,
+                    'order_count' => 0,
+                    'day_name'    => $dayName,
+                ]);
+            }
+        }
         
         // Best selling products
         $bestSellers = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')

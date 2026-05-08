@@ -29,40 +29,42 @@
                 </ul>
             </div>
 
-            <div class="row g-2 g-md-3 align-items-center">
-                <div class="col-6 col-md-auto">
-                    <div class="d-flex align-items-center px-3 px-md-4 bg-light rounded-3" style="height: 42px;">
-                        <h3 class="fw-bold text-gray-800 fs-6 fs-md-5 mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
-                    </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
+                {{-- Pause Buy --}}
+                <div class="position-relative flex-shrink-0 w-100 w-md-auto" id="pause-buy-trigger">
+                    <button type="button"
+                            class="btn btn-light-warning fw-bold w-100"
+                            style="height: 42px;"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#pauseBuyDrawer">
+                        <i class="ki-duotone ki-time fs-5 me-2"></i>
+                        {{ __('pagination.pause_buy') }}
+                    </button>
+                    <span id="pause-buy-badge" class="position-absolute top-0 start-100 translate-middle badge badge-circle badge-danger">0</span>
                 </div>
                 
-                <div class="col-6 col-md-auto">
-                    <div class="position-relative" id="pause-buy-trigger">
-                        <button type="button"
-                                class="btn btn-light-warning fw-bold w-100"
-                                style="height: 42px;"
-                                data-bs-toggle="offcanvas"
-                                data-bs-target="#pauseBuyDrawer">
-                            <i class="ki-duotone ki-time fs-5 me-1 me-md-2"></i>
-                            <span class="d-none d-sm-inline">{{ __('pagination.pause_buy') }}</span>
-                            <span class="d-inline d-sm-none">{{ __('pagination.pause_buy') }}</span>
-                        </button>
-                        <span id="pause-buy-badge" class="position-absolute top-0 start-100 translate-middle badge badge-circle badge-danger">0</span>
-                    </div>
+                {{-- Currency --}}
+                <div class="d-flex align-items-center px-4 bg-light rounded-3 flex-shrink-0 w-100 w-md-auto" style="height: 42px;">
+                    <h3 class="fw-bold text-gray-800 fs-6 mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
                 </div>
-                
-                <div class="col-12 col-md mt-2 mt-md-0">
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" id="variantSearchInput" class="form-control form-control-solid border-0 ps-0" placeholder="{{__('auth._search')}} {{__('pagination._variants')}}" onkeyup="filterProductsAndVariants(this.value)" style="height: 42px;">
-                    </div>
+
+                {{-- Search --}}
+                <div class="input-group input-group-solid flex-grow-1 w-100 w-md-auto" style="min-width: 0;">
+                    <span class="input-group-text bg-body border-0">
+                        <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
+                    </span>
+                    <input type="text"
+                        id="variantSearchInput"
+                        class="form-control form-control-solid border-0 ps-0"
+                        placeholder="{{ __('auth._search') }} {{ __('pagination._variants') }}"
+                        onkeyup="filterProductsAndVariants(this.value)"
+                        style="height: 42px;">
                 </div>
-                
+
+                {{-- Department Filter --}}
                 @if(!tenant_is_single_shop(auth()->user()->tenant_id))
-                <div class="col-12 col-md-auto mt-2 mt-md-0">
-                    <select class="form-select form-select-solid fw-bold" id="departmentFilter" style="height: 42px;">
+                <div class="flex-shrink-0 w-100 w-md-auto">
+                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter" style="height: 42px;">
                         <option value="">{{ __('auth._department') }}</option>
                         @foreach ($user_departments as $department)
                             <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
@@ -70,6 +72,7 @@
                     </select>
                 </div>
                 @endif
+
             </div>
         </div>
     </div>

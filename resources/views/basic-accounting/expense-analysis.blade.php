@@ -26,17 +26,25 @@
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
                 <!-- Date Filter -->
                 <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
-                    <input type="date" id="startDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $startDate }}" onchange="updateFilters()">
-                    <span class="d-none d-sm-inline text-gray-500 align-self-center">to</span>
-                    <span class="d-inline d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                    <input type="date" id="endDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $endDate }}" onchange="updateFilters()">
+                    <div class="position-relative w-100 w-sm-150px">
+                        <input type="date" id="startDate" class="form-control form-control-solid w-100" 
+                            value="{{ $startDate }}" onchange="updateFilters()"
+                            style="cursor: pointer; padding: 0.6rem 0.75rem;">
+                    </div>
+                    <span class="d-none d-sm-inline text-gray-500 align-self-center px-1">to</span>
+                    <span class="d-inline d-sm-none text-gray-500 text-center py-1">{{ __('accounting.to') }}</span>
+                    <div class="position-relative w-100 w-sm-150px">
+                        <input type="date" id="endDate" class="form-control form-control-solid w-100" 
+                            value="{{ $endDate }}" onchange="updateFilters()"
+                            style="cursor: pointer; padding: 0.6rem 0.75rem;">
+                    </div>
                 </div>
                 
-                <!-- Apply Filters Button -->
-                <button class="btn btn-sm btn-primary w-100 w-sm-auto flex-shrink-0" onclick="applyFilters()">
-                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                <!-- Apply Filters Button - Full clickable area -->
+                <button class="btn btn-sm btn-primary w-100 w-sm-auto flex-shrink-0 d-flex align-items-center justify-content-center gap-2" 
+                    onclick="applyFilters()"
+                    style="padding: 0.6rem 1.5rem; min-width: 120px;">
+                    <i class="ki-duotone ki-filter fs-2"></i>
                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                 </button>

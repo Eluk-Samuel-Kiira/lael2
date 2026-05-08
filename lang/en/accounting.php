@@ -21,6 +21,7 @@ return [
     'top_vendor' => 'Top Vendor',
     'export' => 'Export',
     'clear' => 'Clear',
+    'accounts' => 'Accounts',
     'search_accounts' => 'Search accounts...',
     'search_methods' => 'Search methods...',
     'search_transactions' => 'Search transactions...',
@@ -1026,8 +1027,10 @@ return [
     // Messages
     'no_expenses_found_for_payment_methods' => 'No expenses found for payment methods in the selected period.',
     'showing_payment_methods' => 'Showing :count payment methods',
-    'payment_methods' => 'payment method(s)',
+    'payment_methodss' => 'payment method(s)',
     'more_categories' => 'more categories',
+    'daily_analysis' => 'Daily Analysis',
+
     
     // Analysis
     'payment_patterns' => 'Payment Patterns',
