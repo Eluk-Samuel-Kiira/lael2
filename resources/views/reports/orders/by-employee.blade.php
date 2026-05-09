@@ -563,6 +563,50 @@
                             @endif
                         </div>
                     </div>
+                    {{-- Pagination --}}
+                    @if($employeePerformance->count() > 0)
+                    <div class="row mt-6">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                        <div class="d-flex align-items-center">
+                                            <label class="form-label me-2 mb-0">{{ __('accounting.show') }}</label>
+                                            <select class="form-select form-select-sm w-auto" id="perPageSelect" onchange="changePerPage(this.value)">
+                                                <option value="15" {{ $perPage == 15 ? 'selected' : '' }}>15</option>
+                                                <option value="25" {{ $perPage == 25 ? 'selected' : '' }}>25</option>
+                                                <option value="50" {{ $perPage == 50 ? 'selected' : '' }}>50</option>
+                                                <option value="100" {{ $perPage == 100 ? 'selected' : '' }}>100</option>
+                                            </select>
+                                            <span class="text-muted ms-2">{{ __('accounting.entries_per_page') }}</span>
+                                        </div>
+                                        
+                                        <div>
+                                            {{ $employees->appends(request()->query())->links() }}
+                                        </div>
+                                        
+                                        <div class="text-muted">
+                                            {{ __('accounting.showing') }} {{ $employees->firstItem() ?? 0 }} 
+                                            {{ __('accounting.to') }} {{ $employees->lastItem() ?? 0 }} 
+                                            {{ __('accounting.of') }} {{ $employees->total() }} 
+                                            {{ __('accounting.employees') }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+
+                    @push('scripts')
+                    <script>
+                        function changePerPage(perPage) {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('per_page', perPage);
+                            window.location.href = url.toString();
+                        }
+                    </script>
+                    @endpush
                 </div>
                 
                 {{-- Performance Leaderboard --}}

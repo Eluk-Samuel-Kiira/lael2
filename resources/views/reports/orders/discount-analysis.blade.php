@@ -367,6 +367,65 @@
                 </div>
                 @endif
 
+                {{-- Discount Range Distribution --}}
+                @if($discountedOrders->count() > 0)
+                <div class="row mb-6">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.discount_range_distribution') }}</h3>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div id="discountRangeChart" style="height: 350px;"></div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="table-responsive">
+                                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                                <thead>
+                                                    <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                                        <th>{{ __('auth.discount_range') }}</th>
+                                                        <th>{{ __('auth.orders_count') }}</th>
+                                                        <th>{{ __('accounting.percentage') }}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($discountRanges as $range => $count)
+                                                    @php
+                                                        $percentage = $discountedOrders->count() > 0 ? ($count / $discountedOrders->count()) * 100 : 0;
+                                                    @endphp
+                                                    <tr>
+                                                        <td>
+                                                            <span class="badge badge-light-primary">{{ $range }}</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="fw-bold text-gray-800">{{ number_format($count) }}</span>
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="progress w-100 me-3" style="height: 6px;">
+                                                                    <div class="progress-bar bg-primary" style="width: {{ $percentage }}%;"></div>
+                                                                </div>
+                                                                <span class="fw-bold text-gray-700">{{ number_format($percentage, 1) }}%</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 {{-- Discount by Employee --}}
                 @if($discountByEmployee->count() > 0)
                 <div class="row mb-6">
@@ -512,20 +571,44 @@
                                                         </a>
                                                     </td>
                                                     <td>
-                                                        @if($order->customer)
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-40px symbol-circle me-3">
-                                                                <div class="symbol-label bg-light-primary">
-                                                                    <span class="text-primary fw-bold">{{ substr($order->customer->name, 0, 1) }}</span>
+                                                        @if($order->is_registered_customer)
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="symbol symbol-40px symbol-circle me-3">
+                                                                    <div class="symbol-label bg-light-primary">
+                                                                        <span class="text-primary fw-bold">{{ substr($order->customer_display_name, 0, 1) }}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex justify-content-start flex-column">
+                                                                    <span class="text-gray-800 fw-bold">{{ $order->customer_display_name }}</span>
+                                                                    @if($order->customer_email)
+                                                                    <span class="text-muted">{{ $order->customer_email }}</span>
+                                                                    @endif
+                                                                    <span class="badge badge-light-success badge-sm mt-1">{{ __('auth.registered') }}</span>
                                                                 </div>
                                                             </div>
-                                                            <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $order->customer->name }}</span>
-                                                                <span class="text-muted">{{ $order->customer->email }}</span>
+                                                        @elseif($order->is_guest_customer)
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="symbol symbol-40px symbol-circle me-3">
+                                                                    <div class="symbol-label bg-light-secondary">
+                                                                        <i class="ki-duotone ki-user fs-2 text-secondary"></i>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex justify-content-start flex-column">
+                                                                    <span class="text-gray-800 fw-bold">{{ $order->customer_display_name }}</span>
+                                                                    <span class="badge badge-light-secondary badge-sm mt-1">{{ __('auth.guest') }}</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
                                                         @else
-                                                        <span class="text-muted">-</span>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="symbol symbol-40px symbol-circle me-3">
+                                                                    <div class="symbol-label bg-light-danger">
+                                                                        <i class="ki-duotone ki-user fs-2 text-danger"></i>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex justify-content-start flex-column">
+                                                                    <span class="text-gray-800 fw-bold">{{ __('auth.unknown_customer') }}</span>
+                                                                </div>
+                                                            </div>
                                                         @endif
                                                     </td>
                                                     <td>
@@ -558,11 +641,11 @@
                                                         <div class="d-flex align-items-center">
                                                             <div class="symbol symbol-40px symbol-circle me-3">
                                                                 <div class="symbol-label bg-light-success">
-                                                                    <span class="text-success fw-bold">{{ substr($order->orderCreater->name, 0, 1) }}</span>
+                                                                    <span class="text-success fw-bold">{{ substr($order->orderCreater->name ?? $order->orderCreater->first_name, 0, 1) }}</span>
                                                                 </div>
                                                             </div>
                                                             <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $order->orderCreater->name }}</span>
+                                                                <span class="text-gray-800 fw-bold">{{ $order->orderCreater->name ?? ($order->orderCreater->first_name . ' ' . $order->orderCreater->last_name) }}</span>
                                                             </div>
                                                         </div>
                                                         @else
@@ -703,31 +786,15 @@
 </div>
 
 @push('scripts')
-@if($discountPatterns->count() > 0)
+@if($discountPatterns->count() > 0 || $discountByDay->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Discount Patterns Chart
-        const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const patternsData = @json($discountPatterns);
-        
-        // Group by day of week
-        const groupedByDay = {};
-        patternsData.forEach(pattern => {
-            const day = daysOfWeek[pattern.day_of_week - 1];
-            if (!groupedByDay[day]) {
-                groupedByDay[day] = {
-                    discount_count: 0,
-                    total_amount: 0
-                };
-            }
-            groupedByDay[day].discount_count += pattern.discount_count;
-            groupedByDay[day].total_amount += pattern.total_discount_amount;
-        });
-        
-        const dayLabels = Object.keys(groupedByDay);
-        const discountCounts = dayLabels.map(day => groupedByDay[day].discount_count);
-        const discountAmounts = dayLabels.map(day => groupedByDay[day].total_amount);
+        // Discount Patterns Chart (By Day of Week)
+        const discountByDayData = @json($discountByDay);
+        const dayLabels = discountByDayData.map(item => item.day);
+        const discountCounts = discountByDayData.map(item => item.discount_count);
+        const discountAmounts = discountByDayData.map(item => parseFloat(item.total_amount));
         
         const discountPatternsChart = new ApexCharts(document.querySelector("#discountPatternsChart"), {
             series: [{
@@ -735,7 +802,7 @@
                 data: discountCounts,
                 type: 'bar'
             }, {
-                name: 'Total Amount',
+                name: 'Total Amount ($)',
                 data: discountAmounts,
                 type: 'line'
             }],
@@ -753,12 +820,16 @@
                 }
             },
             stroke: {
-                width: [0, 3]
+                width: [0, 3],
+                curve: 'smooth'
             },
             xaxis: {
                 categories: dayLabels,
                 labels: {
-                    rotate: -45
+                    rotate: -45,
+                    style: {
+                        fontSize: '12px'
+                    }
                 }
             },
             yaxis: [{
@@ -783,6 +854,8 @@
             }],
             colors: ['#3E97FF', '#50CD89'],
             tooltip: {
+                shared: true,
+                intersect: false,
                 y: {
                     formatter: function(val, { seriesIndex }) {
                         if (seriesIndex === 0) {
@@ -791,12 +864,200 @@
                         return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
                     }
                 }
+            },
+            legend: {
+                position: 'top',
+                horizontalAlign: 'center'
             }
         });
         discountPatternsChart.render();
+        
+        // Discount Range Distribution Chart
+        const discountRangesData = @json($discountRanges);
+        const rangeLabels = Object.keys(discountRangesData);
+        const rangeCounts = Object.values(discountRangesData);
+        
+        const discountRangeChart = new ApexCharts(document.querySelector("#discountRangeChart"), {
+            series: rangeCounts,
+            chart: {
+                type: 'donut',
+                height: 350
+            },
+            labels: rangeLabels,
+            colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C', '#A1A5B7'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '65%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Total Orders',
+                                formatter: function(w) {
+                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            legend: {
+                position: 'bottom',
+                horizontalAlign: 'center'
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val, { seriesIndex, w }) {
+                    const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                    const percentage = (w.globals.series[seriesIndex] / total) * 100;
+                    return percentage.toFixed(1) + '%';
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return val + ' orders';
+                    }
+                }
+            }
+        });
+        discountRangeChart.render();
+        
+        // Discount by Employee Chart
+        const discountByEmployeeData = @json($discountByEmployee);
+        if (discountByEmployeeData.length > 0) {
+            const employeeNames = discountByEmployeeData.map(emp => `${emp.first_name} ${emp.last_name.charAt(0)}.`);
+            const employeeDiscounts = discountByEmployeeData.map(emp => parseFloat(emp.total_discount_given));
+            
+            // You can add an additional chart here if needed
+            const hasEmployeeChart = document.querySelector("#discountByEmployeeChart");
+            if (hasEmployeeChart) {
+                const employeeChartOptions = {
+                    series: [{
+                        name: 'Total Discount Given',
+                        data: employeeDiscounts
+                    }],
+                    chart: {
+                        type: 'bar',
+                        height: 350,
+                        toolbar: {
+                            show: true
+                        }
+                    },
+                    plotOptions: {
+                        bar: {
+                            horizontal: true,
+                            barHeight: '70%'
+                        }
+                    },
+                    xaxis: {
+                        categories: employeeNames,
+                        labels: {
+                            style: {
+                                fontSize: '12px'
+                            }
+                        }
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'Discount Amount ($)'
+                        },
+                        labels: {
+                            formatter: function(val) {
+                                return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                            }
+                        }
+                    },
+                    colors: ['#F1416C'],
+                    tooltip: {
+                        y: {
+                            formatter: function(val) {
+                                return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                            }
+                        }
+                    }
+                };
+                
+                const employeeChart = new ApexCharts(hasEmployeeChart, employeeChartOptions);
+                employeeChart.render();
+            }
+        }
     });
 </script>
 @endif
+
+<script>
+    // Form validation
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            const startDate = new Date(document.querySelector('[name="start_date"]').value);
+            const endDate = new Date(document.querySelector('[name="end_date"]').value);
+            
+            if (startDate > endDate) {
+                e.preventDefault();
+                alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
+                return false;
+            }
+        });
+    }
+    
+    // Export function
+    function exportCurrentPage(options = {}) {
+        const {
+            tableId = 'discountedOrdersTable',
+            filename = 'discount_analysis_' + new Date().toISOString().split('T')[0],
+            format = 'xlsx',
+            sheetName = 'Discount Analysis'
+        } = options;
+        
+        const table = document.getElementById(tableId);
+        if (!table) {
+            console.warn('Table not found:', tableId);
+            return;
+        }
+        
+        // Get table data
+        const data = [];
+        const headers = [];
+        
+        // Get headers
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+        
+        // Get rows
+        table.querySelectorAll('tbody tr').forEach(row => {
+            const rowData = [];
+            row.querySelectorAll('td').forEach((td, index) => {
+                const tdClone = td.cloneNode(true);
+                tdClone.querySelectorAll('.ki-duotone, .badge, i, .progress, .symbol, .progress-bar').forEach(el => el.remove());
+                rowData.push(tdClone.textContent.trim());
+            });
+            data.push(rowData);
+        });
+        
+        // Create CSV content
+        let csvContent = headers.join(',') + '\n';
+        data.forEach(row => {
+            const escapedRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
+            csvContent += escapedRow.join(',') + '\n';
+        });
+        
+        // Download file
+        const blob = new Blob([csvContent], { type: format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/vnd.ms-excel' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute('download', `${filename}.${format === 'csv' ? 'csv' : 'xls'}`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+</script>
+@endpush
 
 <script>
     // Form validation
@@ -811,6 +1072,5 @@
         }
     });
 </script>
-@endpush
 
 @endsection

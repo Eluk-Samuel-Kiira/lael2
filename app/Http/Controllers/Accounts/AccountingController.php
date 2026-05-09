@@ -579,14 +579,18 @@ class AccountingController extends Controller
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         
+        // Convert to proper datetime ranges to include full days
+        $startDateTime = $startDate . ' 00:00:00';
+        $endDateTime = $endDate . ' 23:59:59';
+        
         // Get payment methods with transaction stats
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->with(['currency'])
             ->get()
-            ->map(function ($method) use ($tenantId, $startDate, $endDate) {
+            ->map(function ($method) use ($tenantId, $startDateTime, $endDateTime) {
                 $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
                     ->where('payment_method_id', $method->id)
-                    ->whereBetween('transaction_date', [$startDate, $endDate])
+                    ->whereBetween('transaction_date', [$startDateTime, $endDateTime])
                     ->where('status', 'COMPLETED')
                     ->get();
                     
@@ -603,7 +607,7 @@ class AccountingController extends Controller
                 
                 return $method;
             });
-            
+        
         // Overall statistics
         $stats = [
             'total_balance' => $paymentMethods->sum('current_balance'),
@@ -613,11 +617,15 @@ class AccountingController extends Controller
             'highest_balance_method' => $paymentMethods->sortByDesc('current_balance')->first(),
         ];
         
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
+        
         return view('basic-accounting.payment-method-analysis', compact(
-            'paymentMethods', 'stats', 'startDate', 'endDate'
+            'paymentMethods', 'stats', 'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
         ));
     }
-    
+
     // 9. Daily Summary Report
     public function dailySummary(Request $request)
     {

@@ -264,7 +264,7 @@
                 @endif
 
                 {{-- Payment Method Trends --}}
-                @if($paymentTrends->count() > 0)
+                @if($paymentTrends && $paymentTrends->count() > 0)
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -517,7 +517,6 @@
         const paymentData = @json($paymentMethodAnalysis);
         const methodNames = paymentData.map(method => method.method_name);
         const methodAmounts = paymentData.map(method => parseFloat(method.total_amount));
-        const methodTransactions = paymentData.map(method => parseFloat(method.transaction_count));
         
         const paymentMethodChart = new ApexCharts(document.querySelector("#paymentMethodChart"), {
             series: methodAmounts,
@@ -557,87 +556,145 @@
         });
         paymentMethodChart.render();
         
-        @if($paymentTrends->count() > 0)
+        @if($paymentTrends && $paymentTrends->count() > 0)
         // Payment Trends Chart
         const paymentTrendsData = @json($paymentTrends);
-        const trendSeries = [];
-        const trendCategories = [];
+        let trendSeries = [];
+        let trendCategories = [];
         
         // Prepare data for trends chart
-        Object.keys(paymentTrendsData).forEach((methodType, index) => {
+        let isFirstType = true;
+        Object.keys(paymentTrendsData).forEach((methodType) => {
             const methodData = paymentTrendsData[methodType];
-            const trendValues = methodData.map(item => parseFloat(item.daily_total));
             
-            if (trendCategories.length === 0) {
-                trendCategories = methodData.map(item => new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            // Make sure methodData is an array
+            if (methodData && Array.isArray(methodData) && methodData.length > 0) {
+                const trendValues = methodData.map(item => parseFloat(item.daily_total || 0));
+                
+                // Set categories only once using the first available data set
+                if (isFirstType && methodData.length > 0) {
+                    trendCategories = methodData.map(item => {
+                        try {
+                            return new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        } catch(e) {
+                            return item.date;
+                        }
+                    });
+                    isFirstType = false;
+                }
+                
+                trendSeries.push({
+                    name: methodType.replace(/_/g, ' ').toUpperCase(),
+                    data: trendValues,
+                    type: 'line'
+                });
             }
-            
-            trendSeries.push({
-                name: methodType.replace('_', ' ').toUpperCase(),
-                data: trendValues,
-                type: 'line'
-            });
         });
         
-        const paymentTrendsChart = new ApexCharts(document.querySelector("#paymentTrendsChart"), {
-            series: trendSeries,
-            chart: {
-                type: 'line',
-                height: 400,
-                toolbar: {
-                    show: true
-                }
-            },
-            stroke: {
-                width: 3,
-                curve: 'smooth'
-            },
-            xaxis: {
-                categories: trendCategories,
-                labels: {
-                    rotate: -45
-                }
-            },
-            yaxis: {
-                title: {
-                    text: 'Daily Amount ($)'
+        // Only render chart if we have valid data
+        if (trendSeries.length > 0 && trendCategories.length > 0) {
+            const paymentTrendsChart = new ApexCharts(document.querySelector("#paymentTrendsChart"), {
+                series: trendSeries,
+                chart: {
+                    type: 'line',
+                    height: 400,
+                    toolbar: {
+                        show: true
+                    }
                 },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
+                stroke: {
+                    width: 3,
+                    curve: 'smooth'
+                },
+                xaxis: {
+                    categories: trendCategories,
+                    labels: {
+                        rotate: -45,
+                        style: {
+                            fontSize: '12px'
+                        }
+                    }
+                },
+                yaxis: {
+                    title: {
+                        text: 'Daily Amount ($)'
+                    },
+                    labels: {
+                        formatter: function(val) {
+                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        }
+                    }
+                },
+                colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C', '#A1A5B7'],
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        }
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'center'
+                },
+                grid: {
+                    borderColor: '#e7e7e7',
+                    row: {
+                        colors: ['#f3f3f3', 'transparent'],
+                        opacity: 0.5
                     }
                 }
-            },
-            colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C'],
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
+            });
+            paymentTrendsChart.render();
+        } else {
+            console.warn('No valid trend data available for chart');
+            // Optionally hide the chart container or show a message
+            const trendsContainer = document.querySelector("#paymentTrendsChart");
+            if (trendsContainer) {
+                trendsContainer.innerHTML = '<div class="text-center text-muted py-10">No trend data available for the selected period</div>';
+            }
+        }
+        @endif
+    });
+</script>
+@else
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hide chart containers when no data
+        const chartElements = ['paymentMethodChart', 'paymentTrendsChart'];
+        chartElements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element && element.parentElement) {
+                const card = element.closest('.card');
+                if (card) {
+                    card.style.display = 'none';
                 }
-            },
-            legend: {
-                position: 'top'
             }
         });
-        paymentTrendsChart.render();
-        @endif
     });
 </script>
 @endif
 
 <script>
     // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
-            return false;
-        }
-    });
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            const startDateInput = document.querySelector('[name="start_date"]');
+            const endDateInput = document.querySelector('[name="end_date"]');
+            
+            if (startDateInput && endDateInput && startDateInput.value && endDateInput.value) {
+                const startDate = new Date(startDateInput.value);
+                const endDate = new Date(endDateInput.value);
+                
+                if (startDate > endDate) {
+                    e.preventDefault();
+                    alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
+                    return false;
+                }
+            }
+        });
+    }
 </script>
 @endpush
 

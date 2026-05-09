@@ -1015,10 +1015,17 @@ return [
     
     // Payment Method Types
     'credit' => 'Credit',
+    'show'  => 'Show',
     'debit' => 'Debit',
+    'entries_per_page' => 'Entries Per Page',
+    'orders' => 'Orders',
     'online' => 'Online',
     'mobile' => 'Mobile',
     'other' => 'Other',
+    'average_per_customer' => 'Average Per Customer',
+    'gross_amount' => 'Gross Amount',
+    'net_amount' => 'Net Amount',
+    'avg_tax_rate' => 'Average Tax Amount',
     
     // Status
     'verified' => 'Verified',
@@ -1037,6 +1044,7 @@ return [
     'preferred_methods' => 'Preferred Methods',
     'method_utilization' => 'Method Utilization',
     'transaction_fees' => 'Transaction Fees',
+    'employees' => 'Employees',
     
     // Cards and Accounts
     'card_last_four' => 'Card Last Four',

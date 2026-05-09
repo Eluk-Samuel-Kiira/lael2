@@ -136,13 +136,27 @@ return [
     
     // Documents
     'documents' => 'Documents',
+    'registered' => 'Registered',
+    'discount_range_distribution' => 'Discount Range Distribution',
+    'discount_range' => 'Discount Rate',
+    'orders_count' => 'Orders Count',
     'upload_documents' => 'Upload Documents',
     'supported_files' => 'Supported files: PDF, JPG, PNG, DOC, DOCX (Max 5MB)',
     'existing_documents' => 'Existing Documents',
     
     // Notes
     'notes' => 'Notes',
+    'total_refunded_amount' => 'Total Refunded Amount',
+    'refund_rate' => 'Refund Rate',
+    'average_return_value' => 'Average Return Value',
+    'total_periods' => 'Total Periods',
+    'daily_sales_analysis' => 'Daily Sales Analysis',
+    'daily_growth' => 'Daily Growth',
+    'weekly_growth' => 'Weekly Growth',
+    'current_daily_average' => 'Current Daily Average',
     '_none' => 'None',
+    'max_order' => 'Max Order',
+    'last_order' => 'Order',
     'additional_notes' => 'Additional notes or comments...',
 
 
