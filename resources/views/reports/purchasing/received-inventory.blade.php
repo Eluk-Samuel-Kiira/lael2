@@ -84,57 +84,73 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.purchasing.received-inventory') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Start Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="start_date" 
-                                                value="{{ $startDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="start_date" 
+                                                    value="{{ $startDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- End Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="end_date" 
-                                                value="{{ $endDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="end_date" 
+                                                    value="{{ $endDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
-                                                <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                @foreach($suppliers as $supplier)
-                                                    <option value="{{ $supplier->id }}" 
-                                                            {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                        {{ $supplier->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        
-                                        {{-- Product Variant --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
-                                            <select class="form-select w-100" name="variant_id">
-                                                <option value="">{{ __('passwords.all_products') }}</option>
-                                                @foreach($variants as $variant)
-                                                    <option value="{{ $variant->id }}" 
-                                                            {{ $productVariantId == $variant->id ? 'selected' : '' }}>
-                                                        {{ $variant->name }} 
-                                                        @if($variant->product)
-                                                            ({{ $variant->product->name }})
-                                                        @endif
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="supplier_id"  data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
+                                                    @foreach($suppliers as $supplier)
+                                                        <option value="{{ $supplier->id }}" 
+                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
+                                                            {{ $supplier->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                     
+                                    {{-- Second Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Expiring Soon --}}
+                                        {{-- Product Variant --}}
                                         <div class="flex-grow-1">
-                                            <div class="form-check form-check-custom form-check-solid">
+                                            <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_products') }}</option>
+                                                    @foreach($variants as $variant)
+                                                        <option value="{{ $variant->id }}" 
+                                                                {{ $productVariantId == $variant->id ? 'selected' : '' }}>
+                                                            {{ $variant->name }} 
+                                                            @if($variant->product)
+                                                                ({{ $variant->product->name }})
+                                                            @endif
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        {{-- Include Expiring --}}
+                                        <div class="flex-grow-1">
+                                            <div class="form-check form-check-custom form-check-solid mt-6">
                                                 <input class="form-check-input" type="checkbox" 
                                                     name="include_expiring" 
                                                     id="include_expiring"
@@ -143,26 +159,22 @@
                                                 <label class="form-check-label fw-semibold" for="include_expiring">
                                                     {{ __('passwords.show_only_expiring_soon') }}
                                                 </label>
-                                                <div class="text-muted fs-8">
-                                                    {{ __('passwords.items_expiring_within_30_days') }}
-                                                </div>
+                                            </div>
+                                            <div class="text-muted fs-8">
+                                                {{ __('passwords.items_expiring_within_30_days') }}
                                             </div>
                                         </div>
                                         
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.purchasing.received-inventory') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.purchasing.received-inventory') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -191,7 +203,7 @@
                             ],
                             [
                                 'title' => __('passwords.total_value'),
-                                'value' => '$' . number_format($summary['total_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_value'], 2),
                                 'color' => 'info',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.total_received_value')
@@ -317,13 +329,16 @@
                                                 <th>{{ __('passwords.total_quantity') }}</th>
                                                 <th>{{ __('passwords.total_value') }}</th>
                                                 <th>{{ __('passwords.status') }}</th>
-                                            </tr>
+                                            <tr>
                                         </thead>
                                         <tbody>
                                             @foreach($batchAnalysis as $batch)
                                             @php
+                                                // ✅ Access as object properties, not array
+                                                $daysToExpiry = $batch->days_to_expiry ?? null;
+                                                $expiryDate = $batch->expiry_date ? Carbon\Carbon::parse($batch->expiry_date) : null;
+                                                
                                                 // Determine expiry status
-                                                $daysToExpiry = $batch['days_to_expiry'];
                                                 $expiryColor = 'success';
                                                 $expiryText = __('passwords.not_expiring');
                                                 
@@ -351,21 +366,21 @@
                                             @endphp
                                             <tr class="{{ $rowClass }}">
                                                 <td class="ps-4">
-                                                    <div class="fw-bold">{{ $batch['batch_number'] ?? __('passwords.no_batch') }}</div>
+                                                    <div class="fw-bold">{{ $batch->batch_number ?? __('passwords.no_batch') }}</div>
                                                 </td>
                                                 <td>
-                                                    @if($batch['expiry_date'])
+                                                    @if($expiryDate)
                                                         <span class="fw-semibold">
-                                                            {{ \Carbon\Carbon::parse($batch['expiry_date'])->format('M d, Y') }}
+                                                            {{ $expiryDate->format('M d, Y') }}
                                                         </span>
                                                     @else
                                                         <span class="text-muted">{{ __('passwords.no_expiry') }}</span>
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    @if($batch['days_to_expiry'] !== null)
+                                                    @if($daysToExpiry !== null)
                                                         <span class="badge badge-light-{{ $expiryColor }}">
-                                                            {{ $batch['days_to_expiry'] }} {{ __('passwords.days') }}
+                                                            {{ abs($daysToExpiry) }} {{ __('passwords.days') }}
                                                         </span>
                                                     @else
                                                         <span class="text-muted">-</span>
@@ -373,13 +388,13 @@
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        {{ number_format($batch['total_quantity']) }}
+                                                        {{ number_format($batch->total_quantity) }}
                                                     </span>
                                                     <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-success">
-                                                        ${{ number_format($batch['total_value'], 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($batch->total_value, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -440,13 +455,10 @@
                                             @foreach($receivedItems as $index => $item)
                                             @php
                                                 $po = $item->purchaseOrder;
-                                                $expiryDate = $item->expiry_date ? \Carbon\Carbon::parse($item->expiry_date) : null;
-                                                $daysToExpiry = $expiryDate ? $expiryDate->diffInDays(now()) : null;
+                                                $expiryDate = $item->expiry_date ? Carbon\Carbon::parse($item->expiry_date) : null;
+                                                $daysToExpiry = $expiryDate ? now()->diffInDays($expiryDate, false) : null;
                                                 
-                                                // Determine expiry status
-                                                $expiryColor = 'success';
-                                                $expiryText = __('passwords.not_expiring');
-                                                
+                                                // Determine expiry status - use object properties
                                                 if ($daysToExpiry !== null) {
                                                     if ($daysToExpiry <= 0) {
                                                         $expiryColor = 'danger';
@@ -463,11 +475,10 @@
                                                     }
                                                 }
                                                 
-                                                // Row class for expired/expiring soon
-                                                $rowClass = '';
-                                                if ($daysToExpiry !== null && $daysToExpiry <= 30) {
-                                                    $rowClass = $daysToExpiry <= 0 ? 'table-danger' : 'table-warning';
-                                                }
+                                                // Access product variant as object property
+                                                $variant = $item->productVariant;
+                                                $product = $variant ? $variant->product : null;
+                                                $supplier = $po ? $po->supplier : null;
                                             @endphp
                                             <tr class="{{ $rowClass }}">
                                                 <td class="ps-4">
@@ -520,13 +531,13 @@
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        ${{ number_format($item->unit_cost, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($item->unit_cost, 2) }}
                                                     </span>
                                                     <div class="text-muted fs-8">{{ __('passwords.per_unit') }}</div>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-success">
-                                                        ${{ number_format($item->total_cost, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($item->total_cost, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>

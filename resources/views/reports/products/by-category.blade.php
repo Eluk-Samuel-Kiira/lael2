@@ -156,7 +156,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
                                         <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
                                             <span class="path1"></span>
@@ -164,147 +164,189 @@
                                         </i>
                                         <h3 class="fw-bold m-0">{{ __('auth.category_performance') }}</h3>
                                     </div>
-                                    @if($categories->count() > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $categories->count() }} {{ __('auth.categories') }}
-                                    </span>
-                                    @endif
                                 </div>
                             </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="categoryTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('accounting.name') }}</th>
-                                                <th>{{ __('auth.product_count') }}</th>
-                                                <th>{{ __('auth.variant_count') }}</th>
-                                                <th>{{ __('auth.total_stock') }}</th>
-                                                <th>{{ __('auth.total_cost_value') }}</th>
-                                                <th>{{ __('auth.total_revenue_value') }}</th>
-                                                <th>{{ __('auth.total_margin') }}</th>
-                                                <th>{{ __('auth.margin_percentage') }}</th>
-                                                <th>{{ __('auth.performance') }}</th>
-                                                <th>{{ __('auth.ranking') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($sortedCategories as $index => $category)
-                                            @php
-                                                // Determine performance rating
-                                                if ($category->margin_percentage >= 50) {
-                                                    $performance = 'excellent';
-                                                    $performanceLabel = __('auth.excellent');
-                                                    $performanceColor = 'success';
-                                                } elseif ($category->margin_percentage >= 30) {
-                                                    $performance = 'good';
-                                                    $performanceLabel = __('auth.good');
-                                                    $performanceColor = 'primary';
-                                                } elseif ($category->margin_percentage >= 10) {
-                                                    $performance = 'average';
-                                                    $performanceLabel = __('auth.average');
-                                                    $performanceColor = 'warning';
-                                                } else {
-                                                    $performance = 'poor';
-                                                    $performanceLabel = __('auth.needs_improvement');
-                                                    $performanceColor = 'danger';
-                                                }
-                                                
-                                                // Determine ranking
-                                                $ranking = $index + 1;
-                                                if ($ranking === 1) {
-                                                    $rankingColor = 'gold';
-                                                    $rankingIcon = 'ki-crown';
-                                                } elseif ($ranking === 2) {
-                                                    $rankingColor = 'silver';
-                                                    $rankingIcon = 'ki-medal-star';
-                                                } elseif ($ranking === 3) {
-                                                    $rankingColor = 'bronze';
-                                                    $rankingIcon = 'ki-medal';
-                                                } else {
-                                                    $rankingColor = 'secondary';
-                                                    $rankingIcon = 'ki-number';
-                                                }
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="d-flex align-items-center">
-                                                        @if($category->image_url)
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($category->image_url) }}" alt="{{ $category->name }}" class="rounded">
-                                                        </div>
-                                                        @endif
-                                                        <div>
-                                                            <span class="fw-bold text-gray-800">{{ $category->name }}</span>
-                                                            @if($category->description)
-                                                            <div class="text-muted fs-7">{{ Str::limit($category->description, 50) }}</div>
+                            
+                            @if($paginatedCategories->count() > 0)
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="categoryTable">
+                                            <thead>
+                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                                    <th class="ps-4 min-w-200px">{{ __('accounting.name') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.product_count') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.variant_count') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.total_stock') }}</th>
+                                                    <th class="min-w-150px text-end">{{ __('auth.total_cost_value') }}</th>
+                                                    <th class="min-w-150px text-end">{{ __('auth.total_revenue_value') }}</th>
+                                                    <th class="min-w-150px text-end">{{ __('auth.total_margin') }}</th>
+                                                    <th class="min-w-120px text-center">{{ __('auth.margin_percentage') }}</th>
+                                                    <th class="min-w-120px text-center">{{ __('auth.performance') }}</th>
+                                                    <th class="min-w-80px text-center">{{ __('auth.ranking') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($paginatedCategories as $index => $category)
+                                                @php
+                                                    // Calculate global ranking index (across all categories)
+                                                    $globalIndex = $sortedCategories->search(function($item) use ($category) {
+                                                        return $item->id === $category->id;
+                                                    });
+                                                    $ranking = $globalIndex !== false ? $globalIndex + 1 : ($loop->index + 1);
+                                                    
+                                                    // Determine performance rating
+                                                    if ($category->margin_percentage >= 50) {
+                                                        $performance = 'excellent';
+                                                        $performanceLabel = __('auth.excellent');
+                                                        $performanceColor = 'success';
+                                                    } elseif ($category->margin_percentage >= 30) {
+                                                        $performance = 'good';
+                                                        $performanceLabel = __('auth.good');
+                                                        $performanceColor = 'primary';
+                                                    } elseif ($category->margin_percentage >= 10) {
+                                                        $performance = 'average';
+                                                        $performanceLabel = __('auth.average');
+                                                        $performanceColor = 'warning';
+                                                    } else {
+                                                        $performance = 'poor';
+                                                        $performanceLabel = __('auth.needs_improvement');
+                                                        $performanceColor = 'danger';
+                                                    }
+                                                    
+                                                    // Determine ranking color and icon
+                                                    if ($ranking === 1) {
+                                                        $rankingColor = 'gold';
+                                                        $rankingIcon = 'ki-crown';
+                                                    } elseif ($ranking === 2) {
+                                                        $rankingColor = 'silver';
+                                                        $rankingIcon = 'ki-medal-star';
+                                                    } elseif ($ranking === 3) {
+                                                        $rankingColor = 'bronze';
+                                                        $rankingIcon = 'ki-medal';
+                                                    } else {
+                                                        $rankingColor = 'secondary';
+                                                        $rankingIcon = 'ki-number';
+                                                    }
+                                                @endphp
+                                                <tr>
+                                                    <td class="ps-4">
+                                                        <div class="d-flex align-items-center">
+                                                            @if($category->image_url)
+                                                            <div class="symbol symbol-50px me-3">
+                                                                <img src="{{ asset($category->image_url) }}" alt="{{ $category->name }}" class="rounded">
+                                                            </div>
                                                             @endif
+                                                            <div>
+                                                                <span class="fw-bold text-gray-800">{{ $category->name }}</span>
+                                                                @if($category->description)
+                                                                <div class="text-muted fs-7">{{ Str::limit($category->description, 50) }}</div>
+                                                                @endif
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $category->product_count }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $category->variant_count }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-success">{{ $category->total_stock }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-warning fw-semibold">${{ number_format($category->total_cost_value, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-info fw-semibold">${{ number_format($category->total_revenue_value, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-{{ $category->total_margin >= 0 ? 'success' : 'danger' }} fw-bold">
-                                                        ${{ number_format($category->total_margin, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $performanceColor }}">
-                                                        {{ number_format($category->margin_percentage, 1) }}%
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-{{ $performanceColor }}">
-                                                        {{ $performanceLabel }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    @if($ranking <= 3)
-                                                    <div class="d-flex align-items-center">
-                                                        <i class="ki-duotone {{ $rankingIcon }} fs-2 me-2 text-{{ $rankingColor }}"></i>
-                                                        <span class="fw-bold text-{{ $rankingColor }}">#{{ $ranking }}</span>
-                                                    </div>
-                                                    @else
-                                                    <span class="badge badge-light-secondary">#{{ $ranking }}</span>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                        {{-- Footer with totals --}}
-                                        <tfoot class="bg-light">
-                                            <tr>
-                                                <td class="text-end fw-bold">{{ __('auth.total') }}:</td>
-                                                <td class="fw-bold">{{ $categorySummary['total_products'] }}</td>
-                                                <td class="fw-bold">{{ $categorySummary['total_variants'] }}</td>
-                                                <td class="fw-bold">{{ $categorySummary['total_stock'] }}</td>
-                                                <td class="fw-bold text-warning">${{ number_format($categories->sum('total_cost_value'), 2) }}</td>
-                                                <td class="fw-bold text-info">${{ number_format($categories->sum('total_revenue_value'), 2) }}</td>
-                                                <td class="fw-bold text-{{ $categories->sum('total_margin') >= 0 ? 'success' : 'danger' }}">
-                                                    ${{ number_format($categories->sum('total_margin'), 2) }}
-                                                </td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-primary">{{ number_format($category->product_count) }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-info">{{ number_format($category->variant_count) }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-success">{{ number_format($category->total_stock) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-warning fw-semibold">${{ number_format($category->total_cost_value, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-info fw-semibold">${{ number_format($category->total_revenue_value, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-{{ $category->total_margin >= 0 ? 'success' : 'danger' }} fw-bold">
+                                                            ${{ number_format($category->total_margin, 2) }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-{{ $performanceColor }}">
+                                                            {{ number_format($category->margin_percentage, 1) }}%
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-{{ $performanceColor }}">
+                                                            {{ $performanceLabel }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        @if($ranking <= 3)
+                                                        <div class="d-flex align-items-center justify-content-center">
+                                                            <i class="ki-duotone {{ $rankingIcon }} fs-2 me-1 text-{{ $rankingColor }}"></i>
+                                                            <span class="fw-bold text-{{ $rankingColor }}">#{{ $ranking }}</span>
+                                                        </div>
+                                                        @else
+                                                        <span class="badge badge-light-secondary">#{{ $ranking }}</span>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                                @endforeach
+                                            </tbody>
+                                            @php
+                                                // Calculate totals for current page
+                                                $pageTotalCost = $paginatedCategories->sum('total_cost_value');
+                                                $pageTotalRevenue = $paginatedCategories->sum('total_revenue_value');
+                                                $pageTotalMargin = $paginatedCategories->sum('total_margin');
+                                            @endphp
+                                            <tfoot class="bg-light">
+                                                <tr>
+                                                    <td class="text-end fw-bold">{{ __('accounting.current_page') }}:</td>
+                                                    <td class="fw-bold text-center">{{ $paginatedCategories->sum('product_count') }}</td>
+                                                    <td class="fw-bold text-center">{{ $paginatedCategories->sum('variant_count') }}</td>
+                                                    <td class="fw-bold text-center">{{ $paginatedCategories->sum('total_stock') }}</td>
+                                                    <td class="fw-bold text-end text-warning">${{ number_format($pageTotalCost, 2) }}</td>
+                                                    <td class="fw-bold text-end text-info">${{ number_format($pageTotalRevenue, 2) }}</td>
+                                                    <td class="fw-bold text-end text-{{ $pageTotalMargin >= 0 ? 'success' : 'danger' }}">
+                                                        ${{ number_format($pageTotalMargin, 2) }}
+                                                    </td>
+                                                    <td colspan="3"></td>
+                                                </tr>
+                                                @if($paginatedCategories->total() > $paginatedCategories->count())
+                                                <tr class="border-top">
+                                                    <td class="text-end fw-bold">{{ __('auth.grand_total') }}:</td>
+                                                    <td class="fw-bold text-center">{{ $categorySummary['total_products'] }}</td>
+                                                    <td class="fw-bold text-center">{{ $categorySummary['total_variants'] }}</td>
+                                                    <td class="fw-bold text-center">{{ $categorySummary['total_stock'] }}</td>
+                                                    <td class="fw-bold text-end text-warning">${{ number_format($categorySummary['total_cost_value'], 2) }}</td>
+                                                    <td class="fw-bold text-end text-info">${{ number_format($categorySummary['total_value'], 2) }}</td>
+                                                    <td class="fw-bold text-end text-{{ $categorySummary['total_margin'] >= 0 ? 'success' : 'danger' }}">
+                                                        ${{ number_format($categorySummary['total_margin'], 2) }}
+                                                    </td>
+                                                    <td colspan="3"></td>
+                                                </tr>
+                                                @endif
+                                            </tfoot>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
+                                
+                                {{-- ✅ Add Pagination Component --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $paginatedCategories,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
+                                </div>
+                                
+                            @else
+                                <div class="card-body">
+                                    <div class="text-center py-10">
+                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
+                                            <span class="path1"></span>
+                                            <span class="path2"></span>
+                                        </i>
+                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                                        <p class="text-muted fs-6">{{ __('auth.no_categories_found') }}</p>
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>

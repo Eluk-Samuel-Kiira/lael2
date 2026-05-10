@@ -49,45 +49,8 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.valuation') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
+                                    {{-- First Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Valuation Method --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.valuation_method') }}</label>
@@ -112,20 +75,39 @@
                                             </div>
                                         </div>
                                         
+                                        {{-- Location & Department - Dependent Dropdown --}}
+                                        <div class="flex-grow-1">
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.valuation') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.valuation') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -444,18 +426,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($inventoryItems->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $inventoryItems->firstItem() }} - {{ $inventoryItems->lastItem() }} {{ __('pagination.of') }} {{ $inventoryItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $inventoryItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $inventoryItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

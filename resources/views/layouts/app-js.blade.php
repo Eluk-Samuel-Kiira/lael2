@@ -1,8 +1,8 @@
 <!-- important imports for laravel liveblades -->
-<script src="{{ asset('blade-live/forms/forms.min.js') }}" type="module"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<!-- <script src="{{ asset('blade-live/forms/forms.min.js') }}" type="module"></script> -->
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> -->
 
 <style>
     /* ── Google/YouTube-style top progress bar ── */
@@ -210,6 +210,13 @@
                     document.title = titleMatch ? titleMatch[1] : 'Default Title';
                     document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
                     updateActiveMenuLink(url);
+
+                    
+                    // console.log('Auu Falls here');
+                    if (typeof window.LiveBladeRefresh === 'function') {
+                        window.LiveBladeRefresh();
+                    }
+
                 } else {
                     console.error('Error: #kt_app_main not found in the fetched content.');
                 }
@@ -497,7 +504,24 @@
         // Set up the URL dynamically
         var updateUrl = '/transfer-stock/' + uniqueId;
         // console.log(updateUrl);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
+        handleTransferStock(data, updateUrl, uniqueId, submitButton);
+    }
+
+        // General Update or Edit Function 
+    function handleTransferStock(data, updateUrl, uniqueId, submitButton) {
+        LiveBlade.editLoopForms(data, updateUrl)
+        .then(noErrorStatus => {
+            if (noErrorStatus) {
+                const closeButton = document.getElementById(`closeTransferModalButton${uniqueId}`);
+                if (closeButton) closeButton.click();
+            }
+        })
+        .catch(error => {
+            console.error('An unexpected error occurred:', error);
+        })
+        .finally(() => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+        });
     }
     
     function initializeStockInputs() {
@@ -565,214 +589,113 @@
         handleEditResponse(data, updateUrl, uniqueId, submitButton);
     }
 
-    
-    $(document).ready(function() {
-        // ========== REUSABLE FUNCTIONS ==========
+</script>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const variantSearch = document.getElementById('variant_search');
+        const variantHidden = document.getElementById('variant_id');
+        const quantityInput = document.getElementById('quantity_on_hand');
+        const allocatedInput = document.getElementById('quantity_allocated');
+        const variantList = document.getElementById('variant_list');
         
-        // Generic function to load departments based on location
-        function loadDepartments(locationId, targetSelect, options = {}) {
-            const {
-                modal = null,
-                selectedDeptId = null,
-                placeholder = "{{__('auth._department')}}",
-                isFilter = false
-            } = options;
-            
-            // Show loading
-            targetSelect.html(`<option value="">${isFilter ? '{{ __("auth._department") }}' : ''}{{ __("auth._loading") }}</option>`);
-            if (targetSelect.data('select2')) targetSelect.trigger('change');
-            
-            if (!locationId) {
-                // No location - reset to default state
-                if (isFilter) {
-                    // Reset to all departments for filter
-                    let options = '<option value="">{{ __("auth._department") }}</option>';
-                    @foreach ($departments as $department)
-                        options += '<option value="{{ $department->id }}">{{ $department->name }}</option>';
-                    @endforeach
-                    targetSelect.html(options).prop('disabled', false);
-                } else {
-                    // Clear for modals
-                    targetSelect.html('<option value=""></option>').prop('disabled', false);
-                }
-                
-                if (targetSelect.data('select2')) targetSelect.trigger('change');
-                return;
-            }
-            
-            // Fetch departments via AJAX
-            $.ajax({
-                url: '{{ route("get.departments.by.location", "") }}/' + locationId,
-                type: 'GET',
-                dataType: 'json',
-                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
-                success: function(response) {
-                    let options = isFilter ? '<option value="">{{ __("auth._department") }}</option>' : '<option value=""></option>';
-                    
-                    if (response.success && response.departments.length > 0) {
-                        // Sort alphabetically
-                        const sortedDepts = response.departments.sort((a, b) => a.name.localeCompare(b.name));
-                        
-                        sortedDepts.forEach(dept => {
-                            const selected = (selectedDeptId && dept.id == selectedDeptId) ? 'selected' : '';
-                            options += `<option value="${dept.id}" ${selected}>${dept.name}</option>`;
-                        });
-                        targetSelect.html(options).prop('disabled', false);
-                    } else {
-                        options += '<option value="" disabled>{{ __("auth.no_departments_found") }}</option>';
-                        targetSelect.html(options).prop('disabled', true);
-                    }
-                    
-                    if (targetSelect.data('select2')) targetSelect.trigger('change');
-                },
-                error: function() {
-                    targetSelect.html('<option value="">{{ __("auth.error_loading_departments") }}</option>').prop('disabled', true);
-                    if (targetSelect.data('select2')) targetSelect.trigger('change');
+        if (!variantSearch || !variantHidden || !quantityInput || !allocatedInput) return;
+        
+        // Store variant data for quick lookup
+        const variants = [];
+        if (variantList) {
+            const options = variantList.querySelectorAll('option');
+            options.forEach(opt => {
+                if (opt.value && opt.value !== 'Select product variant') {
+                    variants.push({
+                        id: opt.getAttribute('data-id'),
+                        name: opt.value,
+                        quantity: parseInt(opt.getAttribute('data-quantity')) || 0
+                    });
                 }
             });
         }
         
-        // Generic function to initialize modal selects
-        function initModalSelects(modal, locationSelect, departmentSelect, originalDeptId = null) {
-            // Store original department ID
-            modal.data('department-id', originalDeptId || departmentSelect.val());
+        function updateQuantity() {
+            const searchValue = variantSearch.value.trim();
+            const allocated = parseInt(allocatedInput.value) || 0;
             
-            // Initialize Select2
-            [locationSelect, departmentSelect].forEach(select => {
-                if (select.data('select2')) select.select2('destroy');
-                select.select2({
-                    placeholder: "{{__('auth._select')}}",
-                    allowClear: true,
-                    dropdownParent: modal
-                });
-            });
+            // Find matching variant
+            let matchedVariant = null;
+            for (let i = 0; i < variants.length; i++) {
+                if (variants[i].name === searchValue) {
+                    matchedVariant = variants[i];
+                    break;
+                }
+            }
             
-            // Load departments if location is selected
-            const locationId = locationSelect.val();
-            if (locationId) {
-                setTimeout(() => loadDepartments(locationId, departmentSelect, {
-                    modal,
-                    selectedDeptId: modal.data('department-id')
-                }), 200);
+            if (matchedVariant) {
+                // Set hidden input value
+                variantHidden.value = matchedVariant.id;
+                // Calculate available quantity
+                const available = Math.max(0, matchedVariant.quantity - allocated);
+                quantityInput.value = available;
+            } else {
+                variantHidden.value = '';
+                quantityInput.value = 0;
             }
         }
         
-        // ========== CREATE MODAL ==========
-        $('#kt_modal_add_inventory').on('shown.bs.modal', function() {
-            const modal = $(this);
-            const locationSelect = modal.find('select[name="location_id"]');
-            const departmentSelect = modal.find('select[name="department_id"]');
-            
-            modal.find('form')[0]?.reset();
-            departmentSelect.html('<option value=""></option>');
-            initModalSelects(modal, locationSelect, departmentSelect);
+        // Update when variant is selected from datalist
+        variantSearch.addEventListener('change', function() {
+            setTimeout(updateQuantity, 10);
         });
         
-        // ========== EDIT MODALS ==========
-        $(document).on('show.bs.modal', '[id^="editItem"]', function() {
-            const modal = $(this);
-            initModalSelects(
-                modal,
-                modal.find('select[name="location_id"]'),
-                modal.find('select[name="department_id"]')
-            );
+        // Update when typing (with debounce)
+        let debounceTimer;
+        variantSearch.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                updateQuantity();
+            }, 300);
         });
         
-        // ========== STOCK TRANSFER MODALS ==========
-        $(document).on('show.bs.modal', '[id^="stockTransfer"]', function() {
-            const modal = $(this);
-            const locationSelect = modal.find('select[name="location_id"]');
-            const departmentSelect = modal.find('select[name="department_id"]');
-            
-            initModalSelects(modal, locationSelect, departmentSelect);
+        // Update when allocated quantity changes
+        allocatedInput.addEventListener('input', function() {
+            updateQuantity();
         });
         
-        // ========== LOCATION CHANGE HANDLER (ALL MODALS) ==========
-        $(document).on('change', '[id^="editItem"] select[name="location_id"], [id^="stockTransfer"] select[name="location_id"], #kt_modal_add_inventory select[name="location_id"]', function() {
-            const locationId = $(this).val();
-            const modal = $(this).closest('.modal');
-            const departmentSelect = modal.find('select[name="department_id"]');
-            
-            loadDepartments(locationId, departmentSelect, {
-                modal,
-                selectedDeptId: modal.data('department-id')
-            });
-        });
-        
-        // ========== FILTER DROPDOWNS ==========
-        $('#locationFilter').on('change', function() {
-            const locationId = $(this).val();
-            const departmentFilter = $('#departmentFilter');
-            const currentDeptId = departmentFilter.val();
-            
-            loadDepartments(locationId, departmentFilter, {
-                selectedDeptId: currentDeptId,
-                isFilter: true
-            });
-        });
-        
-        // Initialize filter on page load
-        const selectedLocation = $('#locationFilter').val();
-        if (selectedLocation) {
-            loadDepartments(selectedLocation, $('#departmentFilter'), {
-                selectedDeptId: $('#departmentFilter').val(),
-                isFilter: true
-            });
+        // Set initial value if editing
+        const initialVariantId = variantHidden.value;
+        if (initialVariantId) {
+            const initialVariant = variants.find(v => v.id == initialVariantId);
+            if (initialVariant) {
+                variantSearch.value = initialVariant.name;
+                updateQuantity();
+            }
         }
         
-        // Initialize Select2 for filters
-        $('#locationFilter, #departmentFilter').each(function() {
-            if ($(this).data('select2')) {
-                $(this).select2({
-                    placeholder: $(this).is('#locationFilter') ? "{{ __('pagination._location') }}" : "{{ __('auth._department') }}",
-                    allowClear: true
-                });
+        // Initialize
+        updateQuantity();
+        
+        // Also handle blur to ensure value is correct
+        variantSearch.addEventListener('blur', function() {
+            const currentValue = this.value;
+            let isValid = false;
+            for (let i = 0; i < variants.length; i++) {
+                if (variants[i].name === currentValue) {
+                    isValid = true;
+                    break;
+                }
+            }
+            if (!isValid && currentValue !== '') {
+                this.value = '';
+                variantHidden.value = '';
+                quantityInput.value = 0;
             }
         });
     });
-
 </script>
 
 
 <script>
     
-    document.addEventListener('DOMContentLoaded', function() {
-        // Wait for Select2 to initialize
-        setTimeout(function() {
-            const variantSelect = document.getElementById('variant-select');
-            const quantityInput = document.querySelector('input[name="quantity_on_hand"]');
-            const allocatedInput = document.querySelector('input[name="quantity_allocated"]');
-            
-            if (!variantSelect || !quantityInput || !allocatedInput) return;
-            
-            function updateAvailableQuantity() {
-                const selectedOption = variantSelect.options[variantSelect.selectedIndex];
-                if (selectedOption && selectedOption.value !== '') {
-                    const variantQuantity = selectedOption.getAttribute('data-quantity') || 0;
-                    const allocated = parseInt(allocatedInput.value) || 0;
-                    const available = Math.max(0, parseInt(variantQuantity) - allocated);
-                    
-                    quantityInput.value = available;
-                } else {
-                    quantityInput.value = 0;
-                }
-            }
-            
-            // Update when variant changes
-            if (typeof jQuery !== 'undefined' && jQuery.fn.select2) {
-                jQuery(variantSelect).on('change', updateAvailableQuantity);
-            } else {
-                variantSelect.addEventListener('change', updateAvailableQuantity);
-            }
-            
-            // Update when allocated quantity changes
-            allocatedInput.addEventListener('input', updateAvailableQuantity);
-            
-            // Initialize on page load
-            updateAvailableQuantity();
-        }, 300);
-    });
-
 
     function editItemInstanceLoop(uniqueId) {
         const submitButton = document.getElementById('updateItemButton' + uniqueId);
@@ -814,32 +737,6 @@
     }
 
 
-    document.addEventListener("change", function (e) {
-        if (e.target.id === "departmentFilter" || e.target.id === "locationFilter") {
-            const departmentFilter = document.getElementById("departmentFilter");
-            const locationFilter = document.getElementById("locationFilter");
-            const rows = document.querySelectorAll("#kt_table_users tbody tr");
-
-            const selectedDepartment = departmentFilter ? departmentFilter.value : "";
-            const selectedLocation = locationFilter ? locationFilter.value : "";
-
-            rows.forEach(row => {
-                const rowDepartment = row.getAttribute("data-department");
-                const rowLocation = row.getAttribute("data-location");
-
-                let showRow = true;
-
-                if (selectedDepartment && rowDepartment !== selectedDepartment) {
-                    showRow = false;
-                }
-                if (selectedLocation && rowLocation !== selectedLocation) {
-                    showRow = false;
-                }
-
-                row.style.display = showRow ? "" : "none";
-            });
-        }
-    });
 
 </script>
 
@@ -2262,6 +2159,12 @@
     function initializeComponentScripts() {
         // initialize stock adjustment inputs
         initializeStockInputs();
+        
+        // Initialize pagination and search capibilities
+        if (typeof window.LiveBladeRefresh === 'function') {
+            window.LiveBladeRefresh();
+        }
+        
 
         // const tableId = '#kt_table_users';
 

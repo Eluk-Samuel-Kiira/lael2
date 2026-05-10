@@ -1,7 +1,7 @@
 @can('view product')
 <div class="card-body py-4" id="reloadProductComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5" id="">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -44,7 +44,7 @@
                                         <img src="{{ productImage($product->image_url) }}" alt="" class="symbol-label">
                                     </a>
                                     <div class="ms-5">
-                                        <a href="#" class="text-gray-800 text-hover-primary fs-5 fw-bold" data-kt-ecommerce-product-filter="product_name">{{ $product->name }}</a>
+                                        <a href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</a>
                                     </div>
                                 </div>
                             </td>
@@ -156,6 +156,18 @@
                 @endif
             </tbody>
         </table>
+    </div>
+    <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$all_products"
+            id="productPagination"
+            route="{{ route('products.index') }}"
+            search-input-id="productSearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="reloadProductComponent"
+        />
     </div>
 </div>
 @endcan

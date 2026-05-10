@@ -102,7 +102,7 @@
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
+                                            <select class="form-select w-100" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                 <option value="">{{ __('passwords.all_suppliers') }}</option>
                                                 @foreach($suppliers as $supplier)
                                                     <option value="{{ $supplier->id }}" 
@@ -116,7 +116,7 @@
                                         {{-- Product Variant --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
-                                            <select class="form-select w-100" name="variant_id">
+                                            <select class="form-select w-100" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                 <option value="">{{ __('passwords.all_products') }}</option>
                                                 @foreach($variants as $variant)
                                                     <option value="{{ $variant->id }}" 
@@ -171,10 +171,17 @@
                             ],
                             [
                                 'title' => __('passwords.total_value'),
-                                'value' => '$' . number_format($summary['total_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_value'], 2),
                                 'color' => 'info',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.total_spend')
+                            ],
+                            [
+                                'title' => __('passwords.avg_unit_cost'),
+                                'value' => currency_symbol() . number_format($summary['avg_unit_cost'] ?? 0, 2),
+                                'color' => 'dark',
+                                'icon' => 'ki-chart-line',
+                                'description' => __('passwords.per_unit_average')
                             ],
                             [
                                 'title' => __('passwords.unique_products'),
@@ -407,13 +414,13 @@
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        ${{ number_format($item->unit_cost, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($item->unit_cost, 2) }}
                                                     </span>
                                                     <div class="text-muted fs-8">{{ __('passwords.per_unit') }}</div>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-success">
-                                                        ${{ number_format($item->total_cost, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($item->total_cost, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -450,13 +457,14 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="card-footer d-flex justify-content-between align-items-center">
-                                    <div class="text-muted">
-                                        {{ __('pagination.showing') }} {{ $items->firstItem() }} - {{ $items->lastItem() }} {{ __('pagination.of') }} {{ $items->total() }} {{ __('passwords.items') }}
-                                    </div>
-                                    <div>
-                                        {{ $items->appends(request()->query())->links() }}
-                                    </div>
+                                {{-- Pagination --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $items,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
                             </div>
                         </div>
@@ -529,6 +537,7 @@
             }
         @endphp
 
+        // Top Items Chart - Using data from controller
         const topItemsChart = new ApexCharts(document.querySelector("#topItemsChart"), {
             series: [
                 {
@@ -544,56 +553,59 @@
             ],
             chart: {
                 height: 400,
+                width: '100%',
                 type: 'line',
                 toolbar: {
                     show: true,
                     tools: {
-                        download: true,
-                        selection: false,
-                        zoom: false,
-                        zoomin: false,
-                        zoomout: false,
-                        pan: false,
-                        reset: false
+                        download: true
                     }
                 }
             },
             stroke: {
-                width: [0, 4]
+                width: [0, 3]
             },
             dataLabels: {
                 enabled: true,
-                enabledOnSeries: [1]
+                enabledOnSeries: [1],
+                formatter: function(val) {
+                    return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 0});
+                }
             },
             colors: ['#3E97FF', '#F1416C'],
             xaxis: {
                 categories: @json($chartLabels),
                 labels: {
                     rotate: -45,
-                    style: {
-                        fontSize: '12px'
-                    }
+                    style: { fontSize: '11px' },
+                    trim: true
+                },
+                title: {
+                    text: '{{ __("passwords.product") }}',
+                    style: { fontSize: '12px', fontWeight: 'bold' }
                 }
             },
             yaxis: [
                 {
                     title: {
-                        text: '{{ __("passwords.quantity") }}'
+                        text: '{{ __("passwords.quantity") }}',
+                        style: { fontSize: '12px', fontWeight: 'bold' }
                     },
                     labels: {
                         formatter: function(val) {
-                            return val.toLocaleString('en-US', {minimumFractionDigits: 0})
+                            return val.toLocaleString('en-US', {minimumFractionDigits: 0});
                         }
                     }
                 },
                 {
                     opposite: true,
                     title: {
-                        text: '{{ __("passwords.total_value_usd") }}'
+                        text: '{{ __("passwords.total_value") }} ({{ currency_symbol() }})',
+                        style: { fontSize: '12px', fontWeight: 'bold' }
                     },
                     labels: {
                         formatter: function(val) {
-                            return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0})
+                            return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 0});
                         }
                     }
                 }
@@ -604,23 +616,31 @@
                 y: [
                     {
                         formatter: function(val) {
-                            return val.toLocaleString('en-US', {minimumFractionDigits: 0}) + ' {{ __("passwords.units") }}'
+                            return val.toLocaleString('en-US', {minimumFractionDigits: 0}) + ' {{ __("passwords.units") }}';
                         }
                     },
                     {
                         formatter: function(val) {
-                            return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 2})
+                            return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 2});
                         }
                     }
                 ]
             },
             legend: {
-                position: 'top'
+                position: 'top',
+                horizontalAlign: 'center'
             },
             plotOptions: {
                 bar: {
                     borderRadius: 4,
                     columnWidth: '60%',
+                }
+            },
+            grid: {
+                borderColor: '#e7e7e7',
+                row: {
+                    colors: ['#f3f3f3', 'transparent'],
+                    opacity: 0.3
                 }
             }
         });

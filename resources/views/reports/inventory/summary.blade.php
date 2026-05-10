@@ -103,41 +103,22 @@
                                             </div>
                                         </div>
                                         
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('auth.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('auth.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
+                                        {{-- Location & Department - Dependent Dropdowns --}}
+                                        <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                            <div class="flex-grow-1">
+                                                <x-liveblade-dependent-dropdown 
+                                                    id="filter_location_department"
+                                                    parentName="location_id"
+                                                    childName="department_id"
+                                                    parentLabel="auth.location"
+                                                    childLabel="accounting.department"
+                                                    :parentOptions="$locations"
+                                                    :childOptions="$departments"
+                                                    route="{{ route('get.departments') }}"
+                                                    selectedParent="{{ $locationId ?? null }}"
+                                                    selectedChild="{{ $departmentId ?? null }}"
+                                                    skipAjax="false"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -148,10 +129,7 @@
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
                                             <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-abstract-42 fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="variant_id">
+                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                     <option value="">{{ __('pagination.all_variants') }}</option>
                                                     @foreach($variants as $variant)
                                                         <option value="{{ $variant->id }}" 
@@ -300,7 +278,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
                                         <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
                                             <span class="path1"></span>
@@ -308,9 +286,6 @@
                                         </i>
                                         <h3 class="fw-bold m-0">{{ __('pagination.inventory_items') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $inventoryItems->count() }} {{ __('accounting.of') }} {{ $inventoryItems->total() }} {{ __('accounting.items') }}
-                                    </span>
                                 </div>
                             </div>
                             <div class="card-body p-0">
@@ -318,15 +293,14 @@
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="inventorySummaryTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('pagination.sku') }}</th>
-                                                <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('accounting.department') }}</th>
-                                                <th>{{ __('auth.location') }}</th>
-                                                <th>{{ __('pagination.quantity') }}</th>
-                                                <th>{{ __('pagination.reorder_point') }}</th>
-                                                <th>{{ __('auth.stock_status') }}</th>
-                                                <th>{{ __('auth.last_updated') }}</th>
-                                                {{--<th class="text-end">{{ __('accounting.actions') }}</th>--}}
+                                                <th class="ps-4 min-w-120px">{{ __('pagination.sku') }}</th>
+                                                <th class="min-w-200px">{{ __('pagination.product') }}</th>
+                                                <th class="min-w-150px">{{ __('accounting.department') }}</th>
+                                                <th class="min-w-150px">{{ __('auth.location') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.quantity') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.reorder_point') }}</th>
+                                                <th class="min-w-120px text-center">{{ __('auth.stock_status') }}</th>
+                                                <th class="min-w-150px">{{ __('auth.last_updated') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -346,19 +320,23 @@
                                             @endphp
                                             <tr>
                                                 <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku }}</div>
+                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
+                                                    @if($item->variant && $item->variant->barcode)
                                                     <small class="text-muted">{{ $item->variant->barcode }}</small>
+                                                    @endif
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        @if($item->variant->image_url)
+                                                        @if($item->variant && $item->variant->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ $item->variant->image_url }}" class="img-fluid" alt="{{ $item->variant->name }}">
+                                                            <img src="{{ asset($item->variant->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
                                                         </div>
                                                         @endif
                                                         <div>
-                                                            <div class="fw-bold">{{ $item->variant->name }}</div>
-                                                            <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                            <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
+                                                            @if($item->variant && $item->variant->product)
+                                                            <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
+                                                            @endif
                                                         </div>
                                                     </div>
                                                 </td>
@@ -368,64 +346,70 @@
                                                 <td>
                                                     <span class="badge badge-light-info">{{ $item->itemLocation->name ?? '-' }}</span>
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="fw-bold {{ $item->quantity_on_hand == 0 ? 'text-danger' : 'text-success' }}">
                                                         {{ number_format($item->quantity_on_hand) }}
                                                     </span>
-                                                    @if($item->quantity_allocated > 0)
+                                                    @if(($item->quantity_allocated ?? 0) > 0)
                                                     <div class="text-muted fs-8">
-                                                        {{ __('pagination.allocated') }}: {{ $item->quantity_allocated }}
+                                                        {{ __('pagination.allocated') }}: {{ number_format($item->quantity_allocated) }}
                                                     </div>
                                                     @endif
                                                 </td>
-                                                <td>
-                                                    {{ $item->reorder_point ?? '-' }}
+                                                <td class="text-center">
+                                                    {{ number_format($item->reorder_point ?? 0) }}
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="badge badge-light-{{ $statusColor }}">{{ $statusText }}</span>
                                                     @if($stockRatio > 0 && $stockRatio < 2)
-                                                    <div class="progress mt-1" style="height: 5px; width: 80px;">
+                                                    <div class="progress mt-1" style="height: 5px; width: 80px; margin: 0 auto;">
                                                         <div class="progress-bar bg-{{ $statusColor }}" 
-                                                             style="width: {{ min(100, $stockRatio * 100) }}%"></div>
+                                                            style="width: {{ min(100, $stockRatio * 100) }}%"></div>
                                                     </div>
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    {{ $item->updated_at->format('Y-m-d H:i') }}
+                                                    {{ $item->updated_at ? $item->updated_at->format('Y-m-d H:i') : '-' }}
                                                 </td>
-                                                {{--
-                                                <td class="text-end">
-                                                    <button class="btn btn-sm btn-icon btn-light-primary" 
-                                                            data-bs-toggle="tooltip" 
-                                                            title="{{ __('accounting.view_details') }}">
-                                                        <i class="ki-duotone ki-eye fs-2"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-icon btn-light-info" 
-                                                            data-bs-toggle="tooltip" 
-                                                            title="{{ __('accounting.adjust_stock') }}">
-                                                        <i class="ki-duotone ki-switch fs-2"></i>
-                                                    </button>
-                                                </td>
-                                                --}}
                                             </tr>
                                             @endforeach
                                         </tbody>
+                                        @php
+                                            // Calculate page totals
+                                            $pageTotalQuantity = $inventoryItems->sum('quantity_on_hand');
+                                            $pageTotalValue = 0;
+                                            foreach($inventoryItems as $item) {
+                                                $pageTotalValue += $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
+                                            }
+                                        @endphp
+                                        <tfoot class="bg-light">
+                                            <tr>
+                                                <td colspan="4" class="text-end fw-bold">{{ __('accounting.current_page') }}: </td>
+                                                <td class="text-center fw-bold">{{ number_format($pageTotalQuantity) }}</td>
+                                                <td colspan="3"></td>
+                                                <td class="fw-bold">${{ number_format($pageTotalValue, 2) }}</td>
+                                            </tr>
+                                            @if($inventoryItems->total() > $inventoryItems->count())
+                                            <tr>
+                                                <td colspan="4" class="text-end fw-bold text-muted">{{ __('auth.grand_total') }}: </td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity']) }}</td>
+                                                <td colspan="3"></td>
+                                                <td class="fw-bold">${{ number_format($summary['total_value'], 2) }}</td>
+                                            </tr>
+                                            @endif
+                                        </tfoot>
                                     </table>
                                 </div>
                                 
-                                {{-- Pagination --}}
-                                @if($inventoryItems->hasPages())
+                                {{-- ✅ Clean Pagination Component --}}
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('accounting.showing') }} {{ $inventoryItems->firstItem() }} - {{ $inventoryItems->lastItem() }} {{ __('accounting.of') }} {{ $inventoryItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $inventoryItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $inventoryItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>
@@ -455,6 +439,7 @@
                         </div>
                     </div>
                 @endif
+
             </div>
         </div>
     </div>

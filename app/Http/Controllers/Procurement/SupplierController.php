@@ -17,34 +17,66 @@ class SupplierController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        
         if (!$user->hasPermissionTo('view supplier')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = Supplier::query();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Supplier::with('createdBy');
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $suppliers = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadSupplierComponent':
-                return view('procurement.supplier.component', [
-                    'all_suppliers' => $suppliers,
-                ]);
-            default:
-                return view('procurement.supplier-index', [
-                    'all_suppliers' => $suppliers,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('contact_person', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('address', 'like', "%{$search}%")
+                ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $suppliers = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $suppliers->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadSupplierComponent') {
+            return view('procurement.supplier.component', [
+                'all_suppliers' => $suppliers,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('procurement.supplier-index', [
+            'all_suppliers' => $suppliers,
+        ]);
     }
 
     /**

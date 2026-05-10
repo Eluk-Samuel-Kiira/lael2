@@ -21,33 +21,88 @@ class ProductController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('view product')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = Product::with('category', 'productCreater');
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Product::with(['category', 'productCreater']);
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $products = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadProductComponent':
-                return view('inventory.product.component', [
-                    'all_products' => $products,
-                ]);
-            default:
-                return view('inventory.product-index', [
-                    'all_products' => $products,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%")
+                ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('productCreater', fn($cr) => $cr->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Apply category filter if provided
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+        
+        // Apply type filter if provided
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+        
+        // Paginate with dynamic per_page
+        $products = $query->latest()->paginate($perPage);
+        
+        // Preserve filters in pagination links
+        $products->appends([
+            'per_page' => $perPage, 
+            'search' => $request->search,
+            'category_id' => $request->category_id,
+            'type' => $request->type
+        ]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadProductComponent') {
+            return view('inventory.product.component', [
+                'all_products' => $products,
+            ])->render();
+        }
+        
+        // Get categories for filter
+        $categories = ProductCategory::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->get(['id', 'name']);
+        
+        // Get product types for filter
+        $productTypes = ['simple' => 'Simple', 'variable' => 'Variable', 'digital' => 'Digital', 'service' => 'Service'];
+        
+        // Regular page load
+        return view('inventory.product-index', [
+            'all_products' => $products,
+            'categories' => $categories,
+            'productTypes' => $productTypes,
+        ]);
     }
 
     /**
@@ -145,30 +200,67 @@ class ProductController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
-        if (!$user->hasPermissionTo('create product')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+        if (!$user->hasPermissionTo('view variant')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
 
-        // Build the query
-        $query = Product::with('variants')->where('id', $id);
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Get the parent product first
+        $product = Product::where('id', $id);
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $tenantId);
+            $product->where('tenant_id', $tenantId);
         }
         
-        $product_variants = $query->firstOrFail();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadVariantComponent':
-                return view('inventory.product-variant.component', compact('product_variants'));
-            default:
-                return view('inventory.product-variant.index', compact('product_variants'));
+        $product_variants = $product->firstOrFail();
+        
+        // Build query for variants with relationships
+        $query = ProductVariant::with(['variantCreater', 'unitMeasure'])
+            ->where('product_id', $id);
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('barcode', 'like', "%{$search}%")
+                ->orWhereHas('variantCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $variants = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $variants->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        // Attach variants to product object
+        $product_variants->setRelation('variants', $variants);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadVariantComponent') {
+            return view('inventory.product-variant.component', compact('product_variants'));
+        }
+        
+        return view('inventory.product-variant.index', compact('product_variants'));
     }
 
     /**
@@ -536,28 +628,43 @@ class ProductController extends Controller
             ],
         ]);
 
+        // Auto-calculate locations based on selected departments
+        $selectedDepartments = $validated['departments'] ?? [];
+        $autoLocations = [];
+        
+        if (!empty($selectedDepartments)) {
+            // Get all locations for the selected departments
+            $autoLocations = Department::whereIn('id', $selectedDepartments)
+                ->where('tenant_id', $tenantId)
+                ->distinct()
+                ->pluck('location_id')
+                ->filter()
+                ->toArray();
+        }
+        
+        // Merge manually selected locations with auto-detected ones
+        $manualLocations = $validated['locations'] ?? [];
+        $allLocations = array_unique(array_merge($manualLocations, $autoLocations));
+
         // Start database transaction for data consistency
         DB::beginTransaction();
 
         try {
-            // 1. Sync departments
-            $product->departments()->sync($validated['departments'] ?? []);
+            // 1. Sync departments (use selected departments only)
+            $product->departments()->sync($selectedDepartments);
 
-            // 2. Sync locations
-            $product->locations()->sync($validated['locations'] ?? []);
+            // 2. Sync locations (merged manual + auto-detected)
+            $product->locations()->sync($allLocations);
 
             // 3. Sync promotions
             $product->promotions()->sync($validated['promotions'] ?? []);
 
             // 4. Handle taxes based on product's taxable status
             if ($product->is_taxable == 1) {
-                // Product is taxable - sync taxes
                 $product->taxes()->sync($validated['taxes'] ?? []);
             } else {
-                // Product is not taxable - remove all taxes
                 $product->taxes()->sync([]);
                 
-                // Show warning message if taxes were attempted to be assigned
                 if (!empty($validated['taxes'])) {
                     session()->flash('toast', [
                         'type' => 'warning',
@@ -566,7 +673,6 @@ class ProductController extends Controller
                 }
             }
 
-            // Commit transaction
             DB::commit();
 
             session()->flash('toast', [
@@ -575,7 +681,6 @@ class ProductController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // Rollback transaction on error
             DB::rollBack();
 
             \Log::error('Product assignments update failed', [

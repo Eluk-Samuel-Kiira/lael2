@@ -61,7 +61,7 @@
         </div>
         <div class="card-body py-4" id="reloadVariantComponent">
             <div class="table-responsive">
-                <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+                <table class="table align-middle table-row-dashed fs-6 gy-5">
                     <thead>
                         <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                             <th class="w-10px pe-2">
@@ -106,7 +106,7 @@
                                             <input type="file" id="variantImageInput_{{ $product->id ?? 0 }}" accept="image/*" style="display: none;" onchange="handleImageChange(event, {{ $product->id }})">
 
                                             <div class="ms-5">
-                                                <a href="#" class="text-gray-800 text-hover-primary fs-5 fw-bold" data-kt-ecommerce-product-filter="product_name">{{ $product->name }}</a>
+                                                <a href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</a>
                                             </div>
                                         </div>
                                     </td>
@@ -220,6 +220,18 @@
             </div>
         </div>
     </diiv>
+    <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$product_variants->variants"
+            id="variantPagination"
+            route="{{ route('products.show', $product_variants->id) }}"
+            search-input-id="variantSearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="reloadVariantComponent"
+        />
+    </div>
 </div>
 
 

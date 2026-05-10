@@ -288,17 +288,12 @@
                             </table>
                         </div>
                         
-                        <!-- Pagination -->
-                        <div class="d-flex justify-content-between align-items-center mt-5">
-                            <div class="d-flex align-items-center">
-                                <span class="text-gray-700 fs-7">
-                                    {{ __('accounting.showing') }} {{ $transactions->firstItem() ?? 0 }} {{ __('accounting.to') }} {{ $transactions->lastItem() ?? 0 }} {{ __('accounting.of') }} {{ $transactions->total() }} {{ __('accounting.entries') }}
-                                </span>
+                        @if($transactions instanceof \Illuminate\Pagination\AbstractPaginator && $transactions->hasPages())
+                            <div class="mt-4 d-flex justify-content-center">
+                                {{ $transactions->appends(request()->query())->links('pagination::bootstrap-5') }}
                             </div>
-                            <div>
-                                {{ $transactions->links() }}
-                            </div>
-                        </div>
+                        @endif
+
                     </div>
                 </div>
                 

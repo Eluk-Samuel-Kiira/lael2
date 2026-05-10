@@ -27,45 +27,41 @@
                         <li class="breadcrumb-item">
                             <span class="bullet bg-gray-500 w-5px h-2px"></span>
                         </li>
-                        <li class="breadcrumb-item text-muted">{{__('pagination.product_index')}}</li>
+                        <li class="breadcrumb-item text-muted">{{__('passwords.inv_adjustments')}}</li>
                     </ul>
                 </div>
 
-                <!-- Right side - Actions -->
-                <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-3 w-100 w-lg-auto">
-                    <!-- Search Bar -->
-                    <div class="w-100 w-lg-auto">
-                        <div class="input-group input-group-solid">
-                            <span class="input-group-text bg-body border-0">
-                                <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                            </span>
-                            <input type="text" 
-                                   id="searchInput" 
-                                   class="form-control form-control-solid border-0 ps-0" 
-                                   placeholder="{{__('auth._search')}} {{__('pagination._products')}}"
-                                   onkeyup="searchTable(this.value, 'kt_table_users')">
-                        </div>
-                    </div>
+                <!-- Right side - Actions with Search and Filters -->
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <!-- Search Component -->
+                    <x-liveblade-search 
+                        id="stockSearchInput"
+                        componentId="reloadStockComponent"
+                        route="{{ route('stocks.index') }}"
+                        placeholder="{{__('auth._search')}} {{__('pagination._products')}}"
+                    />
 
-                    <!-- Location Filter -->
-                    <div class="w-100 w-lg-auto">
-                        <select class="form-select form-select-solid fw-bold w-100" id="locationFilter">
-                            <option value="">{{ __('pagination._location') }}</option>
-                            @foreach ($locations as $location)
-                                <option value="{{ $location->id }}">{{ ucwords(str_replace('_', ' ', $location->name)) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Department Filter -->
-                    <div class="w-100 w-lg-auto">
-                        <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter">
-                            <option value="">{{ __('auth._department') }}</option>
-                            @foreach ($departments as $department)
-                                <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+                    <!-- Reusable Filter Component -->
+                    <x-liveblade-filter 
+                        componentId="reloadStockComponent"
+                        route="{{ route('stocks.index') }}"
+                        :filters="[
+                            [
+                                'name' => 'location_id', 
+                                'label' => __('pagination._location'), 
+                                'options' => $locations,
+                                'value_key' => 'id',
+                                'label_key' => 'name'
+                            ],
+                            [
+                                'name' => 'department_id', 
+                                'label' => __('auth._department'), 
+                                'options' => $departments,
+                                'value_key' => 'id',
+                                'label_key' => 'name'
+                            ]
+                        ]"
+                    />
                 </div>
             </div>
         </div>
@@ -75,9 +71,7 @@
                 <div id="kt_app_content_container" class="app-container container-xxl">
                     <div id="status"></div>
                     <div class="card">
-                        <div class="card">
-                            @include('store.inventory-adjustment.component')
-                        </div>
+                        @include('store.inventory-adjustment.component')
                     </div>
                 </div>
             </div>

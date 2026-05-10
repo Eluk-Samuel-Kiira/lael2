@@ -33,16 +33,12 @@
             <div class="d-flex align-items-stretch align-items-sm-center w-100 w-md-auto">
                 <!-- Search Bar -->
                 <div class="w-100 w-sm-250px me-0 me-sm-3">
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                               id="searchInput" 
-                               class="form-control form-control-solid border-0 ps-0" 
-                               placeholder="{{__('auth._search')}} {{__('pagination._products')}}"
-                               onkeyup="searchTable(this.value, 'kt_table_users')">
-                    </div>
+                    <x-liveblade-search 
+                        id="variantSearchInput"
+                        componentId="reloadVariantComponent"
+                        route="{{ route('products.show', $product_variants->id) }}"
+                        placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
+                    />
                 </div>
                 
                 @can('create variant')

@@ -147,7 +147,7 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="weekly_sales_chart" class="h-350px"></div>
+                                <canvas id="weeklySalesChart" style="height:350px; max-height:350px;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -374,135 +374,70 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Chart Script -->
-                @push('scripts')
-                <script>
-                    "use strict";
-                    var KTWidgets = function () {
-                        var initWeeklySalesChart = function() {
-                            var element = document.getElementById('weekly_sales_chart');
-                            if (!element) return;
-
-                            var height = parseInt(KTUtil.css(element, 'height'));
-                            var labelColor = KTUtil.getCssVariableValue('--kt-gray-500');
-                            var borderColor = KTUtil.getCssVariableValue('--kt-gray-200');
-                            var baseColor = KTUtil.getCssVariableValue('--kt-primary');
-                            var lightColor = KTUtil.getCssVariableValue('--kt-primary-light');
-
-                            var options = {
-                                series: [{
-                                    name: '{{__('payments.sales')}}',
-                                    data: [{{ $weeklySales->pluck('total_sales')->implode(', ') }}]
-                                }],
-                                chart: {
-                                    fontFamily: 'inherit',
-                                    type: 'bar',
-                                    height: height,
-                                    toolbar: {
-                                        show: false
-                                    }
-                                },
-                                plotOptions: {
-                                    bar: {
-                                        borderRadius: 4,
-                                        horizontal: false,
-                                        columnWidth: ['40%']
-                                    }
-                                },
-                                dataLabels: {
-                                    enabled: false
-                                },
-                                xaxis: {
-                                    categories: [{{ $weeklySales->pluck('day_name')->map(function($day) { return '"' . $day . '"'; })->implode(', ') }}],
-                                    axisBorder: {
-                                        show: false
-                                    },
-                                    axisTicks: {
-                                        show: false
-                                    },
-                                    labels: {
-                                        style: {
-                                            colors: labelColor,
-                                            fontSize: '12px'
-                                        }
-                                    }
-                                },
-                                yaxis: {
-                                    labels: {
-                                        style: {
-                                            colors: labelColor,
-                                            fontSize: '12px'
-                                        }
-                                    }
-                                },
-                                fill: {
-                                    opacity: 1
-                                },
-                                states: {
-                                    normal: {
-                                        filter: {
-                                            type: 'none',
-                                            value: 0
-                                        }
-                                    },
-                                    hover: {
-                                        filter: {
-                                            type: 'none',
-                                            value: 0
-                                        }
-                                    },
-                                    active: {
-                                        allowMultipleDataPointsSelection: false,
-                                        filter: {
-                                            type: 'none',
-                                            value: 0
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    style: {
-                                        fontSize: '12px'
-                                    },
-                                    y: {
-                                        formatter: function (val) {
-                                            return val.toFixed(2)
-                                        }
-                                    }
-                                },
-                                colors: [baseColor],
-                                grid: {
-                                    borderColor: borderColor,
-                                    strokeDashArray: 4,
-                                    yaxis: {
-                                        lines: {
-                                            show: true
-                                        }
-                                    }
-                                }
-                            };
-
-                            var chart = new ApexCharts(element, options);
-                            chart.render();
-                        };
-
-                        return {
-                            init: function () {
-                                initWeeklySalesChart();
-                            }
-                        };
-                    }();
-
-                    KTUtil.onDOMContentLoaded(function () {
-                        KTDrawers.init();
-                        KTWidgets.init();
-                    });
-                </script>
-                @endpush
-                
             </div>
         </div>
     </div>
+
+
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            var ctx = document.getElementById('weeklySalesChart');
+            if (!ctx) return;
+
+            var salesData  = {!! $weeklySales->pluck('total_sales')->toJson() !!};
+            var categories = {!! $weeklySales->pluck('day_name')->toJson() !!};
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        label: '{{ __("payments.sales") }}',
+                        data: salesData,
+                        backgroundColor: 'rgba(0, 158, 247, 0.85)',
+                        borderColor: 'rgba(0, 158, 247, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ' ' + parseFloat(context.raw).toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            border: { display: false },
+                            ticks: { color: '#a1a5b7', font: { size: 12 } }
+                        },
+                        y: {
+                            grid: { color: '#f1f1f4' },
+                            border: { display: false, dash: [4, 4] },
+                            ticks: {
+                                color: '#a1a5b7',
+                                font: { size: 12 },
+                                callback: function(val) { return val.toLocaleString(); }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+    @endpush
     
     @endsection
 </x-app-layout>

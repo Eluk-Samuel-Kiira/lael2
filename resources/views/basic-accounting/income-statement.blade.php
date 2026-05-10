@@ -24,33 +24,33 @@
 
             <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Period Selector -->
-                <select class="form-select form-select-solid w-100 w-sm-150px" id="periodSelect" onchange="changePeriod()">
-                    <option value="month" {{ $period === 'month' ? 'selected' : '' }}>{{ __('accounting.this_month') }}</option>
-                    <option value="quarter" {{ $period === 'quarter' ? 'selected' : '' }}>{{ __('accounting.this_quarter') }}</option>
-                    <option value="year" {{ $period === 'year' ? 'selected' : '' }}>{{ __('accounting.this_year') }}</option>
-                    <option value="custom" {{ $period === 'custom' ? 'selected' : '' }}>{{ __('accounting.custom') }}</option>
-                </select>
-                
-                <!-- Custom Date Range (shown when custom is selected) -->
-                <div id="customRange" style="display: {{ $period === 'custom' ? 'flex' : 'none' }}" 
-                    class="flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 w-100">
-                    <input type="date" id="customStartDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $startDate }}">
-                    <span class="d-none d-sm-inline text-gray-500 align-self-center">to</span>
-                    <span class="d-inline d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                    <input type="date" id="customEndDate" class="form-control form-control-solid w-100 w-sm-150px" 
-                        value="{{ $endDate }}">
-                    <button class="btn btn-sm btn-primary w-100 w-sm-auto flex-shrink-0" onclick="applyCustomDate()">
-                        {{ __('accounting.apply') }}
-                    </button>
-                </div>
-                
-                <!-- Print Button -->
-                <!-- <button class="btn btn-sm btn-light flex-shrink-0" onclick="printReport()">
-                    <i class="ki-duotone ki-printer fs-2 me-2"></i>
-                    {{ __('accounting.print') }}
-                </button> -->
+                <form method="GET" action="{{ route('accounting.income-statement') }}" class="w-100">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <!-- Period Selector -->
+                        <select name="period" class="form-select form-select-solid w-100 w-sm-auto" style="min-width: 140px;" onchange="this.form.submit()">
+                            <option value="month" {{ $period === 'month' ? 'selected' : '' }}>{{ __('accounting.this_month') }}</option>
+                            <option value="quarter" {{ $period === 'quarter' ? 'selected' : '' }}>{{ __('accounting.this_quarter') }}</option>
+                            <option value="year" {{ $period === 'year' ? 'selected' : '' }}>{{ __('accounting.this_year') }}</option>
+                            <option value="custom" {{ $period === 'custom' ? 'selected' : '' }}>{{ __('accounting.custom') }}</option>
+                        </select>
+                        
+                        <!-- Custom Date Range -->
+                        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+                            <input type="date" name="start_date" class="form-control form-control-solid w-100 w-sm-auto" 
+                                style="min-width: 140px;"
+                                value="{{ request('start_date', $displayStartDate) }}"
+                                {{ $period !== 'custom' ? 'disabled' : '' }}>
+                            <input type="date" name="end_date" class="form-control form-control-solid w-100 w-sm-auto" 
+                                style="min-width: 140px;"
+                                value="{{ request('end_date', $displayEndDate) }}"
+                                {{ $period !== 'custom' ? 'disabled' : '' }}>
+                            <button type="submit" class="btn btn-sm btn-primary w-100 w-sm-auto" {{ $period !== 'custom' ? 'disabled' : '' }}>
+                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                {{ __('accounting.apply') }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -71,9 +71,9 @@
                             </div>
                             <div class="card-body d-flex flex-column justify-content-between">
                                 <div class="d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">${{ number_format($revenue, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">
-                                        {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($startDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('M d, Y') }}
+                                        {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($displayStartDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($displayEndDate)->format('M d, Y') }}
                                     </span>
                                 </div>
                                 <div class="mt-5">
@@ -83,7 +83,7 @@
                                         <div class="d-flex align-items-center mb-2">
                                             <span class="bullet bullet-vertical bg-success me-3"></span>
                                             <span class="text-gray-800 fw-semibold fs-7">{{ $category->transaction_category }}</span>
-                                            <span class="text-gray-500 fs-7 ms-auto">${{ number_format($category->total, 2) }}</span>
+                                            <span class="text-gray-500 fs-7 ms-auto">{{ currency_symbol() }}{{ number_format($category->total, 2) }}</span>
                                         </div>
                                         @endforeach
                                     </div>
@@ -102,9 +102,9 @@
                             </div>
                             <div class="card-body d-flex flex-column justify-content-between">
                                 <div class="d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">${{ number_format($expenses, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">
-                                        {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($startDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('M d, Y') }}
+                                        {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($displayStartDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($displayEndDate)->format('M d, Y') }}
                                     </span>
                                 </div>
                                 <div class="mt-5">
@@ -114,7 +114,7 @@
                                         <div class="d-flex align-items-center mb-2">
                                             <span class="bullet bullet-vertical bg-danger me-3"></span>
                                             <span class="text-gray-800 fw-semibold fs-7">{{ $category->transaction_category }}</span>
-                                            <span class="text-gray-500 fs-7 ms-auto">${{ number_format($category->total, 2) }}</span>
+                                            <span class="text-gray-500 fs-7 ms-auto">{{ currency_symbol() }}{{ number_format($category->total, 2) }}</span>
                                         </div>
                                         @endforeach
                                     </div>
@@ -134,19 +134,19 @@
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-7">
                                     <span class="fs-2hx fw-bold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        ${{ number_format(abs($netIncome), 2) }}
+                                        {{ currency_symbol() }}{{ number_format(abs($netIncome), 2) }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.profit_loss') }}</span>
                                 </div>
                                 <div class="d-flex flex-column">
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.calculation') }}:</span>
                                     <div class="d-flex align-items-center justify-content-center mt-2">
-                                        <span class="text-success fs-5 fw-bold">${{ number_format($revenue, 2) }}</span>
+                                        <span class="text-success fs-5 fw-bold">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
                                         <span class="mx-2 fs-4">-</span>
-                                        <span class="text-danger fs-5 fw-bold">${{ number_format($expenses, 2) }}</span>
+                                        <span class="text-danger fs-5 fw-bold">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
                                         <span class="mx-2 fs-4">=</span>
                                         <span class="{{ $netIncome >= 0 ? 'text-success' : 'text-danger' }} fs-3 fw-bold">
-                                            ${{ number_format($netIncome, 2) }}
+                                            {{ currency_symbol() }}{{ number_format($netIncome, 2) }}
                                         </span>
                                     </div>
                                 </div>
@@ -206,7 +206,7 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="fs-5 fw-bold text-success">
-                                                        ${{ number_format($category->total, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($category->total, 2) }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
@@ -232,9 +232,9 @@
                                         <tfoot>
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_revenue') }}</td>
-                                                <td class="text-end">${{ number_format($revenue, 2) }}</td>
-                                                <td class="text-end">100%</td>
-                                                <td></td>
+                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</td>
+                                                <td class="text-end">100%</td
+                                                <td></td
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -281,7 +281,7 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="fs-5 fw-bold text-danger">
-                                                        ${{ number_format($category->total, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($category->total, 2) }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
@@ -307,9 +307,9 @@
                                         <tfoot>
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_expenses') }}</td>
-                                                <td class="text-end">${{ number_format($expenses, 2) }}</td>
-                                                <td class="text-end">100%</td>
-                                                <td></td>
+                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</td>
+                                                <td class="text-end">100%</td
+                                                <td></td
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -328,20 +328,20 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
-                                    <span class="fs-2x fw-bold text-gray-800">${{ number_format($revenue, 2) }}</span>
+                                    <span class="fs-2x fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.total_revenue') }}</span>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
-                                    <span class="fs-2x fw-bold text-danger">${{ number_format($expenses, 2) }}</span>
+                                    <span class="fs-2x fw-bold text-danger">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.total_expenses') }}</span>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
                                     <span class="fs-2x fw-bold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }}">
-                                        ${{ number_format($netIncome, 2) }}
+                                        {{ currency_symbol() }}{{ number_format($netIncome, 2) }}
                                     </span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.net_income') }}</span>
                                 </div>
@@ -383,38 +383,27 @@
     </div>
     
     @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        function changePeriod() {
-            const period = document.getElementById('periodSelect').value;
-            const customRange = document.getElementById('customRange');
-            
-            if (period === 'custom') {
-                customRange.style.display = 'flex';
-            } else {
-                customRange.style.display = 'none';
-                // Redirect with period parameter
-                window.location.href = '{{ route("accounting.income-statement") }}?period=' + period;
-            }
-        }
+        // Enable/disable custom date inputs based on period selection
+        const periodSelect = document.querySelector('select[name="period"]');
+        const startDateInput = document.querySelector('input[name="start_date"]');
+        const endDateInput = document.querySelector('input[name="end_date"]');
+        const applyButton = document.querySelector('button[type="submit"]');
         
-        function applyCustomDate() {
-            const startDate = document.getElementById('customStartDate').value;
-            const endDate = document.getElementById('customEndDate').value;
-            
-            if (startDate && endDate) {
-                window.location.href = '{{ route("accounting.income-statement") }}' + 
-                    '?period=custom&start_date=' + startDate + '&end_date=' + endDate;
-            }
-        }
-        
-        function printReport() {
-            window.print();
+        if (periodSelect) {
+            periodSelect.addEventListener('change', function() {
+                const isCustom = this.value === 'custom';
+                if (startDateInput) startDateInput.disabled = !isCustom;
+                if (endDateInput) endDateInput.disabled = !isCustom;
+                if (applyButton) applyButton.disabled = !isCustom;
+            });
         }
         
         // Initialize profitability chart
         document.addEventListener('DOMContentLoaded', function() {
-            const ctx = document.getElementById('profitabilityChart').getContext('2d');
-            if (ctx) {
+            const ctx = document.getElementById('profitabilityChart');
+            if (ctx && typeof Chart !== 'undefined') {
                 new Chart(ctx, {
                     type: 'bar',
                     data: {
@@ -438,13 +427,11 @@
                     options: {
                         responsive: true,
                         plugins: {
-                            legend: {
-                                display: false
-                            },
+                            legend: { display: false },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
-                                        return '$' + context.parsed.y.toFixed(2);
+                                        return '{{ currency_symbol() }}' + context.parsed.y.toFixed(2);
                                     }
                                 }
                             }
@@ -454,7 +441,7 @@
                                 beginAtZero: true,
                                 ticks: {
                                     callback: function(value) {
-                                        return '$' + value;
+                                        return '{{ currency_symbol() }}' + value;
                                     }
                                 }
                             }

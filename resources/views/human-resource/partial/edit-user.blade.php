@@ -60,26 +60,9 @@
                             </div>
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{ __('pagination._location') }}</span>
-                                </label>
-                                <select name="location_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
-                                    <option value="" disabled {{ is_null($employee->location_id) ? 'selected' : '' }}></option>
-                                    @foreach ($locations as $location)
-                                        <option value="{{ $location->id }}" {{ $location->id == $employee->location_id ? 'selected' : '' }}>
-                                            {{ ucwords(str_replace('_', ' ', $location->name)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div id="location_id{{ $employee->id }}"></div>
-                            </div>
-                        </div>
-
-                        <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{ __('auth._role') }}</span>
                                 </label>
-                                <select name="role_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
+                                <select name="role_id" class="form-select">
                                     <option value="" disabled {{ is_null($employee->role) ? 'selected' : '' }}></option>
                                     @foreach ($roles as $role)
                                         <option value="{{ $role->id }}" {{ $role->id == $employee->role_id ? 'selected' : '' }}>
@@ -90,20 +73,28 @@
                                 <div id="role_id{{ $employee->id }}"></div>
                             </div>
 
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                        </div>
+
+                        <div class="row g-9 mb-8">
+
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{ __('auth._department') }}</span>
                                 </label>
-                                <select name="department_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
-                                    <option value="" disabled {{ is_null($employee->department_id) ? 'selected' : '' }}></option>
-                                    @foreach ($departments as $department)
-                                        <option value="{{ $department->id }}" {{ $department->id == $employee->department_id ? 'selected' : '' }}>
-                                            {{ ucwords(str_replace('_', ' ', $department->name)) }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                <x-liveblade-dependent-dropdown 
+                                    id="location_department_{{ $employee->id }}"
+                                    parentName="location_id"
+                                    childName="department_id"
+                                    parentLabel="pagination._location"
+                                    childLabel="auth._department"
+                                    :parentOptions="$locations"
+                                    :childOptions="$departments"
+                                    route="{{ route('get.departments') }}"
+                                    selectedParent="{{ $employee->location_id }}"
+                                    selectedChild="{{ $employee->department_id }}"
+                                    skipAjax="true"
+                                />
                                 <div id="department_id{{ $employee->id }}"></div>
-                            </div>
+                                <div id="locations_id{{ $employee->id }}"></div>
                         </div>
                     </div>
                         

@@ -122,7 +122,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($summary['total_amount'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ currency_symbol() }} {{ number_format($summary['total_amount'], 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.total_value') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -145,7 +145,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">${{ number_format($summary['deposit_total'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }} {{ number_format($summary['deposit_total'], 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_in') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -167,7 +167,7 @@
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
                                     <span class="fs-2hx fw-bold {{ $summary['net_cash_flow'] >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        ${{ number_format($summary['net_cash_flow'], 2) }}
+                                        {{ currency_symbol() }} {{ number_format($summary['net_cash_flow'], 2) }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.net_movement') }}</span>
                                 </div>

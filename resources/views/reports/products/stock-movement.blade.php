@@ -230,7 +230,7 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
                                         <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
                                             <span class="path1"></span>
@@ -238,97 +238,119 @@
                                         </i>
                                         <h3 class="fw-bold m-0">{{ __('auth.recent_activity') }}</h3>
                                     </div>
-                                    @if($variants->count() > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $variants->count() }} {{ __('auth.items') }}
-                                    </span>
-                                    @endif
                                 </div>
                             </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="movementTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('auth.sku') }}</th>
-                                                <th>{{ __('accounting.name') }}</th>
-                                                <th>{{ __('accounting.category') }}</th>
-                                                <th>{{ __('auth.quantity') }}</th>
-                                                <th>{{ __('auth.created_date') }}</th>
-                                                <th>{{ __('auth.last_updated') }}</th>
-                                                <th>{{ __('auth.days_since_update') }}</th>
-                                                <th>{{ __('auth.days_since_creation') }}</th>
-                                                <th>{{ __('auth.movement_status') }}</th>
-                                                <th>{{ __('auth.activity') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($variants as $variant)
-                                            <tr>
-                                                <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        @if($variant->image_url)
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($variant->image_url) }}" alt="{{ $variant->name }}" class="rounded">
-                                                        </div>
-                                                        @endif
-                                                        <div>
-                                                            <span class="fw-bold text-gray-800">{{ $variant->name }}</span>
-                                                            @if($variant->product)
-                                                            <div class="text-muted fs-7">{{ $variant->product->name }}</div>
+                            
+                            @if($variants->count() > 0)
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="movementTable">
+                                            <thead>
+                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                                    <th class="ps-4 min-w-100px">{{ __('auth.sku') }}</th>
+                                                    <th class="min-w-200px">{{ __('accounting.name') }}</th>
+                                                    <th class="min-w-150px">{{ __('accounting.category') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.quantity') }}</th>
+                                                    <th class="min-w-120px">{{ __('auth.created_date') }}</th>
+                                                    <th class="min-w-150px">{{ __('auth.last_updated') }}</th>
+                                                    <th class="min-w-120px text-center">{{ __('auth.days_since_update') }}</th>
+                                                    <th class="min-w-120px text-center">{{ __('auth.days_since_creation') }}</th>
+                                                    <th class="min-w-130px text-center">{{ __('auth.movement_status') }}</th>
+                                                    <th class="min-w-80px text-center">{{ __('auth.activity') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($variants as $variant)
+                                                <tr>
+                                                    <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            @if($variant->product && $variant->product->image_url)
+                                                            <div class="symbol symbol-50px me-3">
+                                                                <img src="{{ asset($variant->product->image_url) }}" alt="{{ $variant->name }}" class="rounded">
+                                                            </div>
                                                             @endif
+                                                            <div>
+                                                                <span class="fw-bold text-gray-800">{{ $variant->product?->name ?? $variant->name }}</span>
+                                                                @if($variant->name !== ($variant->product?->name ?? ''))
+                                                                <div class="text-muted fs-7">{{ $variant->name }}</div>
+                                                                @endif
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    @if($variant->product && $variant->product->category)
-                                                    <span class="badge badge-light-info">{{ $variant->product->category->name }}</span>
-                                                    @else
-                                                    <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $variant->overal_quantity_at_hand }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-muted">{{ $variant->created_at->format('Y-m-d') }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-800 fw-semibold">{{ $variant->updated_at->format('Y-m-d H:i') }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $variant->days_since_update <= 7 ? 'success' : ($variant->days_since_update <= 30 ? 'warning' : 'danger') }}">
-                                                        {{ $variant->days_since_update }} {{ __('auth.days') }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $variant->days_since_creation }} {{ __('auth.days') }}</span>
-                                                </td>
-                                                <td>
-                                                    @if($variant->movement_status == 'recent')
-                                                        <span class="badge badge-success">{{ $variant->movement_label }}</span>
-                                                    @elseif($variant->movement_status == 'active')
-                                                        <span class="badge badge-primary">{{ $variant->movement_label }}</span>
-                                                    @else
-                                                        <span class="badge badge-warning">{{ $variant->movement_label }}</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if($variant->days_since_update <= 7)
-                                                        <i class="ki-duotone ki-check-circle fs-2 text-success"></i>
-                                                    @elseif($variant->days_since_update <= 30)
-                                                        <i class="ki-duotone ki-clock fs-2 text-primary"></i>
-                                                    @else
-                                                        <i class="ki-duotone ki-hourglass fs-2 text-warning"></i>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                                    </td>
+                                                    <td>
+                                                        @if($variant->product && $variant->product->category)
+                                                        <span class="badge badge-light-info">{{ $variant->product->category->name }}</span>
+                                                        @else
+                                                        <span class="text-muted">-</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-primary">{{ number_format($variant->overal_quantity_at_hand) }}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-muted">{{ $variant->created_at->format('Y-m-d') }}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-gray-800 fw-semibold">{{ $variant->updated_at->format('Y-m-d H:i') }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-{{ $variant->days_since_update <= 7 ? 'success' : ($variant->days_since_update <= 30 ? 'warning' : 'danger') }}">
+                                                            {{ $variant->days_since_update }} {{ __('auth.days') }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-info">{{ $variant->days_since_creation }} {{ __('auth.days') }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-{{ $variant->movement_color }}">
+                                                            {{ $variant->movement_label }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        @if($variant->days_since_update <= 7)
+                                                            <i class="ki-duotone ki-check-circle fs-2 text-success"></i>
+                                                        @elseif($variant->days_since_update <= 30)
+                                                            <i class="ki-duotone ki-clock fs-2 text-primary"></i>
+                                                        @else
+                                                            <i class="ki-duotone ki-hourglass fs-2 text-warning"></i>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
+                                
+                                {{-- ✅ Add Clean Pagination Component --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $variants,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
+                                </div>
+                                
+                            @else
+                                <div class="card-body">
+                                    <div class="text-center py-10">
+                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
+                                            <span class="path1"></span>
+                                            <span class="path2"></span>
+                                        </i>
+                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                                        <p class="text-muted fs-6">{{ __('auth.no_products_found') }}</p>
+                                        @if(request()->hasAny(['category_id', 'days']))
+                                        <a href="{{ route('reports.products.stock-movement') }}" class="btn btn-light-primary">
+                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
+                                            {{ __('accounting.clear_filters_view_all') }}
+                                        </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -367,119 +389,214 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Prepare data for charts
+        // ✅ Use the movementSummary data which already has all the counts
+        // These numbers come from the FULL dataset, not paginated data
+        const recentCount = {{ $movementSummary['recent_count'] ?? 0 }};
+        const activeCount = {{ $movementSummary['active_count'] ?? 0 }};
+        const staleCount = {{ $movementSummary['stale_count'] ?? 0 }};
+        
+        console.log('Chart Data:', { recentCount, activeCount, staleCount }); // Debug
+        
+        // Movement Status Distribution Chart (Pie Chart)
+        const movementStatusElement = document.querySelector("#movementStatusChart");
+        if (movementStatusElement && (recentCount > 0 || activeCount > 0 || staleCount > 0)) {
+            const movementStatusChart = new ApexCharts(movementStatusElement, {
+                series: [recentCount, activeCount, staleCount],
+                chart: {
+                    type: 'pie',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
+                    }
+                },
+                labels: [
+                    '{{ __("auth.recently_updated") }} (≤7 days)',
+                    '{{ __("auth.active") }} (8-30 days)',
+                    '{{ __("auth.stale") }} (>30 days)'
+                ],
+                colors: ['#50CD89', '#3E97FF', '#FFC700'],
+                legend: {
+                    position: 'bottom',
+                    fontSize: '12px',
+                    labels: {
+                        colors: '#5B5B5B'
+                    }
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(value) {
+                            return value + ' {{ __("auth.items") }}';
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val, opts) {
+                        const total = recentCount + activeCount + staleCount;
+                        const percentage = ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1);
+                        return opts.w.config.series[opts.seriesIndex] + ' (' + percentage + '%)';
+                    },
+                    style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    }
+                },
+                responsive: [{
+                    breakpoint: 480,
+                    options: {
+                        chart: {
+                            height: 300
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }]
+            });
+            movementStatusChart.render();
+        } else {
+            console.warn('No data for movement status chart');
+            if (movementStatusElement) {
+                movementStatusElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+            }
+        }
+        
+        // Activity Timeline Chart - Use the activity data from PHP
         @php
-            // Calculate movement status distribution
-            $recentCount = $variants->where('movement_status', 'recent')->count();
-            $activeCount = $variants->where('movement_status', 'active')->count();
-            $staleCount = $variants->where('movement_status', 'stale')->count();
-            
-            // Calculate activity by days (last 30 days)
+            // Calculate activity by days from ALL variants (not paginated)
             $activityByDay = [];
-            for ($i = 0; $i < 30; $i++) {
-                $date = \Carbon\Carbon::now()->subDays($i);
-                $count = $variants->where('updated_at', '>=', $date->copy()->startOfDay())
-                    ->where('updated_at', '<=', $date->copy()->endOfDay())
-                    ->count();
+            $today = \Carbon\Carbon::now();
+            
+            for ($i = 29; $i >= 0; $i--) {
+                $date = $today->copy()->subDays($i);
+                $dateStart = $date->copy()->startOfDay();
+                $dateEnd = $date->copy()->endOfDay();
+                
+                // Count updates from ALL variants on this date
+                $count = $allVariants->filter(function($variant) use ($dateStart, $dateEnd) {
+                    $updatedAt = \Carbon\Carbon::parse($variant->updated_at);
+                    return $updatedAt->between($dateStart, $dateEnd);
+                })->count();
+                
                 $activityByDay[] = [
                     'date' => $date->format('M d'),
                     'count' => $count
                 ];
             }
-            $activityByDay = array_reverse($activityByDay);
         @endphp
         
-        // Movement Status Distribution Chart (Pie Chart)
-        const movementStatusChart = new ApexCharts(document.querySelector("#movementStatusChart"), {
-            series: [{{ $recentCount }}, {{ $activeCount }}, {{ $staleCount }}],
-            chart: {
-                type: 'pie',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
-                    }
-                }
-            },
-            labels: [
-                '{{ __("auth.recently_updated") }} (≤7 days)',
-                '{{ __("auth.active") }} (8-30 days)',
-                '{{ __("auth.stale") }} (>30 days)'
-            ],
-            colors: ['#50CD89', '#3E97FF', '#FFC700'],
-            legend: {
-                position: 'bottom',
-                fontSize: '12px'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(value) {
-                        return value + ' {{ __("auth.item") }}' + (value !== 1 ? 's' : '');
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: true,
-                formatter: function(val, opts) {
-                    return opts.w.config.series[opts.seriesIndex];
-                }
-            }
-        });
-        movementStatusChart.render();
+        const activityData = @json(array_column($activityByDay, 'count'));
+        const activityLabels = @json(array_column($activityByDay, 'date'));
+        
+        console.log('Activity Data:', activityData); // Debug
         
         // Activity Timeline Chart (Line Chart)
-        const activityTimelineChart = new ApexCharts(document.querySelector("#activityTimelineChart"), {
-            series: [{
-                name: '{{ __("auth.updates") }}',
-                data: @json(array_column($activityByDay, 'count'))
-            }],
-            chart: {
-                type: 'line',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
+        const timelineElement = document.querySelector("#activityTimelineChart");
+        if (timelineElement && activityData.some(value => value > 0)) {
+            const activityTimelineChart = new ApexCharts(timelineElement, {
+                series: [{
+                    name: '{{ __("auth.updates") }}',
+                    data: activityData
+                }],
+                chart: {
+                    type: 'line',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
+                    },
+                    zoom: {
+                        enabled: true
                     }
-                }
-            },
-            stroke: {
-                curve: 'smooth',
-                width: 3
-            },
-            xaxis: {
-                categories: @json(array_column($activityByDay, 'date')),
-                labels: {
-                    rotate: -45,
-                    style: {
-                        fontSize: '10px'
-                    }
-                }
-            },
-            yaxis: {
-                title: {
-                    text: '{{ __("auth.number_of_updates") }}'
                 },
-                min: 0
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(value) {
-                        return value + ' {{ __("auth.update") }}' + (value !== 1 ? 's' : '');
+                stroke: {
+                    curve: 'smooth',
+                    width: 3
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shade: 'light',
+                        type: 'vertical',
+                        shadeIntensity: 0.3,
+                        gradientToColors: ['#3E97FF'],
+                        inverseColors: false,
+                        opacityFrom: 0.8,
+                        opacityTo: 0.2,
+                        stops: [0, 100]
+                    }
+                },
+                xaxis: {
+                    categories: activityLabels,
+                    labels: {
+                        rotate: -45,
+                        style: {
+                            fontSize: '10px',
+                            colors: '#5B5B5B'
+                        }
+                    },
+                    title: {
+                        text: '{{ __("auth.date") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    }
+                },
+                yaxis: {
+                    title: {
+                        text: '{{ __("auth.number_of_updates") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    },
+                    min: 0,
+                    tickAmount: 5
+                },
+                colors: ['#3E97FF'],
+                tooltip: {
+                    y: {
+                        formatter: function(value) {
+                            return value + ' {{ __("auth.update") }}' + (value !== 1 ? 's' : '');
+                        }
+                    }
+                },
+                markers: {
+                    size: 5,
+                    colors: ['#3E97FF'],
+                    strokeColors: '#fff',
+                    strokeWidth: 2,
+                    hover: {
+                        size: 7
+                    }
+                },
+                grid: {
+                    borderColor: '#e7e7e7',
+                    row: {
+                        colors: ['#f3f3f3', 'transparent'],
+                        opacity: 0.5
                     }
                 }
-            },
-            markers: {
-                size: 5
+            });
+            activityTimelineChart.render();
+        } else {
+            console.warn('No data for activity timeline chart');
+            if (timelineElement) {
+                timelineElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        });
-        activityTimelineChart.render();
+        }
         
-        // Add export functionality
+        // Export functionality
         window.exportCurrentPage = function(options) {
-            const { tableId, filename, sheetName, format = 'excel' } = options;
+            const { tableId, filename, format = 'csv' } = options;
             const table = document.getElementById(tableId);
             
             if (!table) {
@@ -491,12 +608,11 @@
             const rows = table.querySelectorAll('tr');
             
             for (let i = 0; i < rows.length; i++) {
-                const row = [], cols = rows[i].querySelectorAll('td, th');
+                const row = [];
+                const cols = rows[i].querySelectorAll('td, th');
                 
                 for (let j = 0; j < cols.length; j++) {
-                    // Clean text - remove HTML tags and trim
                     let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
-                    // Escape quotes and wrap in quotes if contains comma
                     if (text.includes(',') || text.includes('"')) {
                         text = '"' + text.replace(/"/g, '""') + '"';
                     }
@@ -506,18 +622,16 @@
             }
             
             const csvContent = csv.join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
             
-            if (navigator.msSaveBlob) {
-                navigator.msSaveBlob(blob, filename + '.csv');
-            } else {
-                link.href = URL.createObjectURL(blob);
-                link.setAttribute("download", filename + '.csv');
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
+            link.href = url;
+            link.setAttribute("download", filename + '.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         };
     });
 </script>

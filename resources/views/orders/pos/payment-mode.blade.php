@@ -46,9 +46,66 @@
 .pm-quick-btn.pm-exact { border-color: #50cd89; color: #50cd89; background: #e8fff3; }
 .pm-quick-btn.pm-exact:hover { background: #50cd89; color: #fff; }
 
-.pm-calc-box { border-radius: 12px; padding: 14px 18px; }
-.pm-calc-box .pm-calc-label { font-size: .68rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 3px; }
-.pm-calc-box .pm-calc-value { font-size: 1.9rem; font-weight: 800; line-height: 1; }
+/* Responsive Payment Calculator Boxes */
+.pm-calc-box {
+    border-radius: 12px;
+    padding: 14px 18px;
+    transition: all 0.2s ease;
+}
+
+.pm-calc-box .pm-calc-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.pm-calc-box .pm-calc-value {
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+    .pm-calc-box {
+        padding: 10px 12px;
+        text-align: center;
+    }
+    
+    .pm-calc-box .pm-calc-label {
+        font-size: 0.6rem;
+        letter-spacing: 0.05em;
+    }
+    
+    .pm-calc-box .pm-calc-value {
+        font-size: 1.4rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .pm-calc-box {
+        padding: 8px 10px;
+    }
+    
+    .pm-calc-box .pm-calc-label {
+        font-size: 0.55rem;
+        margin-bottom: 2px;
+    }
+    
+    .pm-calc-box .pm-calc-value {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 380px) {
+    .pm-calc-box .pm-calc-value {
+        font-size: 1rem;
+    }
+}
 .pm-tendered-box { background: #f0f4ff; border: 1.5px solid #d0d8ff; }
 .pm-tendered-box .pm-calc-label { color: #7e8299; }
 .pm-tendered-box .pm-calc-value { color: #1a1a2e; }
@@ -57,9 +114,84 @@
 .pm-change-box .pm-calc-value { color: #fff; }
 .pm-change-box.pm-underpaid { background: linear-gradient(135deg, #f64e60, #ee2d41); }
 
-.pm-summary-tile { border-radius: 14px; padding: 16px 18px; text-align: center; }
-.pm-summary-tile .pm-tile-label { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7e8299; margin-bottom: 5px; }
-.pm-summary-tile .pm-tile-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+/* Responsive Payment Summary Cards */
+.pm-summary-tile {
+    border-radius: 14px;
+    padding: 16px 18px;
+    text-align: center;
+    transition: all 0.2s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.pm-summary-tile .pm-tile-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7e8299;
+    margin-bottom: 5px;
+    word-break: keep-all;
+    white-space: nowrap;
+}
+
+.pm-summary-tile .pm-tile-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    line-height: 1.2;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+    .pm-summary-tile {
+        padding: 12px 10px;
+    }
+    
+    .pm-summary-tile .pm-tile-label {
+        font-size: 0.6rem;
+        white-space: normal;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+    
+    .pm-summary-tile .pm-tile-value {
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+}
+
+@media (max-width: 480px) {
+    .pm-summary-tile {
+        padding: 10px 8px;
+    }
+    
+    .pm-summary-tile .pm-tile-label {
+        font-size: 0.55rem;
+    }
+    
+    .pm-summary-tile .pm-tile-value {
+        font-size: 1rem;
+    }
+}
+
+/* For very small screens (360px and below) */
+@media (max-width: 360px) {
+    .row.g-3.g-md-4 {
+        --bs-gutter-y: 0.75rem;
+    }
+    
+    .pm-summary-tile .pm-tile-value {
+        font-size: 0.9rem;
+    }
+    
+    .pm-summary-tile .pm-tile-label {
+        font-size: 0.5rem;
+    }
+}
 
 </style>
 
@@ -91,21 +223,21 @@
             {{-- Body --}}
             <div class="modal-body p-7">
 
-                {{-- Order summary strip --}}
-                <div class="row g-4 mb-7">
-                    <div class="col-4">
+                {{-- Order summary strip - Responsive --}}
+                <div class="row g-3 g-md-4 mb-7">
+                    <div class="col-12 col-sm-4">
                         <div class="pm-summary-tile bg-light-primary">
                             <div class="pm-tile-label">{{ __('pagination.order_total') }}</div>
                             <div class="pm-tile-value text-primary" id="pm-order-total">0.00</div>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-12 col-sm-4">
                         <div class="pm-summary-tile bg-light-success">
                             <div class="pm-tile-label">{{ __('pagination.paid_amount') }}</div>
                             <div class="pm-tile-value text-success" id="pm-paid-amount">0.00</div>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-12 col-sm-4">
                         <div class="pm-summary-tile bg-light-danger" id="pm-remaining-wrap">
                             <div class="pm-tile-label">{{ __('pagination.remaining_balance') }}</div>
                             <div class="pm-tile-value text-danger" id="pm-remaining">0.00</div>
@@ -198,16 +330,16 @@
                                 {{-- Quick amount presets --}}
                                 <div class="d-flex flex-wrap gap-2 mb-4" id="pm-quick-{{ $type }}"></div>
 
-                                {{-- Cash change calculator --}}
+                                {{-- Cash change calculator - Responsive --}}
                                 <div class="d-none" id="pm-cash-calc-{{ $type }}">
-                                    <div class="row g-3">
-                                        <div class="col-6">
+                                    <div class="row g-2 g-md-3">
+                                        <div class="col-12 col-sm-6">
                                             <div class="pm-calc-box pm-tendered-box">
                                                 <div class="pm-calc-label">{{ __('pagination.cash_tendered') }}</div>
                                                 <div class="pm-calc-value" id="pm-tendered-{{ $type }}">{{ currency_symbol() }}0.00</div>
                                             </div>
                                         </div>
-                                        <div class="col-6">
+                                        <div class="col-12 col-sm-6">
                                             <div class="pm-calc-box pm-change-box" id="pm-change-banner-{{ $type }}">
                                                 <div class="pm-calc-label">{{ __('pagination.change_due') }}</div>
                                                 <div class="pm-calc-value" id="pm-change-{{ $type }}">{{ currency_symbol() }}0.00</div>

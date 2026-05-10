@@ -17,29 +17,31 @@
                     <div class="text-center pt-10">
                         <!-- Basic Information -->
                         <div class="row g-9 mb-8">
+                            <!-- Supplier (Typable) -->
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{ __('passwords.supplier') }}</span>
                                 </label>
-                                <select name="supplier_id" class="form-select" data-control="select2" data-placeholder="{{ __('passwords._select_supplier') }}">
-                                    <option></option>
-                                    @foreach($suppliers as $supplier)
-                                        <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
-                                    @endforeach
-                                </select>
+                                <x-typable-select 
+                                    name="supplier_id"
+                                    :options="$suppliers"
+                                    selected="{{ old('supplier_id', $purchaseOrder->supplier_id ?? '') }}"
+                                    placeholder="Type or select supplier..."
+                                />
                                 <div id="supplier_id"></div>
                             </div>
 
+                            <!-- Location (Typable) -->
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{ __('passwords.location') }}</span>
                                 </label>
-                                <select name="location_id" class="form-select" data-control="select2" data-placeholder="{{ __('passwords._select_location') }}">
-                                    <option></option>
-                                    @foreach($locations as $location)
-                                        <option value="{{ $location->id }}">{{ $location->name }}</option>
-                                    @endforeach
-                                </select>
+                                <x-typable-select 
+                                    name="location_id"
+                                    :options="$locations"
+                                    selected="{{ old('location_id', $purchaseOrder->location_id ?? '') }}"
+                                    placeholder="Type or select location..."
+                                />
                                 <div id="location_id"></div>
                             </div>
                         </div>
@@ -76,35 +78,37 @@
                                 <div class="row g-4 mb-4 purchase-order-item" id="item_0">
                                     <div class="col-md-4">
                                         <label class="form-label required">{{ __('passwords.product') }}</label>
-                                        <select name="items[0][product_variant_id]" class="form-select product-select" onchange="updateProductDetails(this, 0)">
-                                            <option></option>
-                                            @foreach($variants as $variant)
-                                                <option value="{{ $variant->id }}" 
-                                                data-sku="{{ $variant->sku }}" 
-                                                data-name="{{ $variant->name }}"
-                                                data-cost-price="{{ $variant->cost_price }}"
-                                                data-is-taxable="{{ $variant->is_taxable ? '1' : '0' }}"
-                                                >                                                    
-                                                {{ $variant->name }} ({{ $variant->sku }})
-                                                </option>
-                                            @endforeach
-                                        </select>
+                                        <div class="position-relative">
+                                            <input type="text" 
+                                                id="product_search_0"
+                                                class="form-control product-typable-input"
+                                                list="product_list_0"
+                                                placeholder="Type or select product..."
+                                                autocomplete="off"
+                                                data-item-index="0">
+                                            <input type="hidden" 
+                                                name="items[0][product_variant_id]" 
+                                                id="product_id_0">
+                                            <datalist id="product_list_0">
+                                                <option value="">Select product</option>
+                                                @foreach($variants as $variant)
+                                                    <option value="{{ $variant->name }}" 
+                                                            data-id="{{ $variant->id }}"
+                                                            data-cost-price="{{ $variant->cost_price }}">
+                                                    </option>
+                                                @endforeach
+                                            </datalist>
+                                        </div>
                                         <div id="items.0.product_variant_id"></div>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label required">{{ __('passwords.quantity') }}</label>
-                                        <!-- ADD oninput HERE -->
-                                        <input type="number" name="items[0][quantity]" class="form-control" min="1" value="1" 
-                                            onchange="calculateItemTotal(0)" 
-                                            oninput="calculateItemTotal(0)">
+                                        <input type="number" name="items[0][quantity]" class="form-control item-quantity" min="1" value="1">
                                         <div id="items.0.quantity"></div>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label required">{{ __('passwords.unit_cost') }}</label>
-                                        <!-- ADD oninput HERE -->
-                                        <input type="number" name="items[0][unit_cost]" class="form-control" min="0.01" step="0.01" value="0.00" 
-                                            onchange="calculateItemTotal(0)" 
-                                            oninput="calculateItemTotal(0)">
+                                        <input type="number" name="items[0][unit_cost]" class="form-control item-unit-cost" min="0.01" step="0.01" value="0.00">
                                         <div id="items.0.unit_cost"></div>
                                     </div>
                                     <div class="col-md-2">

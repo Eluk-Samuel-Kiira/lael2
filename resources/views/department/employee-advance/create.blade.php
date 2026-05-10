@@ -11,14 +11,25 @@
                 <div class="modal-body">
                     <div class="row g-4">
                         <!-- Employee Selection -->
-                        <div class="col-md-6">
+                         <div class="col-md-6">
                             <label class="form-label">{{ __('payments.employee') }} *</label>
-                            <select name="employee_id" class="form-select" data-control="select2" required>
-                                <option value="">{{ __('payments.select_employee') }}</option>
-                                @foreach($active_employees as $employee)
-                                    <option value="{{ $employee->id }}">{{ $employee->first_name }} {{ $employee->last_name }}</option>
-                                @endforeach
-                            </select>
+                            @php
+                                $formattedEmployees = [];
+                                foreach($active_employees as $employee) {
+                                    $formattedEmployees[] = (object)[
+                                        'id' => $employee->id,
+                                        'name' => $employee->first_name . ' ' . $employee->last_name
+                                    ];
+                                }
+                            @endphp
+                            <x-typable-select 
+                                name="employee_id"
+                                :options="$formattedEmployees"
+                                selected="{{ old('employee_id', $item->employee_id ?? '') }}"
+                                placeholder="Type or select employee..."
+                                required="true"
+                            />
+                            <div id="employee_id"></div>
                         </div>
 
                         <!-- Advance Amount -->

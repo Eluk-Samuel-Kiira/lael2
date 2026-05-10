@@ -18,31 +18,64 @@ class DepartmentController extends Controller
         $user = Auth::user();
 
         if (!$user->hasPermissionTo('view department')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // If user is super_admin, get all departments without tenant filter
-        if ($user->hasRole('super_admin')) {
-            $departments = Department::with('location')->latest()->get();
-        } else {
-            // Regular users only see their tenant's departments
-            $departments = Department::with('location')->where('tenant_id', $user->tenant_id)->latest()->get();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
         }
+        
+        // Build query with relationships
+        $query = Department::with('location', 'departmentCreater', 'departmentManager');
+        
+        // Apply tenant filter based on role
+        if ($user->hasRole('super_admin')) {
+            $query->with('departmentTenant');
+        } else {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhereHas('location', fn($loc) => $loc->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('departmentCreater', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('departmentManager', fn($m) => $m->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $departments = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $departments->appends(['per_page' => $perPage, 'search' => $request->search]);
         
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'departmentIndexTable':
-                return view('department.partials.department-component', [
-                    'all_departments' => $departments,
-                ]);
-            default:
-                return view('department.department-index', [
-                    'all_departments' => $departments,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'departmentIndexTable') {
+            return view('department.partials.department-component', [
+                'all_departments' => $departments,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('department.department-index', [
+            'all_departments' => $departments,
+        ]);
     }
 
     /**

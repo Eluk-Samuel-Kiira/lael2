@@ -80,62 +80,96 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.purchasing.purchase-order-summary') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Start Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="start_date" 
-                                                value="{{ $startDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="start_date" 
+                                                    value="{{ $startDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- End Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="end_date" 
-                                                value="{{ $endDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="end_date" 
+                                                    value="{{ $endDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
-                                                <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                @foreach($suppliers as $supplier)
-                                                    <option value="{{ $supplier->id }}" 
-                                                            {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                        {{ $supplier->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        
-                                        {{-- Status --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('passwords.order_status') }}</label>
-                                            <select class="form-select w-100" name="status">
-                                                <option value="all">{{ __('passwords.all_statuses') }}</option>
-                                                <option value="draft" {{ $status == 'draft' ? 'selected' : '' }}>{{ __('passwords.draft') }}</option>
-                                                <option value="sent" {{ $status == 'sent' ? 'selected' : '' }}>{{ __('passwords.sent') }}</option>
-                                                <option value="pending_approval" {{ $status == 'pending_approval' ? 'selected' : '' }}>{{ __('passwords.pending_approval') }}</option>
-                                                <option value="approved" {{ $status == 'approved' ? 'selected' : '' }}>{{ __('passwords.approved') }}</option>
-                                                <option value="partially_received" {{ $status == 'partially_received' ? 'selected' : '' }}>{{ __('passwords.partially_received') }}</option>
-                                                <option value="received" {{ $status == 'received' ? 'selected' : '' }}>{{ __('passwords.received') }}</option>
-                                                <option value="cancelled" {{ $status == 'cancelled' ? 'selected' : '' }}>{{ __('passwords.cancelled') }}</option>
-                                            </select>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
+                                                    @foreach($suppliers as $supplier)
+                                                        <option value="{{ $supplier->id }}" 
+                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
+                                                            {{ $supplier->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-end">
-                                        <div class="d-flex flex-column flex-sm-row gap-2">
-                                            <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Order Status --}}
+                                        <div class="flex-grow-1">
+                                            <label class="form-label fw-semibold">{{ __('passwords.order_status') }}</label>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-status fs-2"></i>
+                                                </span>
+                                                <select class="form-select" name="status">
+                                                    <option value="all">{{ __('passwords.all_statuses') }}</option>
+                                                    <option value="draft" {{ $status == 'draft' ? 'selected' : '' }}>{{ __('passwords.draft') }}</option>
+                                                    <option value="sent" {{ $status == 'sent' ? 'selected' : '' }}>{{ __('passwords.sent') }}</option>
+                                                    <option value="pending_approval" {{ $status == 'pending_approval' ? 'selected' : '' }}>{{ __('passwords.pending_approval') }}</option>
+                                                    <option value="approved" {{ $status == 'approved' ? 'selected' : '' }}>{{ __('passwords.approved') }}</option>
+                                                    <option value="partially_received" {{ $status == 'partially_received' ? 'selected' : '' }}>{{ __('passwords.partially_received') }}</option>
+                                                    <option value="received" {{ $status == 'received' ? 'selected' : '' }}>{{ __('passwords.received') }}</option>
+                                                    <option value="cancelled" {{ $status == 'cancelled' ? 'selected' : '' }}>{{ __('passwords.cancelled') }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        {{-- Location (if needed) --}}
+                                        <div class="flex-grow-1">
+                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="location_id"  data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}" 
+                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
                                             </button>
-                                            <a href="{{ route('reports.purchasing.purchase-order-summary') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
+                                            <a href="{{ route('reports.purchasing.purchase-order-summary') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
                                             </a>
                                         </div>
                                     </div>
@@ -157,13 +191,13 @@
                             ],
                             [
                                 'title' => __('passwords.total_spent'),
-                                'value' => '$' . number_format($summary['total_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_value'], 2),
                                 'color' => 'success',
                                 'icon' => 'ki-dollar'
                             ],
                             [
                                 'title' => __('passwords.avg_order_value'),
-                                'value' => '$' . number_format($summary['average_order_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['average_order_value'], 2),
                                 'color' => 'info',
                                 'icon' => 'ki-chart-line'
                             ],
@@ -275,9 +309,9 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold text-primary">
-                                                        ${{ number_format($order->total, 2) }}
-                                                    </span>
+                                                <td class="fw-bold text-primary">
+                                                    {{ currency_symbol() }}{{ number_format($order->total, 2) }}
+                                                </td>
                                                 </td>
                                                 <td>
                                                     <button type="button" 
@@ -294,11 +328,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($purchaseOrders->hasPages())
-                                <div class="card-footer d-flex justify-content-end">
-                                    {{ $purchaseOrders->withQueryString()->links() }}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $purchaseOrders,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>
@@ -349,7 +386,7 @@
             <div class="modal-body" id="purchaseOrderDetails">
                 <div class="text-center">
                     <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                        <span class="visually-hidden">{{ __('passwords.loading_details') }}</span>
                     </div>
                     <p class="mt-2">{{ __('passwords.loading_details') }}</p>
                 </div>

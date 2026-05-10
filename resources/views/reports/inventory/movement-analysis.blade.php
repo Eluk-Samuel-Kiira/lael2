@@ -49,17 +49,18 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.movement-analysis') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
+                                    {{-- First Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Date Range --}}
                                         <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.date_range') }}</label>
+                                            <label class="form-label required fw-semibold">{{ __('pagination.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
                                                 <div class="input-group w-100">
                                                     <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
                                                     <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}">
+                                                        value="{{ $startDate }}" required>
                                                 </div>
                                                 <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('pagination.to') }}</span>
                                                 <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('pagination.to') }}</span>
@@ -68,7 +69,7 @@
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
                                                     <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}">
+                                                        value="{{ $endDate }}" required>
                                                 </div>
                                             </div>
                                         </div>
@@ -96,21 +97,37 @@
                                                 </select>
                                             </div>
                                         </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Location & Department - Dependent Dropdown --}}
+                                        <div class="flex-grow-1">
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
                                         
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.movement-analysis') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.movement-analysis') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -244,20 +261,6 @@
                                         <tbody>
                                             @foreach($movementData as $item)
                                             @php
-                                                $categoryColor = 'primary';
-                                                $categoryIcon = 'ki-check';
-                                                
-                                                if ($item->movement_category == 'fast') {
-                                                    $categoryColor = 'success';
-                                                    $categoryIcon = 'ki-rocket';
-                                                } elseif ($item->movement_category == 'slow') {
-                                                    $categoryColor = 'warning';
-                                                    $categoryIcon = 'ki-walk';
-                                                } else {
-                                                    $categoryColor = 'danger';
-                                                    $categoryIcon = 'ki-pause-circle';
-                                                }
-                                                
                                                 $daysSinceColor = 'success';
                                                 if ($item->days_since_last_movement > 30) {
                                                     $daysSinceColor = 'warning';
@@ -265,6 +268,7 @@
                                                 if ($item->days_since_last_movement > 90) {
                                                     $daysSinceColor = 'danger';
                                                 }
+                                                $progressWidth = min(100, ($item->avg_daily_movement / 20) * 100);
                                             @endphp
                                             <tr>
                                                 <td class="ps-4">
@@ -272,55 +276,46 @@
                                                 </td>
                                                 <td>
                                                     <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                    <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                    <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">{{ number_format($item->total_movement) }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-info">{{ $item->transaction_count }}</span>
+                                                    <span class="badge badge-light-info">{{ number_format($item->transaction_count) }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold">{{ number_format($item->avg_daily_movement, 1) }}</span>
                                                     <div class="progress mt-1" style="height: 5px; width: 80px;">
-                                                        @php
-                                                            $progressWidth = min(100, ($item->avg_daily_movement / 20) * 100);
-                                                        @endphp
-                                                        <div class="progress-bar bg-{{ $categoryColor }}" 
-                                                             style="width: {{ $progressWidth }}%"></div>
+                                                        <div class="progress-bar bg-{{ $item->movement_color }}" 
+                                                            style="width: {{ $progressWidth }}%"></div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="text-muted">{{ \Carbon\Carbon::parse($item->first_movement)->format('Y-m-d') }}</span>
+                                                    <span class="text-muted">{{ $item->first_movement ? Carbon\Carbon::parse($item->first_movement)->format('Y-m-d') : '-' }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="text-muted">{{ \Carbon\Carbon::parse($item->last_movement)->format('Y-m-d') }}</span>
+                                                    <span class="text-muted">{{ $item->last_movement ? Carbon\Carbon::parse($item->last_movement)->format('Y-m-d') : '-' }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-{{ $daysSinceColor }}">
-                                                        {{ $item->days_since_last_movement }} {{ __('pagination.days') }}
+                                                        {{ number_format($item->days_since_last_movement) }} {{ __('pagination.days') }}
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-{{ $categoryColor }}">
-                                                        <i class="ki-duotone {{ $categoryIcon }} fs-2 me-1">
+                                                    <span class="badge badge-light-{{ $item->movement_color }}">
+                                                        <i class="ki-duotone {{ $item->movement_icon }} fs-2 me-1">
                                                             <span class="path1"></span>
                                                             <span class="path2"></span>
                                                         </i>
-                                                        @if($item->movement_category == 'fast')
-                                                            {{ __('pagination.fast_moving') }}
-                                                        @elseif($item->movement_category == 'slow')
-                                                            {{ __('pagination.slow_moving') }}
-                                                        @else
-                                                            {{ __('pagination.non_moving') }}
-                                                        @endif
+                                                        {{ $item->movement_label }}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <button class="btn btn-sm btn-icon btn-light-primary" 
                                                             data-bs-toggle="tooltip" 
                                                             title="{{ __('pagination.view_logs') }}"
-                                                            onclick="viewMovementLogs({{ $item->variant_id }}, '{{ $item->variant->name ?? 'Product' }}')">
+                                                            onclick="viewMovementLogs({{ $item->variant->id }}, '{{ $item->variant->name ?? 'Product' }}')">
                                                         <i class="ki-duotone ki-eye fs-2"></i>
                                                     </button>
                                                 </td>
@@ -331,18 +326,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($movementData->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $movementData->firstItem() }} - {{ $movementData->lastItem() }} {{ __('pagination.of') }} {{ $movementData->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $movementData->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $movementData,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

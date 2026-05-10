@@ -120,5 +120,18 @@
             </tbody>
         </table>
     </div>
+    <!-- Pagination -->
+    <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$tenants"
+            id="tenantPagination"
+            route="{{ route('tenant.index') }}"
+            search-input-id="tenantSearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="reloadtenantComponent"
+        />
+    </div>
 </div>
 @endrole

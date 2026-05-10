@@ -35,7 +35,7 @@
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('pagination.is_taxable')}}</span></label>
-                                <select name="is_taxable" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="is_taxable" class="form-select">
                                     <option></option>
                                     <option value="1">{{__('pagination._yes')}}</option>
                                     <option value="0">{{__('pagination._no')}}</option>
@@ -44,7 +44,7 @@
                             </div>
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('pagination._type')}}</span></label>
-                                <select name="type" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="type" class="form-select">
                                     <option></option>
                                     <option value="physical">{{__('pagination._physical')}}</option>
                                     <option value="digital">{{__('pagination._digital')}}</option>
@@ -57,19 +57,20 @@
 
                         <div class="row g-9 mb-8">
                             <div class="mb-10 fv-row col-md-6">
-                                <label class="required form-label">{{__('pagination._category')}}</span></label>
-                                <select name="category_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option></option>
-                                    @foreach ($sub_categories as $category)
-                                        <option value="{{ $category->id }}">{{ $category->name }}</option>
-                                    @endforeach
-                                </select>
+
+                                <!-- Parent Category (Typable) -->
+                                <x-typable-select 
+                                    name="category_id"
+                                    label="pagination._category"
+                                    :options="$sub_categories"
+                                    placeholder="Type or select parent category..."
+                                />
                                 <div id="category_id"></div>
                             </div>
 
                             <div class="mb-10 fv-row col-md-6">
                                 <label class="required form-label">{{__('auth._status')}}</span></label>
-                                <select name="is_active" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                <select name="is_active" class="form-select" >
                                     <option></option>
                                     <option value="1">{{__('auth._active')}}</option>
                                     <option value="0">{{__('auth._inactive')}}</option>

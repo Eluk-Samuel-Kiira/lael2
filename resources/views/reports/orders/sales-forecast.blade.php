@@ -164,12 +164,11 @@
                 @if($historicalData->count() > 0)
                 <div class="row mb-6">
                     @php
-                        $forecastSum = collect($forecast)->sum('forecast_sales');
-                        $forecastAvg = collect($forecast)->avg('forecast_sales');
-                        $forecastMax = collect($forecast)->max('forecast_sales');
-                        $forecastMin = collect($forecast)->min('forecast_sales');
+                        $forecastSum = $forecastCollection->sum('forecast_sales');
+                        $forecastAvg = $forecastCollection->avg('forecast_sales');
+                        $forecastMax = $forecastCollection->max('forecast_sales');
+                        $forecastMin = $forecastCollection->min('forecast_sales');
                         
-                        $historicalAvg = $historicalData->avg('daily_sales');
                         $growthRatePercentage = $growthRate * 100;
                         $confidenceScore = min(95, max(60, 85 - abs($growthRatePercentage) * 2));
                     @endphp
@@ -307,28 +306,44 @@
                 </div>
                 @endif
 
-                {{-- Forecast Details --}}
-                @if($historicalData->count() > 0 && !empty($forecast))
+                {{-- Forecast Details with Pagination --}}
+                @if($forecastData->count() > 0)
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-calendar-8 fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
+                                        <i class="ki-duotone ki-calendar-8 fs-2 me-2 text-primary"></i>
                                         <h3 class="fw-bold m-0">{{ __('auth.daily_forecast_details') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ $forecastDays }} {{ __('auth.days_forecast') }}
-                                    </span>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="d-flex align-items-center">
+                                            <label class="form-label me-2 mb-0">{{ __('accounting.show') }}</label>
+                                            <select class="form-select form-select-sm w-auto" id="forecastPerPageSelect" onchange="changeForecastPerPage(this.value)">
+                                                <option value="7" {{ $forecastPerPage == 7 ? 'selected' : '' }}>7</option>
+                                                <option value="15" {{ $forecastPerPage == 15 ? 'selected' : '' }}>15</option>
+                                                <option value="30" {{ $forecastPerPage == 30 ? 'selected' : '' }}>30</option>
+                                                <option value="50" {{ $forecastPerPage == 50 ? 'selected' : '' }}>50</option>
+                                                <option value="100" {{ $forecastPerPage == 100 ? 'selected' : '' }}>100</option>
+                                            </select>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                                <i class="ki-duotone ki-file-down fs-2 me-1"></i>
+                                                {{ __('accounting.export') }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportForecastData(false)">{{ __('accounting.export_current_page') }}</a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportForecastData(true)">{{ __('accounting.export_all_data') }}</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="forecastTable">
+                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
                                                 <th class="min-w-100px">{{ __('accounting.date') }}</th>
@@ -336,78 +351,56 @@
                                                 <th class="min-w-120px">{{ __('auth.forecast_sales') }}</th>
                                                 <th class="min-w-120px">{{ __('auth.forecast_orders') }}</th>
                                                 <th class="min-w-120px">{{ __('auth.average_order_value') }}</th>
-                                                <th class="min-w-120px">{{ __('auth.confidence_interval') }}</th>
+                                                <th class="min-w-120px">{{ __('auth.confidence') }}</th>
                                                 <th class="min-w-100px">{{ __('accounting.trend') }}</th>
                                                 <th class="min-w-100px">{{ __('auth.seasonality') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {{-- In Forecast Details section --}}
-                                            @foreach($forecast as $dateKey => $data)
+                                            @foreach($forecastData as $dateKey => $data)
                                             @php
-                                                $date = \Carbon\Carbon::parse($dateKey);
+                                                $date = \Carbon\Carbon::parse($data['date'] ?? $dateKey);
                                                 $dayName = $date->format('l');
                                                 $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
                                                 
-                                                // Calculate confidence interval width
-                                                $confidenceWidth = isset($data['confidence_low']) && isset($data['confidence_high']) 
-                                                    ? ($data['confidence_high'] - $data['confidence_low']) / $data['forecast_sales'] * 100 
-                                                    : 20;
+                                                $confidenceLow = $data['confidence_low'] ?? ($data['forecast_sales'] * 0.8);
+                                                $confidenceHigh = $data['confidence_high'] ?? ($data['forecast_sales'] * 1.2);
+                                                $confidenceLevel = $data['confidence'] ?? 'medium';
+                                                $confidenceColor = $confidenceLevel == 'high' ? 'success' : ($confidenceLevel == 'medium' ? 'warning' : 'danger');
                                                 
-                                                // Seasonality factor
                                                 $seasonalityFactor = $data['seasonality_factor'] ?? 1.0;
                                                 $seasonalityClass = $seasonalityFactor > 1.2 ? 'success' : ($seasonalityFactor > 0.8 ? 'warning' : 'danger');
+                                                
+                                                $trendValue = $data['trend'] ?? 0;
+                                                $trendClass = $trendValue > 0 ? 'success' : ($trendValue < 0 ? 'danger' : 'primary');
                                             @endphp
                                             <tr>
-                                                <td>
-                                                    <span class="fw-bold text-gray-800">{{ $date->format('M d, Y') }}</span>
-                                                </td>
+                                                <td class="fw-bold text-gray-800">{{ $date->format('M d, Y') }}</td>
                                                 <td>
                                                     <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
                                                         {{ $dayName }}
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <i class="ki-duotone ki-dollar-circle fs-2 text-success me-2"></i>
-                                                        <div>
-                                                            <span class="fw-bold text-success">${{ number_format($data['forecast_sales'], 0) }}</span>
-                                                            @if(isset($data['confidence_low']) && isset($data['confidence_high']))
-                                                            <div class="text-muted fs-8">
-                                                                ${{ number_format($data['confidence_low'], 0) }} - ${{ number_format($data['confidence_high'], 0) }}
-                                                            </div>
-                                                            @endif
+                                                    <div>
+                                                        <span class="fw-bold text-success">${{ number_format($data['forecast_sales'], 0) }}</span>
+                                                        <div class="text-muted fs-8">
+                                                            ${{ number_format($confidenceLow, 0) }} - ${{ number_format($confidenceHigh, 0) }}
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold text-gray-700">{{ number_format($data['forecast_orders'], 0) }}</span>
+                                                    <span class="badge badge-light-info">{{ number_format($data['forecast_orders'], 0) }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="text-gray-600">${{ number_format($data['average_order_value'], 0) }}</span>
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress w-100 me-3" style="height: 6px;">
-                                                            <div class="progress-bar bg-{{ $confidenceWidth < 15 ? 'success' : ($confidenceWidth < 30 ? 'warning' : 'danger') }}" 
-                                                                role="progressbar" 
-                                                                style="width: {{ min($confidenceWidth, 100) }}%;" 
-                                                                aria-valuenow="{{ $confidenceWidth }}" 
-                                                                aria-valuemin="0" 
-                                                                aria-valuemax="100">
-                                                            </div>
-                                                        </div>
-                                                        <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                            {{ $data['confidence'] ?? 'medium' }}
-                                                        </span>
-                                                    </div>
+                                                    <span class="badge badge-light-{{ $confidenceColor }}">
+                                                        {{ ucfirst($confidenceLevel) }}
+                                                    </span>
                                                 </td>
                                                 <td>
-                                                    @php
-                                                        $trendValue = $data['trend'] ?? 0;
-                                                        $trendClass = 'primary';
-                                                        $trendClass = $trendValue > 0 ? 'success' : ($trendValue < 0 ? 'danger' : 'primary');
-                                                    @endphp
                                                     <span class="badge badge-light-{{ $trendClass }}">
                                                         @if($trendValue != 0)
                                                             <i class="ki-duotone ki-arrow-{{ $trendValue > 0 ? 'up' : 'down' }} fs-4 me-1"></i>
@@ -429,6 +422,14 @@
                                     </table>
                                 </div>
                             </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <div class="text-muted">
+                                    {{ __('accounting.showing') }} <strong>{{ $forecastData->firstItem() ?? 0 }}</strong> 
+                                    {{ __('accounting.to') }} <strong>{{ $forecastData->lastItem() ?? 0 }}</strong> 
+                                    {{ __('accounting.of') }} <strong>{{ $forecastData->total() }}</strong> 
+                                    {{ __('accounting.days') }}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -441,10 +442,7 @@
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie-3 fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-pie-3 fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.seasonality_analysis') }}</h3>
                                 </div>
                             </div>
@@ -480,14 +478,15 @@
                                                             6 => 'Friday',
                                                             7 => 'Saturday'
                                                         ];
-                                                        $isWeekend = in_array($dayNames[$day->day_of_week], ['Saturday', 'Sunday']);
+                                                        $dayName = $dayNames[$day->day_of_week] ?? 'Unknown';
+                                                        $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
                                                         $seasonalityFactor = $maxSales > 0 ? $day->average_sales / $maxSales : 0;
                                                         $salesPercentage = $maxSales > 0 ? ($day->average_sales / $maxSales) * 100 : 0;
                                                     @endphp
                                                     <tr>
                                                         <td>
                                                             <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
-                                                                {{ $dayNames[$day->day_of_week] }}
+                                                                {{ $dayName }}
                                                             </span>
                                                         </td>
                                                         <td>
@@ -495,10 +494,7 @@
                                                                 <div class="progress w-100 me-3" style="height: 6px;">
                                                                     <div class="progress-bar bg-{{ $isWeekend ? 'danger' : 'primary' }}" 
                                                                         role="progressbar" 
-                                                                        style="width: {{ $salesPercentage }}%;" 
-                                                                        aria-valuenow="{{ $salesPercentage }}" 
-                                                                        aria-valuemin="0" 
-                                                                        aria-valuemax="100">
+                                                                        style="width: {{ $salesPercentage }}%;">
                                                                     </div>
                                                                 </div>
                                                                 <span class="fw-bold text-gray-700 min-w-60px text-end">
@@ -507,7 +503,7 @@
                                                             </div>
                                                         </td>
                                                         <td>
-                                                            <span class="badge badge-light-info">{{ $day->order_count }}</span>
+                                                            <span class="badge badge-light-info">{{ number_format($day->order_count) }}</span>
                                                         </td>
                                                         <td>
                                                             <span class="badge badge-light-{{ $seasonalityFactor > 1.1 ? 'success' : ($seasonalityFactor > 0.9 ? 'warning' : 'danger') }}">
@@ -527,23 +523,39 @@
                 </div>
                 @endif
 
-                {{-- Historical Data Table --}}
+                {{-- Historical Data Table with Pagination --}}
                 @if($historicalData->count() > 0)
-                <div class="row">
+                <div class="row mt-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
+                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
                                         <h3 class="fw-bold m-0">{{ __('auth.historical_sales_data') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $historicalData->count() }} {{ __('auth.days') }}
-                                    </span>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="d-flex align-items-center">
+                                            <label class="form-label me-2 mb-0">{{ __('accounting.show') }}</label>
+                                            <select class="form-select form-select-sm w-auto" id="historicalPerPageSelect" onchange="changeHistoricalPerPage(this.value)">
+                                                <option value="10" {{ $historicalPerPage == 10 ? 'selected' : '' }}>10</option>
+                                                <option value="15" {{ $historicalPerPage == 15 ? 'selected' : '' }}>15</option>
+                                                <option value="25" {{ $historicalPerPage == 25 ? 'selected' : '' }}>25</option>
+                                                <option value="50" {{ $historicalPerPage == 50 ? 'selected' : '' }}>50</option>
+                                                <option value="100" {{ $historicalPerPage == 100 ? 'selected' : '' }}>100</option>
+                                            </select>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                                <i class="ki-duotone ki-file-down fs-2 me-1"></i>
+                                                {{ __('accounting.export') }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportHistoricalData(false)">{{ __('accounting.export_current_page') }}</a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportHistoricalData(true)">{{ __('accounting.export_all_data') }}</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="card-body p-0">
@@ -567,35 +579,35 @@
                                                 $dayName = $date->format('l');
                                                 $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
                                                 
-                                                // Calculate trend
-                                                $trend = $index > 0 ? $day->daily_sales - $historicalData[$index-1]->daily_sales : 0;
-                                                $trendPercentage = $index > 0 && $historicalData[$index-1]->daily_sales > 0 
-                                                    ? ($trend / $historicalData[$index-1]->daily_sales) * 100 
+                                                $allData = $historicalDataCollection ?? collect();
+                                                $currentIndex = $allData->search(function($item) use ($day) {
+                                                    return $item->date == $day->date;
+                                                });
+                                                $prevDay = $currentIndex !== false && $currentIndex < $allData->count() - 1 
+                                                    ? $allData[$currentIndex + 1] 
+                                                    : null;
+                                                
+                                                $trend = $prevDay ? $day->daily_sales - $prevDay->daily_sales : 0;
+                                                $trendPercentage = $prevDay && $prevDay->daily_sales > 0 
+                                                    ? ($trend / $prevDay->daily_sales) * 100 
                                                     : 0;
                                                 
-                                                // Calculate deviation from average
-                                                $deviation = $historicalAvg > 0 ? (($day->daily_sales - $historicalAvg) / $historicalAvg) * 100 : 0;
+                                                $deviation = isset($historicalAvg) && $historicalAvg > 0 
+                                                    ? (($day->daily_sales - $historicalAvg) / $historicalAvg) * 100 
+                                                    : 0;
                                             @endphp
                                             <tr>
-                                                <td>
-                                                    <span class="fw-bold text-gray-800">{{ $date->format('M d, Y') }}</span>
-                                                </td>
+                                                <td class="fw-bold text-gray-800">{{ $date->format('M d, Y') }}</td>
                                                 <td>
                                                     <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
                                                         {{ $dayName }}
                                                     </span>
                                                 </td>
+                                                <td class="fw-bold text-success">${{ number_format($day->daily_sales, 2) }}</td>
+                                                <td><span class="badge badge-light-info">{{ number_format($day->order_count) }}</span></td>
+                                                <td class="text-gray-600">${{ number_format($day->average_order_value, 2) }}</td>
                                                 <td>
-                                                    <span class="fw-bold text-success">${{ number_format($day->daily_sales, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $day->order_count }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-600">${{ number_format($day->average_order_value, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    @if($index > 0)
+                                                    @if($prevDay)
                                                         <div class="d-flex align-items-center">
                                                             @if($trend > 0)
                                                                 <i class="ki-duotone ki-arrow-up-right fs-2 text-success me-1"></i>
@@ -623,27 +635,15 @@
                                     </table>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                @else
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="text-center py-10">
-                                    <i class="ki-duotone ki-chart-line fs-4tx text-gray-400 mb-4">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                    <p class="text-muted fs-6">{{ __('auth.no_historical_data_for_forecast') }}</p>
-                                    <p class="text-muted fs-7 mb-4">{{ __('auth.need_at_least_14_days') }}</p>
-                                    <a href="{{ route('reports.orders.sales-forecast') }}?start_date={{ \Carbon\Carbon::now()->subDays(90)->format('Y-m-d') }}&end_date={{ \Carbon\Carbon::now()->format('Y-m-d') }}" 
-                                       class="btn btn-light-primary">
-                                        <i class="ki-duotone ki-calendar-8 fs-2 me-2"></i>
-                                        {{ __('auth.use_last_90_days') }}
-                                    </a>
+                            <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <div class="text-muted">
+                                    {{ __('accounting.showing') }} <strong>{{ $historicalData->firstItem() ?? 0 }}</strong> 
+                                    {{ __('accounting.to') }} <strong>{{ $historicalData->lastItem() ?? 0 }}</strong> 
+                                    {{ __('accounting.of') }} <strong>{{ $historicalData->total() }}</strong> 
+                                    {{ __('accounting.entries') }}
+                                </div>
+                                <div>
+                                    {{ $historicalData->appends(request()->query())->links() }}
                                 </div>
                             </div>
                         </div>
@@ -667,8 +667,8 @@
         const historicalOrders = @json($historicalData->pluck('order_count'));
         
         const forecastData = @json($forecast);
-        const forecastDates = Object.keys(forecastData);
-        const forecastSales = Object.values(forecastData).map(d => d.forecast_sales);
+        const forecastDates = Object.keys(forecastData || {});
+        const forecastSales = Object.values(forecastData || {}).map(d => d.forecast_sales);
         const forecastConfidenceLow = Object.values(forecastData).map(d => d.confidence_low || d.forecast_sales * 0.8);
         const forecastConfidenceHigh = Object.values(forecastData).map(d => d.confidence_high || d.forecast_sales * 1.2);
 
@@ -1013,6 +1013,114 @@
             });
         }
     });
+</script>
+<script>
+    // Change historical data per page
+function changeHistoricalPerPage(perPage) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('historical_per_page', perPage);
+    url.searchParams.set('historical_page', '1'); // Reset to first page
+    window.location.href = url.toString();
+}
+
+// Change forecast per page
+function changeForecastPerPage(perPage) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('forecast_per_page', perPage);
+    url.searchParams.set('forecast_page', '1'); // Reset to first page
+    window.location.href = url.toString();
+}
+
+// Sort forecast data
+let currentForecastSort = 'date';
+let currentForecastDirection = 'asc';
+
+function sortForecast(column) {
+    if (currentForecastSort === column) {
+        currentForecastDirection = currentForecastDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentForecastSort = column;
+        currentForecastDirection = 'asc';
+    }
+    
+    const url = new URL(window.location.href);
+    url.searchParams.set('forecast_sort', column);
+    url.searchParams.set('forecast_order', currentForecastDirection);
+    window.location.href = url.toString();
+}
+
+// Export forecast data
+function exportForecastData() {
+    const forecastData = @json($forecastCollection);
+    const exportRows = [['Date', 'Day', 'Forecast Sales', 'Forecast Orders', 'Average Order Value', 'Confidence Low', 'Confidence High', 'Trend', 'Seasonality Factor']];
+    
+    Object.values(forecastData).forEach(data => {
+        const date = new Date(data.date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+        
+        exportRows.push([
+            data.date,
+            dayName,
+            data.forecast_sales,
+            data.forecast_orders,
+            data.average_order_value,
+            data.confidence_low || data.forecast_sales * 0.8,
+            data.confidence_high || data.forecast_sales * 1.2,
+            data.trend || 0,
+            data.seasonality_factor || 1.0
+        ]);
+    });
+    
+    // Create and download CSV
+    const csvContent = exportRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `sales_forecast_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Export historical data
+function exportHistoricalData(exportAll = false) {
+    let dataToExport;
+    
+    if (exportAll) {
+        dataToExport = @json($historicalDataCollection);
+    } else {
+        dataToExport = @json($historicalData->items());
+    }
+    
+    const exportRows = [['Date', 'Day', 'Daily Sales', 'Order Count', 'Average Order Value']];
+    
+    dataToExport.forEach(day => {
+        const date = new Date(day.date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+        
+        exportRows.push([
+            day.date,
+            dayName,
+            day.daily_sales,
+            day.order_count,
+            day.average_order_value
+        ]);
+    });
+    
+    // Create and download CSV
+    const csvContent = exportRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `historical_data_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
 </script>
 @endif
 @endpush

@@ -33,16 +33,12 @@
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 gap-sm-2 ms-auto w-100 w-lg-auto">
                 <!-- Search Bar -->
                 <div class="w-100 w-sm-200px">
-                    <div class="input-group">
-                        <span class="input-group-text bg-transparent border-end-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                               id="searchInput" 
-                               class="form-control border-start-0 ps-0" 
-                               placeholder="{{__('auth._search')}} {{__('auth._uom')}}"
-                               onkeyup="searchTable(this.value, 'kt_table_users')">
-                    </div>
+                    <x-liveblade-search 
+                        id="uomSearchInput"
+                        componentId="uomIndexTable"
+                        route="{{ route('uom.index') }}"
+                        placeholder="{{__('auth._search')}} {{__('auth._uom')}}"
+                    />
                 </div>
 
                 <!-- Add Button -->

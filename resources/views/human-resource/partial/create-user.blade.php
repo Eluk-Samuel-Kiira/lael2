@@ -59,27 +59,11 @@
                                 <input type="text" id="job_title" class="form-control form-control-solid" name="job_title" />
                                 <div id="job_title"></div>
                             </div>
-
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination._location')}}</span>
-                                </label>
-                                <select name="location_id" class="form-select form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
-                                    <option></option>
-                                    @foreach ($locations as $location)
-                                        <option value="{{ $location->id }}">{{ $location->name }}</option>
-                                    @endforeach
-                                </select>
-                                <div id="location_id"></div>
-                            </div> 
-                        </div>
-
-                        <div class="row g-9 mb-8">
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                         <span class="required">{{__('auth._role')}}</span>
                                 </label>
-                                <select name="role_id" class="form-select form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
+                                <select name="role_id" class="form-select">
                                     <option></option>
                                     @foreach ($roles as $role)
                                         <option value="{{ $role->id }}">{{ ucwords(str_replace('_', ' ', $role->name)) }}</option>
@@ -87,19 +71,23 @@
                                 </select>
                                 <div id="role_id"></div>
                             </div>
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('auth._department')}}</span>
-                                </label>
-                                <select name="department_id" class="form-select form-select" data-control="select2" data-close-on-select="false" data-placeholder="Select an option" data-allow-clear="true">
-                                    <option></option>
-                                    @foreach ($departments as $department)
-                                        <option value="{{ $department->id }}">{{ $department->name }}</option>
-                                    @endforeach
-                                </select>
-                                <div id="department_id"></div>
-                            </div> 
                         </div>
+
+                        <div class="row g-9 mb-8">
+                            <x-liveblade-dependent-dropdown 
+                                id="location_department"
+                                parentName="location_id"
+                                childName="department_id"
+                                parentLabel="pagination._location"
+                                childLabel="auth._department"
+                                :parentOptions="$locations"
+                                :childOptions="$departments"
+                                route="{{ route('get.departments') }}"
+                            />
+                            <div id="location_id"></div>
+                            <div id="department_id"></div>
+                        </div>
+
                         <button type="reset" class="btn btn-light me-3" id="discardButton" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
                         
                         <button 

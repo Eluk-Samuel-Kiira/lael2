@@ -20,13 +20,25 @@ class ExpenseCategoryController extends Controller
         $tenantId = $user->tenant_id;
         
         if (!$user->hasPermissionTo('view category-expense')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
         $query = ExpenseCategory::with('tenant');
         
         // If user is NOT super_admin, filter by tenant
@@ -34,19 +46,35 @@ class ExpenseCategoryController extends Controller
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $categories = $query->latest()->get();
-
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadExpenseCategoryComponent':
-                return view('procurement.expense-category.category-component', [
-                    'expense_categories' => $categories,
-                ]);
-            default:
-                return view('procurement.expense-category-index', [
-                    'expense_categories' => $categories,
-                ]);
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('code', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+            });
         }
+        
+        // Paginate with dynamic per_page
+        $categories = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $categories->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadExpenseCategoryComponent') {
+            return view('procurement.expense-category.category-component', [
+                'expense_categories' => $categories,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('procurement.expense-category-index', [
+            'expense_categories' => $categories,
+        ]);
     }
 
     /**

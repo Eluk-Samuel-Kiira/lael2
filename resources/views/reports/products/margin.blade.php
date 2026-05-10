@@ -212,7 +212,7 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="marginDistributionChart" style="height: 300px;"></div>
+                                <div id="marginDistributionChart" style="height: 350px;"></div>
                             </div>
                         </div>
                     </div>
@@ -230,13 +230,13 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="topMarginChart" style="height: 300px;"></div>
+                                <div id="topMarginChart" style="height: 350px;"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Margin Analysis Table --}}
+               {{-- Margin Analysis Table --}}
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
@@ -261,33 +261,75 @@
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="marginTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('auth.sku') }}</th>
-                                                <th>{{ __('accounting.name') }}</th>
-                                                <th>{{ __('accounting.category') }}</th>
-                                                <th>{{ __('auth.price') }}</th>
-                                                <th>{{ __('auth.cost_price') }}</th>
-                                                <th>{{ __('auth.margin_amount') }}</th>
-                                                <th>{{ __('auth.margin_percentage') }}</th>
-                                                <th>{{ __('auth.quantity') }}</th>
-                                                <th>{{ __('auth.total_margin_value') }}</th>
-                                                <th>{{ __('auth.margin_category') }}</th>
+                                                <th class="ps-4 min-w-100px">{{ __('auth.sku') }}</th>
+                                                <th class="min-w-200px">{{ __('accounting.name') }}</th>
+                                                <th class="min-w-150px">{{ __('accounting.category') }}</th>
+                                                <th class="min-w-120px text-end">{{ __('auth.price') }}</th>
+                                                <th class="min-w-120px text-end">{{ __('auth.cost_price') }}</th>
+                                                <th class="min-w-120px text-end">{{ __('auth.margin_amount') }}</th>
+                                                <th class="min-w-120px text-center">{{ __('auth.margin_percentage') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('auth.quantity') }}</th>
+                                                <th class="min-w-150px text-end">{{ __('auth.total_margin_value') }}</th>
+                                                <th class="min-w-150px text-center">{{ __('auth.margin_category') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($variants->sortByDesc('margin_percentage') as $variant)
+                                            @foreach($variants as $variant)
+                                            @php
+                                                // ✅ Calculate everything in blade
+                                                $price = (float)($variant->price ?? 0);
+                                                $costPrice = (float)($variant->cost_price ?? 0);
+                                                $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
+                                                
+                                                // Calculate margin amount
+                                                $marginAmount = $price - $costPrice;
+                                                
+                                                // Calculate margin percentage
+                                                $marginPercentage = $price > 0 ? ($marginAmount / $price) * 100 : 0;
+                                                
+                                                // Calculate total margin value
+                                                $totalMarginValue = $marginAmount * $quantity;
+                                                
+                                                // Determine margin category
+                                                if ($marginPercentage >= 50) {
+                                                    $marginCategory = 'high';
+                                                    $marginLabel = __('auth.high_margin');
+                                                    $marginColor = 'success';
+                                                    $badgeClass = 'success';
+                                                } elseif ($marginPercentage >= 30) {
+                                                    $marginCategory = 'medium';
+                                                    $marginLabel = __('auth.medium_margin');
+                                                    $marginColor = 'primary';
+                                                    $badgeClass = 'primary';
+                                                } elseif ($marginPercentage >= 10) {
+                                                    $marginCategory = 'low';
+                                                    $marginLabel = __('auth.low_margin');
+                                                    $marginColor = 'warning';
+                                                    $badgeClass = 'warning';
+                                                } else {
+                                                    $marginCategory = 'very_low';
+                                                    $marginLabel = __('auth.very_low_margin');
+                                                    $marginColor = 'danger';
+                                                    $badgeClass = 'danger';
+                                                }
+                                                
+                                                // Determine text color for margin amount
+                                                $marginAmountClass = $marginAmount >= 0 ? 'success' : 'danger';
+                                                $totalMarginClass = $totalMarginValue >= 0 ? 'success' : 'danger';
+                                            @endphp
                                             <tr>
                                                 <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        @if($variant->image_url)
+                                                        @if($variant->product && $variant->product->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($variant->image_url) }}" alt="{{ $variant->name }}" class="rounded">
+                                                            <img src="{{ asset($variant->product->image_url) }}" alt="{{ $variant->name }}" class="rounded">
                                                         </div>
                                                         @endif
                                                         <div>
-                                                            <span class="fw-bold text-gray-800">{{ $variant->name }}</span>
-                                                            @if($variant->product)
-                                                            <div class="text-muted fs-7">{{ $variant->product->name }}</div>
+                                                            <span class="fw-bold text-gray-800">{{ $variant->product?->name ?? $variant->name }}</span>
+                                                            @if($variant->name !== ($variant->product?->name ?? ''))
+                                                            <div class="text-muted fs-7">{{ $variant->name }}</div>
                                                             @endif
                                                         </div>
                                                     </div>
@@ -299,66 +341,80 @@
                                                     <span class="text-muted">-</span>
                                                     @endif
                                                 </td>
-                                                <td>
-                                                    <span class="text-gray-800 fw-semibold">${{ number_format($variant->price, 2) }}</span>
+                                                <td class="text-end">
+                                                    <span class="text-gray-800 fw-semibold">${{ number_format($price, 2) }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="text-gray-600">${{ number_format($variant->cost_price ?? 0, 2) }}</span>
+                                                <td class="text-end">
+                                                    <span class="text-gray-600">${{ number_format($costPrice, 2) }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="text-{{ $variant->margin_amount >= 0 ? 'success' : 'danger' }} fw-bold">
-                                                        ${{ number_format($variant->margin_amount, 2) }}
+                                                <td class="text-end">
+                                                    <span class="text-{{ $marginAmountClass }} fw-bold">
+                                                        ${{ number_format($marginAmount, 2) }}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    @if($variant->margin_category == 'high')
-                                                        <span class="badge badge-success">{{ number_format($variant->margin_percentage, 1) }}%</span>
-                                                    @elseif($variant->margin_category == 'medium')
-                                                        <span class="badge badge-primary">{{ number_format($variant->margin_percentage, 1) }}%</span>
-                                                    @elseif($variant->margin_category == 'low')
-                                                        <span class="badge badge-warning">{{ number_format($variant->margin_percentage, 1) }}%</span>
-                                                    @else
-                                                        <span class="badge badge-danger">{{ number_format($variant->margin_percentage, 1) }}%</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $variant->overal_quantity_at_hand }}</span>
-                                                </td>
-                                                <td>
-                                                    @php
-                                                        $total_margin_value = $variant->margin_amount * $variant->overal_quantity_at_hand;
-                                                    @endphp
-                                                    <span class="text-{{ $total_margin_value >= 0 ? 'success' : 'danger' }} fw-bold">
-                                                        ${{ number_format($total_margin_value, 2) }}
+                                                <td class="text-center">
+                                                    <span class="badge badge-{{ $badgeClass }}">
+                                                        {{ number_format($marginPercentage, 1) }}%
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    @if($variant->margin_category == 'high')
-                                                        <span class="badge badge-success">{{ __('auth.high_margin') }}</span>
-                                                    @elseif($variant->margin_category == 'medium')
-                                                        <span class="badge badge-primary">{{ __('auth.medium_margin') }}</span>
-                                                    @elseif($variant->margin_category == 'low')
-                                                        <span class="badge badge-warning">{{ __('auth.low_margin') }}</span>
-                                                    @else
-                                                        <span class="badge badge-danger">{{ __('auth.very_low_margin') }}</span>
-                                                    @endif
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-primary">{{ number_format($quantity) }}</span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span class="text-{{ $totalMarginClass }} fw-bold">
+                                                        ${{ number_format($totalMarginValue, 2) }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-{{ $marginColor }}">
+                                                        {{ $marginLabel }}
+                                                    </span>
                                                 </td>
                                             </tr>
                                             @endforeach
                                         </tbody>
-                                        {{-- Footer with totals --}}
+                                        @php
+                                            // Calculate totals from the current page variants
+                                            $pageTotalMarginValue = 0;
+                                            foreach($variants as $variant) {
+                                                $price = (float)($variant->price ?? 0);
+                                                $costPrice = (float)($variant->cost_price ?? 0);
+                                                $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
+                                                $marginAmount = $price - $costPrice;
+                                                $pageTotalMarginValue += $marginAmount * $quantity;
+                                            }
+                                        @endphp
                                         <tfoot class="bg-light">
                                             <tr>
-                                                <td colspan="8" class="text-end fw-bold">{{ __('auth.total') }}:</td>
-                                                <td class="fw-bold text-{{ $marginSummary['total_margin_value'] >= 0 ? 'success' : 'danger' }}">
+                                                <td colspan="8" class="text-end fw-bold">{{ __('auth.total') }} ({{ __('accounting.current_page') }}):</td>
+                                                <td class="fw-bold text-{{ $pageTotalMarginValue >= 0 ? 'success' : 'danger' }} text-end">
+                                                    ${{ number_format($pageTotalMarginValue, 2) }}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                            @if(isset($marginSummary['total_margin_value']))
+                                            <tr>
+                                                <td colspan="8" class="text-end fw-bold text-muted">{{ __('auth.grand_total') }} ({{ __('accounting.all_pages') }}):</td>
+                                                <td class="fw-bold text-{{ $marginSummary['total_margin_value'] >= 0 ? 'success' : 'danger' }} text-end">
                                                     ${{ number_format($marginSummary['total_margin_value'], 2) }}
                                                 </td>
                                                 <td></td>
                                             </tr>
+                                            @endif
                                         </tfoot>
                                     </table>
                                 </div>
                             </div>
+                            @if($variants->count() > 0)
+                            <div class="card-footer">
+                                @include('partials.pagination', [
+                                    'paginator' => $variants,
+                                    'pageName' => 'page',
+                                    'perPageName' => 'per_page',
+                                    'showPerPage' => true
+                                ])
+                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -397,136 +453,214 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Prepare data for charts
-        @php
-            // Get top 10 products by margin percentage
-            $topMarginProducts = $variants->sortByDesc('margin_percentage')->take(10);
-            
-            // Margin distribution data
-            $highMarginCount = $variants->where('margin_category', 'high')->count();
-            $mediumMarginCount = $variants->where('margin_category', 'medium')->count();
-            $lowMarginCount = $variants->where('margin_category', 'low')->count();
-            $veryLowMarginCount = $variants->where('margin_category', 'very_low')->count();
-        @endphp
+        // ✅ Use data from marginSummary (already calculated from filtered data)
+        const highMarginCount = {{ $marginSummary['high_margin_count'] ?? 0 }};
+        const mediumMarginCount = {{ $marginSummary['medium_margin_count'] ?? 0 }};
+        const lowMarginCount = {{ $marginSummary['low_margin_count'] ?? 0 }};
+        const veryLowMarginCount = {{ $marginSummary['very_low_margin_count'] ?? 0 }};
+        
+        console.log('Chart Data:', { highMarginCount, mediumMarginCount, lowMarginCount, veryLowMarginCount });
         
         // Margin Distribution Chart (Pie Chart)
-        const marginDistributionChart = new ApexCharts(document.querySelector("#marginDistributionChart"), {
-            series: [{{ $highMarginCount }}, {{ $mediumMarginCount }}, {{ $lowMarginCount }}, {{ $veryLowMarginCount }}],
-            chart: {
-                type: 'pie',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
+        const marginDistElement = document.querySelector("#marginDistributionChart");
+        if (marginDistElement && (highMarginCount > 0 || mediumMarginCount > 0 || lowMarginCount > 0 || veryLowMarginCount > 0)) {
+            const marginDistributionChart = new ApexCharts(marginDistElement, {
+                series: [highMarginCount, mediumMarginCount, lowMarginCount, veryLowMarginCount],
+                chart: {
+                    type: 'pie',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
                     }
-                }
-            },
-            labels: [
-                '{{ __("auth.high_margin") }} (≥50%)',
-                '{{ __("auth.medium_margin") }} (30-49%)',
-                '{{ __("auth.low_margin") }} (10-29%)',
-                '{{ __("auth.very_low_margin") }} (<10%)'
-            ],
-            colors: ['#50CD89', '#3E97FF', '#FFC700', '#F1416C'],
-            legend: {
-                position: 'bottom',
-                fontSize: '12px'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(value) {
-                        return value + ' {{ __("auth.item") }}' + (value !== 1 ? 's' : '');
+                },
+                labels: [
+                    '{{ __("auth.high_margin") }} (≥50%)',
+                    '{{ __("auth.medium_margin") }} (30-49%)',
+                    '{{ __("auth.low_margin") }} (10-29%)',
+                    '{{ __("auth.very_low_margin") }} (<10%)'
+                ],
+                colors: ['#50CD89', '#3E97FF', '#FFC700', '#F1416C'],
+                legend: {
+                    position: 'bottom',
+                    fontSize: '12px',
+                    labels: {
+                        colors: '#5B5B5B'
                     }
-                }
-            },
-            dataLabels: {
-                enabled: true,
-                formatter: function(val, opts) {
-                    return opts.w.config.series[opts.seriesIndex];
-                }
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(value) {
+                            const total = highMarginCount + mediumMarginCount + lowMarginCount + veryLowMarginCount;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return value + ' {{ __("auth.items") }} (' + percentage + '%)';
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val, opts) {
+                        const total = highMarginCount + mediumMarginCount + lowMarginCount + veryLowMarginCount;
+                        const percentage = total > 0 ? ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1) : 0;
+                        return opts.w.config.series[opts.seriesIndex] + ' (' + percentage + '%)';
+                    },
+                    style: {
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }
+                },
+                responsive: [{
+                    breakpoint: 480,
+                    options: {
+                        chart: {
+                            height: 300
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }]
+            });
+            marginDistributionChart.render();
+        } else {
+            console.warn('No data for margin distribution chart');
+            if (marginDistElement) {
+                marginDistElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        });
-        marginDistributionChart.render();
+        }
         
         // Top Margin Products Chart (Bar Chart)
-        const topMarginChart = new ApexCharts(document.querySelector("#topMarginChart"), {
-            series: [{
-                name: '{{ __("auth.margin_percentage") }}',
-                data: @json($topMarginProducts->pluck('margin_percentage'))
-            }],
-            chart: {
-                type: 'bar',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
+        // Top Margin Products Chart (Bar Chart)
+        @php
+            // Get top 10 products by margin percentage from sortedVariants
+            $topProducts = isset($sortedVariants) ? $sortedVariants->take(10) : collect();
+            $topProductNames = [];
+            $topProductMargins = [];
+            $topProductPrices = [];
+            $topProductCosts = [];
+            
+            foreach($topProducts as $product) {
+                $price = (float)($product->price ?? 0);
+                $costPrice = (float)($product->cost_price ?? 0);
+                $marginPercentage = $price > 0 ? (($price - $costPrice) / $price) * 100 : 0;
+                
+                $name = $product->product?->name ?? $product->name;
+                $topProductNames[] = strlen($name) > 20 ? substr($name, 0, 17) . '...' : $name;
+                $topProductMargins[] = $marginPercentage;
+                $topProductPrices[] = $price;
+                $topProductCosts[] = $costPrice;
+            }
+        @endphp
+        
+        const topProductsElement = document.querySelector("#topMarginChart");
+        if (topProductsElement && {{ count($topProductMargins) }} > 0) {
+            const topMarginChart = new ApexCharts(topProductsElement, {
+                series: [{
+                    name: '{{ __("auth.margin_percentage") }}',
+                    data: @json($topProductMargins)
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
                     }
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    borderRadius: 4,
-                    columnWidth: '60%'
-                }
-            },
-            xaxis: {
-                categories: @json($topMarginProducts->map(function($product) {
-                    return strlen($product->name) > 15 ? 
-                        substr($product->name, 0, 15) + '...' : 
-                        $product->name;
-                })),
-                labels: {
-                    rotate: -45,
-                    style: {
-                        fontSize: '10px'
-                    }
-                }
-            },
-            yaxis: {
-                title: {
-                    text: '{{ __("auth.margin_percentage") }} (%)'
                 },
-                labels: {
+                plotOptions: {
+                    bar: {
+                        horizontal: false,
+                        borderRadius: 4,
+                        columnWidth: '60%',
+                        distributed: true
+                    }
+                },
+                xaxis: {
+                    categories: @json($topProductNames),
+                    labels: {
+                        rotate: -45,
+                        style: {
+                            fontSize: '11px',
+                            colors: '#5B5B5B'
+                        },
+                        trim: true
+                    },
+                    title: {
+                        text: '{{ __("accounting.product") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    }
+                },
+                yaxis: {
+                    title: {
+                        text: '{{ __("auth.margin_percentage") }} (%)',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    },
+                    labels: {
+                        formatter: function(val) {
+                            return val.toFixed(1) + '%';
+                        }
+                    },
+                    min: 0
+                },
+                colors: ['#3E97FF'],
+                tooltip: {
+                    y: {
+                        formatter: function(value, { dataPointIndex }) {
+                            const product = @json($topMarginProducts->values())[dataPointIndex];
+                            return value.toFixed(1) + '%\n' + 
+                                   '{{ __("auth.price") }}: $' + (product.price || 0).toFixed(2) + '\n' +
+                                   '{{ __("auth.cost_price") }}: $' + (product.cost_price || 0).toFixed(2) + '\n' +
+                                   '{{ __("auth.margin_amount") }}: $' + (product.margin_amount || 0).toFixed(2);
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
                     formatter: function(val) {
                         return val.toFixed(1) + '%';
+                    },
+                    offsetY: -20,
+                    style: {
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        colors: ["#333"]
                     }
-                }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(value, { seriesIndex, dataPointIndex, w }) {
-                        const product = @json($topMarginProducts->values())[dataPointIndex];
-                        return value.toFixed(1) + '%<br>' + 
-                               '{{ __("auth.price") }}: $' + product.price.toFixed(2) + '<br>' +
-                               '{{ __("auth.cost_price") }}: $' + (product.cost_price || 0).toFixed(2);
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: true,
-                formatter: function(val) {
-                    return val.toFixed(1) + '%';
                 },
-                offsetY: -20,
-                style: {
-                    fontSize: '10px',
-                    colors: ["#333"]
+                grid: {
+                    borderColor: '#e7e7e7',
+                    row: {
+                        colors: ['#f3f3f3', 'transparent'],
+                        opacity: 0.5
+                    }
                 }
+            });
+            topMarginChart.render();
+        } else {
+            console.warn('No data for top margin chart');
+            if (topProductsElement) {
+                topProductsElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        });
-        topMarginChart.render();
+        }
         
         // Add export functionality
         window.exportCurrentPage = function(options) {
-            const { tableId, filename, sheetName, format = 'excel' } = options;
+            const { tableId, filename } = options;
             const table = document.getElementById(tableId);
             
             if (!table) {
-                alert('{{ __("accounting.table_not_found") }}');
+                alert('Table not found');
                 return;
             }
             
@@ -534,12 +668,11 @@
             const rows = table.querySelectorAll('tr');
             
             for (let i = 0; i < rows.length; i++) {
-                const row = [], cols = rows[i].querySelectorAll('td, th');
+                const row = [];
+                const cols = rows[i].querySelectorAll('td, th');
                 
                 for (let j = 0; j < cols.length; j++) {
-                    // Clean text - remove HTML tags and trim
                     let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
-                    // Escape quotes and wrap in quotes if contains comma
                     if (text.includes(',') || text.includes('"')) {
                         text = '"' + text.replace(/"/g, '""') + '"';
                     }
@@ -548,19 +681,17 @@
                 csv.push(row.join(","));
             }
             
-            const csvContent = csv.join("\n");
+            const csvContent = "\uFEFF" + csv.join("\n");
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
             
-            if (navigator.msSaveBlob) {
-                navigator.msSaveBlob(blob, filename + '.csv');
-            } else {
-                link.href = URL.createObjectURL(blob);
-                link.setAttribute("download", filename + '.csv');
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
+            link.href = url;
+            link.setAttribute("download", filename + '.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         };
     });
 </script>

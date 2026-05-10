@@ -222,7 +222,7 @@
                                 <div class="card-body">
                                     <div class="mb-3">
                                         <label class="form-label">{{ __('passwords.batch_number') }}</label>
-                                        <input type="text" name="batch_number" class="form-control" placeholder="{{ __('passwords.enter_batch_number') }}">
+                                        <input type="text" name="batch_number" class="form-control" placeholder="{{ __('passwords.enter_batch_number') }}" required>
                                     </div>
                                     <div class="mb-0">
                                         <label class="form-label">{{ __('passwords.expiry_date') }}</label>

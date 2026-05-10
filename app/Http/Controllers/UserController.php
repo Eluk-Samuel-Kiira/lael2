@@ -74,7 +74,7 @@ class UserController extends Controller
         
         // For AJAX requests - return just the component HTML
         if ($request->ajax() && $bladeToReload === 'reloadEmployeeComponent') {
-            return view('human-resource.partial.user-component', [
+            return view('human-resource.partial.user-componenet', [
                 'all_employees' => $employees,
             ])->render();
         }

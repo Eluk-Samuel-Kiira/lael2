@@ -29,14 +29,21 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('auth._manager')}}</span>
                                 </label>
-                                <select name="manager_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option value="">{{ __('auth._select') }}</option>
-                                    @foreach ($users as $user)
-                                        <option value="{{ $user->id }}" {{ $location->manager_id == $user->id ? 'selected' : '' }}>
-                                            {{ $user->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                @php
+                                    $formattedUsers = [];
+                                    foreach($users as $user) {
+                                        $formattedUsers[] = (object)[
+                                            'id' => $user->id,
+                                            'name' => $user->name
+                                        ];
+                                    }
+                                @endphp
+                                <x-typable-select 
+                                    name="manager_id"
+                                    :options="$formattedUsers"
+                                    selected="{{ $location->manager_id }}"
+                                    placeholder="Type or select manager..."
+                                />
                                 <div id="manager_id{{ $location->id }}"></div>
                             </div>
 
@@ -44,14 +51,21 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('auth._currency')}}</span>
                                 </label>
-                                <select name="currency_id" class="form-select" data-control="select2" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
-                                    <option value="">{{ __('auth._select') }}</option>
-                                    @foreach ($currencies as $currency)
-                                        <option value="{{ $currency->id }}" {{ $location->currency_id == $currency->id ? 'selected' : '' }}>
-                                            {{ $currency->name.' '.$currency->code }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                @php
+                                    $formattedCurrencies = [];
+                                    foreach($currencies as $curr) {
+                                        $formattedCurrencies[] = (object)[
+                                            'id' => $curr->id,
+                                            'name' => $curr->name . ' ' . $curr->code
+                                        ];
+                                    }
+                                @endphp
+                                <x-typable-select 
+                                    name="currency_id"
+                                    :options="$formattedCurrencies"
+                                    selected="{{ $location->currency_id }}"
+                                    placeholder="Type or select currency..."
+                                />
                                 <div id="currency_id{{ $location->id }}"></div>
                             </div>
                         </div>

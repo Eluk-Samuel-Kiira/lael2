@@ -39,23 +39,28 @@ class ExpenseReportsController extends Controller
         $requiresReceipt = $request->get('requires_receipt');
         $isRecurring = $request->get('is_recurring');
         
-        // Validate dates
+        // Validate dates - ensure end date includes full day
         try {
-            $startDate = Carbon::parse($startDate)->format('Y-m-d');
-            $endDate = Carbon::parse($endDate)->format('Y-m-d');
+            $startDateTime = Carbon::parse($startDate)->startOfDay();
+            $endDateTime = Carbon::parse($endDate)->endOfDay();
             
-            if ($startDate > $endDate) {
-                [$startDate, $endDate] = [$endDate, $startDate];
+            if ($startDateTime > $endDateTime) {
+                [$startDateTime, $endDateTime] = [$endDateTime, $startDateTime];
             }
+            
+            $startDate = $startDateTime->format('Y-m-d');
+            $endDate = $endDateTime->format('Y-m-d');
         } catch (\Exception $e) {
-            $startDate = now()->startOfMonth()->format('Y-m-d');
-            $endDate = now()->endOfMonth()->format('Y-m-d');
+            $startDateTime = now()->startOfMonth();
+            $endDateTime = now()->endOfMonth();
+            $startDate = $startDateTime->format('Y-m-d');
+            $endDate = $endDateTime->format('Y-m-d');
         }
         
-        // Build main query
-        $query = Expense::with(['category', 'paymentMethod', 'employee'])
+        // Build main query with proper date range - Using Eloquent for automatic conversion
+        $query = Expense::with(['category', 'paymentMethod', 'employee', 'supplier'])
             ->where('tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate]);
+            ->whereBetween('date', [$startDateTime->format('Y-m-d'), $endDateTime->format('Y-m-d')]);
         
         // Apply filters
         if ($categoryId && is_numeric($categoryId)) {
@@ -63,7 +68,12 @@ class ExpenseReportsController extends Controller
         }
         
         if ($vendorName && strlen(trim($vendorName)) >= 2) {
-            $query->where('vendor_name', 'like', '%' . trim($vendorName) . '%');
+            $query->where(function($q) use ($vendorName) {
+                $q->where('vendor_name', 'like', '%' . trim($vendorName) . '%')
+                    ->orWhereHas('supplier', function($sq) use ($vendorName) {
+                        $sq->where('name', 'like', '%' . trim($vendorName) . '%');
+                    });
+            });
         }
         
         if ($paymentMethodId && is_numeric($paymentMethodId)) {
@@ -88,29 +98,33 @@ class ExpenseReportsController extends Controller
             $query->where('is_recurring', (bool)$isRecurring);
         }
         
-        // Get summary statistics
+        // Get all expenses for summary - Use Eloquent (automatically converted)
+        $allExpenses = clone $query;
+        $expensesCollection = $allExpenses->get();
+        
+        // Get summary statistics from ALL expenses (values already converted by accessors)
         $summary = [
-            'total_expenses' => $query->count(),
-            'total_amount' => (float)($query->sum('total_amount') ?? 0),
-            'total_tax' => (float)($query->sum('tax_amount') ?? 0),
-            'avg_expense' => (float)($query->avg('total_amount') ?? 0),
-            'max_expense' => (float)($query->max('total_amount') ?? 0),
-            'min_expense' => (float)($query->min('total_amount') ?? 0),
+            'total_expenses' => $expensesCollection->count(),
+            'total_amount' => $expensesCollection->sum('total_amount'),
+            'total_tax' => $expensesCollection->sum('tax_amount'),
+            'avg_expense' => $expensesCollection->count() > 0 ? $expensesCollection->avg('total_amount') : 0,
+            'max_expense' => $expensesCollection->max('total_amount') ?? 0,
+            'min_expense' => $expensesCollection->min('total_amount') ?? 0,
         ];
         
-        // Get daily breakdown
-        $dailyBreakdown = DB::table('expenses')
-            ->select(
-                DB::raw('DATE(date) as date'),
-                DB::raw('COUNT(*) as count'),
-                DB::raw('SUM(total_amount) as total'),
-                DB::raw('SUM(tax_amount) as tax'),
-                DB::raw('AVG(total_amount) as average')
-            )
-            ->where('tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate])
+        // Get daily breakdown using Eloquent (not raw DB) for proper conversion
+        $dailyBreakdown = Expense::where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDateTime->format('Y-m-d'), $endDateTime->format('Y-m-d')])
             ->when($categoryId, function($q) use ($categoryId) {
                 return $q->where('category_id', $categoryId);
+            })
+            ->when($vendorName, function($q) use ($vendorName) {
+                return $q->where(function($sq) use ($vendorName) {
+                    $sq->where('vendor_name', 'like', '%' . trim($vendorName) . '%')
+                        ->orWhereHas('supplier', function($ssq) use ($vendorName) {
+                            $ssq->where('name', 'like', '%' . trim($vendorName) . '%');
+                        });
+                });
             })
             ->when($paymentMethodId, function($q) use ($paymentMethodId) {
                 return $q->where('payment_method_id', $paymentMethodId);
@@ -124,28 +138,50 @@ class ExpenseReportsController extends Controller
             ->when($isRecurring, function($q) use ($isRecurring) {
                 return $q->where('is_recurring', $isRecurring);
             })
-            ->groupBy(DB::raw('DATE(date)'))
-            ->orderBy('date', 'desc')
-            ->get();
+            ->get()
+            ->groupBy(function($expense) {
+                return $expense->date->format('Y-m-d');
+            })
+            ->map(function($expenses, $date) {
+                $total = $expenses->sum('total_amount');
+                $tax = $expenses->sum('tax_amount');
+                $count = $expenses->count();
+                
+                return (object)[
+                    'date' => $date,
+                    'count' => $count,
+                    'total' => $total,
+                    'tax' => $tax,
+                    'average' => $count > 0 ? $total / $count : 0,
+                ];
+            })
+            ->sortByDesc('date')
+            ->values();
         
-        // Get top expenses - use the same query but with order by amount
-        $topExpenses = $query->orderBy('total_amount', 'desc')->take(10)->get();
+        // Get top expenses - using Eloquent (automatically converted)
+        $topExpenses = $query->orderBy('total_amount', 'desc')
+            ->take(10)
+            ->get();
         
         // Get filter options
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'requires_receipt']);
         
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'is_default', 'type']);
         
         $employees = Employee::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('first_name')
-            ->get();
+            ->get(['id', 'first_name', 'last_name']);
+        
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
         
         return view('reports.expenses.summary', [
             'summary' => $summary,
@@ -154,8 +190,8 @@ class ExpenseReportsController extends Controller
             'categories' => $categories,
             'paymentMethods' => $paymentMethods,
             'employees' => $employees,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
+            'startDate' => $displayStartDate,
+            'endDate' => $displayEndDate,
             'categoryId' => $categoryId,
             'vendorName' => $vendorName,
             'paymentMethodId' => $paymentMethodId,
@@ -178,55 +214,123 @@ class ExpenseReportsController extends Controller
 
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $categoryId = $request->get('category_id');
         
-        $categoryBreakdown = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select(
-                'expense_categories.name as category_name',
-                'expense_categories.code as category_code',
-                DB::raw('COUNT(*) as expense_count'),
-                DB::raw('SUM(expenses.amount) as total_amount'),
-                DB::raw('SUM(expenses.tax_amount) as total_tax'),
-                DB::raw('SUM(expenses.total_amount) as grand_total'),
-                DB::raw('AVG(expenses.total_amount) as average_amount'),
-                DB::raw('MAX(expenses.total_amount) as max_amount'),
-                DB::raw('MIN(expenses.total_amount) as min_amount')
-            )
-            ->groupBy('expense_categories.id', 'expense_categories.name', 'expense_categories.code')
-            ->orderBy('grand_total', 'desc')
-            ->get();
+        // Build query
+        $query = Expense::with('category')
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate]);
+        
+        // Apply category filter
+        if ($categoryId && is_numeric($categoryId)) {
+            $query->where('category_id', (int)$categoryId);
+        }
+        
+        // Get expenses
+        $expenses = $query->get();
+        
+        // Group by category for breakdown
+        $categoryBreakdown = $expenses->groupBy('category_id')
+            ->map(function($group) {
+                $category = $group->first()->category;
+                $totalAmount = $group->sum('total_amount');
+                $totalTax = $group->sum('tax_amount');
+                $grandTotal = $group->sum('total_amount');
+                $count = $group->count();
+                
+                return (object)[
+                    'category_name' => $category->name ?? 'Uncategorized',
+                    'category_code' => $category->code ?? 'N/A',
+                    'expense_count' => $count,
+                    'total_amount' => $totalAmount,
+                    'total_tax' => $totalTax,
+                    'grand_total' => $grandTotal,
+                    'average_amount' => $count > 0 ? $grandTotal / $count : 0,
+                    'max_amount' => $group->max('total_amount'),
+                    'min_amount' => $group->min('total_amount'),
+                ];
+            })
+            ->sortByDesc('grand_total')
+            ->values();
         
         $totalExpenses = $categoryBreakdown->sum('grand_total');
         
-        // Monthly trend by category
-        $monthlyTrend = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select(
-                DB::raw('YEAR(expenses.date) as year'),
-                DB::raw('MONTH(expenses.date) as month'),
-                'expense_categories.name as category_name',
-                DB::raw('SUM(expenses.total_amount) as monthly_total')
-            )
-            ->groupBy('year', 'month', 'expense_categories.name')
-            ->orderBy('year')
-            ->orderBy('month')
+        // Monthly trend by category - Using Eloquent (FIXED)
+        $monthlyData = Expense::with('category')
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->when($categoryId, function($q) use ($categoryId) {
+                return $q->where('category_id', $categoryId);
+            })
             ->get()
-            ->groupBy('category_name');
+            ->groupBy(function($expense) {
+                return $expense->date->format('Y-m');
+            });
+        
+        $monthlyTrend = collect();
+        foreach ($monthlyData as $month => $expensesInMonth) {
+            $byCategory = $expensesInMonth->groupBy('category_id');
+            foreach ($byCategory as $catId => $categoryExpenses) {
+                $category = $categoryExpenses->first()->category;
+                $monthlyTrend->push((object)[
+                    'year' => (int)date('Y', strtotime($month)),
+                    'month' => (int)date('n', strtotime($month)),
+                    'category_name' => $category->name ?? 'Uncategorized',
+                    'monthly_total' => $categoryExpenses->sum('total_amount'),
+                ]);
+            }
+        }
+        
+        // Group by category name for the view
+        $monthlyTrendGrouped = $monthlyTrend->groupBy('category_name');
+        
+        // Get unique months for chart
+        $uniqueMonths = $monthlyTrend->groupBy(function($item) {
+            return $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
+        })->keys()->sort()->map(function($key) {
+            return (object)[
+                'year' => (int)substr($key, 0, 4),
+                'month' => (int)substr($key, 5, 2),
+                'label' => date('M Y', strtotime($key . '-01'))
+            ];
+        })->values();
         
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
         
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
+
+        $monthlyDataMatrix = [];
+        foreach ($monthlyTrendGrouped as $categoryName => $categoryData) {
+            foreach ($categoryData as $item) {
+                $monthKey = $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
+                $monthlyDataMatrix[$monthKey][$categoryName] = $item->monthly_total;
+            }
+        }
+
+        // Also prepare category totals
+        $categoryTotals = [];
+        foreach ($categoryBreakdown as $category) {
+            $categoryTotals[$category->category_name] = $category->grand_total;
+        }
+        
         return view('reports.expenses.by-category', compact(
             'categoryBreakdown',
             'totalExpenses',
-            'monthlyTrend',
+            'monthlyTrendGrouped',
+            'uniqueMonths',
             'categories',
             'startDate',
-            'endDate'
+            'endDate',
+            'displayStartDate',
+            'displayEndDate',
+            'categoryId',
+            'monthlyDataMatrix', 
+            'categoryTotals'
         ));
     }
     
@@ -266,8 +370,9 @@ class ExpenseReportsController extends Controller
             $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
         }
         
-        // Build main query
-        $query = Expense::where('expenses.tenant_id', $tenantId)
+        // Build query using Eloquent (automatic conversion via accessors)
+        $query = Expense::with(['category', 'paymentMethod'])
+            ->where('tenant_id', $tenantId)
             ->whereBetween('date', [$startDate, $endDate])
             ->whereNotNull('vendor_name')
             ->where('vendor_name', '!=', '');
@@ -293,119 +398,97 @@ class ExpenseReportsController extends Controller
             $query->where('total_amount', '<=', (float)$maxAmount);
         }
         
-        // Get vendor breakdown
-        $vendorBreakdown = $query->select(
-                'vendor_name',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(amount) as total_amount'),
-                DB::raw('SUM(tax_amount) as total_tax'),
-                DB::raw('SUM(total_amount) as grand_total'),
-                DB::raw('AVG(total_amount) as average_transaction'),
-                DB::raw('MAX(total_amount) as largest_transaction'),
-                DB::raw('MIN(total_amount) as smallest_transaction'),
-                DB::raw('COUNT(DISTINCT category_id) as categories_used')
-            )
-            ->groupBy('vendor_name')
-            ->orderBy('grand_total', 'desc')
-            ->get();
+        // Get all expenses (values already converted by accessors)
+        $allExpenses = $query->get();
+        
+        // Group by vendor and calculate statistics using collections
+        $vendorBreakdown = $allExpenses->groupBy('vendor_name')
+            ->map(function($expenses, $vendorName) {
+                return (object)[
+                    'vendor_name' => $vendorName,
+                    'transaction_count' => $expenses->count(),
+                    'total_amount' => $expenses->sum('total_amount'),
+                    'total_tax' => $expenses->sum('tax_amount'),
+                    'grand_total' => $expenses->sum('total_amount'),
+                    'average_transaction' => $expenses->avg('total_amount'),
+                    'largest_transaction' => $expenses->max('total_amount'),
+                    'smallest_transaction' => $expenses->min('total_amount'),
+                    'categories_used' => $expenses->pluck('category_id')->unique()->count(),
+                ];
+            })
+            ->sortByDesc('grand_total')
+            ->values();
         
         // Summary statistics
         $summary = [
             'total_vendors' => $vendorBreakdown->count(),
-            'total_transactions' => $vendorBreakdown->sum('transaction_count'),
-            'total_amount' => (float)($vendorBreakdown->sum('grand_total') ?? 0),
-            'total_tax' => (float)($vendorBreakdown->sum('total_tax') ?? 0),
-            'avg_transaction' => (float)($vendorBreakdown->avg('average_transaction') ?? 0),
-            'largest_single' => (float)($vendorBreakdown->max('largest_transaction') ?? 0),
+            'total_transactions' => $allExpenses->count(),
+            'total_amount' => $allExpenses->sum('total_amount'),
+            'total_tax' => $allExpenses->sum('tax_amount'),
+            'avg_transaction' => $allExpenses->avg('total_amount'),
+            'largest_single' => $allExpenses->max('total_amount'),
             'unique_categories' => ExpenseCategory::where('tenant_id', $tenantId)
                 ->where('is_active', true)
                 ->count(),
         ];
         
-        // Vendor payment methods - FIXED: Specify table for tenant_id
-        $vendorPaymentMethods = Expense::join('payment_methods', 'expenses.payment_method_id', '=', 'payment_methods.id')
-            ->where('expenses.tenant_id', $tenantId) // Specify expenses.tenant_id
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->whereNotNull('expenses.vendor_name')
-            ->where('expenses.vendor_name', '!=', '')
-            ->when($vendorName && strlen(trim($vendorName)) >= 2, function($q) use ($vendorName) {
-                return $q->where('expenses.vendor_name', 'like', '%' . trim($vendorName) . '%');
+        // Vendor payment methods breakdown using collections
+        $vendorPaymentMethods = $allExpenses->groupBy('vendor_name')
+            ->map(function($expenses, $vendorName) {
+                return $expenses->groupBy(function($expense) {
+                    return $expense->paymentMethod->name ?? 'Unknown';
+                })->map(function($groupedExpenses, $methodName) use ($vendorName) {
+                    return (object)[
+                        'vendor_name' => $vendorName,
+                        'payment_method' => $methodName,
+                        'payment_type' => $groupedExpenses->first()->paymentMethod->type ?? 'unknown',
+                        'count' => $groupedExpenses->count(),
+                        'total' => $groupedExpenses->sum('total_amount'),
+                    ];
+                })->values();
             })
-            ->when($categoryId && is_numeric($categoryId), function($q) use ($categoryId) {
-                return $q->where('expenses.category_id', (int)$categoryId);
-            })
-            ->when($paymentMethodId && is_numeric($paymentMethodId), function($q) use ($paymentMethodId) {
-                return $q->where('expenses.payment_method_id', (int)$paymentMethodId);
-            })
-            ->when($minAmount && is_numeric($minAmount), function($q) use ($minAmount) {
-                return $q->where('expenses.total_amount', '>=', (float)$minAmount);
-            })
-            ->when($maxAmount && is_numeric($maxAmount), function($q) use ($maxAmount) {
-                return $q->where('expenses.total_amount', '<=', (float)$maxAmount);
-            })
-            ->select(
-                'expenses.vendor_name',
-                'payment_methods.name as payment_method',
-                'payment_methods.type as payment_type',
-                DB::raw('COUNT(*) as count'),
-                DB::raw('SUM(expenses.total_amount) as total')
-            )
-            ->groupBy('expenses.vendor_name', 'payment_methods.name', 'payment_methods.type')
-            ->orderBy('total', 'desc')
-            ->get()
-            ->groupBy('vendor_name');
+            ->filter()
+            ->flatMap(function($item) {
+                return $item;
+            });
         
-        // Monthly vendor activity - FIXED: Specify table for tenant_id
-        $monthlyVendorActivity = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->whereNotNull('vendor_name')
-            ->where('vendor_name', '!=', '')
-            ->when($vendorName && strlen(trim($vendorName)) >= 2, function($q) use ($vendorName) {
-                return $q->where('vendor_name', 'like', '%' . trim($vendorName) . '%');
-            })
-            ->when($categoryId && is_numeric($categoryId), function($q) use ($categoryId) {
-                return $q->where('category_id', (int)$categoryId);
-            })
-            ->when($paymentMethodId && is_numeric($paymentMethodId), function($q) use ($paymentMethodId) {
-                return $q->where('payment_method_id', (int)$paymentMethodId);
-            })
-            ->when($minAmount && is_numeric($minAmount), function($q) use ($minAmount) {
-                return $q->where('total_amount', '>=', (float)$minAmount);
-            })
-            ->when($maxAmount && is_numeric($maxAmount), function($q) use ($maxAmount) {
-                return $q->where('total_amount', '<=', (float)$maxAmount);
-            })
-            ->select(
-                DB::raw('YEAR(date) as year'),
-                DB::raw('MONTH(date) as month'),
-                'vendor_name',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(total_amount) as monthly_total'),
-                DB::raw('AVG(total_amount) as monthly_average')
-            )
-            ->groupBy('year', 'month', 'vendor_name')
-            ->orderBy('year', 'desc')
-            ->orderBy('month', 'desc')
-            ->orderBy('monthly_total', 'desc')
-            ->get();
+        // Monthly vendor activity using collections
+        $monthlyVendorActivity = $allExpenses->groupBy(function($expense) {
+            return $expense->date->format('Y-m');
+        })->flatMap(function($expensesInMonth, $monthKey) {
+            list($year, $month) = explode('-', $monthKey);
+            
+            return $expensesInMonth->groupBy('vendor_name')
+                ->map(function($vendorExpenses, $vendorName) use ($year, $month) {
+                    return (object)[
+                        'year' => (int)$year,
+                        'month' => (int)$month,
+                        'vendor_name' => $vendorName,
+                        'transaction_count' => $vendorExpenses->count(),
+                        'monthly_total' => $vendorExpenses->sum('total_amount'),
+                        'monthly_average' => $vendorExpenses->avg('total_amount'),
+                    ];
+                })->values();
+        })->sortByDesc(function($item) {
+            return $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
+        })->values();
         
         // Get filter options
-        $uniqueVendors = Expense::where('tenant_id', $tenantId)
-            ->whereNotNull('vendor_name')
-            ->where('vendor_name', '!=', '')
-            ->distinct('vendor_name')
-            ->orderBy('vendor_name')
-            ->pluck('vendor_name');
+        $uniqueVendors = $allExpenses->pluck('vendor_name')->unique()->sort()->values();
         
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name']);
         
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'type', 'is_default']);
+        
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
         
         return view('reports.expenses.by-vendor', [
             'vendorBreakdown' => $vendorBreakdown,
@@ -415,8 +498,8 @@ class ExpenseReportsController extends Controller
             'uniqueVendors' => $uniqueVendors,
             'categories' => $categories,
             'paymentMethods' => $paymentMethods,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
+            'startDate' => $displayStartDate,
+            'endDate' => $displayEndDate,
             'vendorName' => $vendorName,
             'categoryId' => $categoryId,
             'paymentMethodId' => $paymentMethodId,
@@ -458,16 +541,15 @@ class ExpenseReportsController extends Controller
             $endDate = Carbon::now()->endOfMonth()->format('Y-m-d');
         }
         
-        // Build main query with departments join
-        $query = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('employees', 'expenses.employee_id', '=', 'employees.id')
-            ->leftJoin('departments', 'employees.department_id', '=', 'departments.id') // Added left join
+        // Build main query using Eloquent (automatic conversion via accessors)
+        $query = Expense::with(['employee', 'employee.department', 'category'])
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate])
             ->whereNotNull('employee_id');
         
         // Apply filters
         if ($employeeId && is_numeric($employeeId)) {
-            $query->where('expenses.employee_id', (int)$employeeId);
+            $query->where('employee_id', (int)$employeeId);
         }
         
         if ($requiresApproval !== null && in_array($requiresApproval, ['0', '1'])) {
@@ -476,105 +558,103 @@ class ExpenseReportsController extends Controller
             });
         }
         
-        // Get employee breakdown with department name
-        $employeeBreakdown = $query->select(
-                'employees.first_name',
-                'employees.last_name',
-                'employees.id as employee_id',
-                'departments.name as department', // Get department name from departments table
-                DB::raw('CONCAT(employees.first_name, " ", employees.last_name) as employee_name'),
-                DB::raw('COUNT(*) as expense_count'),
-                DB::raw('SUM(expenses.amount) as total_amount'),
-                DB::raw('SUM(expenses.tax_amount) as total_tax'),
-                DB::raw('SUM(expenses.total_amount) as grand_total'),
-                DB::raw('AVG(expenses.total_amount) as average_expense'),
-                DB::raw('MAX(expenses.total_amount) as max_expense'),
-                DB::raw('COUNT(CASE WHEN expenses.payment_status = "pending" THEN 1 END) as pending_count'),
-                DB::raw('COUNT(CASE WHEN expenses.payment_status = "paid" THEN 1 END) as paid_count'),
-                DB::raw('COUNT(CASE WHEN expenses.payment_status = "reimbursed" THEN 1 END) as reimbursed_count')
-            )
-            ->groupBy(
-                'employees.id',
-                'employees.first_name',
-                'employees.last_name',
-                'departments.name' // Group by department name instead of department column
-            )
-            ->orderBy('grand_total', 'desc')
-            ->get();
+        // Get all expenses (values already converted by accessors)
+        $allExpenses = $query->get();
         
-        // Employee monthly spending with departments join
-        $monthlySpending = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('employees', 'expenses.employee_id', '=', 'employees.id')
-            ->leftJoin('departments', 'employees.department_id', '=', 'departments.id') // Added left join
-            ->whereNotNull('employee_id')
-            ->when($employeeId && is_numeric($employeeId), function($q) use ($employeeId) {
-                return $q->where('expenses.employee_id', (int)$employeeId);
+        // Employee breakdown using collections
+        $employeeBreakdown = $allExpenses->groupBy('employee_id')
+            ->map(function($expenses, $empId) {
+                $employee = $expenses->first()->employee;
+                
+                return (object)[
+                    'employee_id' => $empId,
+                    'first_name' => $employee->first_name ?? 'Unknown',
+                    'last_name' => $employee->last_name ?? '',
+                    'employee_name' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')),
+                    'department' => $employee->department->name ?? 'No Department',
+                    'expense_count' => $expenses->count(),
+                    'total_amount' => $expenses->sum('total_amount'),
+                    'total_tax' => $expenses->sum('tax_amount'),
+                    'grand_total' => $expenses->sum('total_amount'),
+                    'average_expense' => $expenses->avg('total_amount'),
+                    'max_expense' => $expenses->max('total_amount'),
+                    'pending_count' => $expenses->where('payment_status', 'pending')->count(),
+                    'paid_count' => $expenses->where('payment_status', 'paid')->count(),
+                    'reimbursed_count' => $expenses->where('payment_status', 'reimbursed')->count(),
+                ];
             })
-            ->when($requiresApproval !== null && in_array($requiresApproval, ['0', '1']), function($q) use ($requiresApproval) {
-                return $q->whereHas('category', function($q2) use ($requiresApproval) {
-                    $q2->where('requires_approval', (bool)$requiresApproval);
-                });
-            })
-            ->select(
-                DB::raw('YEAR(expenses.date) as year'),
-                DB::raw('MONTH(expenses.date) as month'),
-                'employees.first_name',
-                'employees.last_name',
-                'departments.name as department', // Added department name
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(expenses.total_amount) as monthly_total')
-            )
-            ->groupBy('year', 'month', 'employees.id', 'employees.first_name', 'employees.last_name', 'departments.name')
-            ->orderBy('year', 'desc')
-            ->orderBy('month', 'desc')
-            ->get()
-            ->groupBy(function($item) {
-                return $item->first_name . ' ' . $item->last_name;
+            ->sortByDesc('grand_total')
+            ->values();
+        
+        // Monthly spending by employee using collections
+        $monthlySpendingRaw = $allExpenses->groupBy(function($expense) {
+            return $expense->date->format('Y-m');
+        })->flatMap(function($expensesInMonth, $monthKey) {
+            list($year, $month) = explode('-', $monthKey);
+            
+            return $expensesInMonth->groupBy('employee_id')
+                ->map(function($empExpenses, $empId) use ($year, $month) {
+                    $employee = $empExpenses->first()->employee;
+                    
+                    return (object)[
+                        'year' => (int)$year,
+                        'month' => (int)$month,
+                        'employee_name' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')),
+                        'department' => $employee->department->name ?? 'No Department',
+                        'transaction_count' => $empExpenses->count(),
+                        'monthly_total' => $empExpenses->sum('total_amount'),
+                    ];
+                })->values();
+        });
+        
+        // Group monthly spending by employee name
+        $monthlySpending = $monthlySpendingRaw->groupBy('employee_name');
+        
+        // Get all monthly data for chart (flattened)
+        $allMonthlyData = $monthlySpendingRaw->values();
+        
+        // Categories by employee using collections
+        $employeeCategoriesRaw = $allExpenses->groupBy('employee_id')
+            ->flatMap(function($empExpenses, $empId) {
+                $employee = $empExpenses->first()->employee;
+                $employeeName = trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? ''));
+                
+                return $empExpenses->groupBy('category_id')
+                    ->map(function($catExpenses, $catId) use ($employeeName) {
+                        $category = $catExpenses->first()->category;
+                        
+                        return (object)[
+                            'employee_name' => $employeeName,
+                            'category_name' => $category->name ?? 'Uncategorized',
+                            'count' => $catExpenses->count(),
+                            'total' => $catExpenses->sum('total_amount'),
+                        ];
+                    })->values();
             });
         
-        // Get all monthly data for chart (flatten the grouped collection)
-        $allMonthlyData = [];
-        foreach($monthlySpending as $employeeName => $months) {
-            foreach($months as $month) {
-                $allMonthlyData[] = $month;
-            }
-        }
+        // Group categories by employee name
+        $employeeCategories = $employeeCategoriesRaw->groupBy('employee_name');
         
-        // Categories by employee
-        $employeeCategories = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('employees', 'expenses.employee_id', '=', 'employees.id')
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->whereNotNull('employee_id')
-            ->when($employeeId && is_numeric($employeeId), function($q) use ($employeeId) {
-                return $q->where('expenses.employee_id', (int)$employeeId);
-            })
-            ->when($requiresApproval !== null && in_array($requiresApproval, ['0', '1']), function($q) use ($requiresApproval) {
-                return $q->whereHas('category', function($q2) use ($requiresApproval) {
-                    $q2->where('requires_approval', (bool)$requiresApproval);
-                });
-            })
-            ->select(
-                'employees.first_name',
-                'employees.last_name',
-                'expense_categories.name as category_name',
-                DB::raw('COUNT(*) as count'),
-                DB::raw('SUM(expenses.total_amount) as total')
-            )
-            ->groupBy('employees.id', 'employees.first_name', 'employees.last_name', 'expense_categories.name')
-            ->orderBy('total', 'desc')
-            ->get()
-            ->groupBy(function($item) {
-                return $item->first_name . ' ' . $item->last_name;
-            });
-        
-        // Get filter options
-        $employees = Employee::with('department') // Eager load department relationship
+        // Get filter options - FIXED: Don't select 'employee_id' column
+        $employees = Employee::with('department')
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('first_name')
-            ->get();
+            ->get(['id', 'first_name', 'last_name']); // Removed 'employee_id' - not a column
+        
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
+        
+        // Summary statistics
+        $summary = [
+            'total_employees' => $employeeBreakdown->count(),
+            'total_expenses' => $allExpenses->count(),
+            'total_amount' => $allExpenses->sum('total_amount'),
+            'total_tax' => $allExpenses->sum('tax_amount'),
+            'avg_per_employee' => $allExpenses->avg('total_amount'),
+            'largest_expense' => $allExpenses->max('total_amount'),
+        ];
         
         return view('reports.expenses.by-employee', [
             'employeeBreakdown' => $employeeBreakdown,
@@ -582,13 +662,14 @@ class ExpenseReportsController extends Controller
             'allMonthlyData' => $allMonthlyData,
             'employeeCategories' => $employeeCategories,
             'employees' => $employees,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
+            'summary' => $summary,
+            'startDate' => $displayStartDate,
+            'endDate' => $displayEndDate,
             'employeeId' => $employeeId,
             'requiresApproval' => $requiresApproval,
         ]);
     }
-        
+            
     // Budget vs Actual Report
     public function budgetVsActual(Request $request)
     {
@@ -605,8 +686,10 @@ class ExpenseReportsController extends Controller
         // Get budgeted categories
         $budgetedCategories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->whereNotNull('budget_monthly')
-            ->orWhereNotNull('budget_annual')
+            ->where(function($q) {
+                $q->whereNotNull('budget_monthly')
+                ->orWhereNotNull('budget_annual');
+            })
             ->orderBy('name')
             ->get();
         
@@ -617,7 +700,7 @@ class ExpenseReportsController extends Controller
         $totalActualAnnual = 0;
         
         foreach ($budgetedCategories as $category) {
-            // Get actual expenses for the period
+            // Get actual expenses for the period using Eloquent
             $monthlyActual = Expense::where('tenant_id', $tenantId)
                 ->where('category_id', $category->id)
                 ->whereYear('date', $year)
@@ -659,45 +742,49 @@ class ExpenseReportsController extends Controller
             'total_budget_monthly' => $totalBudgetMonthly,
             'total_actual_monthly' => $totalActualMonthly,
             'total_variance_monthly' => $totalBudgetMonthly - $totalActualMonthly,
+            'variance_percentage_monthly' => $totalBudgetMonthly > 0 ? (($totalBudgetMonthly - $totalActualMonthly) / $totalBudgetMonthly) * 100 : 0,
             
             'total_budget_annual' => $totalBudgetAnnual,
             'total_actual_annual' => $totalActualAnnual,
             'total_variance_annual' => $totalBudgetAnnual - $totalActualAnnual,
+            'variance_percentage_annual' => $totalBudgetAnnual > 0 ? (($totalBudgetAnnual - $totalActualAnnual) / $totalBudgetAnnual) * 100 : 0,
             
             'under_budget_count' => collect($budgetData)->where('variance_monthly', '>', 0)->count(),
             'over_budget_count' => collect($budgetData)->where('variance_monthly', '<', 0)->count(),
             'on_budget_count' => collect($budgetData)->where('variance_monthly', '==', 0)->count(),
         ];
         
-        // Monthly trend for each category
+        // Monthly trend for each category using Eloquent
         $monthlyTrends = [];
         foreach ($budgetedCategories as $category) {
             $monthlyData = Expense::where('tenant_id', $tenantId)
                 ->where('category_id', $category->id)
                 ->whereYear('date', $year)
-                ->select(
-                    DB::raw('MONTH(date) as month'),
-                    DB::raw('SUM(total_amount) as actual')
-                )
-                ->groupBy(DB::raw('MONTH(date)'))
-                ->orderBy('month')
                 ->get()
-                ->keyBy('month');
+                ->groupBy(function($expense) {
+                    return $expense->date->month;
+                })
+                ->map(function($expenses) {
+                    return $expenses->sum('total_amount');
+                });
             
             $trend = [];
             for ($m = 1; $m <= 12; $m++) {
+                $actual = $monthlyData[$m] ?? 0;
+                $budget = $category->budget_monthly ?? 0;
                 $trend[$m] = [
                     'month' => $m,
-                    'budget' => $category->budget_monthly ?? 0,
-                    'actual' => $monthlyData[$m]->actual ?? 0,
-                    'variance' => ($category->budget_monthly ?? 0) - ($monthlyData[$m]->actual ?? 0)
+                    'budget' => $budget,
+                    'actual' => $actual,
+                    'variance' => $budget - $actual,
+                    'variance_percentage' => $budget > 0 ? (($budget - $actual) / $budget) * 100 : 0,
                 ];
             }
             
             $monthlyTrends[$category->id] = $trend;
         }
         
-        $years = range(date('Y') - 5, date('Y'));
+        $years = range(date('Y') - 5, date('Y') + 1);
         $months = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
             5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
@@ -749,84 +836,115 @@ class ExpenseReportsController extends Controller
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         $paymentMethodId = $request->get('payment_method_id');
         
-        $query = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('payment_methods', 'expenses.payment_method_id', '=', 'payment_methods.id');
+        // Build query using Eloquent
+        $query = Expense::with(['paymentMethod', 'category'])
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereNotNull('payment_method_id');
         
         if ($paymentMethodId) {
-            $query->where('payment_methods.id', $paymentMethodId);
+            $query->where('payment_method_id', $paymentMethodId);
         }
         
-        $methodBreakdown = $query->select(
-                'payment_methods.id',
-                'payment_methods.name as method_name',
-                'payment_methods.type as method_type',
-                'payment_methods.is_active',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(expenses.amount) as total_amount'),
-                DB::raw('SUM(expenses.tax_amount) as total_tax'),
-                DB::raw('SUM(expenses.total_amount) as grand_total'),
-                DB::raw('AVG(expenses.total_amount) as average_transaction'),
-                DB::raw('MAX(expenses.total_amount) as max_transaction'),
-                DB::raw('MIN(expenses.total_amount) as min_transaction'),
-                DB::raw('COUNT(DISTINCT expenses.category_id) as categories_used'),
-                DB::raw('COUNT(DISTINCT expenses.vendor_name) as vendors_used')
-            )
-            ->groupBy(
-                'payment_methods.id',
-                'payment_methods.name',
-                'payment_methods.type',
-                'payment_methods.is_active'
-            )
-            ->orderBy('grand_total', 'desc')
-            ->get();
+        // Get all expenses (values automatically converted by accessors)
+        $allExpenses = $query->get();
+        
+        // Group by payment method for breakdown
+        $methodBreakdown = $allExpenses->groupBy('payment_method_id')
+            ->map(function($expenses, $methodId) {
+                $paymentMethod = $expenses->first()->paymentMethod;
+                
+                return (object)[
+                    'id' => $methodId,
+                    'method_name' => $paymentMethod->name ?? 'Unknown',
+                    'method_type' => $paymentMethod->type ?? 'unknown',
+                    'is_active' => $paymentMethod->is_active ?? false,
+                    'transaction_count' => $expenses->count(),
+                    'total_amount' => $expenses->sum('total_amount'),
+                    'total_tax' => $expenses->sum('tax_amount'),
+                    'grand_total' => $expenses->sum('total_amount'),
+                    'average_transaction' => $expenses->avg('total_amount'),
+                    'max_transaction' => $expenses->max('total_amount'),
+                    'min_transaction' => $expenses->min('total_amount'),
+                    'categories_used' => $expenses->pluck('category_id')->unique()->count(),
+                    'vendors_used' => $expenses->pluck('vendor_name')->unique()->count(),
+                ];
+            })
+            ->sortByDesc('grand_total')
+            ->values();
         
         // Monthly trend by payment method
-        $monthlyTrend = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('payment_methods', 'expenses.payment_method_id', '=', 'payment_methods.id')
-            ->select(
-                DB::raw('YEAR(expenses.date) as year'),
-                DB::raw('MONTH(expenses.date) as month'),
-                'payment_methods.name as method_name',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(expenses.total_amount) as monthly_total')
-            )
-            ->groupBy('year', 'month', 'payment_methods.name')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get()
-            ->groupBy('method_name');
+        $monthlyTrendRaw = $allExpenses->groupBy(function($expense) {
+            return $expense->date->format('Y-m');
+        })->flatMap(function($expensesInMonth, $monthKey) {
+            list($year, $month) = explode('-', $monthKey);
+            
+            return $expensesInMonth->groupBy('payment_method_id')
+                ->map(function($methodExpenses, $methodId) use ($year, $month) {
+                    $paymentMethod = $methodExpenses->first()->paymentMethod;
+                    
+                    return (object)[
+                        'year' => (int)$year,
+                        'month' => (int)$month,
+                        'method_name' => $paymentMethod->name ?? 'Unknown',
+                        'transaction_count' => $methodExpenses->count(),
+                        'monthly_total' => $methodExpenses->sum('total_amount'),
+                    ];
+                })->values();
+        });
+        
+        $monthlyTrend = $monthlyTrendRaw->groupBy('method_name');
         
         // Payment method by category
-        $methodByCategory = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('payment_methods', 'expenses.payment_method_id', '=', 'payment_methods.id')
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select(
-                'payment_methods.name as method_name',
-                'expense_categories.name as category_name',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(expenses.total_amount) as total_amount')
-            )
-            ->groupBy('payment_methods.name', 'expense_categories.name')
-            ->orderBy('method_name')
-            ->orderBy('total_amount', 'desc')
-            ->get()
-            ->groupBy('method_name');
+        $methodByCategoryRaw = $allExpenses->groupBy('payment_method_id')
+            ->flatMap(function($expenses, $methodId) {
+                $paymentMethod = $expenses->first()->paymentMethod;
+                $methodName = $paymentMethod->name ?? 'Unknown';
+                
+                return $expenses->groupBy('category_id')
+                    ->map(function($categoryExpenses, $categoryId) use ($methodName) {
+                        $category = $categoryExpenses->first()->category;
+                        
+                        return (object)[
+                            'method_name' => $methodName,
+                            'category_name' => $category->name ?? 'Uncategorized',
+                            'transaction_count' => $categoryExpenses->count(),
+                            'total_amount' => $categoryExpenses->sum('total_amount'),
+                        ];
+                    })->values();
+            });
         
+        $methodByCategory = $methodByCategoryRaw->groupBy('method_name');
+        
+        // Get filter options
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'type', 'is_default']);
+        
+        // Summary statistics
+        $totalExpenses = $methodBreakdown->sum('grand_total');
+        $summary = [
+            'total_methods' => $methodBreakdown->count(),
+            'total_transactions' => $methodBreakdown->sum('transaction_count'),
+            'total_amount' => $totalExpenses,
+            'avg_per_method' => $methodBreakdown->avg('grand_total'),
+            'most_used_method' => $methodBreakdown->first()->method_name ?? 'N/A',
+        ];
+        
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
         
         return view('reports.expenses.by-payment-method', compact(
             'methodBreakdown',
             'monthlyTrend',
             'methodByCategory',
             'paymentMethods',
+            'summary',
             'startDate',
             'endDate',
+            'displayStartDate',
+            'displayEndDate',
             'paymentMethodId'
         ));
     }
@@ -843,11 +961,12 @@ class ExpenseReportsController extends Controller
         
         $frequency = $request->get('frequency');
         $categoryId = $request->get('category_id');
-        $status = $request->get('status', 'active'); // active, upcoming, overdue
+        $status = $request->get('status', 'active');
         
-        $query = Expense::where('tenant_id', $tenantId)
-            ->where('is_recurring', true)
-            ->with(['category', 'paymentMethod']);
+        // Build query using Eloquent
+        $query = Expense::with(['category', 'paymentMethod'])
+            ->where('tenant_id', $tenantId)
+            ->where('is_recurring', true);
         
         if ($frequency) {
             $query->where('recurring_frequency', $frequency);
@@ -857,8 +976,9 @@ class ExpenseReportsController extends Controller
             $query->where('category_id', $categoryId);
         }
         
-        // Status filtering
         $today = Carbon::today();
+        
+        // Status filtering
         if ($status === 'active') {
             $query->where(function($q) use ($today) {
                 $q->where('next_recurring_date', '>=', $today)
@@ -872,16 +992,23 @@ class ExpenseReportsController extends Controller
         }
         
         $recurringExpenses = $query->orderBy('next_recurring_date', 'asc')
-            ->get();
+            ->get()
+            ->map(function($expense) {
+                // Convert amounts (already converted by accessors, but ensure)
+                $expense->total_amount = $expense->total_amount;
+                $expense->tax_amount = $expense->tax_amount;
+                $expense->gross_amount = $expense->gross_amount;
+                return $expense;
+            });
         
         // Group by frequency
-        $byFrequency = $recurringExpenses->groupBy('recurring_frequency')->map(function($items) {
+        $byFrequency = $recurringExpenses->groupBy('recurring_frequency')->map(function($items, $freq) {
             return [
                 'count' => $items->count(),
                 'total_monthly' => $items->sum('total_amount'),
-                'total_annual' => $items->sum(function($item) {
-                    $multiplier = match($item->recurring_frequency) {
-                        'weekly' => 4.33 * 12, // Approximate weeks in year
+                'total_annual' => $items->sum(function($item) use ($freq) {
+                    $multiplier = match($freq) {
+                        'weekly' => 52,
                         'monthly' => 12,
                         'quarterly' => 4,
                         'annually' => 1,
@@ -911,7 +1038,7 @@ class ExpenseReportsController extends Controller
             return $expense->total_amount * $multiplier;
         });
         
-        // Monthly projection for the next 12 months (instead of historical)
+        // Monthly projection for the next 12 months
         $monthlyProjection = [];
         $currentMonth = Carbon::now()->startOfMonth();
         
@@ -926,7 +1053,6 @@ class ExpenseReportsController extends Controller
                 $nextDate = Carbon::parse($expense->next_recurring_date);
                 $frequency = $expense->recurring_frequency;
                 
-                // Check if expense occurs in this month
                 switch ($frequency) {
                     case 'weekly':
                         $weeksInMonth = 4.33;
@@ -936,12 +1062,10 @@ class ExpenseReportsController extends Controller
                         return $expense->total_amount;
                         
                     case 'quarterly':
-                        // Check if this month is a quarter after the next date
                         $monthsDiff = $nextDate->diffInMonths($month);
                         return ($monthsDiff % 3 === 0) ? $expense->total_amount : 0;
                         
                     case 'annually':
-                        // Check if this month is the anniversary month
                         return ($nextDate->format('m') === $month->format('m')) ? $expense->total_amount : 0;
                         
                     default:
@@ -949,17 +1073,17 @@ class ExpenseReportsController extends Controller
                 }
             });
             
-            $monthlyProjection[$monthKey] = [
+            $monthlyProjection[] = [
                 'month' => $monthName,
                 'projected_total' => $monthlyTotal,
-                'expense_count' => $recurringExpenses->count() // All recurring count for now
+                'expense_count' => $recurringExpenses->count()
             ];
         }
         
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'code']);
         
         $frequencies = [
             'weekly' => 'Weekly',
@@ -968,21 +1092,31 @@ class ExpenseReportsController extends Controller
             'annually' => 'Annually'
         ];
         
+        // Summary statistics
+        $summary = [
+            'total_recurring' => $recurringExpenses->count(),
+            'total_monthly_cost' => $recurringExpenses->sum('total_amount'),
+            'total_annual_cost' => $annualProjection,
+            'upcoming_30_days' => $upcomingNext30Days->count(),
+            'avg_per_expense' => $recurringExpenses->avg('total_amount'),
+        ];
+        
         return view('reports.expenses.recurring', compact(
             'recurringExpenses',
             'byFrequency',
             'upcomingNext30Days',
             'annualProjection',
-            'monthlyProjection', // Changed from historicalExecutions
+            'monthlyProjection',
             'categories',
             'frequencies',
+            'summary',
             'frequency',
             'categoryId',
             'status'
         ));
     }
         
-    // Expense Trends Report (Optimized)
+    // Expense Trends Report
     public function trends(Request $request)
     {
         $user = auth()->user();
@@ -1006,46 +1140,43 @@ class ExpenseReportsController extends Controller
             $startDate = Carbon::create($year, 1, 1)->startOfYear();
             $endDate = Carbon::create($year, 12, 31)->endOfYear();
             
-            // Monthly trend query
-            $monthlyTrend = Expense::where('expenses.tenant_id', $tenantId)
-                ->whereBetween('expenses.date', [$startDate, $endDate])
-                ->select(
-                    DB::raw('YEAR(expenses.date) as year'),
-                    DB::raw('MONTH(expenses.date) as month'),
-                    DB::raw('COUNT(*) as expense_count'),
-                    DB::raw('SUM(expenses.amount) as total_amount'),
-                    DB::raw('SUM(expenses.tax_amount) as total_tax'),
-                    DB::raw('SUM(expenses.total_amount) as grand_total'),
-                    DB::raw('AVG(expenses.total_amount) as average_amount')
-                )
-                ->groupBy(DB::raw('YEAR(expenses.date), MONTH(expenses.date)'))
-                ->orderBy('year')
-                ->orderBy('month')
-                ->get();
+            // Get all expenses for the year using Eloquent (converted via accessors)
+            $expensesQuery = Expense::with('category')
+                ->where('tenant_id', $tenantId)
+                ->whereBetween('date', [$startDate, $endDate]);
             
-            // Previous year comparison
-            $prevYear = $year - 1;
-            $prevYearTrend = Expense::where('tenant_id', $tenantId)
-                ->whereBetween('date', [
-                    Carbon::create($prevYear, 1, 1)->startOfYear(),
-                    Carbon::create($prevYear, 12, 31)->endOfYear()
-                ])
-                ->select(
-                    DB::raw('MONTH(date) as month'),
-                    DB::raw('SUM(total_amount) as monthly_total')
-                )
-                ->groupBy(DB::raw('MONTH(date)'))
-                ->orderBy('month')
+            if ($categoryId) {
+                $expensesQuery->where('category_id', $categoryId);
+            }
+            
+            $expenses = $expensesQuery->get();
+            
+            // Group by month
+            $monthlyExpenses = $expenses->groupBy(function($expense) {
+                return $expense->date->month;
+            });
+            
+            // Previous year comparison using Eloquent
+            $prevYearStart = Carbon::create($year - 1, 1, 1)->startOfYear();
+            $prevYearEnd = Carbon::create($year - 1, 12, 31)->endOfYear();
+            
+            $prevYearExpenses = Expense::where('tenant_id', $tenantId)
+                ->whereBetween('date', [$prevYearStart, $prevYearEnd])
+                ->when($categoryId, function($q) use ($categoryId) {
+                    return $q->where('category_id', $categoryId);
+                })
                 ->get()
-                ->keyBy('month');
+                ->groupBy(function($expense) {
+                    return $expense->date->month;
+                });
             
             // Build trend data for all months
             for ($month = 1; $month <= 12; $month++) {
-                $currentMonth = $monthlyTrend->firstWhere('month', $month);
-                $previousMonth = $prevYearTrend->get($month);
+                $currentMonthExpenses = $monthlyExpenses->get($month, collect());
+                $previousMonthExpenses = $prevYearExpenses->get($month, collect());
                 
-                $currentYearTotal = $currentMonth ? ($currentMonth->grand_total ?? 0) : 0;
-                $previousYearTotal = $previousMonth ? ($previousMonth->monthly_total ?? 0) : 0;
+                $currentYearTotal = $currentMonthExpenses->sum('total_amount');
+                $previousYearTotal = $previousMonthExpenses->sum('total_amount') ?? 0;
                 
                 // Calculate growth
                 $growth = 0;
@@ -1055,161 +1186,127 @@ class ExpenseReportsController extends Controller
                 
                 $trendData[$month] = [
                     'month' => $month,
+                    'month_name' => Carbon::create()->month($month)->format('F'),
                     'current_year' => $currentYearTotal,
                     'previous_year' => $previousYearTotal,
                     'growth' => $growth,
-                    'expense_count' => $currentMonth ? ($currentMonth->expense_count ?? 0) : 0,
+                    'expense_count' => $currentMonthExpenses->count(),
+                    'tax_total' => $currentMonthExpenses->sum('tax_amount'),
                 ];
             }
             
-            // Category trends - FIXED: Specify table for tenant_id
-            $categoryTrends = Expense::where('expenses.tenant_id', $tenantId)
-                ->whereBetween('expenses.date', [$startDate, $endDate])
-                ->join('expense_categories', function($join) use ($tenantId) {
-                    $join->on('expenses.category_id', '=', 'expense_categories.id')
-                        ->where('expense_categories.tenant_id', '=', $tenantId);
+            // Category trends (top categories by month)
+            $categoryTrendsRaw = $expenses->groupBy('category_id')
+                ->map(function($catExpenses, $catId) use ($expenses) {
+                    $category = $catExpenses->first()->category;
+                    $monthlyData = [];
+                    for ($month = 1; $month <= 12; $month++) {
+                        $monthlyData[$month] = $catExpenses->filter(function($e) use ($month) {
+                            return $e->date->month == $month;
+                        })->sum('total_amount');
+                    }
+                    return (object)[
+                        'category_name' => $category->name ?? 'Uncategorized',
+                        'monthly_data' => $monthlyData,
+                        'total' => $catExpenses->sum('total_amount'),
+                    ];
                 })
-                ->select(
-                    'expense_categories.name as category_name',
-                    DB::raw('MONTH(expenses.date) as month'),
-                    DB::raw('SUM(expenses.total_amount) as monthly_total')
-                )
-                ->groupBy('expense_categories.name', DB::raw('MONTH(expenses.date)'))
-                ->orderBy('expense_categories.name')
-                ->orderBy('month')
-                ->get()
-                ->groupBy('category_name');
+                ->sortByDesc('total')
+                ->take(5);
             
-            // Moving averages and growth rates
-            $monthlyTotals = collect($trendData)->pluck('current_year')->toArray();
+            // Moving averages (3-month rolling average)
+            $monthlyTotals = collect($trendData)->pluck('current_year')->values()->toArray();
             
-            // 3-month moving average
-            if (count($monthlyTotals) >= 3) {
-                for ($i = 2; $i < count($monthlyTotals); $i++) {
-                    $movingAverages[$i + 1] = (
-                        ($monthlyTotals[$i - 2] ?? 0) + 
-                        ($monthlyTotals[$i - 1] ?? 0) + 
-                        ($monthlyTotals[$i] ?? 0)
-                    ) / 3;
-                }
+            for ($i = 2; $i < count($monthlyTotals); $i++) {
+                $movingAverages[$i + 1] = (
+                    ($monthlyTotals[$i - 2] ?? 0) + 
+                    ($monthlyTotals[$i - 1] ?? 0) + 
+                    ($monthlyTotals[$i] ?? 0)
+                ) / 3;
             }
             
             // Month-over-month growth
-            if (count($monthlyTotals) >= 2) {
-                for ($i = 1; $i < count($monthlyTotals); $i++) {
-                    $prevMonthTotal = $monthlyTotals[$i - 1] ?? 0;
-                    $currentMonthTotal = $monthlyTotals[$i] ?? 0;
-                    
-                    if ($prevMonthTotal > 0) {
-                        $momGrowth[$i + 1] = (($currentMonthTotal - $prevMonthTotal) / $prevMonthTotal) * 100;
-                    } else {
-                        $momGrowth[$i + 1] = $currentMonthTotal > 0 ? 100 : 0;
-                    }
+            for ($i = 1; $i < count($monthlyTotals); $i++) {
+                $prevMonthTotal = $monthlyTotals[$i - 1] ?? 0;
+                $currentMonthTotal = $monthlyTotals[$i] ?? 0;
+                
+                if ($prevMonthTotal > 0) {
+                    $momGrowth[$i + 1] = (($currentMonthTotal - $prevMonthTotal) / $prevMonthTotal) * 100;
+                } else {
+                    $momGrowth[$i + 1] = $currentMonthTotal > 0 ? 100 : 0;
                 }
             }
             
         } elseif ($period === 'quarterly') {
-            // Quarterly trend logic
-            $quarters = [];
+            // Get all expenses for the year
+            $expenses = Expense::where('tenant_id', $tenantId)
+                ->whereYear('date', $year)
+                ->when($categoryId, function($q) use ($categoryId) {
+                    return $q->where('category_id', $categoryId);
+                })
+                ->get();
+            
             for ($quarter = 1; $quarter <= 4; $quarter++) {
                 $startMonth = ($quarter - 1) * 3 + 1;
                 $endMonth = $startMonth + 2;
                 
-                $quarterTotal = Expense::where('tenant_id', $tenantId)
-                    ->whereYear('date', $year)
-                    ->whereBetween(DB::raw('MONTH(date)'), [$startMonth, $endMonth])
-                    ->sum('total_amount') ?? 0;
+                $quarterExpenses = $expenses->filter(function($expense) use ($startMonth, $endMonth) {
+                    $month = $expense->date->month;
+                    return $month >= $startMonth && $month <= $endMonth;
+                });
                 
-                $quarters[$quarter] = [
+                $trendData[$quarter] = [
                     'quarter' => $quarter,
-                    'total' => $quarterTotal,
+                    'quarter_name' => "Q{$quarter}",
+                    'total' => $quarterExpenses->sum('total_amount'),
                     'start_month' => $startMonth,
-                    'end_month' => $endMonth
+                    'end_month' => $endMonth,
+                    'expense_count' => $quarterExpenses->count(),
                 ];
             }
-            
-            $trendData = $quarters;
             
         } elseif ($period === 'yearly') {
             // Yearly trend (last 5 years)
             $currentYear = date('Y');
             $years = range($currentYear - 4, $currentYear);
             
-            $yearlyTrend = [];
             foreach ($years as $yearItem) {
-                $yearTotal = Expense::where('tenant_id', $tenantId)
+                $yearExpenses = Expense::where('tenant_id', $tenantId)
                     ->whereYear('date', $yearItem)
-                    ->sum('total_amount') ?? 0;
+                    ->when($categoryId, function($q) use ($categoryId) {
+                        return $q->where('category_id', $categoryId);
+                    })
+                    ->get();
                 
-                $expenseCount = Expense::where('tenant_id', $tenantId)
-                    ->whereYear('date', $yearItem)
-                    ->count();
-                
+                $yearTotal = $yearExpenses->sum('total_amount');
+                $expenseCount = $yearExpenses->count();
                 $average = $expenseCount > 0 ? ($yearTotal / $expenseCount) : 0;
                 
-                $yearlyTrend[$yearItem] = [
+                $trendData[$yearItem] = [
                     'year' => $yearItem,
                     'total' => $yearTotal,
                     'expense_count' => $expenseCount,
-                    'average' => $average
+                    'average' => $average,
+                    'tax_total' => $yearExpenses->sum('tax_amount'),
                 ];
-            }
-            
-            $trendData = $yearlyTrend;
-        }
-        
-        // Category filter (if selected)
-        if ($categoryId) {
-            // Recalculate trend data for specific category
-            $category = ExpenseCategory::find($categoryId);
-            if ($category) {
-                $filteredTrendData = [];
-                
-                if ($period === 'monthly') {
-                    for ($month = 1; $month <= 12; $month++) {
-                        $monthTotal = Expense::where('tenant_id', $tenantId)
-                            ->where('category_id', $categoryId)
-                            ->whereYear('date', $year)
-                            ->whereMonth('date', $month)
-                            ->sum('total_amount') ?? 0;
-                        
-                        $prevMonthTotal = Expense::where('tenant_id', $tenantId)
-                            ->where('category_id', $categoryId)
-                            ->whereYear('date', $year - 1)
-                            ->whereMonth('date', $month)
-                            ->sum('total_amount') ?? 0;
-                        
-                        $growth = $prevMonthTotal > 0 ? (($monthTotal - $prevMonthTotal) / $prevMonthTotal) * 100 : 0;
-                        
-                        $filteredTrendData[$month] = [
-                            'month' => $month,
-                            'current_year' => $monthTotal,
-                            'previous_year' => $prevMonthTotal,
-                            'growth' => $growth,
-                            'expense_count' => Expense::where('tenant_id', $tenantId)
-                                ->where('category_id', $categoryId)
-                                ->whereYear('date', $year)
-                                ->whereMonth('date', $month)
-                                ->count(),
-                        ];
-                    }
-                    $trendData = $filteredTrendData;
-                }
-                // Add similar logic for quarterly and yearly periods if needed
             }
         }
         
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'code']);
         
         $years = range(date('Y') - 5, date('Y'));
+        
+        // For display
+        $displayYear = $year;
         
         return view('reports.expenses.trends', compact(
             'trendData',
             'period',
             'year',
+            'displayYear',
             'categoryId',
             'categories',
             'years',
@@ -1234,95 +1331,134 @@ class ExpenseReportsController extends Controller
         $categoryId = $request->get('category_id');
         $taxType = $request->get('tax_type'); // taxable, non-taxable, all
         
-        $query = Expense::where('tenant_id', $tenantId)
+        // Build base query using Eloquent
+        $baseQuery = Expense::where('tenant_id', $tenantId)
             ->whereBetween('date', [$startDate, $endDate])
             ->with(['category']);
         
         if ($categoryId) {
-            $query->where('category_id', $categoryId);
+            $baseQuery->where('category_id', $categoryId);
         }
         
         if ($taxType === 'taxable') {
-            $query->where('tax_amount', '>', 0);
+            $baseQuery->where('tax_amount', '>', 0);
         } elseif ($taxType === 'non-taxable') {
-            $query->where('tax_amount', '=', 0);
+            $baseQuery->where('tax_amount', '=', 0);
         }
         
-        // Tax summary
+        // Get all expenses (values auto-converted via accessors)
+        $allExpenses = $baseQuery->get();
+        
+        // Tax summary - CORRECTED calculations
+        $taxableExpenses = $allExpenses->where('tax_amount', '>', 0);
+        $nonTaxableExpenses = $allExpenses->where('tax_amount', '=', 0);
+        $totalGross = $allExpenses->sum('gross_amount');
+        $totalTax = $allExpenses->sum('tax_amount');
+        $totalNet = $allExpenses->sum('net_amount');
+        
         $taxSummary = [
-            'total_expenses' => $query->count(),
-            'total_amount' => $query->sum('amount'),
-            'total_tax' => $query->sum('tax_amount'),
-            'total_with_tax' => $query->sum('total_amount'),
-            'taxable_expenses' => $query->clone()->where('tax_amount', '>', 0)->count(),
-            'non_taxable_expenses' => $query->clone()->where('tax_amount', '=', 0)->count(),
-            'avg_tax_rate' => $query->where('tax_amount', '>', 0)
-                ->avg(DB::raw('(tax_amount / amount) * 100'))
+            'total_expenses' => $allExpenses->count(),
+            'total_gross' => $totalGross,                                    // Original amount before tax
+            'total_tax' => $totalTax,                                        // Total tax (additive + withholding)
+            'total_net' => $totalNet,                                        // Amount paid after tax
+            'taxable_expenses' => $taxableExpenses->count(),
+            'non_taxable_expenses' => $nonTaxableExpenses->count(),
+            'avg_tax_rate' => $totalGross > 0 ? ($totalTax / $totalGross) * 100 : 0,
+            'tax_percentage_of_gross' => $totalGross > 0 ? ($totalTax / $totalGross) * 100 : 0,
+            'withholding_impact' => $totalGross > 0 ? (($totalGross - $totalNet) / $totalGross) * 100 : 0,
         ];
         
-        // Tax by category
-        $taxByCategory = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select(
-                'expense_categories.name as category_name',
-                DB::raw('COUNT(*) as expense_count'),
-                DB::raw('SUM(expenses.amount) as subtotal'),
-                DB::raw('SUM(expenses.tax_amount) as tax_total'),
-                DB::raw('SUM(expenses.total_amount) as grand_total'),
-                DB::raw('AVG((expenses.tax_amount / expenses.amount) * 100) as avg_tax_rate'),
-                DB::raw('COUNT(CASE WHEN expenses.tax_amount > 0 THEN 1 END) as taxable_count'),
-                DB::raw('COUNT(CASE WHEN expenses.tax_amount = 0 THEN 1 END) as non_taxable_count')
-            )
-            ->groupBy('expense_categories.name')
-            ->orderBy('tax_total', 'desc')
-            ->get();
+        // Tax by category - CORRECTED
+        $taxByCategory = $allExpenses->groupBy('category_id')
+            ->map(function($expenses, $catId) {
+                $category = $expenses->first()->category;
+                $taxableExpenses = $expenses->where('tax_amount', '>', 0);
+                $grossAmount = $expenses->sum('gross_amount');
+                $taxAmount = $expenses->sum('tax_amount');
+                $netAmount = $expenses->sum('net_amount');
+                
+                return (object)[
+                    'category_name' => $category->name ?? 'Uncategorized',
+                    'expense_count' => $expenses->count(),
+                    'gross_amount' => $grossAmount,      // Before tax
+                    'tax_amount' => $taxAmount,           // Total tax
+                    'net_amount' => $netAmount,           // After tax (what was paid)
+                    'avg_tax_rate' => $grossAmount > 0 ? ($taxAmount / $grossAmount) * 100 : 0,
+                    'taxable_count' => $taxableExpenses->count(),
+                    'non_taxable_count' => $expenses->count() - $taxableExpenses->count(),
+                ];
+            })
+            ->sortByDesc('tax_amount')
+            ->values();
         
-        // Monthly tax breakdown
-        $monthlyTax = Expense::where('tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->select(
-                DB::raw('YEAR(date) as year'),
-                DB::raw('MONTH(date) as month'),
-                DB::raw('SUM(amount) as monthly_subtotal'),
-                DB::raw('SUM(tax_amount) as monthly_tax'),
-                DB::raw('SUM(total_amount) as monthly_total'),
-                DB::raw('COUNT(*) as expense_count'),
-                DB::raw('AVG((tax_amount / amount) * 100) as avg_monthly_tax_rate')
-            )
-            ->groupBy(DB::raw('YEAR(date), MONTH(date)'))
-            ->orderBy('year', 'desc')
-            ->orderBy('month', 'desc')
-            ->get();
+        // Monthly tax breakdown - CORRECTED
+        $monthlyTax = $allExpenses->groupBy(function($expense) {
+            return $expense->date->format('Y-m');
+        })->map(function($expenses, $monthKey) {
+            list($year, $month) = explode('-', $monthKey);
+            $date = Carbon::createFromDate((int)$year, (int)$month, 1);
+            $grossAmount = $expenses->sum('gross_amount');
+            $taxAmount = $expenses->sum('tax_amount');
+            $netAmount = $expenses->sum('net_amount');
+            
+            return (object)[
+                'year' => (int)$year,
+                'month' => (int)$month,
+                'month_name' => $date->format('F Y'),
+                'expense_count' => $expenses->count(),
+                'gross_amount' => $grossAmount,
+                'tax_amount' => $taxAmount,
+                'net_amount' => $netAmount,
+                'avg_tax_rate' => $grossAmount > 0 ? ($taxAmount / $grossAmount) * 100 : 0,
+            ];
+        })->sortByDesc(function($item) {
+            return $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
+        })->values();
         
         // Top tax expenses
-        $topTaxExpenses = Expense::where('tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->where('tax_amount', '>', 0)
-            ->with(['category', 'paymentMethod'])
-            ->orderBy('tax_amount', 'desc')
+        $topTaxExpenses = $allExpenses->where('tax_amount', '>', 0)
+            ->sortByDesc('tax_amount')
             ->take(20)
-            ->get();
+            ->values()
+            ->map(function($expense) {
+                $expense->tax_rate = $expense->gross_amount > 0 
+                    ? ($expense->tax_amount / $expense->gross_amount) * 100 
+                    : 0;
+                $expense->withholding_impact = $expense->gross_amount > 0 
+                    ? (($expense->gross_amount - $expense->net_amount) / $expense->gross_amount) * 100 
+                    : 0;
+                return $expense;
+            });
         
         // Tax rate distribution
-        $taxRateDistribution = Expense::where('tenant_id', $tenantId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->where('tax_amount', '>', 0)
-            ->where('amount', '>', 0)
-            ->select(
-                DB::raw('ROUND((tax_amount / amount) * 100, 0) as tax_rate_percent'),
-                DB::raw('COUNT(*) as expense_count'),
-                DB::raw('SUM(amount) as total_amount'),
-                DB::raw('SUM(tax_amount) as total_tax')
-            )
-            ->groupBy(DB::raw('ROUND((tax_amount / amount) * 100, 0)'))
-            ->orderBy('tax_rate_percent')
-            ->get();
+        $taxRateDistribution = $allExpenses->where('tax_amount', '>', 0)
+            ->where('gross_amount', '>', 0)
+            ->groupBy(function($expense) {
+                $rate = round(($expense->tax_amount / $expense->gross_amount) * 100, 0);
+                return $rate;
+            })
+            ->map(function($expenses, $rate) {
+                $totalTax = $expenses->sum('tax_amount');
+                
+                return (object)[
+                    'tax_rate_percent' => (int)$rate,
+                    'expense_count' => $expenses->count(),
+                    'gross_amount' => $expenses->sum('gross_amount'),
+                    'total_tax' => $totalTax,
+                    'percentage' => $expenses->sum('tax_amount') > 0 ? ($totalTax / $expenses->sum('tax_amount')) * 100 : 0,
+                ];
+            })
+            ->sortKeys()
+            ->values();
         
+        // Get filter options
         $categories = ExpenseCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'code']);
+        
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
         
         return view('reports.expenses.tax-report', compact(
             'taxSummary',
@@ -1333,12 +1469,14 @@ class ExpenseReportsController extends Controller
             'categories',
             'startDate',
             'endDate',
+            'displayStartDate',
+            'displayEndDate',
             'categoryId',
             'taxType'
         ));
     }
     
-    // Expense Audit Report (Fixed with Locale)
+    // Expense Audit Report (Fixed with Eloquent)
     public function audit(Request $request)
     {
         $user = auth()->user();
@@ -1350,12 +1488,14 @@ class ExpenseReportsController extends Controller
         
         $startDate = $request->get('start_date', Carbon::now()->subMonths(3)->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->format('Y-m-d'));
-        $auditType = $request->get('audit_type', 'all'); // all, missing_receipts, unapproved, high_value
+        $auditType = $request->get('audit_type', 'all');
         $employeeId = $request->get('employee_id');
+        $threshold = $request->get('threshold', 1000);
         
-        $query = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->with(['category', 'paymentMethod', 'employee', 'approver']);
+        // Build query using Eloquent
+        $query = Expense::with(['category', 'paymentMethod', 'employee', 'approver'])
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate]);
         
         // Apply audit type filters
         switch ($auditType) {
@@ -1375,16 +1515,14 @@ class ExpenseReportsController extends Controller
                 break;
                 
             case 'high_value':
-                $threshold = $request->get('threshold', 1000);
                 $query->where('total_amount', '>=', $threshold);
                 break;
                 
             case 'late_submissions':
-                $query->where(DB::raw('DATEDIFF(created_at, date)'), '>', 7);
+                $query->whereRaw('DATEDIFF(created_at, date) > 7');
                 break;
                 
             case 'policy_violations':
-                // Example: Expenses without receipt when required
                 $query->whereHas('category', function($q) {
                     $q->where('requires_receipt', true);
                 })->where(function($q) {
@@ -1399,20 +1537,26 @@ class ExpenseReportsController extends Controller
         }
         
         $auditItems = $query->orderBy('date', 'desc')
-            ->get();
+            ->get()
+            ->map(function($item) {
+                // Ensure amounts are converted (accessors handle this)
+                $item->total_amount = $item->total_amount;
+                return $item;
+            });
         
-        // Audit statistics
+        // Audit statistics using collections
         $auditStats = [
             'total_items' => $auditItems->count(),
             'total_amount' => $auditItems->sum('total_amount'),
             'missing_receipts' => $auditItems->filter(function($item) {
-                return $item->category && $item->category->requires_receipt && empty($item->receipt_url);
+                $requiresReceipt = $item->category && $item->category->requires_receipt;
+                return $requiresReceipt && empty($item->receipt_url);
             })->count(),
             'unapproved' => $auditItems->filter(function($item) {
-                return $item->category && $item->category->requires_approval && !$item->approved_at;
+                $requiresApproval = $item->category && $item->category->requires_approval;
+                return $requiresApproval && !$item->approved_at;
             })->count(),
-            'high_value' => $auditItems->filter(function($item) use ($request) {
-                $threshold = $request->get('threshold', 1000);
+            'high_value' => $auditItems->filter(function($item) use ($threshold) {
                 return $item->total_amount >= $threshold;
             })->count(),
             'average_age_days' => $auditItems->avg(function($item) {
@@ -1420,7 +1564,7 @@ class ExpenseReportsController extends Controller
             }) ?? 0,
         ];
         
-        // Group by category for analysis
+        // Group by category for analysis using collections
         $byCategory = $auditItems->groupBy(function($item) {
             return $item->category ? $item->category->name : 'Uncategorized';
         })->map(function($items, $category) {
@@ -1438,56 +1582,74 @@ class ExpenseReportsController extends Controller
             ];
         })->sortByDesc('count')->values();
         
-        // Monthly audit trend
-        $monthlyAudit = Expense::where('expenses.tenant_id', $tenantId)
-            ->whereBetween('expenses.date', [$startDate, $endDate])
-            ->select(
-                DB::raw('YEAR(expenses.date) as year'),
-                DB::raw('MONTH(expenses.date) as month'),
-                DB::raw('COUNT(*) as total_expenses'),
-                DB::raw('COUNT(CASE WHEN receipt_url IS NULL OR receipt_url = "" THEN 1 END) as missing_receipts'),
-                DB::raw('COUNT(CASE WHEN approved_at IS NULL THEN 1 END) as unapproved'),
-                DB::raw('SUM(total_amount) as monthly_total')
-            )
-            ->groupBy(DB::raw('YEAR(expenses.date), MONTH(expenses.date)'))
-            ->orderBy('year', 'desc')
-            ->orderBy('month', 'desc')
-            ->get();
+        // Monthly audit trend using Eloquent (no DB::raw)
+        $monthlyAuditRaw = Expense::where('tenant_id', $tenantId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->groupBy(function($expense) {
+                return $expense->date->format('Y-m');
+            })
+            ->map(function($expenses, $monthKey) {
+                list($year, $month) = explode('-', $monthKey);
+                
+                $missingReceipts = $expenses->filter(function($item) {
+                    return $item->category && $item->category->requires_receipt && empty($item->receipt_url);
+                })->count();
+                
+                $unapproved = $expenses->filter(function($item) {
+                    return $item->category && $item->category->requires_approval && !$item->approved_at;
+                })->count();
+                
+                return (object)[
+                    'year' => (int)$year,
+                    'month' => (int)$month,
+                    'total_expenses' => $expenses->count(),
+                    'missing_receipts' => $missingReceipts,
+                    'unapproved' => $unapproved,
+                    'monthly_total' => $expenses->sum('total_amount'),
+                ];
+            });
         
-        // Employee compliance - FIXED: Use employees.id instead of employees.employee_id
-        $employeeCompliance = Expense::where('expenses.tenant_id', $tenantId)
+        $monthlyAudit = $monthlyAuditRaw->sortKeysDesc()->values();
+        
+        // Employee compliance using Eloquent
+        $employeeComplianceRaw = Expense::where('expenses.tenant_id', $tenantId)
             ->whereBetween('expenses.date', [$startDate, $endDate])
             ->whereNotNull('expenses.employee_id')
-            ->join('employees', 'expenses.employee_id', '=', 'employees.id')
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select(
-                'employees.id',
-                'employees.first_name',
-                'employees.last_name',
-                'employees.email',
-                DB::raw('CONCAT(employees.first_name, " ", employees.last_name) as employee_name'),
-                DB::raw('COUNT(*) as total_expenses'),
-                DB::raw('COUNT(CASE WHEN (expenses.receipt_url IS NULL OR expenses.receipt_url = "") 
-                        AND expense_categories.requires_receipt = 1 THEN 1 END) as missing_receipts'),
-                DB::raw('COUNT(CASE WHEN expenses.approved_at IS NULL 
-                        AND expense_categories.requires_approval = 1 THEN 1 END) as unapproved'),
-                DB::raw('AVG(expenses.total_amount) as avg_expense')
-            )
-            ->groupBy(
-                'employees.id',
-                'employees.first_name',
-                'employees.last_name',
-                'employees.email'
-            )
-            ->orderBy('missing_receipts', 'desc')
-            ->get();
+            ->with(['employee', 'category'])
+            ->get()
+            ->groupBy('employee_id')
+            ->map(function($expenses, $empId) {
+                $employee = $expenses->first()->employee;
+                
+                return (object)[
+                    'id' => $empId,
+                    'first_name' => $employee->first_name ?? '',
+                    'last_name' => $employee->last_name ?? '',
+                    'email' => $employee->email ?? '',
+                    'employee_name' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')),
+                    'total_expenses' => $expenses->count(),
+                    'missing_receipts' => $expenses->filter(function($item) {
+                        $requiresReceipt = $item->category && $item->category->requires_receipt;
+                        return $requiresReceipt && empty($item->receipt_url);
+                    })->count(),
+                    'unapproved' => $expenses->filter(function($item) {
+                        $requiresApproval = $item->category && $item->category->requires_approval;
+                        return $requiresApproval && !$item->approved_at;
+                    })->count(),
+                    'avg_expense' => $expenses->avg('total_amount'),
+                ];
+            });
         
+        $employeeCompliance = $employeeComplianceRaw->sortByDesc('missing_receipts')->values();
+        
+        // Get employees for filter
         $employees = Employee::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('first_name')
-            ->get();
+            ->get(['id', 'first_name', 'last_name']);
         
-        // Use locale for audit types
+        // Audit types for dropdown
         $auditTypes = [
             'all' => __('accounting.all_items'),
             'missing_receipts' => __('accounting.missing_receipts'),
@@ -1496,6 +1658,9 @@ class ExpenseReportsController extends Controller
             'late_submissions' => __('accounting.late_submissions'),
             'policy_violations' => __('accounting.policy_violations')
         ];
+        
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
         
         return view('reports.expenses.audit', compact(
             'auditItems',
@@ -1506,9 +1671,12 @@ class ExpenseReportsController extends Controller
             'employees',
             'startDate',
             'endDate',
+            'displayStartDate',
+            'displayEndDate',
             'auditType',
             'employeeId',
-            'auditTypes'
+            'auditTypes',
+            'threshold'
         ));
     }
         

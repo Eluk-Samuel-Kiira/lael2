@@ -102,6 +102,16 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_uoms"
+        id="uomPagination"
+        route="{{ route('uom.index') }}"
+        search-input-id="uomSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="uomIndexTable"
+    />
 </div>
 @endcan
 

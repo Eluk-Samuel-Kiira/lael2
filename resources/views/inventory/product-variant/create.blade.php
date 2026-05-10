@@ -10,15 +10,8 @@
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        @php
-                            $previousUrl = url()->previous();
-                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
-                                : __('auth._back');
-                        @endphp
-                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
-                            {{ $formattedRouteName }}
+                        <a href="{{ url()->previous() }}" class="text-muted text-hover-primary">
+                            {{ __('auth._back') }}
                         </a>
                     </li>
                     <li class="breadcrumb-item">
@@ -34,7 +27,7 @@
         <div id="kt_app_content_container" class="app-container container-xxl">
             <form id="addVariantsForm" method="POST" action="{{ route('variants.store')}}" enctype="multipart/form-data">
                 @csrf
-                <input type="hidden" name="product_id" value="{{ $product->id }}" class="form-control" required>
+                <input type="hidden" name="product_id" value="{{ $product->id }}" required>
 
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle" id="variantsTable">
@@ -92,18 +85,18 @@
                                             @enderror
                                         </td>
                                         <td>
-                                            <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" value="{{ $variant['weight'] ?? '' }}" required>
+                                            <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" step="0.01" value="{{ $variant['weight'] ?? '' }}" required>
                                             @error("variants.$index.weight")
                                                 <small class="text-danger">{{ $message }}</small>
                                             @enderror
                                         </td>
                                         <td>
-                                            <select name="variants[{{ $index }}][weight_unit]" class="form-select" data-control="select2" data-placeholder="{{__('auth._select')}}">
-                                                <option></option>
-                                                @foreach ($uoms as $umo)
-                                                    <option value="{{ $umo->id }}" {{ (isset($variant['weight_unit']) && $variant['weight_unit']==$umo->id) ? 'selected' : '' }}>{{ $umo->name }}</option>
-                                                @endforeach
-                                            </select>
+                                            <x-typable-select 
+                                                name="variants[{{ $index }}][weight_unit]"
+                                                :options="$uoms"
+                                                selected="{{ $variant['weight_unit'] ?? '' }}"
+                                                placeholder="Type or select weight unit..."
+                                            />
                                             @error("variants.$index.weight_unit")
                                                 <small class="text-danger">{{ $message }}</small>
                                             @enderror
@@ -117,25 +110,35 @@
                                 @endforeach
                             @else
                                 {{-- Default first row --}}
-                                <tr>
+                                <tr id="variant_row_0">
                                     <td>
                                         <input type="file" name="variants[0][image]" class="form-control" accept="image/*" required>
                                     </td>
                                     <td>
                                         <input type="text" name="variants[0][name]" class="form-control" required>
                                     </td>
-                                    <td><input type="text" name="variants[0][sku]" class="form-control"></td>
-                                    <td><input type="text" name="variants[0][barcode]" class="form-control"></td>
-                                    <td><input type="number" name="variants[0][price]" class="form-control" step="0.01" required></td>
-                                    <td><input type="number" name="variants[0][cost_price]" class="form-control" step="0.01" required></td>
-                                    <td><input type="number" name="variants[0][weight]" class="form-control" min="0" required></td>
                                     <td>
-                                        <select name="variants[0][weight_unit]" class="form-select" data-control="select2" data-placeholder="{{__('auth._select')}}">
-                                            <option></option>
-                                            @foreach ($uoms as $umo)
-                                                <option value="{{ $umo->id }}">{{ $umo->name }}</option>
-                                            @endforeach
-                                        </select>
+                                        <input type="text" name="variants[0][sku]" class="form-control">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="variants[0][barcode]" class="form-control">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="variants[0][price]" class="form-control" step="0.01" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="variants[0][cost_price]" class="form-control" step="0.01" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="variants[0][weight]" class="form-control" min="0" step="0.01" required>
+                                    </td>
+                                    <td>
+                                        <x-typable-select 
+                                            name="variants[0][weight_unit]"
+                                            :options="$uoms"
+                                            selected=""
+                                            placeholder="Type or select weight unit..."
+                                        />
                                     </td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-icon btn-danger removeVariantBtn" disabled>
@@ -155,8 +158,11 @@
                         <span class="d-inline d-sm-none">{{ __('auth._add') }}</span>
                     </button>
 
-                    <button type="submit" class="btn btn-success flex-grow-1 flex-sm-grow-0">
-                        <i class="ki-duotone ki-check-circle fs-2 me-2"></i>
+                   <button type="submit" class="btn btn-success flex-grow-1 flex-sm-grow-0">
+                        <i class="ki-duotone ki-check-circle fs-2 me-2">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                        </i>
                         <span class="d-none d-sm-inline">{{ __('auth.submit') }}</span>
                         <span class="d-inline d-sm-none">{{ __('auth.save') }}</span>
                     </button>
@@ -165,44 +171,152 @@
         </div>
     </div>
 
-    <!-- Ensure the main button has the correct type -->
     <script>
-        // One more direct approach
-        document.addEventListener('click', function(e) {
-            if (e.target && (e.target.id === 'addVariantBtn' || e.target.closest('#addVariantBtn'))) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const btn = document.getElementById('addVariantBtn');
-                if (btn) {
-                    console.log('Global click handler - button clicked');
-                    
-                    const tableBody = document.querySelector('#variantsTable tbody');
-                    if (tableBody) {
-                        const index = tableBody.rows.length;
-                        const newRow = document.createElement('tr');
-                        newRow.innerHTML = `
-                            <td><input type="file" name="variants[${index}][image]" class="form-control" accept="image/*"></td>
-                            <td><input type="text" name="variants[${index}][name]" class="form-control" required></td>
-                            <td><input type="text" name="variants[${index}][sku]" class="form-control"></td>
-                            <td><input type="text" name="variants[${index}][barcode]" class="form-control"></td>
-                            <td><input type="number" name="variants[${index}][price]" class="form-control" step="0.01" required></td>
-                            <td><input type="number" name="variants[${index}][cost_price]" class="form-control" step="0.01" required></td>
-                            <td><input type="number" name="variants[${index}][weight]" class="form-control" min="0" required></td>
-                            <td>
-                                <select name="variants[${index}][weight_unit]" class="form-control" required>
-                                    <option value="">Select unit</option>
-                                    @foreach($uoms as $umo)
-                                        <option value="{{ $umo->id }}">{{ $umo->name }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td><button type="button" class="btn btn-sm btn-danger removeVariantBtn" onclick="this.closest('tr').remove(); updateRowIndices();">×</button></td>
-                        `;
-                        tableBody.appendChild(newRow);
+        function updateRowIndices() {
+            const rows = document.querySelectorAll('#variantsTable tbody tr');
+            rows.forEach((row, newIndex) => {
+                // Update all input names with the new index
+                row.querySelectorAll('input, select').forEach(input => {
+                    if (input.name) {
+                        input.name = input.name.replace(/variants\[\d+\]/g, `variants[${newIndex}]`);
                     }
+                });
+                // Update the row ID
+                row.id = `variant_row_${newIndex}`;
+            });
+        }
+
+        document.getElementById('addVariantBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const tableBody = document.querySelector('#variantsTable tbody');
+            if (!tableBody) return;
+            
+            const currentIndex = tableBody.rows.length;
+            const newIndex = currentIndex;
+            
+            // Get the first row as template
+            const firstRow = tableBody.rows[0];
+            if (!firstRow) return;
+            
+            // Build UOM options correctly
+            let uomOptions = '';
+            
+            // Try to get options from existing datalist
+            const existingSelect = firstRow.querySelector('select, .position-relative');
+            if (existingSelect) {
+                const existingDatalist = existingSelect.querySelector('datalist');
+                if (existingDatalist) {
+                    const options = existingDatalist.querySelectorAll('option');
+                    options.forEach(opt => {
+                        if (opt.value && opt.value !== 'Select weight unit' && opt.value !== 'None' && opt.value !== '') {
+                            uomOptions += `<option value="${opt.value}" data-id="${opt.getAttribute('data-id') || ''}"></option>`;
+                        }
+                    });
                 }
             }
+            
+            // If no options found, use Blade data
+            if (!uomOptions) {
+                @foreach($uoms as $umo)
+                    uomOptions += `<option value="{{ $umo->name }}" data-id="{{ $umo->id }}"></option>`;
+                @endforeach
+            }
+            
+            const newRow = document.createElement('tr');
+            newRow.id = `variant_row_${newIndex}`;
+            newRow.innerHTML = `
+                <td>
+                    <input type="file" name="variants[${newIndex}][image]" class="form-control" accept="image/*">
+                </td>
+                <td>
+                    <input type="text" name="variants[${newIndex}][name]" class="form-control" required>
+                </td>
+                <td>
+                    <input type="text" name="variants[${newIndex}][sku]" class="form-control">
+                </td>
+                <td>
+                    <input type="text" name="variants[${newIndex}][barcode]" class="form-control">
+                </td>
+                <td>
+                    <input type="number" name="variants[${newIndex}][price]" class="form-control" step="0.01" required>
+                </td>
+                <td>
+                    <input type="number" name="variants[${newIndex}][cost_price]" class="form-control" step="0.01" required>
+                </td>
+                <td>
+                    <input type="number" name="variants[${newIndex}][weight]" class="form-control" min="0" step="0.01" required>
+                </td>
+                <td>
+                    <div class="position-relative">
+                        <input type="text" 
+                            id="weight_unit_input_${newIndex}"
+                            class="form-control typable-select-input"
+                            list="weight_unit_list_${newIndex}"
+                            placeholder="Type or select weight unit..."
+                            autocomplete="off"
+                            data-typable-input="true"
+                            data-hidden-id="weight_unit_hidden_${newIndex}"
+                            data-list-id="weight_unit_list_${newIndex}">
+                        <input type="hidden" 
+                            name="variants[${newIndex}][weight_unit]" 
+                            id="weight_unit_hidden_${newIndex}"
+                            class="typable-select-hidden"
+                            value="">
+                        <datalist id="weight_unit_list_${newIndex}">
+                            <option value="">Select weight unit</option>
+                            ${uomOptions}
+                        </datalist>
+                    </div>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-icon btn-danger removeVariantBtn" onclick="removeRow(this)">
+                        <i class="ki-duotone ki-trash fs-2">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                            <span class="path3"></span>
+                            <span class="path4"></span>
+                            <span class="path5"></span>
+                        </i>
+                    </button>
+                </td>
+            `;
+            
+            tableBody.appendChild(newRow);
+            
+            // Re-initialize typable selects for the new row
+            if (typeof window.LiveBladeRefresh === 'function') {
+                window.LiveBladeRefresh();
+            }
+        });
+        
+        function removeRow(btn) {
+            const row = btn.closest('tr');
+            if (row) {
+                row.remove();
+                updateRowIndices();
+                
+                // Disable remove button if only one row left
+                const rows = document.querySelectorAll('#variantsTable tbody tr');
+                rows.forEach(r => {
+                    const removeBtn = r.querySelector('.removeVariantBtn');
+                    if (removeBtn) {
+                        removeBtn.disabled = rows.length === 1;
+                    }
+                });
+            }
+        }
+        
+        // Initial setup - disable remove button if only one row
+        document.addEventListener('DOMContentLoaded', function() {
+            const rows = document.querySelectorAll('#variantsTable tbody tr');
+            rows.forEach(r => {
+                const removeBtn = r.querySelector('.removeVariantBtn');
+                if (removeBtn) {
+                    removeBtn.disabled = rows.length === 1;
+                }
+            });
         });
     </script>
        

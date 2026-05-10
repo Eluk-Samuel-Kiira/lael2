@@ -49,6 +49,7 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.adjustments') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Date Range --}}
                                         <div class="flex-grow-1">
@@ -73,43 +74,28 @@
                                             </div>
                                         </div>
                                         
-                                        {{-- Department --}}
+                                        {{-- Location & Department - Dependent Dropdown --}}
                                         <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
                                         </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
                                         
                                         {{-- Action Buttons --}}
                                         <div class="d-flex flex-column justify-content-end">
@@ -149,49 +135,15 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @php
-                                        $stats = [
-                                            [
-                                                'key' => 'total_adjustments', 
-                                                'color' => 'primary', 
-                                                'icon' => 'ki-switch', 
-                                                'label' => 'total_adjustments',
-                                                'value' => number_format($summary['total_adjustments'])
-                                            ],
-                                            [
-                                                'key' => 'total_quantity_changed', 
-                                                'color' => 'info', 
-                                                'icon' => 'ki-arrow-change', 
-                                                'label' => 'total_quantity_changed',
-                                                'value' => number_format($summary['total_quantity_changed'])
-                                            ],
-                                            [
-                                                'key' => 'net_change', 
-                                                'color' => $summary['net_change'] >= 0 ? 'success' : 'danger', 
-                                                'icon' => 'ki-trend-up', 
-                                                'label' => 'net_change',
-                                                'value' => ($summary['net_change'] >= 0 ? '+' : '') . number_format($summary['net_change'])
-                                            ],
-                                            [
-                                                'key' => 'increase_count', 
-                                                'color' => 'success', 
-                                                'icon' => 'ki-arrow-up', 
-                                                'label' => 'increase_count',
-                                                'value' => number_format($summary['increase_count'])
-                                            ],
-                                            [
-                                                'key' => 'decrease_count', 
-                                                'color' => 'danger', 
-                                                'icon' => 'ki-arrow-down', 
-                                                'label' => 'decrease_count',
-                                                'value' => number_format($summary['decrease_count'])
-                                            ]
-                                        ];
-                                    @endphp
-                                    
-                                    @foreach($stats as $stat)
-                                    <div class="col-md-6 col-lg">
-                                        <div class="card card-flush border border-{{ $stat['color'] }} border-dashed h-100">
+                                    @foreach([
+                                        ['key' => 'total_adjustments', 'color' => 'primary', 'icon' => 'ki-switch', 'label' => 'total_adjustments', 'value' => number_format($summary['total_adjustments'])],
+                                        ['key' => 'total_quantity_changed', 'color' => 'info', 'icon' => 'ki-arrow-change', 'label' => 'total_quantity_changed', 'value' => number_format($summary['total_quantity_changed'])],
+                                        ['key' => 'net_change', 'color' => $summary['net_change'] >= 0 ? 'success' : 'danger', 'icon' => 'ki-trend-up', 'label' => 'net_change', 'value' => ($summary['net_change'] >= 0 ? '+' : '') . number_format($summary['net_change'])],
+                                        ['key' => 'increase_count', 'color' => 'success', 'icon' => 'ki-arrow-up', 'label' => 'increase_count', 'value' => number_format($summary['increase_count'])],
+                                        ['key' => 'decrease_count', 'color' => 'danger', 'icon' => 'ki-arrow-down', 'label' => 'decrease_count', 'value' => number_format($summary['decrease_count'])],
+                                    ] as $stat)
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
                                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                                 <div class="mb-4">
                                                     <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
@@ -304,18 +256,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($adjustments->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $adjustments->firstItem() }} - {{ $adjustments->lastItem() }} {{ __('pagination.of') }} {{ $adjustments->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $adjustments->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $adjustments,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

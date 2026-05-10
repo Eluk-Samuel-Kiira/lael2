@@ -29,55 +29,42 @@
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
-            <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-3 w-100 w-lg-auto">
-                
-                <!-- Currency Display - Fixed height to match other elements -->
-                <div class="d-flex align-items-center px-4 px-lg-4 bg-light rounded-3" style="height: 46px;">
-                    <h3 class="fw-bold text-gray-800 fs-2qx mb-0 lh-1">{{ currency_code() }} ({{ currency_symbol() }})</h3>
-                </div>
-
-                <div class="position-relative d-inline-flex" id="pause-buy-trigger">
+            <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
+                {{-- Pause Buy --}}
+                <div class="position-relative flex-shrink-0 w-100 w-md-auto" id="pause-buy-trigger">
                     <button type="button"
-                            class="btn btn-light-warning fw-bold"
-                            style="height:46px;"
+                            class="btn btn-light-warning fw-bold w-100"
+                            style="height: 42px;"
                             data-bs-toggle="offcanvas"
-                            data-bs-target="#pauseBuyDrawer"
-                            aria-controls="pauseBuyDrawer">
-                        <i class="ki-duotone ki-time fs-2 me-2">
-                            <span class="path1"></span><span class="path2"></span>
-                        </i>
+                            data-bs-target="#pauseBuyDrawer">
+                        <i class="ki-duotone ki-time fs-5 me-2"></i>
                         {{ __('pagination.pause_buy') }}
                     </button>
-
-                    <span id="pause-buy-badge"
-                        class="position-absolute top-0 start-100 translate-middle
-                                badge badge-circle badge-danger fs-9 fw-bolder lh-1 min-w-20px"
-                        style="display:none; padding:4px 5px;">
-                        0
-                    </span>
+                    <span id="pause-buy-badge" class="position-absolute top-0 start-100 translate-middle badge badge-circle badge-danger">0</span>
                 </div>
                 
-
-                <!-- Search Bar -->
-                <div class="w-100 w-lg-250px">
-                    <div class="input-group input-group-solid h-100">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                            id="variantSearchInput" 
-                            class="form-control form-control-solid border-0 ps-0" 
-                            placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
-                            onkeyup="filterProductsAndVariants(this.value)"
-                            style="height: 46px;">
-                    </div>
+                {{-- Currency --}}
+                <div class="d-flex align-items-center px-4 bg-light rounded-3 flex-shrink-0 w-100 w-md-auto" style="height: 42px;">
+                    <h3 class="fw-bold text-gray-800 fs-6 mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
                 </div>
 
-                <!-- Department Filter -->
+                {{-- Search --}}
+                <div class="input-group input-group-solid flex-grow-1 w-100 w-md-auto" style="min-width: 0;">
+                    <span class="input-group-text bg-body border-0">
+                        <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
+                    </span>
+                    <input type="text"
+                        id="variantSearchInput"
+                        class="form-control form-control-solid border-0 ps-0"
+                        placeholder="{{ __('auth._search') }} {{ __('pagination._variants') }}"
+                        onkeyup="filterProductsAndVariants(this.value)"
+                        style="height: 42px;">
+                </div>
+
+                {{-- Department Filter --}}
                 @if(!tenant_is_single_shop(auth()->user()->tenant_id))
-                <div class="w-100 w-lg-auto">
-                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter" style="height: 46px;">
+                <div class="flex-shrink-0 w-100 w-md-auto">
+                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter" style="height: 42px;">
                         <option value="">{{ __('auth._department') }}</option>
                         @foreach ($user_departments as $department)
                             <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
@@ -102,6 +89,7 @@
             </div>
         </div>
     </div>
+
     
     @endsection
 </x-app-layout>

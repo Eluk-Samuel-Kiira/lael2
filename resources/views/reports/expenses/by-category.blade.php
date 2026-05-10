@@ -338,7 +338,7 @@
                 </div>
                 
                 {{-- Monthly Trend Chart --}}
-                @if($monthlyTrend->count() > 0)
+                @if($monthlyTrendGrouped && $monthlyTrendGrouped->count() > 0)
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
@@ -357,7 +357,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 {{-- Monthly Trend Table --}}
                 <div class="row mt-6">
                     <div class="col-12">
@@ -377,38 +377,25 @@
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
                                                 <th class="ps-4">{{ __('accounting.month_year') }}</th>
-                                                @foreach($monthlyTrend->keys() as $categoryName)
-                                                <th>{{ $categoryName }}</th>
+                                                @foreach($monthlyTrendGrouped->keys() as $categoryName)
+                                                <th class="text-end">{{ $categoryName }}</th>
                                                 @endforeach
-                                            </tr>
+                                            </td>
                                         </thead>
                                         <tbody>
+                                            @foreach($uniqueMonths as $monthData)
                                             @php
-                                                // Get unique months
-                                                $months = [];
-                                                foreach($monthlyTrend as $categoryData) {
-                                                    foreach($categoryData as $month) {
-                                                        $key = $month->year . '-' . str_pad($month->month, 2, '0', STR_PAD_LEFT);
-                                                        $months[$key] = [
-                                                            'year' => $month->year,
-                                                            'month' => $month->month,
-                                                            'label' => date('M Y', strtotime($key . '-01'))
-                                                        ];
-                                                    }
-                                                }
-                                                ksort($months);
+                                                $monthKey = $monthData->year . '-' . str_pad($monthData->month, 2, '0', STR_PAD_LEFT);
                                             @endphp
-                                            
-                                            @foreach($months as $monthData)
                                             <tr>
-                                                <td class="ps-4 fw-semibold">{{ $monthData['label'] }}</td>
-                                                @foreach($monthlyTrend->keys() as $categoryName)
+                                                <td class="ps-4 fw-semibold">{{ $monthData->label }}</td>
+                                                @foreach($monthlyTrendGrouped->keys() as $categoryName)
                                                     @php
-                                                        $monthlyTotal = $monthlyTrend[$categoryName]->firstWhere('year', $monthData['year'])->monthly_total ?? 0;
+                                                        $monthlyTotal = $monthlyDataMatrix[$monthKey][$categoryName] ?? 0;
                                                     @endphp
-                                                <td class="text-end">
-                                                    <span class="text-gray-800 fw-semibold">${{ number_format($monthlyTotal, 2) }}</span>
-                                                </td>
+                                                    <td class="text-end">
+                                                        <span class="text-gray-800 fw-semibold">${{ number_format($monthlyTotal, 2) }}</span>
+                                                    </td>
                                                 @endforeach
                                             </tr>
                                             @endforeach
@@ -416,13 +403,13 @@
                                         <tfoot>
                                             <tr class="fw-bold text-gray-800 bg-light">
                                                 <td class="ps-4">{{ __('accounting.total') }}</td>
-                                                @foreach($monthlyTrend->keys() as $categoryName)
+                                                @foreach($monthlyTrendGrouped->keys() as $categoryName)
                                                     @php
-                                                        $categoryTotal = $categoryBreakdown->firstWhere('category_name', $categoryName)->grand_total ?? 0;
+                                                        $total = $categoryTotals[$categoryName] ?? 0;
                                                     @endphp
-                                                <td class="text-end">
-                                                    <span class="text-success fw-bold">${{ number_format($categoryTotal, 2) }}</span>
-                                                </td>
+                                                    <td class="text-end">
+                                                        <span class="text-success fw-bold">${{ number_format($total, 2) }}</span>
+                                                    </td>
                                                 @endforeach
                                             </tr>
                                         </tfoot>
@@ -439,113 +426,66 @@
 </div>
 
 @push('scripts')
-@if($monthlyTrend->count() > 0)
+@if(isset($monthlyTrendGrouped) && $monthlyTrendGrouped->count() > 0 && isset($uniqueMonths) && $uniqueMonths->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Prepare data for chart
-        const categories = @json($monthlyTrend->keys());
-        const months = @json(array_values($months));
+        const categories = @json($monthlyTrendGrouped->keys());
+        const months = @json($uniqueMonths);
         const seriesData = [];
         
         categories.forEach((category, index) => {
             const data = months.map(month => {
-                const monthData = @json($monthlyTrend);
-                const total = monthData[category]?.find(m => 
+                const monthData = @json($monthlyTrendGrouped);
+                const found = monthData[category]?.find(m => 
                     m.year == month.year && m.month == month.month
-                )?.monthly_total || 0;
-                return total;
+                );
+                return found?.monthly_total || 0;
             });
             
             seriesData.push({
                 name: category,
                 data: data,
-                type: 'line',
-                color: getCategoryColor(index)
+                type: 'line'
             });
         });
         
         const monthLabels = months.map(m => m.label);
+        const colors = ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C', '#14B8A6', '#F97316', '#8B5CF6'];
         
-        // Initialize chart
         const chartOptions = {
             series: seriesData,
             chart: {
                 type: 'line',
                 height: 400,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true,
-                        selection: true,
-                        zoom: true,
-                        zoomin: true,
-                        zoomout: true,
-                        pan: true,
-                        reset: true
-                    }
-                }
+                toolbar: { show: true },
+                zoom: { enabled: true }
             },
-            stroke: {
-                width: [3, 3, 3],
-                curve: 'smooth'
-            },
+            stroke: { width: 3, curve: 'smooth' },
+            colors: colors,
             xaxis: {
                 categories: monthLabels,
-                labels: {
-                    rotate: -45,
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
+                labels: { rotate: -45, style: { fontSize: '11px' } }
             },
             yaxis: {
-                title: {
-                    text: 'Amount ($)'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
-                    }
-                }
+                title: { text: 'Amount ($)' },
+                labels: { formatter: (val) => '$' + val.toLocaleString() }
             },
             tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
-                }
+                y: { formatter: (val) => '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2}) }
             },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center',
-                fontSize: '14px',
-                fontFamily: 'Helvetica, Arial',
-                itemMargin: {
-                    horizontal: 10,
-                    vertical: 5
-                }
-            },
-            markers: {
-                size: 5
-            },
-            grid: {
-                borderColor: '#f1f1f1',
-            }
+            legend: { position: 'top', horizontalAlign: 'center', fontSize: '12px' },
+            markers: { size: 4 },
+            grid: { borderColor: '#f1f1f1' }
         };
         
         const chart = new ApexCharts(document.querySelector("#monthlyTrendChart"), chartOptions);
         chart.render();
-        
-        // Function to get category color
-        function getCategoryColor(index) {
-            const colors = ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C'];
-            return colors[index % colors.length];
-        }
     });
 </script>
 @endif
-
 @endpush
+
 
 @endsection

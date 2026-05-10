@@ -78,64 +78,79 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.purchasing.purchase-cost-analysis') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Start Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="start_date" 
-                                                value="{{ $startDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="start_date" 
+                                                    value="{{ $startDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- End Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="end_date" 
-                                                value="{{ $endDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="end_date" 
+                                                    value="{{ $endDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- Product Variant --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
-                                            <select class="form-select w-100" name="variant_id">
-                                                <option value="">{{ __('passwords.all_products') }}</option>
-                                                @foreach($variants as $variant)
-                                                    <option value="{{ $variant->id }}" 
-                                                            {{ $productVariantId == $variant->id ? 'selected' : '' }}>
-                                                        {{ $variant->name }} 
-                                                        @if($variant->product)
-                                                            ({{ $variant->product->name }})
-                                                        @endif
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        
-                                        {{-- Supplier --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
-                                                <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                @foreach($suppliers as $supplier)
-                                                    <option value="{{ $supplier->id }}" 
-                                                            {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                        {{ $supplier->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_products') }}</option>
+                                                    @foreach($variants as $variant)
+                                                        <option value="{{ $variant->id }}" 
+                                                                {{ $productVariantId == $variant->id ? 'selected' : '' }}>
+                                                            {{ $variant->name }} 
+                                                            @if($variant->product)
+                                                                ({{ $variant->product->name }})
+                                                            @endif
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-end">
-                                        <div class="d-flex flex-column flex-sm-row gap-2">
-                                            <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Supplier --}}
+                                        <div class="flex-grow-1">
+                                            <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
+                                                    @foreach($suppliers as $supplier)
+                                                        <option value="{{ $supplier->id }}" 
+                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
+                                                            {{ $supplier->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
                                             </button>
-                                            <a href="{{ route('reports.purchasing.purchase-cost-analysis') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
+                                            <a href="{{ route('reports.purchasing.purchase-cost-analysis') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
                                             </a>
                                         </div>
                                     </div>
@@ -165,7 +180,7 @@
                             ],
                             [
                                 'title' => __('passwords.total_cost'),
-                                'value' => '$' . number_format($summary['total_cost'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_cost'], 2),
                                 'color' => 'info',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.total_spend')
@@ -283,7 +298,7 @@
                 @endif
 
                 {{-- Top Products by Spend --}}
-                @if($productAnalysis->count() > 0)
+                @if(isset($topProducts) && $topProducts->count() > 0)
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -297,7 +312,7 @@
                                         <h3 class="fw-bold m-0">{{ __('passwords.top_products_by_spend') }}</h3>
                                     </div>
                                     <span class="badge badge-light-warning fs-7">
-                                        {{ __('pagination.top') }} 10 {{ __('passwords.products') }}
+                                        {{ __('pagination.top') }} {{ $topProducts->count() }} {{ __('passwords.products') }}
                                     </span>
                                 </div>
                             </div>
@@ -317,16 +332,16 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($productAnalysis->take(10) as $analysis)
+                                            @foreach($topProducts as $analysis)
                                             @php
-                                                $product = $analysis['product'] ?? null;
-                                                $priceChange = $analysis['price_change'] ?? 0;
-                                                $priceChangePercentage = $analysis['price_change_percentage'] ?? 0;
+                                                $product = $analysis->product ?? null;
+                                                $priceChange = $analysis->price_change ?? 0;
+                                                $priceChangePercentage = $analysis->price_change_percentage ?? 0;
                                                 
                                                 // Determine trend color
                                                 $trendColor = $priceChangePercentage > 5 ? 'danger' : 
-                                                             ($priceChangePercentage > 0 ? 'warning' : 
-                                                             ($priceChangePercentage < -5 ? 'success' : 'info'));
+                                                            ($priceChangePercentage > 0 ? 'warning' : 
+                                                            ($priceChangePercentage < -5 ? 'success' : 'info'));
                                                 $trendIcon = $priceChangePercentage > 0 ? 'ki-arrow-up-right' : 
                                                             ($priceChangePercentage < 0 ? 'ki-arrow-down-right' : 'ki-chart-line');
                                                 $trendText = $priceChangePercentage > 5 ? __('passwords.significant_increase') :
@@ -337,9 +352,9 @@
                                             <tr>
                                                 <td class="ps-4">
                                                     @if($product)
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <div class="symbol-label bg-light-primary text-primary fw-bold">
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <div class="symbol symbol-40px flex-shrink-0">
+                                                            <div class="symbol-label bg-light-primary text-primary fw-bold fs-6">
                                                                 {{ strtoupper(substr($product->name, 0, 2)) }}
                                                             </div>
                                                         </div>
@@ -358,22 +373,22 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold">{{ number_format($analysis['total_quantity'] ?? 0) }}</span>
+                                                    <span class="fw-bold">{{ number_format($analysis->total_quantity ?? 0) }}</span>
                                                     <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        ${{ number_format($analysis['avg_unit_cost'] ?? 0, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($analysis->avg_unit_cost ?? 0, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-success">
-                                                        ${{ number_format($analysis['total_cost'] ?? 0, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($analysis->total_cost ?? 0, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-{{ $trendColor }}">
-                                                        ${{ number_format($priceChange, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($priceChange, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -391,7 +406,7 @@
                                                 </td>
                                                 <td>
                                                     <span class="badge badge-light-info">
-                                                        {{ $analysis['purchase_count'] ?? 0 }} {{ __('passwords.purchases') }}
+                                                        {{ $analysis->purchase_count ?? 0 }} {{ __('passwords.purchases') }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end pe-4">
@@ -410,194 +425,192 @@
                 </div>
                 @endif
 
-                {{-- Complete Cost Analysis Table --}}
-                @if($productAnalysis->count() > 0)
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('passwords.complete_cost_analysis') }}</h3>
-                                    </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $productAnalysis->count() }} {{ __('passwords.products') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">#</th>
-                                                <th>{{ __('passwords.product') }}</th>
-                                                <th>{{ __('passwords.category') }}</th>
-                                                <th>{{ __('passwords.total_quantity') }}</th>
-                                                <th>{{ __('passwords.avg_unit_cost') }}</th>
-                                                <th>{{ __('passwords.total_cost') }}</th>
-                                                <th>{{ __('passwords.price_change') }}</th>
-                                                <th>{{ __('passwords.price_change_percentage') }}</th>
-                                                <th>{{ __('passwords.purchase_frequency') }}</th>
-                                                <th class="text-end pe-4">{{ __('passwords.cost_efficiency') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($productAnalysis as $index => $analysis)
-                                            @php
-                                                $product = $analysis['product'] ?? null;
-                                                $priceChange = $analysis['price_change'] ?? 0;
-                                                $priceChangePercentage = $analysis['price_change_percentage'] ?? 0;
-                                                $avgUnitCost = $analysis['avg_unit_cost'] ?? 0;
-                                                $totalCost = $analysis['total_cost'] ?? 0;
-                                                $totalQuantity = $analysis['total_quantity'] ?? 0;
-                                                $purchaseCount = $analysis['purchase_count'] ?? 0;
-                                                
-                                                // Determine trend color
-                                                $trendColor = $priceChangePercentage > 5 ? 'danger' : 
-                                                             ($priceChangePercentage > 0 ? 'warning' : 
-                                                             ($priceChangePercentage < -5 ? 'success' : 'info'));
-                                                
-                                                // Calculate cost efficiency
-                                                $costEfficiency = 'high';
-                                                $efficiencyColor = 'success';
-                                                $avgCostPerPurchase = $purchaseCount > 0 ? $totalCost / $purchaseCount : 0;
-                                                
-                                                if ($avgCostPerPurchase > 1000) {
-                                                    $costEfficiency = 'low';
-                                                    $efficiencyColor = 'danger';
-                                                } elseif ($avgCostPerPurchase > 500) {
-                                                    $costEfficiency = 'medium';
-                                                    $efficiencyColor = 'warning';
-                                                }
-                                                
-                                                // Calculate purchase frequency
-                                                $purchaseFrequency = 'high';
-                                                $frequencyColor = 'success';
-                                                $daysInPeriod = \Carbon\Carbon::parse($endDate)->diffInDays(\Carbon\Carbon::parse($startDate));
-                                                $frequencyPerMonth = $daysInPeriod > 0 ? ($purchaseCount / $daysInPeriod) * 30 : 0;
-                                                
-                                                if ($frequencyPerMonth > 4) {
-                                                    $purchaseFrequency = 'very_high';
-                                                    $frequencyColor = 'primary';
-                                                } elseif ($frequencyPerMonth > 2) {
-                                                    $purchaseFrequency = 'high';
-                                                    $frequencyColor = 'success';
-                                                } elseif ($frequencyPerMonth > 1) {
-                                                    $purchaseFrequency = 'moderate';
-                                                    $frequencyColor = 'info';
-                                                } elseif ($frequencyPerMonth > 0.5) {
-                                                    $purchaseFrequency = 'low';
-                                                    $frequencyColor = 'warning';
-                                                } else {
-                                                    $purchaseFrequency = 'very_low';
-                                                    $frequencyColor = 'danger';
-                                                }
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <span class="fw-bold">{{ $loop->iteration }}</span>
-                                                </td>
-                                                <td>
-                                                    @if($product)
-                                                    <div class="fw-bold">{{ $product->name }}</div>
-                                                    <small class="text-muted">
-                                                        {{ $product->sku ?? 'N/A' }}
-                                                    </small>
-                                                    @else
-                                                    <span class="text-muted">{{ __('passwords.product_not_found') }}</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if($product && $product->product && $product->product->category)
-                                                    <span class="badge badge-light-info">
-                                                        {{ $product->product->category->name ?? 'N/A' }}
-                                                    </span>
-                                                    @else
-                                                    <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold">{{ number_format($totalQuantity) }}</span>
-                                                    <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-primary">
-                                                        ${{ number_format($avgUnitCost, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">
-                                                        ${{ number_format($totalCost, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <span class="fw-bold text-{{ $trendColor }} me-2">
-                                                            ${{ number_format($priceChange, 2) }}
-                                                        </span>
-                                                        @if($priceChange != 0)
-                                                        <i class="ki-duotone {{ $priceChange > 0 ? 'ki-arrow-up-right' : 'ki-arrow-down-right' }} fs-2 text-{{ $trendColor }}">
-                                                            <span class="path1"></span>
-                                                            <span class="path2"></span>
-                                                        </i>
-                                                        @endif
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $trendColor }}">
-                                                        {{ number_format($priceChangePercentage, 2) }}%
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $frequencyColor }}">
-                                                        {{ __("passwords.{$purchaseFrequency}_frequency") }}
-                                                    </span>
-                                                    <div class="text-muted fs-8">
-                                                        {{ $purchaseCount }} {{ __('passwords.orders') }}
-                                                    </div>
-                                                </td>
-                                                <td class="text-end pe-4">
-                                                    <span class="badge badge-{{ $efficiencyColor }}">
-                                                        {{ __("passwords.{$costEfficiency}_efficiency") }}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+{{-- Complete Cost Analysis Table (with Pagination) --}}
+@if($productAnalysis->count() > 0)
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header border-0">
+                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
+                    <div class="d-flex align-items-center">
+                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
+                        <h3 class="fw-bold m-0">{{ __('passwords.complete_cost_analysis') }}</h3>
                     </div>
                 </div>
-                @else
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="text-center py-10">
-                                    <i class="ki-duotone ki-chart-line fs-4tx text-gray-400 mb-4">
-                                        <span class="path1"></span>
-                                    </i>
-                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_cost_data') }}</h4>
-                                    <p class="text-muted fs-6">{{ __('passwords.no_purchase_cost_data_available') }}</p>
-                                    @if(request()->hasAny(['start_date', 'end_date', 'variant_id', 'supplier_id']))
-                                    <a href="{{ route('reports.purchasing.purchase-cost-analysis') }}" class="btn btn-light-primary">
-                                        <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                        {{ __('passwords.clear_filters_view_all') }}
-                                    </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                        <thead>
+                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                <th class="ps-4 min-w-50px text-center">#</th>
+                                <th class="min-w-200px">{{ __('passwords.product') }}</th>
+                                <th class="min-w-150px">{{ __('passwords.category') }}</th>
+                                <th class="min-w-100px text-end">{{ __('passwords.total_quantity') }}</th>
+                                <th class="min-w-120px text-end">{{ __('passwords.avg_unit_cost') }}</th>
+                                <th class="min-w-150px text-end">{{ __('passwords.total_cost') }}</th>
+                                <th class="min-w-120px text-end">{{ __('passwords.price_change') }}</th>
+                                <th class="min-w-120px text-center">{{ __('passwords.price_change_percentage') }}</th>
+                                <th class="min-w-150px text-center">{{ __('passwords.purchase_frequency') }}</th>
+                                <th class="min-w-130px text-center pe-4">{{ __('passwords.cost_efficiency') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($productAnalysis as $index => $analysis)
+                            @php
+                                $globalIndex = $productAnalysisCollection->search(function($item) use ($analysis) {
+                                    return $item->variant_id === $analysis->variant_id;
+                                });
+                                $displayIndex = $globalIndex !== false ? $globalIndex + 1 : ($index + 1);
+                                
+                                $product = $analysis->product;
+                                $priceChange = $analysis->price_change ?? 0;
+                                $priceChangePercentage = $analysis->price_change_percentage ?? 0;
+                                
+                                $trendColor = $priceChangePercentage > 5 ? 'danger' : 
+                                            ($priceChangePercentage > 0 ? 'warning' : 
+                                            ($priceChangePercentage < -5 ? 'success' : 'info'));
+                                                
+                                $avgCostPerPurchase = $analysis->purchase_count > 0 ? $analysis->total_cost / $analysis->purchase_count : 0;
+                                                
+                                if ($avgCostPerPurchase > 1000) {
+                                    $costEfficiency = 'low';
+                                    $efficiencyColor = 'danger';
+                                } elseif ($avgCostPerPurchase > 500) {
+                                    $costEfficiency = 'medium';
+                                    $efficiencyColor = 'warning';
+                                } else {
+                                    $costEfficiency = 'high';
+                                    $efficiencyColor = 'success';
+                                }
+                                                
+                                $daysInPeriod = \Carbon\Carbon::parse($endDate)->diffInDays(\Carbon\Carbon::parse($startDate)) + 1;
+                                $frequencyPerMonth = $daysInPeriod > 0 ? ($analysis->purchase_count / $daysInPeriod) * 30 : 0;                                                
+                                                
+                                if ($frequencyPerMonth > 4) {
+                                    $purchaseFrequency = 'very_high';
+                                    $frequencyColor = 'primary';
+                                } elseif ($frequencyPerMonth > 2) {
+                                    $purchaseFrequency = 'high';
+                                    $frequencyColor = 'success';
+                                } elseif ($frequencyPerMonth > 1) {
+                                    $purchaseFrequency = 'moderate';
+                                    $frequencyColor = 'info';
+                                } elseif ($frequencyPerMonth > 0.5) {
+                                    $purchaseFrequency = 'low';
+                                    $frequencyColor = 'warning';
+                                } else {
+                                    $purchaseFrequency = 'very_low';
+                                    $frequencyColor = 'danger';
+                                }
+                            @endphp
+                            <tr>
+                                <td class="ps-4 text-center">
+                                    <span class="fw-bold">{{ $displayIndex }}</span>
+                                </td>
+                                <td>
+                                    @if($product)
+                                    <div class="fw-bold">{{ $product->name }}</div>
+                                    <small class="text-muted">{{ $product->sku ?? 'N/A' }}</small>
+                                    @else
+                                    <span class="text-muted">{{ __('passwords.product_not_found') }}</span>
                                     @endif
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                </td>
+                                <td>
+                                    @if($product && $product->product && $product->product->category)
+                                    <span class="badge badge-light-info">
+                                        {{ $product->product->category->name ?? 'N/A' }}
+                                    </span>
+                                    @else
+                                    <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold">{{ number_format($analysis->total_quantity) }}</span>
+                                    <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold text-primary">
+                                        {{ currency_symbol() }}{{ number_format($analysis->avg_unit_cost, 2) }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold text-success">
+                                        {{ currency_symbol() }}{{ number_format($analysis->total_cost, 2) }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex align-items-center justify-content-end">
+                                        <span class="fw-bold text-{{ $trendColor }} me-1">
+                                            {{ currency_symbol() }}{{ number_format($priceChange, 2) }}
+                                        </span>
+                                        @if($priceChange != 0)
+                                        <i class="ki-duotone {{ $priceChange > 0 ? 'ki-arrow-up-right' : 'ki-arrow-down-right' }} fs-2 text-{{ $trendColor }}"></i>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge badge-light-{{ $trendColor }}">
+                                        {{ number_format($priceChangePercentage, 2) }}%
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge badge-light-{{ $frequencyColor }}">
+                                        {{ __("passwords.{$purchaseFrequency}_frequency") }}
+                                    </span>
+                                    <div class="text-muted fs-8">
+                                        {{ $analysis->purchase_count }} {{ __('passwords.orders') }}
+                                    </div>
+                                </td>
+                                <td class="text-center pe-4">
+                                    <span class="badge badge-{{ $efficiencyColor }}">
+                                        {{ __("passwords.{$costEfficiency}_efficiency") }}
+                                    </span>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                        @php
+                            $pageTotalCost = $productAnalysis->sum('total_cost');
+                            $pageTotalQuantity = $productAnalysis->sum('total_quantity');
+                        @endphp
+                        <tfoot class="bg-light">
+                            <tr>
+                                {{-- Total 10 columns: #, Product, Category, Total Qty, Avg Cost, Total Cost, Price Change, Price Change %, Purchase Frequency, Cost Efficiency --}}
+                                <td colspan="3" class="text-end fw-bold">{{ __('pagination.current_page') }} ({{ __('passwords.total_quantity') }}):</td>
+                                <td class="text-end fw-bold">{{ number_format($pageTotalQuantity) }}</td>
+                                <td colspan="1" class="text-end fw-bold">{{ __('pagination.current_page') }} ({{ __('passwords.total_cost') }}):</td>
+                                <td class="text-end fw-bold text-primary">{{ currency_symbol() }}{{ number_format($pageTotalCost, 2) }}</td>
+                                <td colspan="4"></td>
+                            </tr>
+                            @if($productAnalysis->total() > $productAnalysis->count())
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }} ({{ __('passwords.total_quantity') }}):</td>
+                                <td class="text-end fw-bold text-muted">{{ number_format($summary['total_quantity']) }}</td>
+                                <td colspan="1" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }} ({{ __('passwords.total_cost') }}):</td>
+                                <td class="text-end fw-bold text-primary">{{ currency_symbol() }}{{ number_format($summary['total_cost'], 2) }}</td>
+                                <td colspan="4"></td>
+                            </tr>
+                            @endif
+                        </tfoot>
+                    </table>
                 </div>
-                @endif
+                
+                {{-- Pagination Component --}}
+                <div class="card-footer">
+                    @include('partials.pagination', [
+                        'paginator' => $productAnalysis,
+                        'pageName' => 'page',
+                        'perPageName' => 'per_page',
+                        'showPerPage' => true
+                    ])
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
             </div>
         </div>
     </div>
@@ -628,11 +641,12 @@
             
             foreach ($priceTrends as $date => $trend) {
                 $chartDates[] = $date;
-                $chartPrices[] = $trend['avg_unit_cost'] ?? 0;
-                $chartQuantities[] = $trend['total_quantity'] ?? 0;
+                $chartPrices[] = $trend->avg_unit_cost ?? 0;      // Changed from array to object
+                $chartQuantities[] = $trend->total_quantity ?? 0; // Changed from array to object
             }
         @endphp
 
+        // Price Trend Chart
         const priceTrendChart = new ApexCharts(document.querySelector("#priceTrendChart"), {
             series: [
                 {
@@ -648,9 +662,13 @@
             ],
             chart: {
                 height: 400,
+                width: '100%',
                 type: 'line',
                 toolbar: {
-                    show: false
+                    show: true,
+                    tools: {
+                        download: true
+                    }
                 }
             },
             colors: ['#3E97FF', '#50CD89'],
@@ -658,32 +676,41 @@
                 width: [3, 0]
             },
             dataLabels: {
-                enabled: false
+                enabled: true,
+                enabledOnSeries: [0],
+                formatter: function(val) {
+                    return '{{ currency_symbol() }}' + val.toFixed(2);
+                },
+                offsetY: -10
             },
             xaxis: {
                 categories: @json($chartDates),
                 labels: {
                     rotate: -45,
-                    style: {
-                        fontSize: '12px'
-                    }
+                    style: { fontSize: '11px' }
+                },
+                title: {
+                    text: '{{ __("pagination.date") }}',
+                    style: { fontSize: '12px', fontWeight: 'bold' }
                 }
             },
             yaxis: [
                 {
                     title: {
-                        text: '{{ __("passwords.avg_unit_cost_usd") }}'
+                        text: '{{ __("passwords.avg_unit_cost") }} ({{ currency_symbol() }})',
+                        style: { fontSize: '12px', fontWeight: 'bold' }
                     },
                     labels: {
                         formatter: function(val) {
-                            return '$' + val.toFixed(2);
+                            return '{{ currency_symbol() }}' + val.toFixed(2);
                         }
                     }
                 },
                 {
                     opposite: true,
                     title: {
-                        text: '{{ __("passwords.total_quantity") }}'
+                        text: '{{ __("passwords.total_quantity") }}',
+                        style: { fontSize: '12px', fontWeight: 'bold' }
                     },
                     labels: {
                         formatter: function(val) {
@@ -698,7 +725,7 @@
                 y: [
                     {
                         formatter: function(val) {
-                            return '$' + val.toFixed(2);
+                            return '{{ currency_symbol() }}' + val.toFixed(2);
                         }
                     },
                     {
@@ -709,12 +736,25 @@
                 ]
             },
             legend: {
-                position: 'top'
+                position: 'top',
+                horizontalAlign: 'center'
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 4,
+                    columnWidth: '60%'
+                }
+            },
+            grid: {
+                borderColor: '#e7e7e7',
+                row: {
+                    colors: ['#f3f3f3', 'transparent'],
+                    opacity: 0.3
+                }
             }
         });
-        
         priceTrendChart.render();
-        
+                
         // Simple export function
         function exportReport(format) {
             // Your existing export implementation

@@ -101,5 +101,29 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
 
+    /**
+     * Get the orders created by this user
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'created_by');
+    }
+
+    /**
+     * Get the orders processed by this user
+     */
+    public function processedOrders()
+    {
+        return $this->hasMany(Order::class, 'processed_by');
+    }
+
+    /**
+     * Get the orders where this user is the cashier
+     */
+    public function cashierOrders()
+    {
+        return $this->hasMany(Order::class, 'cashier_id');
+    }
+
 
 }

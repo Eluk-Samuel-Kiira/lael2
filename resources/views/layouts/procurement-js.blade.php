@@ -539,386 +539,379 @@
 
 
 
-
 <script>
-
     // Global variable to track item count
-    let purchaseOrderItemCount = 0;
+let purchaseOrderItemCount = 0;
 
-    // Initialize when page loads
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('Purchase order form initialized');
-        
-        // Set the first item ID - FIXED: Ensure it has the ID
-        const firstItem = document.querySelector('.purchase-order-item');
-        if (firstItem) {
-            firstItem.id = 'item_0';
-            purchaseOrderItemCount = 0;
-            console.log('First item ID set to:', firstItem.id);
-        }
-        
-        // Enable remove button if needed
-        updateRemoveButtons();
-        
-        // Initialize order summary
-        updateOrderSummary();
-        
-        // Add event listeners to existing quantity and unit cost inputs
-        initializeExistingInputs();
-    });
-
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Purchase order form initialized');
     
-
-    // Initialize event listeners for existing inputs - FIXED
-    function initializeExistingInputs() {
-        console.log('Initializing existing inputs...');
-        
-        // Add input event listeners to quantity and unit cost fields - WITH ERROR HANDLING
-        document.querySelectorAll('input[name^="items["][name$="[quantity]"]').forEach(input => {
-            console.log('Found quantity input:', input.name);
-            
-            input.addEventListener('input', function() {
-                try {
-                    const matches = this.name.match(/\[(\d+)\]/);
-                    if (matches && matches[1]) {
-                        const itemIndex = parseInt(matches[1]);
-                        console.log('Quantity input changed for item:', itemIndex);
-                        calculateItemTotal(itemIndex);
-                    } else {
-                        console.error('Could not parse item index from:', this.name);
-                        // Fallback: try to calculate for first item (index 0)
-                        calculateItemTotal(0);
-                    }
-                } catch (error) {
-                    console.error('Error in quantity input listener:', error);
-                    calculateItemTotal(0); // Fallback to first item
-                }
-            });
-        });
-        
-        document.querySelectorAll('input[name^="items["][name$="[unit_cost]"]').forEach(input => {
-            console.log('Found unit cost input:', input.name);
-            
-            input.addEventListener('input', function() {
-                try {
-                    const matches = this.name.match(/\[(\d+)\]/);
-                    if (matches && matches[1]) {
-                        const itemIndex = parseInt(matches[1]);
-                        console.log('Unit cost input changed for item:', itemIndex);
-                        calculateItemTotal(itemIndex);
-                    } else {
-                        console.error('Could not parse item index from:', this.name);
-                        // Fallback: try to calculate for first item (index 0)
-                        calculateItemTotal(0);
-                    }
-                } catch (error) {
-                    console.error('Error in unit cost input listener:', error);
-                    calculateItemTotal(0); // Fallback to first item
-                }
-            });
-        });
-        
-        // Also add event listeners to product selects
-        document.querySelectorAll('select[name^="items["][name$="[product_variant_id]"]').forEach(select => {
-            console.log('Found product select:', select.name);
-            
-            select.addEventListener('change', function() {
-                try {
-                    const matches = this.name.match(/\[(\d+)\]/);
-                    if (matches && matches[1]) {
-                        const itemIndex = parseInt(matches[1]);
-                        console.log('Product select changed for item:', itemIndex);
-                        updateProductDetails(this, itemIndex);
-                    } else {
-                        console.error('Could not parse item index from:', this.name);
-                        updateProductDetails(this, 0); // Fallback to first item
-                    }
-                } catch (error) {
-                    console.error('Error in product select listener:', error);
-                    updateProductDetails(this, 0); // Fallback to first item
-                }
-            });
-        });
+    // Set the first item ID
+    const firstItem = document.querySelector('.purchase-order-item');
+    if (firstItem) {
+        firstItem.id = 'item_0';
+        purchaseOrderItemCount = 0;
+        console.log('First item ID set to:', firstItem.id);
     }
+    
+    // Initialize product search for existing items
+    initProductSearch();
+    
+    // Enable remove button if needed
+    updateRemoveButtons();
+    
+    // Initialize order summary
+    updateOrderSummary();
+    
+    // Add event listeners to existing quantity and unit cost inputs
+    initializeExistingInputs();
+});
 
-
-
-    // Function to add new purchase order item row
-    function addPurchaseOrderItem() {
-        purchaseOrderItemCount++;
+// Initialize product search for all typable inputs
+function initProductSearch() {
+    document.querySelectorAll('.product-typable-input').forEach(input => {
+        if (input.dataset.initialized === 'true') return;
+        input.dataset.initialized = 'true';
         
-        const container = document.getElementById('purchase_order_items_container');
-        if (!container) {
-            console.error('Purchase order items container not found');
-            return;
-        }
-        
-        const newItemHtml = `
-            <div class="row g-4 mb-4 purchase-order-item" id="item_${purchaseOrderItemCount}">
-                <div class="col-md-4">
-                    <label class="form-label required">{{ __('passwords.product') }}</label>
-                    <select name="items[${purchaseOrderItemCount}][product_variant_id]" class="form-select product-select" onchange="updateProductDetails(this, ${purchaseOrderItemCount})">
-                        <option value=""></option>
-                        @foreach($variants as $variant)
-                            <option value="{{ $variant->id }}" 
-                                    data-sku="{{ $variant->sku }}" 
-                                    data-name="{{ $variant->name }}"
-                                    data-cost-price="{{ $variant->cost_price }}"
-                                    data-is-taxable="{{ $variant->is_taxable ? '1' : '0' }}">
-                                {{ $variant->name }} ({{ $variant->sku }})
-                            </option>
-                        @endforeach
-                    </select>
-                    <div id="items.${purchaseOrderItemCount}.product_variant_id"></div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label required">{{ __('passwords.quantity') }}</label>
-                    <input type="number" name="items[${purchaseOrderItemCount}][quantity]" class="form-control item-quantity" min="1" value="1">
-                    <div id="items.${purchaseOrderItemCount}.quantity"></div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label required">{{ __('passwords.unit_cost') }}</label>
-                    <input type="number" name="items[${purchaseOrderItemCount}][unit_cost]" class="form-control item-unit-cost" min="0.01" step="0.01" value="0.00">
-                    <div id="items.${purchaseOrderItemCount}.unit_cost"></div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">{{ __('passwords.total') }}</label>
-                    <input type="text" class="form-control bg-light item-total" value="0.00" readonly>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePurchaseOrderItem(this)">
-                        <i class="bi bi-trash fs-5"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        container.insertAdjacentHTML('beforeend', newItemHtml);
-        
-        // Add event listeners to the new inputs
-        const newQuantityInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][quantity]"]`);
-        const newUnitCostInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][unit_cost]"]`);
-        
-        if (newQuantityInput) {
-            newQuantityInput.addEventListener('input', function() {
-                calculateItemTotal(purchaseOrderItemCount);
-            });
-        }
-        
-        if (newUnitCostInput) {
-            newUnitCostInput.addEventListener('input', function() {
-                calculateItemTotal(purchaseOrderItemCount);
-            });
-        }
-        
-        // Enable remove buttons if there's more than one item
-        updateRemoveButtons();
-        
-        console.log('Added new item row:', purchaseOrderItemCount);
-    }
-
-    // Function to remove purchase order item
-    function removePurchaseOrderItem(button) {
-        if (!button) return;
-        
-        const item = button.closest('.purchase-order-item');
-        const items = document.querySelectorAll('.purchase-order-item');
-        
-        if (items.length > 1 && item) {
-            item.remove();
-            updateRemoveButtons();
-            updateOrderSummary();
-            console.log('Removed item row');
-        }
-    }
-
-    // Function to update remove buttons state
-    function updateRemoveButtons() {
-        const items = document.querySelectorAll('.purchase-order-item');
-        const removeButtons = document.querySelectorAll('.purchase-order-item .btn-danger');
-        
-        removeButtons.forEach(button => {
-            if (button) {
-                button.disabled = items.length <= 1;
-            }
-        });
-    }
-
-    // Function to update product details when variant is selected
-    function updateProductDetails(selectElement, itemIndex) {
-        if (!selectElement) {
-            console.error('Select element not found');
-            return;
-        }
-        
-        const selectedOption = selectElement.options[selectElement.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-            console.log('No product selected');
-            return;
-        }
-        
-        console.log('Product selected for item', itemIndex, ':', selectedOption.value);
-        
-        // Get product data from data attributes
-        const costPrice = parseFloat(selectedOption.getAttribute('data-cost-price')) || 0;
-        const sku = selectedOption.getAttribute('data-sku') || '';
-        const productName = selectedOption.getAttribute('data-name') || '';
-        
-        console.log('Product details:', { costPrice, sku, productName });
-        
-        // Update unit cost field
+        const itemIndex = input.dataset.itemIndex;
+        const hiddenInput = document.getElementById(`product_id_${itemIndex}`);
         const unitCostInput = document.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
-        if (unitCostInput) {
-            unitCostInput.value = costPrice;
-            console.log('Updated unit cost to:', costPrice);
+        const quantityInput = document.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
+        
+        function updateProduct() {
+            const selectedValue = input.value;
+            const datalist = document.getElementById(input.getAttribute('list'));
+            let selectedId = '';
+            let costPrice = 0;
             
-            // Calculate total immediately after updating unit cost
-            calculateItemTotal(itemIndex);
-        } else {
-            console.error('Unit cost input not found for item:', itemIndex);
+            if (datalist) {
+                const options = datalist.querySelectorAll('option');
+                for (let opt of options) {
+                    if (opt.value === selectedValue) {
+                        selectedId = opt.dataset.id;
+                        costPrice = parseFloat(opt.dataset.costPrice) || 0;
+                        break;
+                    }
+                }
+            }
+            
+            hiddenInput.value = selectedId;
+            if (unitCostInput && costPrice > 0) {
+                unitCostInput.value = costPrice.toFixed(2);
+                if (quantityInput) {
+                    calculateItemTotal(parseInt(itemIndex));
+                }
+            } else if (!selectedValue) {
+                hiddenInput.value = '';
+                if (unitCostInput) unitCostInput.value = '0.00';
+                if (quantityInput) calculateItemTotal(parseInt(itemIndex));
+            }
         }
-    }
+        
+        input.addEventListener('change', updateProduct);
+        input.addEventListener('blur', updateProduct);
+        
+        // Initial sync if there's a value
+        if (input.value) {
+            updateProduct();
+        }
+    });
+}
 
-    // Function to calculate item total
-    function calculateItemTotal(itemIndex) {
-        const itemContainer = document.getElementById(`item_${itemIndex}`);
-        if (!itemContainer) {
-            console.error('Item container not found:', itemIndex);
-            return;
-        }
+// Initialize event listeners for existing inputs
+function initializeExistingInputs() {
+    console.log('Initializing existing inputs...');
+    
+    // Add input event listeners to quantity and unit cost fields
+    document.querySelectorAll('input[name^="items["][name$="[quantity]"]').forEach(input => {
+        console.log('Found quantity input:', input.name);
         
-        const quantityInput = itemContainer.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
-        const unitCostInput = itemContainer.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
-        const totalInput = itemContainer.querySelector('.item-total');
+        input.removeEventListener('input', input._quantityHandler);
+        input._quantityHandler = function() {
+            try {
+                const matches = this.name.match(/\[(\d+)\]/);
+                if (matches && matches[1]) {
+                    const itemIndex = parseInt(matches[1]);
+                    calculateItemTotal(itemIndex);
+                }
+            } catch (error) {
+                console.error('Error in quantity input listener:', error);
+            }
+        };
+        input.addEventListener('input', input._quantityHandler);
+    });
+    
+    document.querySelectorAll('input[name^="items["][name$="[unit_cost]"]').forEach(input => {
+        console.log('Found unit cost input:', input.name);
         
-        if (!quantityInput || !unitCostInput || !totalInput) {
-            console.error('Required inputs not found for item:', itemIndex);
-            return;
-        }
-        
-        const quantity = parseFloat(quantityInput.value) || 0;
-        const unitCost = parseFloat(unitCostInput.value) || 0;
-        const total = quantity * unitCost;
-        
-        totalInput.value = total.toFixed(2);
-        console.log('Calculated total for item', itemIndex, ':', quantity, '×', unitCost, '=', total.toFixed(2));
-        
-        // Update order summary
+        input.removeEventListener('input', input._costHandler);
+        input._costHandler = function() {
+            try {
+                const matches = this.name.match(/\[(\d+)\]/);
+                if (matches && matches[1]) {
+                    const itemIndex = parseInt(matches[1]);
+                    calculateItemTotal(itemIndex);
+                }
+            } catch (error) {
+                console.error('Error in unit cost input listener:', error);
+            }
+        };
+        input.addEventListener('input', input._costHandler);
+    });
+}
+
+// Function to add new purchase order item row
+function addPurchaseOrderItem() {
+    purchaseOrderItemCount++;
+    
+    const container = document.getElementById('purchase_order_items_container');
+    if (!container) {
+        console.error('Purchase order items container not found');
+        return;
+    }
+    
+    // Build variant options for datalist
+    let variantOptions = '';
+    @foreach($variants as $variant)
+        variantOptions += `<option value="{{ $variant->name }}" 
+                                data-id="{{ $variant->id }}"
+                                data-cost-price="{{ $variant->cost_price }}">
+                            </option>`;
+    @endforeach
+    
+    const newItemHtml = `
+        <div class="row g-4 mb-4 purchase-order-item" id="item_${purchaseOrderItemCount}">
+            <div class="col-md-4">
+                <label class="form-label required">{{ __('passwords.product') }}</label>
+                <div class="position-relative">
+                    <input type="text" 
+                           id="product_search_${purchaseOrderItemCount}"
+                           class="form-control product-typable-input"
+                           list="product_list_${purchaseOrderItemCount}"
+                           placeholder="Type or select product..."
+                           autocomplete="off"
+                           data-item-index="${purchaseOrderItemCount}">
+                    <input type="hidden" 
+                           name="items[${purchaseOrderItemCount}][product_variant_id]" 
+                           id="product_id_${purchaseOrderItemCount}">
+                    <datalist id="product_list_${purchaseOrderItemCount}">
+                        <option value="">Select product</option>
+                        ${variantOptions}
+                    </datalist>
+                </div>
+                <div id="items.${purchaseOrderItemCount}.product_variant_id"></div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label required">{{ __('passwords.quantity') }}</label>
+                <input type="number" name="items[${purchaseOrderItemCount}][quantity]" class="form-control item-quantity" min="1" value="1">
+                <div id="items.${purchaseOrderItemCount}.quantity"></div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label required">{{ __('passwords.unit_cost') }}</label>
+                <input type="number" name="items[${purchaseOrderItemCount}][unit_cost]" class="form-control item-unit-cost" min="0.01" step="0.01" value="0.00">
+                <div id="items.${purchaseOrderItemCount}.unit_cost"></div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">{{ __('passwords.total') }}</label>
+                <input type="text" class="form-control bg-light item-total" value="0.00" readonly>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePurchaseOrderItem(this)">
+                    <i class="bi bi-trash fs-5"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', newItemHtml);
+    
+    // Initialize product search for the new row
+    initProductSearch();
+    
+    // Add event listeners to the new inputs
+    const newQuantityInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][quantity]"]`);
+    const newUnitCostInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][unit_cost]"]`);
+    
+    if (newQuantityInput) {
+        newQuantityInput.removeEventListener('input', newQuantityInput._handler);
+        newQuantityInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
+        newQuantityInput.addEventListener('input', newQuantityInput._handler);
+    }
+    
+    if (newUnitCostInput) {
+        newUnitCostInput.removeEventListener('input', newUnitCostInput._handler);
+        newUnitCostInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
+        newUnitCostInput.addEventListener('input', newUnitCostInput._handler);
+    }
+    
+    // Enable remove buttons if there's more than one item
+    updateRemoveButtons();
+    
+    console.log('Added new item row:', purchaseOrderItemCount);
+}
+
+// Function to remove purchase order item
+function removePurchaseOrderItem(button) {
+    if (!button) return;
+    
+    const item = button.closest('.purchase-order-item');
+    const items = document.querySelectorAll('.purchase-order-item');
+    
+    if (items.length > 1 && item) {
+        item.remove();
+        updateRemoveButtons();
         updateOrderSummary();
+        console.log('Removed item row');
     }
+}
 
-    // Function to update the order summary
-    function updateOrderSummary() {
-        const subtotalElement = document.getElementById('order_subtotal');
-        const taxTotalElement = document.getElementById('order_tax_total');
-        const grandTotalElement = document.getElementById('order_grand_total');
-        
-        if (!subtotalElement || !taxTotalElement || !grandTotalElement) {
-            console.warn('Order summary elements not found');
-            return;
+// Function to update remove buttons state
+function updateRemoveButtons() {
+    const items = document.querySelectorAll('.purchase-order-item');
+    const removeButtons = document.querySelectorAll('.purchase-order-item .btn-danger');
+    
+    removeButtons.forEach((button, index) => {
+        if (button) {
+            button.disabled = items.length <= 1;
         }
-        
-        let subtotal = 0;
-        
-        // Calculate subtotal from all items
-        document.querySelectorAll('.purchase-order-item').forEach((item) => {
-            const totalInput = item.querySelector('.item-total');
-            if (totalInput && totalInput.value) {
-                subtotal += parseFloat(totalInput.value) || 0;
-            }
-        });
-        
-        // For now, set tax to 0 - we can add tax calculation later
-        const taxTotal = 0;
-        const grandTotal = subtotal + taxTotal;
-        
-        subtotalElement.textContent = subtotal.toFixed(2);
-        taxTotalElement.textContent = taxTotal.toFixed(2);
-        grandTotalElement.textContent = grandTotal.toFixed(2);
-        
-        console.log('Order summary updated - Subtotal:', subtotal.toFixed(2), 'Grand Total:', grandTotal.toFixed(2));
+    });
+}
+
+// Function to calculate item total
+function calculateItemTotal(itemIndex) {
+    const itemContainer = document.getElementById(`item_${itemIndex}`);
+    if (!itemContainer) {
+        console.error('Item container not found:', itemIndex);
+        return;
     }
+    
+    const quantityInput = itemContainer.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
+    const unitCostInput = itemContainer.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
+    const totalInput = itemContainer.querySelector('.item-total');
+    
+    if (!quantityInput || !unitCostInput || !totalInput) {
+        console.error('Required inputs not found for item:', itemIndex);
+        return;
+    }
+    
+    const quantity = parseFloat(quantityInput.value) || 0;
+    const unitCost = parseFloat(unitCostInput.value) || 0;
+    const total = quantity * unitCost;
+    
+    totalInput.value = total.toFixed(2);
+    
+    // Update order summary
+    updateOrderSummary();
+}
 
+// Function to update the order summary
+function updateOrderSummary() {
+    const subtotalElement = document.getElementById('order_subtotal');
+    const taxTotalElement = document.getElementById('order_tax_total');
+    const grandTotalElement = document.getElementById('order_grand_total');
+    
+    if (!subtotalElement || !taxTotalElement || !grandTotalElement) {
+        console.warn('Order summary elements not found');
+        return;
+    }
+    
+    let subtotal = 0;
+    
+    // Calculate subtotal from all items
+    document.querySelectorAll('.purchase-order-item').forEach((item) => {
+        const totalInput = item.querySelector('.item-total');
+        if (totalInput && totalInput.value) {
+            subtotal += parseFloat(totalInput.value) || 0;
+        }
+    });
+    
+    const taxTotal = 0;
+    const grandTotal = subtotal + taxTotal;
+    
+    subtotalElement.textContent = subtotal.toFixed(2);
+    taxTotalElement.textContent = taxTotal.toFixed(2);
+    grandTotalElement.textContent = grandTotal.toFixed(2);
+}
 
-    // Function to validate purchase order form
-    function validatePurchaseOrderForm() {
-        let isValid = true;
+// Function to validate purchase order form
+function validatePurchaseOrderForm() {
+    let isValid = true;
+    
+    // Clear previous errors
+    document.querySelectorAll('.is-invalid').forEach(element => {
+        element.classList.remove('is-invalid');
+    });
+    document.querySelectorAll('.invalid-feedback').forEach(element => {
+        element.remove();
+    });
+    
+    // Validate supplier
+    const supplierSelect = document.querySelector('select[name="supplier_id"]');
+    if (!supplierSelect || !supplierSelect.value) {
+        showFieldError(supplierSelect, "Supplier is required");
+        isValid = false;
+    }
+    
+    // Validate location
+    const locationSelect = document.querySelector('select[name="location_id"]');
+    if (!locationSelect || !locationSelect.value) {
+        showFieldError(locationSelect, "Location is required");
+        isValid = false;
+    }
+    
+    // Validate expected delivery date
+    const deliveryDateInput = document.querySelector('input[name="expected_delivery_date"]');
+    if (!deliveryDateInput || !deliveryDateInput.value) {
+        showFieldError(deliveryDateInput, "Expected delivery date is required");
+        isValid = false;
+    }
+    
+    // Validate items
+    const items = document.querySelectorAll('.purchase-order-item');
+    let hasValidItems = false;
+    
+    items.forEach((item) => {
+        const itemId = item.id.replace('item_', '');
+        const productHidden = document.getElementById(`product_id_${itemId}`);
+        const quantityInput = item.querySelector(`input[name="items[${itemId}][quantity]"]`);
+        const unitCostInput = item.querySelector(`input[name="items[${itemId}][unit_cost]"]`);
         
-        // Clear previous errors
-        document.querySelectorAll('.is-invalid').forEach(element => {
-            element.classList.remove('is-invalid');
-        });
-        document.querySelectorAll('.invalid-feedback').forEach(element => {
-            element.remove();
-        });
-        
-        // Validate supplier
-        const supplierSelect = document.querySelector('select[name="supplier_id"]');
-        if (!supplierSelect || !supplierSelect.value) {
-            showFieldError(supplierSelect, "Supplier is required");
-            isValid = false;
-        }
-        
-        // Validate location
-        const locationSelect = document.querySelector('select[name="location_id"]');
-        if (!locationSelect || !locationSelect.value) {
-            showFieldError(locationSelect, "Location is required");
-            isValid = false;
-        }
-        
-        // Validate expected delivery date
-        const deliveryDateInput = document.querySelector('input[name="expected_delivery_date"]');
-        if (!deliveryDateInput || !deliveryDateInput.value) {
-            showFieldError(deliveryDateInput, "Expected delivery date is required");
-            isValid = false;
-        }
-        
-        // Validate items
-        const items = document.querySelectorAll('.purchase-order-item');
-        let hasValidItems = false;
-        
-        items.forEach((item) => {
-            const itemId = item.id.replace('item_', '');
-            const productSelect = item.querySelector(`select[name="items[${itemId}][product_variant_id]"]`);
-            const quantityInput = item.querySelector(`input[name="items[${itemId}][quantity]"]`);
-            const unitCostInput = item.querySelector(`input[name="items[${itemId}][unit_cost]"]`);
+        if (productHidden && productHidden.value) {
+            hasValidItems = true;
             
-            if (productSelect && productSelect.value) {
-                hasValidItems = true;
-                
-                if (!quantityInput || !quantityInput.value || parseFloat(quantityInput.value) <= 0) {
-                    showFieldError(quantityInput, "Valid quantity is required");
-                    isValid = false;
-                }
-                
-                if (!unitCostInput || !unitCostInput.value || parseFloat(unitCostInput.value) <= 0) {
-                    showFieldError(unitCostInput, "Valid unit cost is required");
-                    isValid = false;
-                }
+            if (!quantityInput || !quantityInput.value || parseFloat(quantityInput.value) <= 0) {
+                showFieldError(quantityInput, "Valid quantity is required");
+                isValid = false;
             }
-        });
-        
-        if (!hasValidItems) {
-            alert("At least one valid item is required");
-            isValid = false;
+            
+            if (!unitCostInput || !unitCostInput.value || parseFloat(unitCostInput.value) <= 0) {
+                showFieldError(unitCostInput, "Valid unit cost is required");
+                isValid = false;
+            }
         }
-        
-        return isValid;
+    });
+    
+    if (!hasValidItems) {
+        alert("At least one valid item is required");
+        isValid = false;
     }
+    
+    return isValid;
+}
 
-    // Function to show field error
-    function showFieldError(field, message) {
-        if (!field) return;
-        
-        field.classList.add('is-invalid');
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'invalid-feedback';
-        errorDiv.textContent = message;
-        field.parentNode.appendChild(errorDiv);
-    }
+// Function to show field error
+function showFieldError(field, message) {
+    if (!field) return;
+    
+    field.classList.add('is-invalid');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'invalid-feedback';
+    errorDiv.textContent = message;
+    field.parentNode.appendChild(errorDiv);
+}
 </script>
-
 
 
 <script>

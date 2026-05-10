@@ -19,35 +19,70 @@ class CurrencyController extends Controller
         $tenantId = $user->tenant_id;
         
         if (!$user->hasPermissionTo('view currency')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        $query = Currency::where('tenant_id', $tenantId);
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
         
-        // If user is super_admin, also show all other currencies
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        $query = Currency::with('currencyCreater');
+        
+        // Apply tenant filtering
         if ($user->hasRole('super_admin')) {
-            $query->orWhere(function($query) use ($tenantId) {
-                $query->where('tenant_id', '!=', $tenantId)
-                    ->whereNotNull('tenant_id');
+            // Super admin sees all currencies
+            $query->where(function($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)
+                ->orWhere(function($sub) use ($tenantId) {
+                    $sub->where('tenant_id', '!=', $tenantId)
+                        ->whereNotNull('tenant_id');
+                });
+            });
+        } else {
+            $query->where('tenant_id', $tenantId);
+        }
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('code', 'like', "%{$search}%")
+                ->orWhere('symbol', 'like', "%{$search}%")
+                ->orWhereHas('currencyCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
         
-        $currencies = $query->latest()->get();
+        // Paginate with dynamic per_page
+        $currencies = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $currencies->appends(['per_page' => $perPage, 'search' => $request->search]);
         
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'currencyIndexTable':
-                return view('settings.currency.currency-component', [
-                    'all_currencies' => $currencies,
-                ]);
-            default:
-                return view('settings.currency-index', [
-                    'all_currencies' => $currencies,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'currencyIndexTable') {
+            return view('settings.currency.currency-component', [
+                'all_currencies' => $currencies,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('settings.currency-index', [
+            'all_currencies' => $currencies,
+        ]);
     }
 
     /**

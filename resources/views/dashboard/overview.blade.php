@@ -155,8 +155,9 @@
                                     <span class="text-gray-400 mt-1 fw-semibold fs-6">{{__('payments.peak_hours_analysis')}}</span>
                                 </h3>
                             </div>
+                            {{-- Hourly Sales --}}
                             <div class="card-body pt-0">
-                                <div id="hourly_sales_chart" class="h-350px"></div>
+                                <canvas id="hourlySalesChart" style="height:350px; max-height:350px;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -171,7 +172,7 @@
                                 </h3>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="payment_methods_chart" class="h-350px"></div>
+                                <canvas id="paymentMethodsChart" style="height:350px; max-height:350px;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -279,190 +280,120 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Charts Script -->
-                @push('scripts')
-                <script>
-                    "use strict";
-                    var KTDashboardFinancial = function () {
-                        var initHourlyChart = function() {
-                            var element = document.getElementById('hourly_sales_chart');
-                            if (!element) return;
-
-                            var height = parseInt(KTUtil.css(element, 'height'));
-                            var labelColor = KTUtil.getCssVariableValue('--kt-gray-500');
-                            var borderColor = KTUtil.getCssVariableValue('--kt-gray-200');
-                            var baseColor = KTUtil.getCssVariableValue('--kt-primary');
-                            var lightColor = KTUtil.getCssVariableValue('--kt-primary-light');
-
-                            var hours = [];
-                            var sales = [];
-                            
-                            @foreach($hourlyBreakdown as $data)
-                                hours.push('{{ $data->hour }}:00');
-                                sales.push({{ $data->hourly_total }});
-                            @endforeach
-
-                            var options = {
-                                series: [{
-                                    name: '{{__('payments.sales')}}',
-                                    data: sales
-                                }],
-                                chart: {
-                                    fontFamily: 'inherit',
-                                    type: 'area',
-                                    height: height,
-                                    toolbar: {
-                                        show: false
-                                    }
-                                },
-                                plotOptions: {},
-                                dataLabels: {
-                                    enabled: false
-                                },
-                                xaxis: {
-                                    categories: hours,
-                                    axisBorder: {
-                                        show: false
-                                    },
-                                    axisTicks: {
-                                        show: false
-                                    },
-                                    labels: {
-                                        style: {
-                                            colors: labelColor,
-                                            fontSize: '12px'
-                                        }
-                                    }
-                                },
-                                yaxis: {
-                                    labels: {
-                                        style: {
-                                            colors: labelColor,
-                                            fontSize: '12px'
-                                        }
-                                    }
-                                },
-                                fill: {
-                                    type: 'gradient',
-                                    gradient: {
-                                        shadeIntensity: 1,
-                                        opacityFrom: 0.7,
-                                        opacityTo: 0.3,
-                                        stops: [0, 90, 100]
-                                    }
-                                },
-                                stroke: {
-                                    curve: 'smooth',
-                                    width: 2
-                                },
-                                colors: [baseColor],
-                                grid: {
-                                    borderColor: borderColor,
-                                    strokeDashArray: 4,
-                                    yaxis: {
-                                        lines: {
-                                            show: true
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    y: {
-                                        formatter: function(val) {
-                                            return val.toFixed(2)
-                                        }
-                                    }
-                                }
-                            };
-
-                            var chart = new ApexCharts(element, options);
-                            chart.render();
-                        };
-
-                        var initPaymentMethodsChart = function() {
-                            var element = document.getElementById('payment_methods_chart');
-                            if (!element) return;
-
-                            var height = parseInt(KTUtil.css(element, 'height'));
-                            var labelColor = KTUtil.getCssVariableValue('--kt-gray-500');
-                            
-                            var methods = [];
-                            var amounts = [];
-                            var colors = ['#009EF7', '#50CD89', '#FFC700', '#F1416C', '#7239EA'];
-                            
-                            @foreach($paymentBreakdown as $index => $method)
-                                methods.push('{{ $method->name }}');
-                                amounts.push({{ $method->total_amount }});
-                            @endforeach
-
-                            var options = {
-                                series: amounts,
-                                chart: {
-                                    fontFamily: 'inherit',
-                                    type: 'donut',
-                                    height: height
-                                },
-                                labels: methods,
-                                colors: colors,
-                                legend: {
-                                    position: 'bottom',
-                                    horizontalAlign: 'center',
-                                    fontSize: '12px'
-                                },
-                                plotOptions: {
-                                    pie: {
-                                        donut: {
-                                            size: '65%',
-                                            labels: {
-                                                show: true,
-                                                total: {
-                                                    show: true,
-                                                    label: '{{__('payments.total')}}',
-                                                    formatter: function(w) {
-                                                        return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(2);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                dataLabels: {
-                                    enabled: false
-                                },
-                                stroke: {
-                                    width: 3
-                                },
-                                tooltip: {
-                                    y: {
-                                        formatter: function(val) {
-                                            return val.toFixed(2)
-                                        }
-                                    }
-                                }
-                            };
-
-                            var chart = new ApexCharts(element, options);
-                            chart.render();
-                        };
-
-                        return {
-                            init: function () {
-                                initHourlyChart();
-                                initPaymentMethodsChart();
-                            }
-                        };
-                    }();
-
-                    KTUtil.onDOMContentLoaded(function () {
-                        KTDrawers.init();
-                        KTDashboardFinancial.init();
-                    });
-                </script>
-                @endpush
-
             </div>
         </div>
     </div>
     
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            // --- Hourly Sales Chart ---
+            var hourlyCtx = document.getElementById('hourlySalesChart');
+            if (hourlyCtx) {
+                var hourlyLabels = {!! $hourlyBreakdown->pluck('hour')->map(fn($h) => $h . ':00')->toJson() !!};
+                var hourlyData   = {!! $hourlyBreakdown->pluck('hourly_total')->toJson() !!};
+
+                new Chart(hourlyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: hourlyLabels,
+                        datasets: [{
+                            label: '{{ __("payments.sales") }}',
+                            data: hourlyData,
+                            borderColor: 'rgba(0, 158, 247, 1)',
+                            backgroundColor: 'rgba(0, 158, 247, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointBackgroundColor: 'rgba(0, 158, 247, 1)',
+                            fill: true,
+                            tension: 0.4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return ' ' + parseFloat(ctx.raw).toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                border: { display: false },
+                                ticks: { color: '#a1a5b7', font: { size: 12 } }
+                            },
+                            y: {
+                                grid: { color: '#f1f1f4' },
+                                border: { display: false, dash: [4, 4] },
+                                ticks: {
+                                    color: '#a1a5b7',
+                                    font: { size: 12 },
+                                    callback: function(val) { return val.toLocaleString(); }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Payment Methods Donut Chart ---
+            var paymentCtx = document.getElementById('paymentMethodsChart');
+            if (paymentCtx) {
+                var paymentLabels = {!! $paymentBreakdown->pluck('name')->toJson() !!};
+                var paymentData   = {!! $paymentBreakdown->pluck('total_amount')->toJson() !!};
+
+                new Chart(paymentCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: paymentLabels,
+                        datasets: [{
+                            data: paymentData,
+                            backgroundColor: [
+                                'rgba(0, 158, 247, 0.85)',
+                                'rgba(80, 205, 137, 0.85)',
+                                'rgba(255, 199, 0, 0.85)',
+                                'rgba(241, 65, 108, 0.85)',
+                                'rgba(114, 57, 234, 0.85)',
+                            ],
+                            borderColor: '#ffffff',
+                            borderWidth: 3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#a1a5b7',
+                                    font: { size: 12 },
+                                    padding: 16,
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return ' ' + ctx.label + ': ' + parseFloat(ctx.raw).toFixed(2);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+        });
+    </script>
+    @endpush
     @endsection
 </x-app-layout>

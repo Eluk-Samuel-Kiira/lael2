@@ -33,23 +33,19 @@
             <div class="d-flex align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
                 <!-- Search Bar -->
                 <div class="w-100 w-sm-250px">
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text bg-body border-0">
-                            <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
-                        </span>
-                        <input type="text" 
-                               id="searchInput" 
-                               class="form-control form-control-solid border-0 ps-0" 
-                               placeholder="{{__('auth._search')}} {{__('pagination.employee')}}"
-                               onkeyup="searchTable(this.value, 'kt_table_users')">
-                    </div>
+                    <x-liveblade-search 
+                        id="employeeSearchInput"
+                        componentId="employeeUserIndexTable"
+                        route="{{ route('user.index') }}"
+                        placeholder="{{__('auth._search')}} {{__('pagination.employee')}}"
+                    />
                 </div>
 
                 @can('edit employee')
                     <button type="button" 
-                            class="btn btn-light-primary flex-shrink-0" 
+                            class="btn btn-sm btn-light-primary flex-shrink-0" 
                             onclick="syncUserToEmployee()">
-                        <i class="ki-duotone ki-arrows-circle fs-2 me-2"></i>
+                        <i class="ki-duotone ki-arrows-circle fs-5 me-1"></i>
                         <span class="d-none d-sm-inline">{{ __('auth.sync_users') }}</span>
                         <span class="d-inline d-sm-none">{{ __('auth.sync') }}</span>
                     </button>

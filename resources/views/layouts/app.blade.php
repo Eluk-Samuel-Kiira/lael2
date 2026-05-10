@@ -38,6 +38,7 @@
 	@php
 		use Illuminate\Support\Str;
 	@endphp
+	
 	<body id="kt_app_body" data-kt-app-layout="dark-sidebar" 
 		data-kt-app-header-fixed="true" 
 		data-kt-app-sidebar-enabled="true" 
@@ -71,6 +72,7 @@
                         data-kt-drawer-width="225px"
                         data-kt-drawer-direction="start"
                         data-kt-drawer-toggle="#kt_app_sidebar_mobile_toggle">
+						
 						
                         <!--begin::Logo-->
 						<div class="app-sidebar-logo px-6" id="kt_app_sidebar_logo">

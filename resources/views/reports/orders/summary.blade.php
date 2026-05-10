@@ -17,692 +17,304 @@
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                                 <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('accounting.dashboard') }}
-                                    </a>
-                                </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('accounting.dashboard') }}</a>
                                 </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.summary') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($summary['total_orders'] > 0)
-                            <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'orderSummaryTable', filename: 'order_summary_{{ date('Y_m_d') }}', sheetName: 'Order Summary'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'orderSummaryTable', filename: 'order_summary_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
+                        @if($summary->total_orders > 0)
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportTableToExcel('orderSummaryTable', 'order_summary')">{{ __('accounting.export_to_excel') }}</a></li>
+                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportTableToCSV('orderSummaryTable', 'order_summary')">{{ __('accounting.export_to_csv') }}</a></li>
+                            </ul>
                         </div>
+                        @endif
                     </div>
                 </div>
 
                 {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
-                                </div>
+                <div class="card mb-6">
+                    <div class="card-body">
+                        <form method="GET" action="{{ route('reports.orders.summary') }}" class="row g-3">
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('accounting.start_date') }}</label>
+                                <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.orders.summary') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-6">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('auth.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('auth.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('auth.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('auth.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('auth.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Order Type --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('auth.order_type') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-bag fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="order_type">
-                                                    <option value="all">{{ __('auth.all_types') }}</option>
-                                                    <option value="sale" {{ $orderType == 'sale' ? 'selected' : '' }}>{{ __('auth.sale') }}</option>
-                                                    <option value="return" {{ $orderType == 'return' ? 'selected' : '' }}>{{ __('auth.return') }}</option>
-                                                    <option value="quote" {{ $orderType == 'quote' ? 'selected' : '' }}>{{ __('auth.quote') }}</option>
-                                                    <option value="layby" {{ $orderType == 'layby' ? 'selected' : '' }}>{{ __('auth.layby') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Order Status --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('auth.order_status') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-status fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="order_status">
-                                                    <option value="all">{{ __('auth.all_statuses') }}</option>
-                                                    <option value="draft" {{ $orderStatus == 'draft' ? 'selected' : '' }}>{{ __('auth.draft') }}</option>
-                                                    <option value="confirmed" {{ $orderStatus == 'confirmed' ? 'selected' : '' }}>{{ __('auth.confirmed') }}</option>
-                                                    <option value="processing" {{ $orderStatus == 'processing' ? 'selected' : '' }}>{{ __('auth.processing') }}</option>
-                                                    <option value="completed" {{ $orderStatus == 'completed' ? 'selected' : '' }}>{{ __('auth.completed') }}</option>
-                                                    <option value="cancelled" {{ $orderStatus == 'cancelled' ? 'selected' : '' }}>{{ __('auth.cancelled') }}</option>
-                                                    <option value="refunded" {{ $orderStatus == 'refunded' ? 'selected' : '' }}>{{ __('auth.refunded') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Action Buttons --}}
-                                    <div class="d-flex justify-content-end gap-2">
-                                        <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                            <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                            <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                            <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                        </button>
-                                        <a href="{{ route('reports.orders.summary') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                            <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                            <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                            <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                        </a>
-                                    </div>
-                                </form>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('accounting.end_date') }}</label>
+                                <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
                             </div>
-                        </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.location') }}</label>
+                                <select class="form-select" name="location_id">
+                                    <option value="">{{ __('auth.all_locations') }}</option>
+                                    @foreach($locations as $location)
+                                        <option value="{{ $location->id }}" {{ $locationId == $location->id ? 'selected' : '' }}>{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.department') }}</label>
+                                <select class="form-select" name="department_id">
+                                    <option value="">{{ __('auth.all_departments') }}</option>
+                                    @foreach($departments as $department)
+                                        <option value="{{ $department->id }}" {{ $departmentId == $department->id ? 'selected' : '' }}>{{ $department->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.order_type') }}</label>
+                                <select class="form-select" name="order_type">
+                                    <option value="">{{ __('auth.all_types') }}</option>
+                                    <option value="dine_in" {{ $orderType == 'dine_in' ? 'selected' : '' }}>Dine In</option>
+                                    <option value="takeaway" {{ $orderType == 'takeaway' ? 'selected' : '' }}>Takeaway</option>
+                                    <option value="delivery" {{ $orderType == 'delivery' ? 'selected' : '' }}>Delivery</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.order_status') }}</label>
+                                <select class="form-select" name="order_status">
+                                    <option value="">{{ __('auth.all_statuses') }}</option>
+                                    <option value="pending" {{ $orderStatus == 'pending' ? 'selected' : '' }}>Pending</option>
+                                    <option value="confirmed" {{ $orderStatus == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                                    <option value="processing" {{ $orderStatus == 'processing' ? 'selected' : '' }}>Processing</option>
+                                    <option value="completed" {{ $orderStatus == 'completed' ? 'selected' : '' }}>Completed</option>
+                                    <option value="cancelled" {{ $orderStatus == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary me-2">{{ __('accounting.apply_filters') }}</button>
+                                <a href="{{ route('reports.orders.summary') }}" class="btn btn-light">{{ __('accounting.clear_filters') }}</a>
+                            </div>
+                        </form>
                     </div>
                 </div>
 
                 {{-- Summary Statistics --}}
-                @if($summary['total_orders'] > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.summary_statistics') }}</h3>
-                                </div>
+                @if($summary->total_orders > 0)
+                <div class="row g-6 mb-6">
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-primary">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ $summary->total_orders }}</div>
+                                <div class="text-muted">{{ __('auth.total_orders') }}</div>
                             </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'total_orders', 'color' => 'primary', 'icon' => 'ki-bag', 'label' => 'total_orders', 'value' => $summary['total_orders']],
-                                        ['key' => 'total_sales', 'color' => 'success', 'icon' => 'ki-dollar', 'label' => 'total_sales', 'value' => '$' . number_format($summary['total_sales'], 2)],
-                                        ['key' => 'total_tax', 'color' => 'info', 'icon' => 'ki-receipt-tax', 'label' => 'total_tax', 'value' => '$' . number_format($summary['total_tax'], 2)],
-                                        ['key' => 'total_discount', 'color' => 'warning', 'icon' => 'ki-percentage', 'label' => 'total_discount', 'value' => '$' . number_format($summary['total_discount'], 2)],
-                                        ['key' => 'average_order_value', 'color' => 'danger', 'icon' => 'ki-calculator', 'label' => 'average_order_value', 'value' => '$' . number_format($summary['average_order_value'], 2)],
-                                        ['key' => 'max_order_value', 'color' => 'secondary', 'icon' => 'ki-arrow-up', 'label' => 'max_order_value', 'value' => '$' . number_format($summary['max_order_value'], 2)]
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-success">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ currency_symbol() }}{{ number_format($summary->total_sales, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.total_sales') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-warning">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ currency_symbol() }}{{ number_format($summary->total_tax, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.total_tax') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-info">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ currency_symbol() }}{{ number_format($summary->total_discount, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.total_discount') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-danger">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ currency_symbol() }}{{ number_format($summary->average_order_value, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.average_order_value') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-2">
+                        <div class="card bg-light-secondary">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold">{{ currency_symbol() }}{{ number_format($summary->max_order_value, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.max_order_value') }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Status Breakdown Table --}}
+                <div class="card mb-6">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ __('auth.order_status_breakdown') }}</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>{{ __('accounting.status') }}</th>
+                                        <th class="text-center">{{ __('auth.order_count') }}</th>
+                                        <th class="text-end">{{ __('accounting.total_amount') }}</th>
+                                        <th class="text-end">{{ __('accounting.average_amount') }}</th>
+                                        <th class="text-center">{{ __('accounting.percentage') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($statusBreakdown as $status)
+                                    @php
+                                        $percentage = $summary->total_orders > 0 ? ($status->count / $summary->total_orders) * 100 : 0;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <span class="badge badge-light-{{ $status->color }}">
+                                                {{ ucfirst($status->status) }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">{{ $status->count }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($status->total_amount, 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($status->average_amount, 2) }}</td>
+                                        <td class="text-center">
+                                            <div class="d-flex align-items-center justify-content-end">
+                                                <div class="progress w-100 me-2" style="height: 6px; max-width: 100px;">
+                                                    <div class="progress-bar bg-{{ $status->color }}" style="width: {{ $percentage }}%;"></div>
                                                 </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('auth.' . $stat['label']) }}
-                                                </div>
+                                                <span class="fw-bold min-w-45px text-end">{{ number_format($percentage, 1) }}%</span>
                                             </div>
-                                        </div>
-                                    </div>
+                                        </td>
+                                    </tr>
                                     @endforeach
-                                </div>
-                            </div>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-                @endif
 
-                {{-- Charts Section --}}
-                @if($dailyBreakdown->count() > 0)
-                <div class="row mb-6">
-                    {{-- Daily Sales Chart --}}
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.daily_sales_trend') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div id="dailySalesChart" style="height: 350px;"></div>
-                            </div>
-                        </div>
+                {{-- Type Breakdown Table --}}
+                <div class="card mb-6">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ __('auth.order_type_breakdown') }}</h3>
                     </div>
-                    
-                    {{-- Order Type Distribution --}}
-                    <div class="col-lg-4">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.order_type_distribution') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div id="orderTypeChart" style="height: 350px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {{-- Hourly Analysis Chart --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-clock fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.hourly_sales_analysis') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div id="hourlySalesChart" style="height: 300px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- Detailed Breakdown Tables --}}
-                <div class="row">
-                    {{-- Order Status Breakdown --}}
-                    <div class="col-lg-6 mb-6">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-status fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.order_status_breakdown') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th>{{ __('accounting.status') }}</th>
-                                                <th>{{ __('auth.order_count') }}</th>
-                                                <th>{{ __('accounting.total_amount') }}</th>
-                                                <th>{{ __('accounting.average_amount') }}</th>
-                                                <th>{{ __('accounting.percentage') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($statusBreakdown as $status)
-                                            @php
-                                                $percentage = $summary['total_orders'] > 0 ? ($status->count / $summary['total_orders']) * 100 : 0;
-                                            @endphp
-                                            <tr>
-                                                <td>
-                                                    <span class="badge badge-light-{{ getOrderStatusColor($status->status) }}">
-                                                        {{ ucfirst($status->status) }}
-                                                    </span>
-                                                </td>
-                                                <td>{{ $status->count }}</td>
-                                                <td>${{ number_format($status->total_amount, 2) }}</td>
-                                                <td>${{ number_format($status->average_amount, 2) }}</td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress w-100 me-3" style="height: 8px;">
-                                                            <div class="progress-bar bg-{{ getOrderStatusColor($status->status) }}" 
-                                                                style="width: {{ $percentage }}%"></div>
-                                                        </div>
-                                                        <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                            {{ number_format($percentage, 1) }}%
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {{-- Order Type Breakdown --}}
-                    <div class="col-lg-6 mb-6">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-bag fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.order_type_breakdown') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th>{{ __('accounting.type') }}</th>
-                                                <th>{{ __('auth.order_count') }}</th>
-                                                <th>{{ __('accounting.total_amount') }}</th>
-                                                <th>{{ __('accounting.average_amount') }}</th>
-                                                <th>{{ __('accounting.percentage') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($typeBreakdown as $type)
-                                            @php
-                                                $percentage = $summary['total_orders'] > 0 ? ($type->count / $summary['total_orders']) * 100 : 0;
-                                            @endphp
-                                            <tr>
-                                                <td>
-                                                    <span class="badge badge-light-{{ getOrderTypeColor($type->type) }}">
-                                                        {{ ucfirst($type->type) }}
-                                                    </span>
-                                                </td>
-                                                <td>{{ $type->count }}</td>
-                                                <td>${{ number_format($type->total_amount, 2) }}</td>
-                                                <td>${{ number_format($type->average_amount, 2) }}</td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress w-100 me-3" style="height: 8px;">
-                                                            <div class="progress-bar bg-{{ getOrderTypeColor($type->type) }}" 
-                                                                style="width: {{ $percentage }}%"></div>
-                                                        </div>
-                                                        <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                            {{ number_format($percentage, 1) }}%
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>{{ __('accounting.type') }}</th>
+                                        <th class="text-center">{{ __('auth.order_count') }}</th>
+                                        <th class="text-end">{{ __('accounting.total_amount') }}</th>
+                                        <th class="text-end">{{ __('accounting.average_amount') }}</th>
+                                        <th class="text-center">{{ __('accounting.percentage') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($typeBreakdown as $type)
+                                    @php
+                                        $percentage = $summary->total_orders > 0 ? ($type->count / $summary->total_orders) * 100 : 0;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <span class="badge badge-light-{{ $type->color }}">
+                                                {{ ucfirst($type->type) }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">{{ $type->count }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($type->total_amount, 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($type->average_amount, 2) }}</td>
+                                        <td class="text-center">
+                                            <div class="d-flex align-items-center justify-content-end">
+                                                <div class="progress w-100 me-2" style="height: 6px; max-width: 100px;">
+                                                    <div class="progress-bar bg-{{ $type->color }}" style="width: {{ $percentage }}%;"></div>
+                                                </div>
+                                                <span class="fw-bold min-w-45px text-end">{{ number_format($percentage, 1) }}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
                 {{-- Daily Breakdown Table --}}
                 @if($dailyBreakdown->count() > 0)
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('auth.daily_breakdown') }}</h3>
-                                    </div>
-                                    @if($dailyBreakdown->count() > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $dailyBreakdown->count() }} {{ __('accounting.days') }}
-                                    </span>
-                                    @endif
-                                </div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="orderSummaryTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('accounting.date') }}</th>
-                                                <th>{{ __('accounting.day') }}</th>
-                                                <th>{{ __('auth.order_count') }}</th>
-                                                <th>{{ __('auth.daily_total') }}</th>
-                                                <th>{{ __('auth.daily_average') }}</th>
-                                                <th>{{ __('accounting.trend') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($dailyBreakdown as $day)
-                                            @php
-                                                $dayName = \Carbon\Carbon::parse($day->date)->format('l');
-                                                $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4 fw-semibold">{{ $day->date }}</td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
-                                                        {{ $dayName }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $day->order_count }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">${{ number_format($day->daily_total, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-600">${{ number_format($day->daily_average, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    @if($loop->index > 0)
-                                                        @php
-                                                            $prevDay = $dailyBreakdown[$loop->index - 1];
-                                                            $trend = $day->daily_total - $prevDay->daily_total;
-                                                            $trendPercent = $prevDay->daily_total > 0 ? ($trend / $prevDay->daily_total) * 100 : 0;
-                                                        @endphp
-                                                        <div class="d-flex align-items-center">
-                                                            @if($trend > 0)
-                                                                <i class="ki-duotone ki-arrow-up-right fs-2 text-success me-1"></i>
-                                                                <span class="text-success fw-bold">+{{ number_format($trendPercent, 1) }}%</span>
-                                                            @elseif($trend < 0)
-                                                                <i class="ki-duotone ki-arrow-down-right fs-2 text-danger me-1"></i>
-                                                                <span class="text-danger fw-bold">{{ number_format($trendPercent, 1) }}%</span>
-                                                            @else
-                                                                <i class="ki-duotone ki-minus fs-2 text-gray-400 me-1"></i>
-                                                                <span class="text-gray-600">{{ number_format($trendPercent, 1) }}%</span>
-                                                            @endif
-                                                        </div>
-                                                    @else
-                                                        <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ __('auth.daily_breakdown') }}</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped align-middle mb-0" id="orderSummaryTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>{{ __('accounting.date') }}</th>
+                                        <th class="text-center">{{ __('auth.order_count') }}</th>
+                                        <th class="text-end">{{ __('auth.daily_total') }}</th>
+                                        <th class="text-end">{{ __('auth.daily_average') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($dailyBreakdown as $day)
+                                    <tr>
+                                        <td>{{ $day->date }}</td>
+                                        <td class="text-center">{{ $day->order_count }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($day->daily_total, 2) }}</td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($day->daily_average, 2) }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
+                @endif
+
                 @else
-                    {{-- No Data Message --}}
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('auth.no_orders_found_for_period') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date', 'location_id', 'department_id', 'order_type', 'order_status']))
-                                        <a href="{{ route('reports.orders.summary') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters_view_all') }}
-                                        </a>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
+                {{-- No Data Message --}}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="text-center py-10">
+                            <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
+                            <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                            <p class="text-muted fs-6">{{ __('auth.no_orders_found_for_period') }}</p>
                         </div>
                     </div>
+                </div>
                 @endif
+                
             </div>
         </div>
     </div>
 </div>
 
-@push('scripts')
-@if($dailyBreakdown->count() > 0)
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Daily Sales Chart
-        const dailySalesData = {
-            dates: @json($dailyBreakdown->pluck('date')),
-            totals: @json($dailyBreakdown->pluck('daily_total')),
-            counts: @json($dailyBreakdown->pluck('order_count'))
-        };
-        
-        const dailySalesChart = new ApexCharts(document.querySelector("#dailySalesChart"), {
-            series: [{
-                name: 'Sales Amount',
-                data: dailySalesData.totals,
-                type: 'line'
-            }, {
-                name: 'Order Count',
-                data: dailySalesData.counts,
-                type: 'column'
-            }],
-            chart: {
-                type: 'line',
-                height: 350,
-                toolbar: {
-                    show: true
-                }
-            },
-            stroke: {
-                width: [3, 1],
-                curve: 'smooth'
-            },
-            xaxis: {
-                categories: dailySalesData.dates,
-                labels: {
-                    rotate: -45
-                }
-            },
-            yaxis: [{
-                title: {
-                    text: 'Sales Amount ($)'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
-                    }
-                }
-            }, {
-                opposite: true,
-                title: {
-                    text: 'Order Count'
-                }
-            }],
-            tooltip: {
-                shared: true,
-                intersect: false,
-                y: {
-                    formatter: function(val, { seriesIndex }) {
-                        if (seriesIndex === 0) {
-                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                        }
-                        return val;
-                    }
-                }
-            },
-            colors: ['#3E97FF', '#50CD89']
-        });
-        dailySalesChart.render();
-        
-        // Order Type Pie Chart
-        const orderTypeData = @json($typeBreakdown);
-        const orderTypeChart = new ApexCharts(document.querySelector("#orderTypeChart"), {
-            series: orderTypeData.map(item => item.total_amount),
-            chart: {
-                type: 'pie',
-                height: 350
-            },
-            labels: orderTypeData.map(item => item.type.toUpperCase()),
-            colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700'],
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
-                }
-            }
-        });
-        orderTypeChart.render();
-        
-        // Hourly Sales Chart
-        const hourlyData = @json($hourlyBreakdown);
-        const hourlySalesChart = new ApexCharts(document.querySelector("#hourlySalesChart"), {
-            series: [{
-                name: 'Sales Amount',
-                data: hourlyData.map(item => item.hourly_total)
-            }],
-            chart: {
-                type: 'bar',
-                height: 300
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: '60%'
-                }
-            },
-            xaxis: {
-                categories: hourlyData.map(item => {
-                    const hour = parseInt(item.hour);
-                    const period = hour >= 12 ? 'PM' : 'AM';
-                    const displayHour = hour % 12 || 12;
-                    return `${displayHour} ${period}`;
-                })
-            },
-            yaxis: {
-                title: {
-                    text: 'Sales Amount ($)'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
-                    }
-                }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
-                }
-            }
-        });
-        hourlySalesChart.render();
+function exportTableToExcel(tableId, filename) {
+    const table = document.getElementById(tableId);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.table_to_sheet(table);
+    XLSX.utils.book_append_sheet(wb, ws, filename);
+    XLSX.writeFile(wb, filename + '.xlsx');
+}
+function exportTableToCSV(tableId, filename) {
+    const table = document.getElementById(tableId);
+    const rows = table.querySelectorAll('tr');
+    let csv = [];
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td, th');
+        const rowData = Array.from(cols).map(col => col.innerText);
+        csv.push(rowData.join(','));
     });
-    
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename + '.csv';
+    link.click();
+}
 </script>
-@endif
-
-<script>
-    // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
-            return false;
-        }
-    });
-</script>
-@endpush
-
 @endsection

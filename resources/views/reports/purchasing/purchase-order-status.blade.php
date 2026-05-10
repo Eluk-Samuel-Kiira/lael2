@@ -76,47 +76,63 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.purchasing.purchase-order-status') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Start Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="start_date" 
-                                                value="{{ $startDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="start_date" 
+                                                    value="{{ $startDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- End Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="end_date" 
-                                                value="{{ $endDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="end_date" 
+                                                    value="{{ $endDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
-                                                <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                @foreach($suppliers as $supplier)
-                                                    <option value="{{ $supplier->id }}" 
-                                                            {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                        {{ $supplier->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="supplier_id"  data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
+                                                    @foreach($suppliers as $supplier)
+                                                        <option value="{{ $supplier->id }}" 
+                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
+                                                            {{ $supplier->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-end">
-                                        <div class="d-flex flex-column flex-sm-row gap-2">
-                                            <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
                                             </button>
-                                            <a href="{{ route('reports.purchasing.purchase-order-status') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
+                                            <a href="{{ route('reports.purchasing.purchase-order-status') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
                                             </a>
                                         </div>
                                     </div>
@@ -129,32 +145,24 @@
                 {{-- Summary Cards --}}
                 <div class="row mb-6">
                     @php
-                        $totalOrders = $statusDistribution->sum('count');
-                        $totalValue = $statusDistribution->sum('total_value');
-                        $pendingCount = $pendingOrders->total();
-                        $overdueCount = $overdueOrders->total();
-                        $completedCount = $statusDistribution->get('completed')?->count ?? 0;
-                    @endphp
-                    
-                    @php
                         $summaryCards = [
                             [
                                 'title' => __('passwords.total_orders'),
                                 'value' => number_format($totalOrders),
                                 'color' => 'primary',
                                 'icon' => 'ki-clipboard',
-                                'description' => __('passwords.value') . ': $' . number_format($totalValue, 2)
+                                'description' => __('passwords.value') . ': ' . currency_symbol() . number_format($totalValue, 2)
                             ],
                             [
                                 'title' => __('passwords.pending_orders'),
-                                'value' => number_format($pendingCount),
+                                'value' => number_format($pendingTotalCount),
                                 'color' => 'warning',
                                 'icon' => 'ki-clock',
                                 'description' => __('passwords.needs_attention')
                             ],
                             [
                                 'title' => __('passwords.overdue_orders'),
-                                'value' => number_format($overdueCount),
+                                'value' => number_format($overdueTotalCount),
                                 'color' => 'danger',
                                 'icon' => 'ki-exclamation',
                                 'description' => __('passwords.urgent')
@@ -164,7 +172,7 @@
                                 'value' => number_format($completedCount),
                                 'color' => 'success',
                                 'icon' => 'ki-check',
-                                'description' => __('passwords.value') . ': $' . number_format($statusDistribution->get('completed')?->total_value ?? 0, 2)
+                                'description' => __('passwords.value') . ': ' . currency_symbol() . number_format($completedValue, 2)
                             ]
                         ];
                     @endphp
@@ -316,14 +324,20 @@
                                             </tbody>
                                         </table>
                                     </div>
-                                    <div class="card-footer d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $pendingOrders->firstItem() }} - {{ $pendingOrders->lastItem() }} {{ __('pagination.of') }} {{ $pendingOrders->total() }} {{ __('passwords.orders') }}
-                                        </div>
-                                        <div>
-                                            {{ $pendingOrders->appends(request()->query())->links() }}
-                                        </div>
+                                    <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <div class="text-muted">
+                                        {{ __('pagination.showing') }} {{ $overdueOrders->firstItem() ?? 0 }} - {{ $overdueOrders->lastItem() ?? 0 }} 
+                                        {{ __('pagination.of') }} {{ $overdueOrders->total() }} {{ __('passwords.orders') }}
                                     </div>
+                                    <div>
+                                        @include('partials.pagination', [
+                                            'paginator' => $overdueOrders,
+                                            'pageName' => 'overdue_page',
+                                            'perPageName' => 'per_page',
+                                            'showPerPage' => true
+                                        ])
+                                    </div>
+                                </div>
                                 @else
                                     <div class="card-body">
                                         <div class="text-center py-10">
@@ -498,16 +512,19 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Form validation
-        document.getElementById('filterForm').addEventListener('submit', function(e) {
-            const startDate = new Date(document.querySelector('[name="start_date"]').value);
-            const endDate = new Date(document.querySelector('[name="end_date"]').value);
-            
-            if (startDate > endDate) {
-                e.preventDefault();
-                alert('{{ __("pagination.start_date_cannot_be_after_end_date") }}');
-                return false;
-            }
-        });
+        const filterForm = document.getElementById('filterForm');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(e) {
+                const startDate = new Date(document.querySelector('[name="start_date"]').value);
+                const endDate = new Date(document.querySelector('[name="end_date"]').value);
+                
+                if (startDate > endDate) {
+                    e.preventDefault();
+                    alert('{{ __("pagination.start_date_cannot_be_after_end_date") }}');
+                    return false;
+                }
+            });
+        }
 
         // Status Distribution Chart
         @php
@@ -551,7 +568,7 @@
                     data: @json($chartCounts)
                 },
                 {
-                    name: '{{ __("passwords.total_value_usd") }}',
+                    name: '{{ __("passwords.total_value") }}',
                     type: 'line',
                     data: @json($chartValues)
                 }
@@ -562,18 +579,12 @@
                 toolbar: {
                     show: true,
                     tools: {
-                        download: true,
-                        selection: false,
-                        zoom: false,
-                        zoomin: false,
-                        zoomout: false,
-                        pan: false,
-                        reset: false
+                        download: true
                     }
                 }
             },
             stroke: {
-                width: [0, 4]
+                width: [0, 3]
             },
             dataLabels: {
                 enabled: true,
@@ -598,11 +609,11 @@
                 {
                     opposite: true,
                     title: {
-                        text: '{{ __("passwords.total_value_usd") }}'
+                        text: '{{ __("passwords.total_value") }} ({{ currency_symbol() }})'
                     },
                     labels: {
                         formatter: function(val) {
-                            return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0})
+                            return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 0})
                         }
                     }
                 }
@@ -616,7 +627,7 @@
                     },
                     {
                         formatter: function(val) {
-                            return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 2})
+                            return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 2})
                         }
                     }
                 ]
@@ -625,18 +636,25 @@
                 position: 'top'
             }
         });
-        statusDistributionChart.render();
+        
+        if (document.querySelector("#statusDistributionChart")) {
+            statusDistributionChart.render();
+        }
 
         // View Purchase Order Details
         const viewOrderButtons = document.querySelectorAll('.view-order-btn');
-        const purchaseOrderModal = new bootstrap.Modal(document.getElementById('purchaseOrderModal'));
+        const purchaseOrderModalElement = document.getElementById('purchaseOrderModal');
         
-        viewOrderButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const orderId = this.getAttribute('data-order-id');
-                loadPurchaseOrderDetails(orderId);
+        if (purchaseOrderModalElement) {
+            const purchaseOrderModal = new bootstrap.Modal(purchaseOrderModalElement);
+            
+            viewOrderButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const orderId = this.getAttribute('data-order-id');
+                    loadPurchaseOrderDetails(orderId, purchaseOrderModal);
+                });
             });
-        });
+        }
 
         // Follow Up buttons
         const followUpButtons = document.querySelectorAll('.follow-up-btn');
@@ -648,8 +666,10 @@
         });
     });
 
-    function loadPurchaseOrderDetails(orderId) {
+    function loadPurchaseOrderDetails(orderId, modal) {
         const detailsContainer = document.getElementById('purchaseOrderDetails');
+        
+        if (!detailsContainer) return;
         
         detailsContainer.innerHTML = `
             <div class="text-center py-5">
@@ -671,8 +691,7 @@
                 if (data.success && data.data) {
                     const order = data.data;
                     renderPurchaseOrderDetails(order);
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('purchaseOrderModal'));
-                    modal.show();
+                    if (modal) modal.show();
                 } else {
                     detailsContainer.innerHTML = `
                         <div class="alert alert-danger">
@@ -696,12 +715,10 @@
     function renderPurchaseOrderDetails(order) {
         const detailsContainer = document.getElementById('purchaseOrderDetails');
         
+        if (!detailsContainer) return;
+        
         const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2
-            }).format(amount);
+            return '{{ currency_symbol() }}' + parseFloat(amount).toLocaleString('en-US', {minimumFractionDigits: 2});
         };
         
         const statusColors = {
@@ -710,17 +727,20 @@
             'pending_approval': 'warning',
             'approved': 'success',
             'cancelled': 'danger',
-            'completed': 'primary'
+            'completed': 'primary',
+            'partially_received': 'info',
+            'received': 'success'
         };
         
-        // Get status text from translations object
         const statusTranslations = {
             'draft': '{{ __("passwords.draft") }}',
             'sent': '{{ __("passwords.sent") }}',
             'pending_approval': '{{ __("passwords.pending_approval") }}',
             'approved': '{{ __("passwords.approved") }}',
             'cancelled': '{{ __("passwords.cancelled") }}',
-            'completed': '{{ __("passwords.completed") }}'
+            'completed': '{{ __("passwords.completed") }}',
+            'partially_received': '{{ __("passwords.partially_received") }}',
+            'received': '{{ __("passwords.received") }}'
         };
         
         const statusColor = statusColors[order.status] || 'dark';
@@ -730,35 +750,35 @@
         if (order.items && order.items.length > 0) {
             itemsHtml = `
                 <div class="mt-6">
-                    <h5 class="mb-4">{{ __("passwords.order_items") }}</h5>
+                    <h5 class="mb-4 fw-bold">{{ __("passwords.order_items") }}</h5>
                     <div class="table-responsive">
                         <table class="table table-row-bordered table-row-dashed gy-4">
                             <thead>
                                 <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                    <th>{{ __("passwords.item") }}</th>
+                                    <th class="ps-4">{{ __("passwords.item") }}</th>
                                     <th>{{ __("passwords.sku") }}</th>
                                     <th class="text-end">{{ __("passwords.quantity") }}</th>
                                     <th class="text-end">{{ __("passwords.unit_cost") }}</th>
                                     <th class="text-end">{{ __("passwords.total") }}</th>
                                     <th class="text-end">{{ __("passwords.received") }}</th>
-                                    <th class="text-end">{{ __("passwords.pending") }}</th>
+                                    <th class="text-end pe-4">{{ __("passwords.pending") }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${order.items.map(item => `
                                     <tr>
-                                        <td>${item.product_name || '{{ __("pagination.n_a") }}'}</td>
+                                        <td class="ps-4">${item.product_name || '{{ __("pagination.n_a") }}'}</td>
                                         <td>${item.sku || '{{ __("pagination.n_a") }}'}</td>
                                         <td class="text-end">${item.quantity}</td>
                                         <td class="text-end">${formatCurrency(item.unit_cost)}</td>
                                         <td class="text-end fw-bold">${formatCurrency(item.total_cost)}</td>
                                         <td class="text-end">${item.received_quantity || 0}</td>
-                                        <td class="text-end">${item.quantity - (item.received_quantity || 0)}</td>
+                                        <td class="text-end pe-4">${item.quantity - (item.received_quantity || 0)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
                             <tfoot>
-                                <tr class="fw-bold fs-5 text-gray-800">
+                                <tr class="fw-bold fs-5 text-gray-800 border-top">
                                     <td colspan="4" class="text-end">{{ __("passwords.grand_total") }}:</td>
                                     <td class="text-end" colspan="3">${formatCurrency(order.total)}</td>
                                 </tr>
@@ -794,7 +814,7 @@
                         ` : ''}
                     </div>
                     <div class="col-md-4">
-                        <div class="card card-flush bg-light-${statusColor}">
+                        <div class="card card-flush bg-light-${statusColor} border border-${statusColor} border-dashed">
                             <div class="card-body text-center">
                                 <div class="mb-3">
                                     <span class="badge badge-${statusColor} fs-5 px-4 py-2">${statusText}</span>
@@ -868,7 +888,8 @@
         const printContent = document.getElementById('purchaseOrderDetails').innerHTML;
         const originalContent = document.body.innerHTML;
         
-        document.body.innerHTML = `
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
@@ -890,16 +911,13 @@
                 ${printContent}
             </body>
             </html>
-        `;
-        
-        window.print();
-        document.body.innerHTML = originalContent;
-        window.location.reload();
+        `);
+        printWindow.document.close();
+        printWindow.print();
     }
 
     function followUpOrder(orderId) {
         if (confirm('{{ __("passwords.send_follow_up_email") }}')) {
-            // You'll need to implement this endpoint
             fetch(`/api/purchase-orders/${orderId}/follow-up`, {
                 method: 'POST',
                 headers: {
@@ -910,43 +928,18 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '{{ __("passwords.follow_up_email_sent") }}',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
+                    alert('{{ __("passwords.follow_up_email_sent") }}');
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '{{ __("passwords.follow_up_email_failed") }}',
-                        text: data.message || ''
-                    });
+                    alert('{{ __("passwords.follow_up_email_failed") }}: ' + (data.message || ''));
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: '{{ __("passwords.error_occurred") }}',
-                    text: error.message
-                });
+                alert('{{ __("passwords.error_occurred") }}: ' + error.message);
             });
         }
     }
-
-    // Helper function for translations in JavaScript
-    function __(key) {
-        const translations = {
-            'passwords.draft': '{{ __("passwords.draft") }}',
-            'passwords.sent': '{{ __("passwords.sent") }}',
-            'passwords.pending_approval': '{{ __("passwords.pending_approval") }}',
-            'passwords.approved': '{{ __("passwords.approved") }}',
-            'passwords.cancelled': '{{ __("passwords.cancelled") }}',
-            'passwords.completed': '{{ __("passwords.completed") }}'
-        };
-        return translations[key] || key;
-    }
 </script>
 @endpush
+
 @endsection

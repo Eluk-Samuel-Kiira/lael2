@@ -259,9 +259,9 @@
                                             @endphp
                                             <tr class="table-danger">
                                                 <td class="ps-4">
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <div class="symbol-label bg-light-danger text-danger fw-bold">
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <div class="symbol symbol-35px flex-shrink-0">  {{-- Changed from 50px to 35px --}}
+                                                            <div class="symbol-label bg-light-danger text-danger fw-bold fs-6">  {{-- Added fs-6 for smaller font --}}
                                                                 {{ strtoupper(substr($supplier->name, 0, 2)) }}
                                                             </div>
                                                         </div>
@@ -282,7 +282,7 @@
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        ${{ number_format($totalSpent, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($totalSpent, 2) }}
                                                     </span>
                                                     <div class="text-muted fs-8">
                                                         {{ $supplier->total_orders ?? 0 }} {{ __('passwords.orders') }}
@@ -318,29 +318,32 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                {{-- Pagination for Critical Suppliers --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $criticalSuppliers,
+                                        'pageName' => 'critical_page',
+                                        'perPageName' => 'critical_per_page',
+                                        'showPerPage' => true
+                                    ])
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 @endif
 
-                {{-- All Suppliers --}}
+                {{-- All Suppliers Table --}}
                 @if($suppliers->count() > 0)
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
+                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
                                         <h3 class="fw-bold m-0">{{ __('passwords.all_suppliers_assessment') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ $suppliers->count() }} {{ __('passwords.suppliers') }}
-                                    </span>
                                 </div>
                             </div>
                             <div class="card-body p-0">
@@ -361,81 +364,43 @@
                                         <tbody>
                                             @foreach($suppliers as $index => $supplier)
                                             @php
-                                                // Risk level configuration
-                                                $riskLevelColors = [
-                                                    'high' => 'danger',
-                                                    'medium' => 'warning',
-                                                    'low' => 'success'
-                                                ];
-                                                $riskLevelIcons = [
-                                                    'high' => 'ki-exclamation',
-                                                    'medium' => 'ki-information',
-                                                    'low' => 'ki-check'
-                                                ];
+                                                $globalIndex = $sortedSuppliers->search(function($item) use ($supplier) {
+                                                    return $item->id === $supplier->id;
+                                                });
+                                                $displayIndex = $globalIndex !== false ? $globalIndex + 1 : ($index + 1);
+                                                
+                                                $riskLevelColors = ['high' => 'danger', 'medium' => 'warning', 'low' => 'success'];
+                                                $riskLevelIcons = ['high' => 'ki-exclamation', 'medium' => 'ki-information', 'low' => 'ki-check'];
                                                 $riskColor = $riskLevelColors[$supplier->risk_level] ?? 'dark';
                                                 $riskIcon = $riskLevelIcons[$supplier->risk_level] ?? 'ki-user';
                                                 
-                                                // Financial impact
                                                 $totalSpent = $supplier->total_spent ?? 0;
-                                                $financialImpact = 'low';
-                                                $financialColor = 'success';
-                                                if ($totalSpent > 50000) {
-                                                    $financialImpact = 'critical';
-                                                    $financialColor = 'danger';
-                                                } elseif ($totalSpent > 10000) {
-                                                    $financialImpact = 'high';
-                                                    $financialColor = 'warning';
-                                                } elseif ($totalSpent > 1000) {
-                                                    $financialImpact = 'medium';
-                                                    $financialColor = 'info';
-                                                }
+                                                $financialImpact = $totalSpent > 50000 ? 'critical' : ($totalSpent > 10000 ? 'high' : ($totalSpent > 1000 ? 'medium' : 'low'));
+                                                $financialColor = $financialImpact === 'critical' ? 'danger' : ($financialImpact === 'high' ? 'warning' : ($financialImpact === 'medium' ? 'info' : 'success'));
                                                 
-                                                // Delivery performance
-                                                $deliveryPerformance = 'good';
-                                                $deliveryColor = 'success';
                                                 $avgDeliveryDays = $supplier->avg_delivery_days ?? 0;
-                                                if ($avgDeliveryDays > 21) {
-                                                    $deliveryPerformance = 'poor';
-                                                    $deliveryColor = 'danger';
-                                                } elseif ($avgDeliveryDays > 14) {
-                                                    $deliveryPerformance = 'average';
-                                                    $deliveryColor = 'warning';
-                                                } elseif ($avgDeliveryDays > 7) {
-                                                    $deliveryPerformance = 'moderate';
-                                                    $deliveryColor = 'info';
-                                                }
+                                                $deliveryPerformance = $avgDeliveryDays > 21 ? 'poor' : ($avgDeliveryDays > 14 ? 'average' : ($avgDeliveryDays > 7 ? 'moderate' : 'good'));
+                                                $deliveryColor = $deliveryPerformance === 'poor' ? 'danger' : ($deliveryPerformance === 'average' ? 'warning' : ($deliveryPerformance === 'moderate' ? 'info' : 'success'));
                                                 
-                                                // Contract terms
-                                                $contractTerms = 'favorable';
-                                                $contractColor = 'success';
-                                                $paymentTerms = $supplier->payment_terms_days ?? 30;
-                                                if ($paymentTerms > 60) {
-                                                    $contractTerms = 'unfavorable';
-                                                    $contractColor = 'danger';
-                                                } elseif ($paymentTerms > 45) {
-                                                    $contractTerms = 'extended';
-                                                    $contractColor = 'warning';
-                                                } elseif ($paymentTerms > 30) {
-                                                    $contractTerms = 'standard';
-                                                    $contractColor = 'info';
-                                                }
+                                                $paymentTerms = $supplier->payment_terms ?? 30;
+                                                $contractTerms = $paymentTerms > 60 ? 'unfavorable' : ($paymentTerms > 45 ? 'extended' : ($paymentTerms > 30 ? 'standard' : 'favorable'));
+                                                $contractColor = $contractTerms === 'unfavorable' ? 'danger' : ($contractTerms === 'extended' ? 'warning' : ($contractTerms === 'standard' ? 'info' : 'success'));
                                                 
-                                                // Risk factors
                                                 $riskFactors = $supplier->risk_factors ?? [];
                                                 $displayFactors = array_slice($riskFactors, 0, 2);
                                             @endphp
                                             <tr>
                                                 <td class="ps-4">
-                                                    <span class="fw-bold">{{ $loop->iteration }}</span>
+                                                    <span class="fw-bold">{{ $displayIndex }}</span>
                                                 </td>
                                                 <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <div class="symbol-label bg-light-{{ $riskColor }} text-{{ $riskColor }} fw-bold">
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <div class="symbol symbol-40px flex-shrink-0">  {{-- Added flex-shrink-0 --}}
+                                                            <div class="symbol-label bg-light-{{ $riskColor }} text-{{ $riskColor }} fw-bold fs-5">
                                                                 {{ strtoupper(substr($supplier->name, 0, 2)) }}
                                                             </div>
                                                         </div>
-                                                        <div>
+                                                        <div class="flex-grow-1">  {{-- Added flex-grow-1 to allow text to take remaining space --}}
                                                             <div class="fw-bold">{{ $supplier->name }}</div>
                                                             <small class="text-muted">{{ $supplier->contact_person ?? __('pagination.no_contact') }}</small>
                                                         </div>
@@ -443,10 +408,7 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <i class="ki-duotone {{ $riskIcon }} fs-2 text-{{ $riskColor }} me-2">
-                                                            <span class="path1"></span>
-                                                            <span class="path2"></span>
-                                                        </i>
+                                                        <i class="ki-duotone {{ $riskIcon }} fs-2 text-{{ $riskColor }} me-2"></i>
                                                         <span class="badge badge-light-{{ $riskColor }}">
                                                             {{ __("passwords.{$supplier->risk_level}_risk") }}
                                                         </span>
@@ -467,7 +429,7 @@
                                                             {{ __("passwords.{$financialImpact}_impact") }}
                                                         </span>
                                                         <span class="text-muted fs-8">
-                                                            ${{ number_format($totalSpent, 0) }}
+                                                            {{ currency_symbol() }}{{ number_format($totalSpent, 0) }}
                                                         </span>
                                                     </div>
                                                 </td>
@@ -506,22 +468,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @else
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="text-center py-10">
-                                    <i class="ki-duotone ki-shield fs-4tx text-gray-400 mb-4">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_supplier_risk_data') }}</h4>
-                                    <p class="text-muted fs-6">{{ __('passwords.no_suppliers_available_for_risk_assessment') }}</p>
+                                
+                                {{-- Pagination Component --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $suppliers,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
                             </div>
                         </div>

@@ -110,4 +110,22 @@ class OrderItem extends Model
     {
         return $this->belongsTo(ProductVariant::class);
     }
+
+    // In app/Models/OrderItem.php
+
+    /**
+     * Get product info with eager loading
+     */
+    public function productVariant()
+    {
+        return $this->belongsTo(ProductVariant::class, 'variant_id');
+    }
+
+    /**
+     * Accessor for total return value
+     */
+    public function getReturnValueAttribute()
+    {
+        return $this->total_price;
+    }
 }

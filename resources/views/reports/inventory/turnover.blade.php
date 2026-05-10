@@ -106,10 +106,7 @@
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
                                             <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-abstract-42 fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="variant_id" data-close-on-select="false" data-placeholder="{{__('auth._select')}}" data-allow-clear="true">
+                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                     <option value="">{{ __('pagination.all_variants') }}</option>
                                                     @foreach($variants as $variant)
                                                         <option value="{{ $variant->id }}" 
@@ -158,24 +155,15 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                @php
-                                    $avgTurnoverRate = $turnoverData->avg('turnover_rate');
-                                    $avgDaysHeld = $turnoverData->avg('days_inventory_held');
-                                    $totalMovement = $turnoverData->sum('total_movement');
-                                    $totalTransactions = $turnoverData->sum('transaction_count');
-                                    $fastMoving = $turnoverData->where('turnover_rate', '>=', 10)->count();
-                                    $slowMoving = $turnoverData->whereBetween('turnover_rate', [1, 9.99])->count();
-                                    $nonMoving = $turnoverData->where('turnover_rate', '<', 1)->count();
-                                @endphp
                                 <div class="row g-6">
                                     @foreach([
-                                        ['key' => 'avg_turnover_rate', 'color' => 'primary', 'icon' => 'ki-repeat', 'label' => 'avg_turnover_rate', 'value' => number_format($avgTurnoverRate, 2)],
-                                        ['key' => 'avg_days_held', 'color' => 'success', 'icon' => 'ki-clock', 'label' => 'avg_days_held', 'value' => number_format($avgDaysHeld, 1)],
-                                        ['key' => 'total_movement', 'color' => 'info', 'icon' => 'ki-switch', 'label' => 'total_movement', 'value' => number_format($totalMovement)],
-                                        ['key' => 'total_transactions', 'color' => 'warning', 'icon' => 'ki-exchange', 'label' => 'total_transactions', 'value' => number_format($totalTransactions)],
-                                        ['key' => 'fast_moving', 'color' => 'danger', 'icon' => 'ki-rocket', 'label' => 'fast_moving_items', 'value' => $fastMoving],
-                                        ['key' => 'slow_moving', 'color' => 'secondary', 'icon' => 'ki-speedometer', 'label' => 'slow_moving_items', 'value' => $slowMoving],
-                                        ['key' => 'non_moving', 'color' => 'dark', 'icon' => 'ki-pause', 'label' => 'non_moving_items', 'value' => $nonMoving],
+                                        ['key' => 'avg_turnover_rate', 'color' => 'primary', 'icon' => 'ki-repeat', 'label' => 'avg_turnover_rate', 'value' => number_format($summary['avg_turnover_rate'] ?? 0, 2)],
+                                        ['key' => 'avg_days_held', 'color' => 'success', 'icon' => 'ki-clock', 'label' => 'avg_days_held', 'value' => number_format($summary['avg_days_held'] ?? 0, 1)],
+                                        ['key' => 'total_movement', 'color' => 'info', 'icon' => 'ki-switch', 'label' => 'total_movement', 'value' => number_format($summary['total_movement'] ?? 0)],
+                                        ['key' => 'total_transactions', 'color' => 'warning', 'icon' => 'ki-exchange', 'label' => 'total_transactions', 'value' => number_format($summary['total_transactions'] ?? 0)],
+                                        ['key' => 'fast_moving', 'color' => 'danger', 'icon' => 'ki-rocket', 'label' => 'fast_moving_items', 'value' => $summary['fast_moving'] ?? 0],
+                                        ['key' => 'slow_moving', 'color' => 'secondary', 'icon' => 'ki-speedometer', 'label' => 'slow_moving_items', 'value' => $summary['slow_moving'] ?? 0],
+                                        ['key' => 'non_moving', 'color' => 'dark', 'icon' => 'ki-pause', 'label' => 'non_moving_items', 'value' => $summary['non_moving'] ?? 0],
                                     ] as $stat)
                                     <div class="col-md-6 col-lg-3">
                                         <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
@@ -284,18 +272,6 @@
                                         <tbody>
                                             @foreach($turnoverData as $item)
                                             @php
-                                                // Movement category logic
-                                                if ($item->turnover_rate >= 10) {
-                                                    $categoryColor = 'danger';
-                                                    $categoryText = __('pagination.fast_moving');
-                                                } elseif ($item->turnover_rate >= 1) {
-                                                    $categoryColor = 'warning';
-                                                    $categoryText = __('pagination.slow_moving');
-                                                } else {
-                                                    $categoryColor = 'dark';
-                                                    $categoryText = __('pagination.non_moving');
-                                                }
-                                                
                                                 // Turnover rate color logic
                                                 $turnoverColor = 'success';
                                                 if ($item->turnover_rate < 1) {
@@ -311,14 +287,14 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        @if(isset($item->variant->image_url) && $item->variant->image_url)
+                                                        @if($item->variant && $item->variant->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ $item->variant->image_url }}" class="img-fluid" alt="{{ $item->variant->name }}">
+                                                            <img src="{{ asset($item->variant->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
                                                         </div>
                                                         @endif
                                                         <div>
                                                             <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                            <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                            <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -328,7 +304,7 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-info">{{ $item->transaction_count }}</span>
+                                                    <span class="badge badge-light-info">{{ number_format($item->transaction_count) }}</span>
                                                 </td>
                                                 <td>
                                                     {{ number_format($item->avg_stock_level, 1) }}
@@ -344,8 +320,8 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-{{ $categoryColor }}">
-                                                        {{ $categoryText }}
+                                                    <span class="badge badge-light-{{ $item->movement_color }}">
+                                                        {{ $item->movement_label }}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -353,20 +329,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                
                                 {{-- Pagination --}}
-                                @if($turnoverData->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $turnoverData->firstItem() }} - {{ $turnoverData->lastItem() }} {{ __('pagination.of') }} {{ $turnoverData->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $turnoverData->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $turnoverData,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>
@@ -387,7 +358,7 @@
                                         @if(request()->hasAny(['start_date', 'end_date', 'variant_id']))
                                         <a href="{{ route('reports.inventory.turnover') }}" class="btn btn-light-primary">
                                             <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('pagination.clear_filters_view_all') }}
+                                            {{ __('pagination.clear_filters') }}
                                         </a>
                                         @endif
                                     </div>
@@ -406,9 +377,14 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Turnover Rate Chart
-        const turnoverRates = @json($turnoverData->pluck('turnover_rate'));
-        const productNames = @json($turnoverData->pluck('variant.name'));
+        // Turnover Rate Chart - using top 20 items from full dataset
+        @if(isset($sortedTurnover) && $sortedTurnover->count() > 0)
+        const topTurnoverItems = @json($sortedTurnover->take(20));
+        const turnoverRates = topTurnoverItems.map(item => item.turnover_rate);
+        const productNames = topTurnoverItems.map(item => {
+            const name = item.variant.name;
+            return name.length > 20 ? name.substring(0, 17) + '...' : name;
+        });
         
         const turnoverChart = new ApexCharts(document.querySelector("#turnoverChart"), {
             series: [{
@@ -435,7 +411,10 @@
                 categories: productNames,
                 labels: {
                     rotate: -45,
-                    trim: true
+                    trim: true,
+                    style: {
+                        fontSize: '11px'
+                    }
                 }
             },
             yaxis: {
@@ -453,11 +432,12 @@
             }
         });
         turnoverChart.render();
+        @endif
         
         // Movement Category Chart
-        const fastMoving = @json($turnoverData->where('turnover_rate', '>=', 10)->count());
-        const slowMoving = @json($turnoverData->whereBetween('turnover_rate', [1, 9.99])->count());
-        const nonMoving = @json($turnoverData->where('turnover_rate', '<', 1)->count());
+        const fastMoving = {{ $summary['fast_moving'] ?? 0 }};
+        const slowMoving = {{ $summary['slow_moving'] ?? 0 }};
+        const nonMoving = {{ $summary['non_moving'] ?? 0 }};
         
         const movementCategoryChart = new ApexCharts(document.querySelector("#movementCategoryChart"), {
             series: [fastMoving, slowMoving, nonMoving],
@@ -484,7 +464,6 @@
         });
         movementCategoryChart.render();
     });
-    
 </script>
 @endif
 

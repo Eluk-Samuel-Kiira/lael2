@@ -1,7 +1,7 @@
 @can('view subcategory')
 <div class="card-body py-4" id="reloadProductCategoryComponent">
     <div class="table-responsive">
-        <table class="table align-middle table-row-dashed fs-6 gy-5" id="kt_table_users">
+        <table class="table align-middle table-row-dashed fs-6 gy-5" id="">
             <thead>
                 <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
                     <th class="w-10px pe-2">
@@ -124,6 +124,19 @@
                 @endif
             </tbody>
         </table>
+    </div>
+    <!-- Pagination -->
+   <div class="mt-4">
+        <x-liveblade-pagination
+            :paginator="$products_categories"
+            id="subcategoryPagination"
+            route="{{ route('product-category.index') }}"
+            search-input-id="subcategorySearchInput"
+            :show-info="true"
+            :show-per-page="true"
+            :per-page-options="[15, 25, 50, 100]"
+            data-lb-component="reloadProductCategoryComponent"
+        />
     </div>
 </div>
 @endcan

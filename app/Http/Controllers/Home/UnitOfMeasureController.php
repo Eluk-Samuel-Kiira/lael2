@@ -18,33 +18,61 @@ class UnitOfMeasureController extends Controller
         $user = Auth::user();
 
         if (!$user->hasPermissionTo('view uom')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
         }
         
-        // Build the query
-        $query = UnitOfMeasure::query();
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationship
+        $query = UnitOfMeasure::with('UOMCreater');
         
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
         
-        $uoms = $query->latest()->get();
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('symbol', 'like', "%{$search}%")
+                ->orWhereHas('UOMCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $uoms = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $uoms->appends(['per_page' => $perPage, 'search' => $request->search]);
         
         $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'uomIndexTable':
-                return view('unit-of-measure.partials.uom-component', [
-                    'all_uoms' => $uoms,
-                ]);
-            default:
-                return view('unit-of-measure.index', [
-                    'all_uoms' => $uoms,
-                ]);
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'uomIndexTable') {
+            return view('unit-of-measure.partials.uom-component', [
+                'all_uoms' => $uoms,
+            ])->render();
         }
+        
+        // Regular page load
+        return view('unit-of-measure.index', [
+            'all_uoms' => $uoms,
+        ]);
     }
 
     /**

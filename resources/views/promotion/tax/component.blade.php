@@ -125,6 +125,16 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_taxes"
+        id="taxPagination"
+        route="{{ route('tax.index') }}"
+        search-input-id="taxSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadTaxComponent"
+    />
 </div>
 @endcan
 

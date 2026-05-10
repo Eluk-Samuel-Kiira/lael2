@@ -21,6 +21,7 @@ return [
     'top_vendor' => 'Top Vendor',
     'export' => 'Export',
     'clear' => 'Clear',
+    'accounts' => 'Accounts',
     'search_accounts' => 'Search accounts...',
     'search_methods' => 'Search methods...',
     'search_transactions' => 'Search transactions...',
@@ -1007,6 +1008,9 @@ return [
     
     // Table Headers
     'max' => 'Max',
+    'current_page' => 'Current Page',
+    'all_pages' => 'All Pages',
+    'performance' => 'Performance',
     'mobile_money' => 'Mobile Money',
     'bank_account' => 'Bank Account',
     'vendors' => 'Vendors',
@@ -1014,10 +1018,17 @@ return [
     
     // Payment Method Types
     'credit' => 'Credit',
+    'show'  => 'Show',
     'debit' => 'Debit',
+    'entries_per_page' => 'Entries Per Page',
+    'orders' => 'Orders',
     'online' => 'Online',
     'mobile' => 'Mobile',
     'other' => 'Other',
+    'average_per_customer' => 'Average Per Customer',
+    'gross_amount' => 'Gross Amount',
+    'net_amount' => 'Net Amount',
+    'avg_tax_rate' => 'Average Tax Amount',
     
     // Status
     'verified' => 'Verified',
@@ -1026,14 +1037,17 @@ return [
     // Messages
     'no_expenses_found_for_payment_methods' => 'No expenses found for payment methods in the selected period.',
     'showing_payment_methods' => 'Showing :count payment methods',
-    'payment_methods' => 'payment method(s)',
+    'payment_methodss' => 'payment method(s)',
     'more_categories' => 'more categories',
+    'daily_analysis' => 'Daily Analysis',
+
     
     // Analysis
     'payment_patterns' => 'Payment Patterns',
     'preferred_methods' => 'Preferred Methods',
     'method_utilization' => 'Method Utilization',
     'transaction_fees' => 'Transaction Fees',
+    'employees' => 'Employees',
     
     // Cards and Accounts
     'card_last_four' => 'Card Last Four',

@@ -49,45 +49,8 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.excess-stock') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
                                         {{-- Excess Threshold --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.excess_threshold') }}</label>
@@ -113,23 +76,41 @@
                                                     </option>
                                                 </select>
                                             </div>
-                                            <div class="form-text">{{ __('pagination.threshold_description') }}</div>
                                         </div>
                                         
+                                        {{-- Location & Department - Dependent Dropdown --}}
+                                        <div class="flex-grow-1">
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.excess-stock') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.excess-stock') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -177,7 +158,7 @@
                                                 'color' => 'danger', 
                                                 'icon' => 'ki-dollar', 
                                                 'label' => 'excess_value',
-                                                'value' => '₦' . number_format($summary['total_excess_value'], 2),
+                                                'value' => number_format($summary['total_excess_value'], 2),
                                                 'subtitle' => __('pagination.value_of_excess_stock')
                                             ],
                                             [
@@ -220,7 +201,11 @@
                                                 </div>
                                                 <div class="mb-1">
                                                     <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
+                                                        @if(str_contains($stat['key'], 'value') || str_contains($stat['key'], 'excess_value'))
+                                                            {{ currency_symbol() }}{{ $stat['value'] }}
+                                                        @else
+                                                            {{ $stat['value'] }}
+                                                        @endif
                                                     </span>
                                                 </div>
                                                 <div class="text-gray-600 fw-semibold mb-2">
@@ -363,91 +348,75 @@
                                         </thead>
                                         <tbody>
                                             @foreach($excessStockItems as $item)
-                                            @php
-                                                // Calculate excess metrics
-                                                $currentStock = $item->quantity_on_hand;
-                                                $preferredStock = $item->preferred_stock_level;
-                                                $excessQuantity = max(0, $currentStock - ($preferredStock * $excessThreshold));
-                                                $excessPercentage = $preferredStock > 0 ? (($currentStock / $preferredStock) - 1) * 100 : 0;
-                                                
-                                                // Determine severity
-                                                $severityColor = 'warning';
-                                                $severityIcon = 'ki-warning-2';
-                                                $severityText = __('pagination.moderate');
-                                                
-                                                if ($excessPercentage >= 100 && $excessPercentage < 200) {
-                                                    $severityColor = 'danger';
-                                                    $severityIcon = 'ki-danger';
-                                                    $severityText = __('pagination.high');
-                                                } elseif ($excessPercentage >= 200) {
-                                                    $severityColor = 'danger';
-                                                    $severityIcon = 'ki-cross';
-                                                    $severityText = __('pagination.critical');
-                                                }
-                                                
-                                                // Calculate excess value
-                                                $costPrice = $item->variant->cost_price ?? 0;
-                                                $excessValue = $excessQuantity * $costPrice;
-                                            @endphp
-                                            <tr class="{{ $severityColor == 'danger' ? 'table-light-' . $severityColor : '' }}">
+                                            <tr>
                                                 <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
+                                                    <div class="fw-semibold">{{ $item->sku }}</div>
+                                                    @if($item->barcode)
+                                                    <small class="text-muted">{{ $item->barcode }}</small>
+                                                    @endif
                                                 </td>
                                                 <td>
-                                                    <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                    <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $item->departmentItem->name ?? '-' }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $item->itemLocation->name ?? '-' }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold">{{ number_format($currentStock) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">{{ number_format($preferredStock) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-{{ $severityColor }}">
-                                                        +{{ number_format($excessQuantity) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-{{ $severityColor }}">
-                                                        {{ number_format($excessPercentage, 1) }}%
-                                                    </span>
-                                                    <div class="progress mt-1" style="height: 5px; width: 80px;">
-                                                        <div class="progress-bar bg-{{ $severityColor }}" 
-                                                             style="width: {{ min(100, $excessPercentage) }}%"></div>
+                                                    <div class="d-flex align-items-center">
+                                                        @if($item->image_url)
+                                                        <div class="symbol symbol-40px me-3">
+                                                            <img src="{{ asset($item->image_url) }}" class="rounded" alt="{{ $item->variant_name }}">
+                                                        </div>
+                                                        @endif
+                                                        <div>
+                                                            <div class="fw-bold">{{ $item->variant_name }}</div>
+                                                            <div class="text-muted fs-7">{{ $item->product_name }}</div>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-{{ $severityColor }}">
-                                                        <i class="ki-duotone {{ $severityIcon }} fs-2 me-1">
+                                                    <span class="badge badge-light-primary">{{ $item->department_name }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-info">{{ $item->location_name }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="fw-bold">{{ number_format($item->quantity_on_hand) }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="fw-bold text-success">{{ number_format($item->preferred_stock_level) }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="fw-bold text-{{ $item->severity_color }}">
+                                                        +{{ number_format($item->excess_quantity) }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="fw-bold text-{{ $item->severity_color }}">
+                                                        {{ number_format($item->excess_percentage, 1) }}%
+                                                    </span>
+                                                    <div class="progress mt-1" style="height: 5px; width: 80px; margin: 0 auto;">
+                                                        <div class="progress-bar bg-{{ $item->severity_color }}" 
+                                                            style="width: {{ min(100, $item->excess_percentage) }}%"></div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $item->severity_color }}">
+                                                        <i class="ki-duotone {{ $item->severity_icon }} fs-2 me-1">
                                                             <span class="path1"></span>
                                                             <span class="path2"></span>
                                                         </i>
-                                                        {{ $severityText }}
+                                                        {{ $item->severity_text }}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span class="fw-bold text-{{ $severityColor }}">
-                                                        ₦{{ number_format($excessValue, 2) }}
+                                                <td class="text-end">
+                                                    <span class="fw-bold text-{{ $item->severity_color }}">
+                                                        {{ currency_symbol() }}{{ number_format($item->excess_value, 2) }}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-icon btn-light-warning" 
+                                                <td class="text-center">
+                                                    <button class="btn btn-sm btn-icon btn-light-warning me-1" 
                                                             data-bs-toggle="tooltip" 
-                                                            title="{{ __('pagination.adjust_stock') }}"
-                                                            onclick="adjustStock({{ $item->id }})">
+                                                            title="{{ __('pagination.adjust_stock') }}">
                                                         <i class="ki-duotone ki-switch fs-2"></i>
                                                     </button>
                                                     <button class="btn btn-sm btn-icon btn-light-info" 
                                                             data-bs-toggle="tooltip" 
-                                                            title="{{ __('pagination.transfer_stock') }}"
-                                                            onclick="transferStock({{ $item->id }})">
+                                                            title="{{ __('pagination.transfer_stock') }}">
                                                         <i class="ki-duotone ki-move fs-2"></i>
                                                     </button>
                                                 </td>
@@ -458,18 +427,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($excessStockItems->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $excessStockItems->firstItem() }} - {{ $excessStockItems->lastItem() }} {{ __('pagination.of') }} {{ $excessStockItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $excessStockItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $excessStockItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

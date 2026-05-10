@@ -27,10 +27,12 @@
             </div>
             <div class="d-flex align-items-center gap-2 gap-lg-3">
                 <!-- Search Bar -->
-                <div class="px-7 py-5">
-                    <input type="text" id="searchInput" class="form-control" placeholder="{{__('auth._search')}} {{__('payments.tenant')}}"
-                        onkeyup="searchTable(this.value, 'kt_table_users')">
-                </div>
+                <x-liveblade-search 
+                    id="tenantSearchInput"
+                    componentId="reloadtenantComponent"
+                    route="{{ route('tenant.index') }}"
+                    placeholder="{{__('auth._search')}} {{__('payments.tenant')}}"
+                />
                 
                 @role('super_admin')
                     <a href="{{ route('tenant.create') }}" class="btn btn-sm btn-primary">

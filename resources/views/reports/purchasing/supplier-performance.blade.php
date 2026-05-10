@@ -36,7 +36,7 @@
                             </ul>
                         </div>
                         <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($suppliers->count() > 0)
+                            @if($paginatedSuppliers->count() > 0)
                             <div class="dropdown w-100 w-sm-auto">
                                 <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
@@ -80,47 +80,63 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.purchasing.supplier-performance') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Start Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="start_date" 
-                                                value="{{ $startDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="start_date" 
+                                                    value="{{ $startDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- End Date --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <input type="date" class="form-control w-100" name="end_date" 
-                                                value="{{ $endDate }}" required>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text bg-light">
+                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                </span>
+                                                <input type="date" class="form-control" name="end_date" 
+                                                    value="{{ $endDate }}" required>
+                                            </div>
                                         </div>
                                         
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
-                                                <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                @foreach($suppliers as $supplier)
-                                                    <option value="{{ $supplier->id }}" 
-                                                            {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                        {{ $supplier->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
+                                                    @foreach($paginatedSuppliers as $supplier)
+                                                        <option value="{{ $supplier->id }}" 
+                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
+                                                            {{ $supplier->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="d-flex justify-content-end">
-                                        <div class="d-flex flex-column flex-sm-row gap-2">
-                                            <button type="submit" class="btn btn-primary flex-grow-1 flex-sm-grow-0" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
                                             </button>
-                                            <a href="{{ route('reports.purchasing.supplier-performance') }}" class="btn btn-light btn-active-light-primary flex-grow-1 flex-sm-grow-0">
-                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
+                                            <a href="{{ route('reports.purchasing.supplier-performance') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
                                             </a>
                                         </div>
                                     </div>
@@ -143,14 +159,14 @@
                             ],
                             [
                                 'title' => __('passwords.total_spent'),
-                                'value' => '$' . number_format($summary['total_spent'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_spent'], 2),
                                 'color' => 'success',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.total_purchases')
                             ],
                             [
                                 'title' => __('passwords.avg_order_value'),
-                                'value' => '$' . number_format($summary['avg_order_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['avg_order_value'], 2),
                                 'color' => 'info',
                                 'icon' => 'ki-chart-line',
                                 'description' => __('passwords.per_order_average')
@@ -160,7 +176,7 @@
                                 'value' => $summary['top_supplier'] ? $summary['top_supplier']->name : __('passwords.none'),
                                 'color' => 'warning',
                                 'icon' => 'ki-crown',
-                                'description' => $summary['top_supplier'] ? '$' . number_format($summary['top_supplier']->total_spent, 2) : ''
+                                'description' => $summary['top_supplier'] ? currency_symbol() . number_format($summary['top_supplier']->total_spent, 2) : ''
                             ]
                         ];
                     @endphp
@@ -190,15 +206,15 @@
                 </div>
 
                 {{-- Charts Section --}}
-                @if($suppliers->count() > 0)
+                @if($paginatedSuppliers->count() > 0)
                 @php
-                    // Collect chart data manually since $suppliers is a paginator
+                    // Collect chart data manually since $paginatedSuppliers is a paginator
                     $abcCounts = ['A' => 0, 'B' => 0, 'C' => 0];
                     $supplierData = [];
                     $deliveryRanges = ['excellent' => 0, 'good' => 0, 'fair' => 0, 'poor' => 0];
                     $orderValueRanges = ['high' => 0, 'medium' => 0, 'low' => 0, 'very_low' => 0];
                     
-                    foreach ($suppliers as $supplier) {
+                    foreach ($paginatedSuppliers as $supplier) {
                         // Count ABC classifications
                         $classification = $supplier->classification ?? 'C';
                         $abcCounts[$classification]++;
@@ -326,7 +342,7 @@
                 @endif
 
                 {{-- Suppliers Performance Table --}}
-                @if($suppliers->count() > 0)
+                @if($paginatedSuppliers->count() > 0)
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
@@ -340,7 +356,7 @@
                                         <h3 class="fw-bold m-0">{{ __('passwords.supplier_performance_metrics') }}</h3>
                                     </div>
                                     <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $suppliers->count() }} {{ __('pagination.suppliers') }}
+                                        {{ __('pagination.showing') }} {{ $paginatedSuppliers->count() }} {{ __('pagination.suppliers') }}
                                     </span>
                                 </div>
                             </div>
@@ -362,7 +378,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($suppliers as $index => $supplier)
+                                            @foreach($paginatedSuppliers as $index => $supplier)
                                             @php
                                                 // Determine classification colors
                                                 $classificationColors = [
@@ -443,7 +459,7 @@
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold text-primary">
-                                                        ${{ number_format($supplier->total_spent, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($supplier->total_spent, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -456,7 +472,7 @@
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="fw-semibold">${{ number_format($supplier->avg_order_value, 2) }}</span>
+                                                    <span class="fw-semibold">{{ currency_symbol() }}{{ number_format($supplier->avg_order_value, 2) }}</span>
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
@@ -501,6 +517,16 @@
                                             @endforeach
                                         </tbody>
                                     </table>
+                                </div>
+                                
+                                {{-- Pagination --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $paginatedSuppliers,  // Changed from $purchaseOrders to $paginatedSuppliers
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
                             </div>
                         </div>
@@ -549,7 +575,7 @@
 @endpush
 
 @push('scripts')
-@if($suppliers->count() > 0)
+@if($paginatedSuppliers->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -570,13 +596,13 @@
             series: [{{ $abcCounts['A'] }}, {{ $abcCounts['B'] }}, {{ $abcCounts['C'] }}],
             chart: {
                 type: 'donut',
-                height: 300
+                height: 350,
+                width: '100%',
+                toolbar: { show: true, tools: { download: true } }
             },
             labels: ['Category A (Strategic)', 'Category B (Tactical)', 'Category C (Transactional)'],
             colors: ['#F1416C', '#FFC700', '#50CD89'],
-            legend: {
-                position: 'bottom'
-            },
+            legend: { position: 'bottom', fontSize: '12px' },
             plotOptions: {
                 pie: {
                     donut: {
@@ -587,7 +613,7 @@
                                 show: true,
                                 label: 'Total Suppliers',
                                 formatter: function(w) {
-                                    return {{ $suppliers->count() }}
+                                    return {{ $paginatedSuppliers->total() }}
                                 }
                             }
                         }
@@ -597,24 +623,35 @@
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return val + ' suppliers'
+                        const total = {{ $paginatedSuppliers->total() }};
+                        const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                        return val + ' suppliers (' + percentage + '%)';
                     }
                 }
-            }
+            },
+            dataLabels: { enabled: true, formatter: function(val, opts) { return opts.w.config.series[opts.seriesIndex]; } },
+            responsive: [{ breakpoint: 480, options: { chart: { height: 300 }, legend: { position: 'bottom' } } }]
         });
         abcClassificationChart.render();
-        
+
         // Chart 2: Top 10 Suppliers by Spend
+        const topSupplierNames = @json($topSupplierNames);
+        const topSupplierSpends = @json($topSupplierSpends);
+
         const topSuppliersChart = new ApexCharts(document.querySelector("#topSuppliersChart"), {
             series: [{
                 name: 'Total Spent',
-                data: @json($topSupplierSpends)
+                data: topSupplierSpends
             }],
             chart: {
                 type: 'bar',
-                height: 300,
+                height: 350,
+                width: '100%',
                 toolbar: {
-                    show: false
+                    show: true,
+                    tools: {
+                        download: true
+                    }
                 }
             },
             plotOptions: {
@@ -623,32 +660,52 @@
                     borderRadius: 4,
                     dataLabels: {
                         position: 'top'
-                    }
+                    },
+                    barHeight: '70%'
                 }
             },
             dataLabels: {
                 enabled: true,
                 formatter: function(val) {
-                    return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0})
+                    return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 0});
                 },
                 offsetX: 20,
                 style: {
-                    fontSize: '12px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
                     colors: ['#304758']
                 }
             },
             xaxis: {
-                categories: @json($topSupplierNames),
+                categories: topSupplierNames,
                 labels: {
                     formatter: function(val) {
-                        return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 0})
+                        return '{{ currency_symbol() }}' + parseFloat(val).toLocaleString('en-US', {minimumFractionDigits: 0});
+                    },
+                    style: {
+                        fontSize: '11px'
+                    }
+                },
+                title: {
+                    text: 'Total Spent',
+                    style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold'
                     }
                 }
             },
             yaxis: {
                 labels: {
                     style: {
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    }
+                },
+                title: {
+                    text: 'Supplier',
+                    style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold'
                     }
                 }
             },
@@ -656,13 +713,28 @@
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 2})
+                        return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 2});
+                    }
+                }
+            },
+            grid: {
+                borderColor: '#e7e7e7',
+                row: {
+                    colors: ['#f3f3f3', 'transparent'],
+                    opacity: 0.5
+                }
+            },
+            states: {
+                hover: {
+                    filter: {
+                        type: 'darken',
+                        value: 0.1
                     }
                 }
             }
         });
         topSuppliersChart.render();
-        
+                
         // Chart 3: Delivery Performance
         const deliveryPerformanceChart = new ApexCharts(document.querySelector("#deliveryPerformanceChart"), {
             series: [{

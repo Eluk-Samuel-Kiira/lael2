@@ -125,6 +125,16 @@
             </tbody>
         </table>
     </div>
+    <x-liveblade-pagination
+        :paginator="$all_promotions"
+        id="promotionPagination"
+        route="{{ route('promotion.index') }}"
+        search-input-id="promotionSearchInput"
+        :show-info="true"
+        :show-per-page="true"
+        :per-page-options="[15, 25, 50, 100]"
+        data-lb-component="reloadPromotionComponent"
+    />
 </div>
 
 

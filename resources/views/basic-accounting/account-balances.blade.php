@@ -122,7 +122,7 @@
                                     @foreach($accounts->sortByDesc('current_balance')->take(5) as $account)
                                     <div class="d-flex flex-column me-7 mb-5">
                                         <span class="fs-4 fw-bold text-gray-800">{{ $account->name }}</span>
-                                        <span class="fs-6 fw-semibold text-gray-500">{{ $account->currency->code ?? 'USD' }} {{ number_format($account->current_balance, 2) }}</span>
+                                        <span class="fs-6 fw-semibold text-gray-500">{{ currency_code() }} {{ number_format($account->current_balance, 2) }}</span>
                                         <div class="d-flex align-items-center mt-2">
                                             <div class="progress h-6px w-100 me-3">
                                                 <div class="progress-bar bg-primary" role="progressbar" 

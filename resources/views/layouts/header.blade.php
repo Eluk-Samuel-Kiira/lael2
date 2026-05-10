@@ -362,3 +362,66 @@
         }
     }
 </style>
+
+<style>
+    /* Reduce toolbar height */
+    .app-toolbar.py-3.py-lg-6 {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
+    
+    /* Reduce heading size */
+    .page-heading {
+        font-size: 1.1rem !important;
+        margin: 0 !important;
+    }
+    
+    /* Reduce search input height */
+    .input-group {
+        height: 42px !important;
+    }
+    
+    .form-control,
+    .input-group-text {
+        padding: 0.2rem 0.5rem !important;
+        height: 42px !important;
+        font-size: 1.0rem !important;
+    }
+    
+    /* Reduce button size */
+    .btn-primary {
+        padding: 0.2rem 0.75rem !important;
+        font-size: 1.0rem !important;
+        height: 42px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+    }
+    
+    /* Reduce icon size */
+    .btn-primary i,
+    .input-group-text i {
+        font-size: 1.0rem !important;
+    }
+    
+    /* Reduce gap between elements */
+    .d-flex.gap-3 {
+        gap: 0.5rem !important;
+    }
+    
+    /* Make search input narrower */
+    .w-sm-250px {
+        width: 180px !important;
+    }
+    
+    /* Responsive - keep readable on mobile */
+    @media (max-width: 768px) {
+        .w-sm-250px {
+            width: 100% !important;
+        }
+        
+        .page-heading {
+            font-size: 1rem !important;
+        }
+    }
+</style>

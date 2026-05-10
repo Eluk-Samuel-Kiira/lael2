@@ -22,12 +22,19 @@ class AccountingController extends Controller
         
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->with(['currency'])
-            ->get();
+            ->get()
+            ->map(function($method) {
+                // Convert balances from cents to base currency
+                $method->current_balance_display = from_base_currency($method->current_balance);
+                $method->available_balance_display = from_base_currency($method->available_balance);
+                $method->pending_balance_display = from_base_currency($method->pending_balance);
+                return $method;
+            });
         
         $stats = [
             'total_payment_methods' => $paymentMethods->count(),
-            'total_balance' => $paymentMethods->sum('current_balance'),
-            'average_balance' => $paymentMethods->avg('current_balance'),
+            'total_balance' => from_base_currency($paymentMethods->sum('current_balance')),
+            'average_balance' => from_base_currency($paymentMethods->avg('current_balance')),
             'active_methods' => $paymentMethods->where('is_active', true)->count(),
             'inactive_methods' => $paymentMethods->where('is_active', false)->count(),
         ];
@@ -51,22 +58,37 @@ class AccountingController extends Controller
                 'pending_balance', 'currency_id', 'is_active', 'last_transaction_at'
             ])
             ->with(['currency'])
-            ->get();
-            
+            ->get()
+            ->map(function($account) {
+                // Convert balances from cents to base currency
+                $account->current_balance_display = from_base_currency($account->current_balance);
+                $account->available_balance_display = from_base_currency($account->available_balance);
+                $account->pending_balance_display = from_base_currency($account->pending_balance);
+                return $account;
+            });
+        
         // Calculate summary
         $summary = [
-            'total_current' => $accounts->sum('current_balance'),
-            'total_available' => $accounts->sum('available_balance'),
-            'total_pending' => $accounts->sum('pending_balance'),
+            'total_current' => from_base_currency($accounts->sum('current_balance')),
+            'total_available' => from_base_currency($accounts->sum('available_balance')),
+            'total_pending' => from_base_currency($accounts->sum('pending_balance')),
             'accounts_count' => $accounts->count(),
         ];
         
-        // Get recent transactions for context
+        // Get recent transactions for context - include today's transactions
+        $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
         $recentTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [now()->subDays(30)->format('Y-m-d'), $endDate])
             ->with(['paymentMethod'])
             ->orderBy('transaction_date', 'desc')
             ->limit(10)
-            ->get();
+            ->get()
+            ->map(function($transaction) {
+                // Convert amounts from cents to base currency
+                $transaction->amount_display = from_base_currency($transaction->amount);
+                $transaction->balance_after_display = from_base_currency($transaction->balance_after);
+                return $transaction;
+            });
         
         return view('basic-accounting.account-balances', compact('accounts', 'summary', 'recentTransactions'));
     }
@@ -88,16 +110,20 @@ class AccountingController extends Controller
             'status' => $request->get('status', 'COMPLETED'),
         ];
         
+        // Convert to proper datetime ranges for full day inclusion
+        $startDateTime = $filters['start_date'] . ' 00:00:00';
+        $endDateTime = $filters['end_date'] . ' 23:59:59';
+        
         $query = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->with(['paymentMethod', 'currency', 'customer']); // Added customer here
-                
+            ->with(['paymentMethod', 'currency', 'customer']);
+        
         // Apply filters
         if ($filters['start_date']) {
-            $query->whereDate('transaction_date', '>=', $filters['start_date']);
+            $query->where('transaction_date', '>=', $startDateTime);
         }
         
         if ($filters['end_date']) {
-            $query->whereDate('transaction_date', '<=', $filters['end_date']);
+            $query->where('transaction_date', '<=', $endDateTime);
         }
         
         if ($filters['transaction_type']) {
@@ -112,27 +138,57 @@ class AccountingController extends Controller
             $query->where('status', $filters['status']);
         }
         
+        // Get paginated transactions
         $transactions = $query->orderBy('transaction_date', 'desc')
-            ->paginate(50);
-            
+            ->paginate(15) // Changed to 15 per page for better usability
+            ->through(function($transaction) {
+                // Convert amounts from cents to base currency
+                $transaction->amount_display = from_base_currency($transaction->amount);
+                $transaction->fee_display = from_base_currency($transaction->transaction_fee);
+                $transaction->net_amount_display = from_base_currency($transaction->net_amount);
+                $transaction->balance_before_display = from_base_currency($transaction->balance_before);
+                $transaction->balance_after_display = from_base_currency($transaction->balance_after);
+                return $transaction;
+            });
+        
+        // Calculate summary stats using the paginated data
+        $totalAmount = $transactions->sum('amount_display');
+        $averageAmount = $transactions->count() > 0 ? $totalAmount / $transactions->count() : 0;
+        
+        // Get recent transactions (last 5 for quick view)
+        $recentTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->where('status', 'COMPLETED')
+            ->orderBy('transaction_date', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function($transaction) {
+                $transaction->amount_display = from_base_currency($transaction->amount);
+                $transaction->balance_after_display = from_base_currency($transaction->balance_after);
+                return $transaction;
+            });
+        
         // Get filter options
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->get();
-            
+            ->get(['id', 'name']);
+        
         $transactionTypes = PaymentTransactionLog::distinct('transaction_type')
             ->pluck('transaction_type');
-            
+        
         $categories = PaymentTransactionLog::distinct('transaction_category')
             ->pluck('transaction_category');
         
+        // For display in the form
+        $displayStartDate = $filters['start_date'];
+        $displayEndDate = $filters['end_date'];
+        
         return view('basic-accounting.transaction-ledger', compact(
             'transactions', 'filters', 'paymentMethods', 
-            'transactionTypes', 'categories'
+            'transactionTypes', 'categories', 'displayStartDate', 'displayEndDate',
+            'totalAmount', 'averageAmount', 'recentTransactions'
         ));
     }
 
-    // Add this method to AccountingController
     public function getTransactionDetails($id)
     {
         $user = Auth::user();
@@ -146,6 +202,13 @@ class AccountingController extends Controller
             ->with(['paymentMethod.currency', 'customer'])
             ->firstOrFail();
         
+        // Convert amounts
+        $transaction->amount = from_base_currency($transaction->amount);
+        $transaction->balance_before = from_base_currency($transaction->balance_before);
+        $transaction->balance_after = from_base_currency($transaction->balance_after);
+        $transaction->transaction_fee = from_base_currency($transaction->transaction_fee);
+        $transaction->net_amount = from_base_currency($transaction->net_amount);
+        
         // Handle metadata - ensure it's properly formatted
         if ($transaction->metadata && is_string($transaction->metadata)) {
             try {
@@ -156,6 +219,7 @@ class AccountingController extends Controller
         }
         
         return response()->json([
+            'success' => true,
             'transaction' => $transaction,
             'customer' => $transaction->customer,
             'payment_method' => $transaction->paymentMethod,
@@ -173,48 +237,83 @@ class AccountingController extends Controller
         }
         
         $period = $request->get('period', 'month');
-        $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
         
-        // Get revenue (deposits)
-        $revenue = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Set dates based on period - ensure we include current date
+        switch ($period) {
+            case 'month':
+                $startDate = now()->startOfMonth()->format('Y-m-d');
+                $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
+                break;
+            case 'quarter':
+                $startDate = now()->startOfQuarter()->format('Y-m-d');
+                $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
+                break;
+            case 'year':
+                $startDate = now()->startOfYear()->format('Y-m-d');
+                $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
+                break;
+            case 'custom':
+                $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
+                $endDate = $request->get('end_date', now()->format('Y-m-d')) . ' 23:59:59';
+                break;
+            default:
+                $startDate = now()->startOfMonth()->format('Y-m-d');
+                $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
+        }
+        
+        // For display purposes (show date only without time)
+        $displayStartDate = date('Y-m-d', strtotime($startDate));
+        $displayEndDate = date('Y-m-d', strtotime($endDate));
+        
+        // Get revenue (deposits) - using RAW DB values (cents)
+        $revenueCents = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->sum('amount');
-            
-        // Get expenses (withdrawals)
-        $expenses = PaymentTransactionLog::where('tenant_id', $tenantId)
+        
+        // Get expenses (withdrawals) - using RAW DB values (cents)
+        $expensesCents = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->sum('amount');
-            
-        // Get net income
+        
+        // Convert to base currency using helper
+        $revenue = from_base_currency($revenueCents);
+        $expenses = from_base_currency($expensesCents);
         $netIncome = $revenue - $expenses;
         
-        // Get revenue by category
+        // Get revenue by category - using RAW DB values (cents)
         $revenueByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
-            ->select('transaction_category', DB::raw('SUM(amount) as total'))
+            ->select('transaction_category', DB::raw('SUM(amount) as total_cents'))
             ->groupBy('transaction_category')
-            ->get();
-            
-        // Get expenses by category
+            ->get()
+            ->map(function($item) {
+                $item->total = from_base_currency($item->total_cents);
+                return $item;
+            });
+        
+        // Get expenses by category - using RAW DB values (cents)
         $expensesByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
-            ->select('transaction_category', DB::raw('SUM(amount) as total'))
+            ->select('transaction_category', DB::raw('SUM(amount) as total_cents'))
             ->groupBy('transaction_category')
-            ->get();
+            ->get()
+            ->map(function($item) {
+                $item->total = from_base_currency($item->total_cents);
+                return $item;
+            });
         
         return view('basic-accounting.income-statement', compact(
             'revenue', 'expenses', 'netIncome', 
             'revenueByCategory', 'expensesByCategory',
-            'startDate', 'endDate', 'period'
+            'displayStartDate', 'displayEndDate', 'period'
         ));
     }
     
@@ -228,50 +327,74 @@ class AccountingController extends Controller
         }
         
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
+        $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
         
-        // Get daily cash flow
+        // For display (show date only)
+        $displayStartDate = date('Y-m-d', strtotime($startDate));
+        $displayEndDate = date('Y-m-d', strtotime($endDate));
+        
+        // Validate date range
+        if (strtotime($startDate) > strtotime($endDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+        
+        // Get daily cash flow - using RAW DB values (cents)
         $dailyCashFlow = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->select(
                 DB::raw('DATE(transaction_date) as date'),
-                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as cash_in'),
-                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as cash_out'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as cash_in_cents'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as cash_out_cents'),
                 DB::raw('COUNT(*) as transaction_count')
             )
             ->groupBy(DB::raw('DATE(transaction_date)'))
             ->orderBy('date', 'desc')
-            ->get();
-            
-        // Get cash flow by payment method
+            ->get()
+            ->map(function($item) {
+                // Convert cents to base currency using helper
+                $item->cash_in = from_base_currency($item->cash_in_cents);
+                $item->cash_out = from_base_currency($item->cash_out_cents);
+                return $item;
+            });
+        
+        // Get cash flow by payment method - using RAW DB values (cents)
         $cashFlowByMethod = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->with('paymentMethod')
             ->select(
                 'payment_method_id',
-                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as cash_in'),
-                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as cash_out'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as cash_in_cents'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as cash_out_cents'),
                 DB::raw('COUNT(*) as transaction_count')
             )
             ->groupBy('payment_method_id')
-            ->get();
-            
-        // Summary
+            ->get()
+            ->map(function($item) {
+                // Convert cents to base currency using helper
+                $item->cash_in = from_base_currency($item->cash_in_cents);
+                $item->cash_out = from_base_currency($item->cash_out_cents);
+                return $item;
+            });
+        
+        // Summary - using helpers
+        $totalCashIn = from_base_currency($dailyCashFlow->sum('cash_in_cents'));
+        $totalCashOut = from_base_currency($dailyCashFlow->sum('cash_out_cents'));
+        
         $summary = [
-            'total_cash_in' => $dailyCashFlow->sum('cash_in'),
-            'total_cash_out' => $dailyCashFlow->sum('cash_out'),
-            'net_cash_flow' => $dailyCashFlow->sum('cash_in') - $dailyCashFlow->sum('cash_out'),
+            'total_cash_in' => $totalCashIn,
+            'total_cash_out' => $totalCashOut,
+            'net_cash_flow' => $totalCashIn - $totalCashOut,
             'total_transactions' => $dailyCashFlow->sum('transaction_count'),
         ];
         
         return view('basic-accounting.cash-flow', compact(
             'dailyCashFlow', 'cashFlowByMethod', 'summary',
-            'startDate', 'endDate'
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
         ));
     }
-    
+        
     // 6. Transaction Analysis Report
     public function transactionAnalysis(Request $request)
     {
@@ -282,66 +405,85 @@ class AccountingController extends Controller
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
+        $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
+        
+        // For display (show date only)
+        $displayStartDate = date('Y-m-d', strtotime($startDate));
+        $displayEndDate = date('Y-m-d', strtotime($endDate));
         
         // Validate date range
         if (strtotime($startDate) > strtotime($endDate)) {
-            // Swap dates if start is after end
             [$startDate, $endDate] = [$endDate, $startDate];
         }
         
-        // Transaction volume by type
+        // Transaction volume by type - using RAW DB values (cents)
         $volumeByType = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->select(
                 'transaction_type',
                 DB::raw('COUNT(*) as count'),
-                DB::raw('COALESCE(SUM(amount), 0) as total_amount'),
-                DB::raw('COALESCE(AVG(amount), 0) as average_amount')
+                DB::raw('COALESCE(SUM(amount), 0) as total_cents'),
+                DB::raw('COALESCE(AVG(amount), 0) as avg_cents')
             )
             ->groupBy('transaction_type')
-            ->get();
-            
-        // Transaction volume by category
+            ->get()
+            ->map(function($item) {
+                // Convert cents to base currency using helper
+                $item->total_amount = from_base_currency($item->total_cents);
+                $item->average_amount = from_base_currency($item->avg_cents);
+                return $item;
+            });
+        
+        // Transaction volume by category - using RAW DB values (cents)
         $volumeByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->select(
                 'transaction_category',
                 DB::raw('COUNT(*) as count'),
-                DB::raw('COALESCE(SUM(amount), 0) as total_amount'),
-                DB::raw('COALESCE(AVG(amount), 0) as average_amount')
+                DB::raw('COALESCE(SUM(amount), 0) as total_cents'),
+                DB::raw('COALESCE(AVG(amount), 0) as avg_cents')
             )
             ->groupBy('transaction_category')
-            ->orderBy('total_amount', 'desc')
-            ->get();
-            
-        // Daily transaction trends
+            ->orderBy('total_cents', 'desc')
+            ->get()
+            ->map(function($item) {
+                // Convert cents to base currency using helper
+                $item->total_amount = from_base_currency($item->total_cents);
+                $item->average_amount = from_base_currency($item->avg_cents);
+                return $item;
+            });
+        
+        // Daily transaction trends - using RAW DB values (cents)
         $dailyTrends = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->select(
                 DB::raw('DATE(transaction_date) as date'),
                 DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('COALESCE(SUM(amount), 0) as daily_total')
+                DB::raw('COALESCE(SUM(amount), 0) as daily_total_cents')
             )
             ->groupBy(DB::raw('DATE(transaction_date)'))
             ->orderBy('date')
-            ->get();
-            
-        // Top transactions
+            ->get()
+            ->map(function($item) {
+                // Convert cents to base currency using helper
+                $item->daily_total = from_base_currency($item->daily_total_cents);
+                return $item;
+            });
+        
+        // Top transactions - using pagination (amount is already converted by accessor)
         $topTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
             ->with(['paymentMethod'])
             ->orderBy('amount', 'desc')
-            ->limit(20)
-            ->get();
+            ->paginate(15);
         
         return view('basic-accounting.transaction-analysis', compact(
             'volumeByType', 'volumeByCategory', 'dailyTrends', 'topTransactions',
-            'startDate', 'endDate'
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
         ));
     }
         
@@ -355,26 +497,39 @@ class AccountingController extends Controller
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
+        $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
         
-        // All expenses (withdrawals)
-        $expenses = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // For display (show date only)
+        $displayStartDate = date('Y-m-d', strtotime($startDate));
+        $displayEndDate = date('Y-m-d', strtotime($endDate));
+        
+        // Validate date range
+        if (strtotime($startDate) > strtotime($endDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+        
+        // Calculate summary using RAW DB values (cents) then convert
+        $summaryRaw = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->where('status', 'COMPLETED')
-            ->with(['paymentMethod'])
-            ->orderBy('transaction_date', 'desc')
-            ->get();
-            
-        // Expense summary
+            ->select(
+                DB::raw('SUM(amount) as total_cents'),
+                DB::raw('COUNT(*) as count'),
+                DB::raw('AVG(amount) as avg_cents'),
+                DB::raw('MAX(amount) as max_cents')
+            )
+            ->first();
+        
+        // Convert cents to base currency using helper
         $summary = [
-            'total_expenses' => $expenses->sum('amount'),
-            'expense_count' => $expenses->count(),
-            'average_expense' => $expenses->avg('amount'),
-            'largest_expense' => $expenses->max('amount'),
+            'total_expenses' => from_base_currency($summaryRaw->total_cents ?? 0),
+            'expense_count' => $summaryRaw->count ?? 0,
+            'average_expense' => from_base_currency($summaryRaw->avg_cents ?? 0),
+            'largest_expense' => from_base_currency($summaryRaw->max_cents ?? 0),
         ];
         
-        // Expenses by category
+        // Expenses by category using RAW DB values (cents)
         $expensesByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
@@ -382,23 +537,36 @@ class AccountingController extends Controller
             ->select(
                 'transaction_category',
                 DB::raw('COUNT(*) as count'),
-                DB::raw('SUM(amount) as total_amount'),
-                DB::raw('AVG(amount) as average_amount'),
-                DB::raw('MAX(amount) as max_amount')
+                DB::raw('SUM(amount) as total_cents'),
+                DB::raw('AVG(amount) as avg_cents'),
+                DB::raw('MAX(amount) as max_cents')
             )
             ->groupBy('transaction_category')
-            ->orderBy('total_amount', 'desc')
-            ->get();
-            
-        // Top expense sources
-        $topExpenses = $expenses->sortByDesc('amount')->take(10);
+            ->orderBy('total_cents', 'desc')
+            ->get()
+            ->map(function($category) {
+                // Convert cents to base currency using helper
+                $category->total_amount = from_base_currency($category->total_cents);
+                $category->average_amount = from_base_currency($category->avg_cents);
+                $category->max_amount = from_base_currency($category->max_cents);
+                return $category;
+            });
+        
+        // Top expenses - use pagination
+        $topExpenses = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED')
+            ->with(['paymentMethod'])
+            ->orderBy('amount', 'desc')
+            ->paginate(10);
         
         return view('basic-accounting.expense-analysis', compact(
-            'expenses', 'summary', 'expensesByCategory', 'topExpenses',
-            'startDate', 'endDate'
+            'summary', 'expensesByCategory', 'topExpenses',
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
         ));
     }
-    
+            
     // 8. Payment Method Analysis Report
     public function paymentMethodAnalysis(Request $request)
     {
@@ -411,14 +579,18 @@ class AccountingController extends Controller
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         
+        // Convert to proper datetime ranges to include full days
+        $startDateTime = $startDate . ' 00:00:00';
+        $endDateTime = $endDate . ' 23:59:59';
+        
         // Get payment methods with transaction stats
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->with(['currency'])
             ->get()
-            ->map(function ($method) use ($tenantId, $startDate, $endDate) {
+            ->map(function ($method) use ($tenantId, $startDateTime, $endDateTime) {
                 $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
                     ->where('payment_method_id', $method->id)
-                    ->whereBetween('transaction_date', [$startDate, $endDate])
+                    ->whereBetween('transaction_date', [$startDateTime, $endDateTime])
                     ->where('status', 'COMPLETED')
                     ->get();
                     
@@ -435,7 +607,7 @@ class AccountingController extends Controller
                 
                 return $method;
             });
-            
+        
         // Overall statistics
         $stats = [
             'total_balance' => $paymentMethods->sum('current_balance'),
@@ -445,11 +617,15 @@ class AccountingController extends Controller
             'highest_balance_method' => $paymentMethods->sortByDesc('current_balance')->first(),
         ];
         
+        // For display in the form
+        $displayStartDate = $startDate;
+        $displayEndDate = $endDate;
+        
         return view('basic-accounting.payment-method-analysis', compact(
-            'paymentMethods', 'stats', 'startDate', 'endDate'
+            'paymentMethods', 'stats', 'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
         ));
     }
-    
+
     // 9. Daily Summary Report
     public function dailySummary(Request $request)
     {
