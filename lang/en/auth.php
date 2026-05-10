@@ -136,6 +136,8 @@ return [
     
     // Documents
     'documents' => 'Documents',
+    'grand_total' => 'Grant Total',
+    'documents' => 'Documents',
     'registered' => 'Registered',
     'discount_range_distribution' => 'Discount Range Distribution',
     'discount_range' => 'Discount Rate',

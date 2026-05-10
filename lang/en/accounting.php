@@ -1008,6 +1008,9 @@ return [
     
     // Table Headers
     'max' => 'Max',
+    'current_page' => 'Current Page',
+    'all_pages' => 'All Pages',
+    'performance' => 'Performance',
     'mobile_money' => 'Mobile Money',
     'bank_account' => 'Bank Account',
     'vendors' => 'Vendors',

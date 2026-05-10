@@ -459,7 +459,11 @@ class Order extends Model
      */
     public function getDayNameAttribute()
     {
-        return $this->created_at->format('l');
+        if ($this->created_at) {
+            return $this->created_at->format('l');
+        }
+        
+        return null; // or return a default value like 'Unknown'
     }
 
     /**

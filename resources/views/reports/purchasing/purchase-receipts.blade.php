@@ -98,7 +98,7 @@
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
+                                            <select class="form-select w-100" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                 <option value="">{{ __('passwords.all_suppliers') }}</option>
                                                 @foreach($suppliers as $supplier)
                                                     <option value="{{ $supplier->id }}" 
@@ -112,7 +112,7 @@
                                         {{-- Location --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.location') }}</label>
-                                            <select class="form-select w-100" name="location_id">
+                                            <select class="form-select w-100" name="location_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                 <option value="">{{ __('passwords.all_locations') }}</option>
                                                 @foreach($locations as $location)
                                                     <option value="{{ $location->id }}" 
@@ -171,7 +171,7 @@
                             ],
                             [
                                 'title' => __('passwords.total_value'),
-                                'value' => '$' . number_format($summary['total_value'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_value'], 2),
                                 'color' => 'warning',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.total_cost')
@@ -305,11 +305,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($receipts->hasPages())
-                                <div class="card-footer d-flex justify-content-end">
-                                    {{ $receipts->withQueryString()->links() }}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $receipts,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

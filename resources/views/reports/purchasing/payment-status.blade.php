@@ -109,7 +109,7 @@
                                         {{-- Supplier --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <select class="form-select w-100" name="supplier_id">
+                                            <select class="form-select w-100" name="supplier_id"  data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
                                                 <option value="">{{ __('passwords.all_suppliers') }}</option>
                                                 @foreach($suppliers as $supplier)
                                                     <option value="{{ $supplier->id }}" 
@@ -147,28 +147,28 @@
                         $summaryCards = [
                             [
                                 'title' => __('passwords.total_amount_due'),
-                                'value' => '$' . number_format($summary['total_amount_due'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_amount_due'], 2),
                                 'color' => 'warning',
                                 'icon' => 'ki-dollar',
                                 'description' => __('passwords.amount_outstanding')
                             ],
                             [
                                 'title' => __('passwords.total_amount_paid'),
-                                'value' => '$' . number_format($summary['total_amount_paid'], 2),
+                                'value' => currency_symbol() . number_format($summary['total_amount_paid'], 2),
                                 'color' => 'success',
                                 'icon' => 'ki-check',
                                 'description' => __('passwords.amount_settled')
                             ],
                             [
                                 'title' => __('passwords.overdue_amount'),
-                                'value' => '$' . number_format($summary['overdue_amount'], 2),
+                                'value' => currency_symbol() . number_format($summary['overdue_amount'], 2),
                                 'color' => 'danger',
                                 'icon' => 'ki-exclamation',
                                 'description' => __('passwords.overdue_payments') . ': ' . $summary['overdue_count']
                             ],
                             [
                                 'title' => __('passwords.total_items'),
-                                'value' => number_format($items->total()),
+                                'value' => number_format($summary['total_items']),
                                 'color' => 'primary',
                                 'icon' => 'ki-element-plus',
                                 'description' => __('passwords.items_analyzed')
@@ -500,13 +500,14 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="card-footer d-flex justify-content-between align-items-center">
-                                    <div class="text-muted">
-                                        {{ __('pagination.showing') }} {{ $items->firstItem() }} - {{ $items->lastItem() }} {{ __('pagination.of') }} {{ $items->total() }} {{ __('passwords.items') }}
-                                    </div>
-                                    <div>
-                                        {{ $items->appends(request()->query())->links() }}
-                                    </div>
+                                {{-- Pagination --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $items,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
                             </div>
                         </div>
@@ -583,54 +584,91 @@
             }
         @endphp
 
-        const paymentStatusChart = new ApexCharts(document.querySelector("#paymentStatusChart"), {
-            series: @json($statusData),
-            chart: {
-                type: 'donut',
-                height: 350
-            },
-            labels: @json($statusLabels),
-            colors: @json($statusColors),
-            legend: {
-                position: 'bottom',
-                formatter: function(seriesName, opts) {
-                    const total = opts.w.config.series.reduce((a, b) => a + b, 0);
-                    const percentage = total > 0 ? ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1) : 0;
-                    return seriesName + ': ' + percentage + '%';
-                }
-            },
-            plotOptions: {
-                pie: {
-                    donut: {
-                        size: '65%',
-                        labels: {
-                            show: true,
-                            total: {
+        // Payment Status Chart - Using data from controller
+        const statusLabels = @json($statusLabels);
+        const statusData = @json($statusData);
+        const statusColors = @json($statusColors);
+
+        if (statusData.length > 0 && statusData.some(value => value > 0)) {
+            const paymentStatusChart = new ApexCharts(document.querySelector("#paymentStatusChart"), {
+                series: statusData,
+                chart: {
+                    type: 'donut',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
+                    }
+                },
+                labels: statusLabels,
+                colors: statusColors,
+                legend: {
+                    position: 'bottom',
+                    fontSize: '12px',
+                    formatter: function(seriesName, opts) {
+                        const total = opts.w.config.series.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1) : 0;
+                        return seriesName + ': ' + percentage + '%';
+                    }
+                },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '65%',
+                            labels: {
                                 show: true,
-                                label: '{{ __("passwords.total_amount") }}',
-                                formatter: function(w) {
-                                    const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                    return '$' + total.toLocaleString('en-US', {minimumFractionDigits: 0});
+                                total: {
+                                    show: true,
+                                    label: '{{ __("passwords.total_amount") }}',
+                                    formatter: function(w) {
+                                        const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                        return '{{ currency_symbol() }}' + total.toLocaleString('en-US', {minimumFractionDigits: 0});
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString('en-US', {minimumFractionDigits: 2});
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            const total = statusData.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return '{{ currency_symbol() }}' + val.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' (' + percentage + '%)';
+                        }
                     }
-                }
-            },
-            dataLabels: {
-                formatter: function(val, opts) {
-                    return opts.w.config.series[opts.seriesIndex].toLocaleString('en-US', {minimumFractionDigits: 0});
-                }
-            }
-        });
-        paymentStatusChart.render();
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val, opts) {
+                        const total = statusData.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                        return percentage + '%';
+                    },
+                    style: {
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }
+                },
+                responsive: [{
+                    breakpoint: 480,
+                    options: {
+                        chart: {
+                            height: 300
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }]
+            });
+            paymentStatusChart.render();
+        } else {
+            document.querySelector("#paymentStatusChart").innerHTML = '<div class="text-center text-muted py-5">{{ __("passwords.no_payment_data") }}</div>';
+        }
     });
 </script>
 @endpush

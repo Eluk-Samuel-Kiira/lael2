@@ -16,6 +16,7 @@ use App\Models\PaymentMethod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class PurchasingReportsController extends Controller
 {
@@ -34,7 +35,28 @@ class PurchasingReportsController extends Controller
     }
 
     /**
-     * Purchase Order Summary Report
+     * ✅ Reusable pagination method
+     */
+    private function paginateCollection($collection, $perPage = 15, $pageName = 'page')
+    {
+        $page = LengthAwarePaginator::resolveCurrentPage($pageName);
+        $currentPageItems = $collection->slice(($page - 1) * $perPage, $perPage)->values();
+        
+        return new LengthAwarePaginator(
+            $currentPageItems,
+            $collection->count(),
+            $perPage,
+            $page,
+            [
+                'path' => request()->url(),
+                'pageName' => $pageName,
+                'query' => request()->except($pageName, 'per_page')
+            ]
+        );
+    }
+
+    /**
+     * Purchase Order Summary Report with Pure Eloquent
      */
     public function purchaseOrderSummary(Request $request)
     {
@@ -46,13 +68,14 @@ class PurchasingReportsController extends Controller
         $supplierId = $request->get('supplier_id');
         $status = $request->get('status', 'all');
         $locationId = $request->get('location_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query purchase orders
+        // Get ALL purchase orders for calculations (unpaginated)
         $query = PurchaseOrder::with(['supplier', 'location', 'creator'])
             ->where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         
-        // Apply filters
+        // Apply filters to the query
         if ($supplierId) {
             $query->where('supplier_id', $supplierId);
         }
@@ -65,17 +88,22 @@ class PurchasingReportsController extends Controller
             $query->where('location_id', $locationId);
         }
         
-        $purchaseOrders = $query->orderBy('created_at', 'desc')->paginate(25);
+        // Get ALL orders for summary calculations
+        $allOrders = $query->get();
         
-        // Summary statistics
+        // Calculate summary statistics from ALL orders
         $summary = [
-            'total_orders' => $query->count(),
-            'total_value' => $query->sum('total'),
-            'average_order_value' => $query->avg('total'),
-            'pending_orders' => $query->clone()->whereIn('status', ['draft', 'sent', 'pending_approval'])->count(),
-            'completed_orders' => $query->clone()->whereIn('status', ['received', 'partially_received'])->count(),
-            'cancelled_orders' => $query->clone()->where('status', 'cancelled')->count(),
+            'total_orders' => $allOrders->count(),
+            'total_value' => $allOrders->sum('total'),
+            'average_order_value' => $allOrders->avg('total') ?? 0,
+            'pending_orders' => $allOrders->whereIn('status', ['draft', 'sent', 'pending_approval'])->count(),
+            'completed_orders' => $allOrders->whereIn('status', ['received', 'partially_received'])->count(),
+            'cancelled_orders' => $allOrders->where('status', 'cancelled')->count(),
         ];
+        
+        // Apply pagination to the collection
+        $sortedOrders = $allOrders->sortByDesc('created_at')->values();
+        $purchaseOrders = $this->paginateCollection($sortedOrders, $perPage, 'page');
         
         // Get data for filter dropdowns
         $suppliers = Supplier::where('tenant_id', $tenantId)
@@ -94,12 +122,13 @@ class PurchasingReportsController extends Controller
             'endDate',
             'supplierId',
             'status',
-            'locationId'
+            'locationId',
+            'perPage'
         ));
     }
 
     /**
-     * Supplier Performance Report - NO PAGINATION VERSION
+     * Supplier Performance Report - With Pagination
      */
     public function supplierPerformance(Request $request)
     { 
@@ -108,24 +137,25 @@ class PurchasingReportsController extends Controller
         $startDate = $request->get('start_date', now()->subDays(90)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $supplierId = $request->get('supplier_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Get all suppliers
-        $query = Supplier::where('tenant_id', $tenantId)
+        // Get all suppliers with filters
+        $suppliersQuery = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true);
         
         if ($supplierId) {
-            $query->where('id', $supplierId);
+            $suppliersQuery->where('id', $supplierId);
         }
         
-        $allSuppliers = $query->get();
+        $allSuppliers = $suppliersQuery->get();
         
-        // Calculate metrics for each supplier
+        // Calculate metrics for each supplier using collections
         $suppliersData = collect();
         
         foreach ($allSuppliers as $supplier) {
-            // Load purchase orders for this period
+            // Get purchase orders for this period
             $purchaseOrders = PurchaseOrder::where('supplier_id', $supplier->id)
-                ->where('tenant_id', $this->getTenantId())
+                ->where('tenant_id', $tenantId)
                 ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
                 ->get();
             
@@ -135,7 +165,8 @@ class PurchasingReportsController extends Controller
             
             // Get received orders for delivery metrics
             $receivedOrders = $purchaseOrders->where('status', 'received');
-            $on_time_orders = $receivedOrders->count();
+            $receivedCount = $receivedOrders->count();
+            $on_time_orders = $receivedCount;
             
             // Calculate on-time delivery rate
             $on_time_delivery_rate = $total_orders > 0 
@@ -144,18 +175,25 @@ class PurchasingReportsController extends Controller
             
             // Calculate average delivery days
             $avg_delivery_days = 0;
-            if ($receivedOrders->count() > 0) {
-                $totalDays = 0;
-                foreach ($receivedOrders as $order) {
+            if ($receivedCount > 0) {
+                $totalDays = $receivedOrders->sum(function($order) {
                     if ($order->received_at && $order->created_at) {
-                        $totalDays += Carbon::parse($order->created_at)
+                        return Carbon::parse($order->created_at)
                             ->diffInDays(Carbon::parse($order->received_at));
                     }
-                }
-                $avg_delivery_days = $totalDays / $receivedOrders->count();
+                    return 0;
+                });
+                $avg_delivery_days = $totalDays / $receivedCount;
             }
             
-            $suppliersData->push([
+            // Calculate performance score
+            $performanceScore = 0;
+            if ($total_spent > 0) $performanceScore += 30;
+            $performanceScore += ($on_time_delivery_rate * 0.4);
+            $performanceScore += (max(0, 100 - ($avg_delivery_days * 2)) * 0.3);
+            $performanceScore = min(100, $performanceScore);
+            
+            $suppliersData->push((object)[
                 'id' => $supplier->id,
                 'name' => $supplier->name,
                 'contact_person' => $supplier->contact_person,
@@ -167,6 +205,7 @@ class PurchasingReportsController extends Controller
                 'on_time_orders' => $on_time_orders,
                 'on_time_delivery_rate' => $on_time_delivery_rate,
                 'avg_delivery_days' => $avg_delivery_days,
+                'performance_score' => $performanceScore,
                 'spend_percentage' => 0,
                 'classification' => 'C'
             ]);
@@ -178,57 +217,106 @@ class PurchasingReportsController extends Controller
         // Calculate spend percentage and ABC classification
         $sortedSuppliers = $suppliersData->sortByDesc('total_spent')->values();
         $cumulativePercentage = 0;
-        
         $processedSuppliers = [];
+        
         foreach ($sortedSuppliers as $supplier) {
             if ($totalSpentAllSuppliers > 0) {
-                $spendPercentage = ($supplier['total_spent'] / $totalSpentAllSuppliers) * 100;
-                $supplier['spend_percentage'] = $spendPercentage;
+                $spendPercentage = ($supplier->total_spent / $totalSpentAllSuppliers) * 100;
+                $supplier->spend_percentage = $spendPercentage;
                 $cumulativePercentage += $spendPercentage;
                 
                 // ABC Classification
                 if ($cumulativePercentage <= 80) {
-                    $supplier['classification'] = 'A';
+                    $supplier->classification = 'A';
                 } elseif ($cumulativePercentage <= 95) {
-                    $supplier['classification'] = 'B';
+                    $supplier->classification = 'B';
                 } else {
-                    $supplier['classification'] = 'C';
+                    $supplier->classification = 'C';
                 }
             } else {
-                $supplier['spend_percentage'] = 0;
-                $supplier['classification'] = 'C';
+                $supplier->spend_percentage = 0;
+                $supplier->classification = 'C';
             }
             
-            $processedSuppliers[] = (object)$supplier;
+            $processedSuppliers[] = $supplier;
         }
         
-        // Convert to collection of objects for blade
-        $suppliersCollection = collect($processedSuppliers);
+        // Apply pagination - THIS RETURNS A LengthAwarePaginator
+        $allSuppliersCollection = collect($processedSuppliers);
+        $paginatedSuppliers = $this->paginateCollection($allSuppliersCollection, $perPage, 'page');
+        
+        // Calculate chart data from ALL suppliers (not paginated) - for accurate charts
+        $abcCounts = ['A' => 0, 'B' => 0, 'C' => 0];
+        $deliveryRanges = ['excellent' => 0, 'good' => 0, 'fair' => 0, 'poor' => 0];
+        $orderValueRanges = ['high' => 0, 'medium' => 0, 'low' => 0, 'very_low' => 0];
+        
+        foreach ($processedSuppliers as $supplier) {
+            $abcCounts[$supplier->classification]++;
+            
+            $deliveryRate = $supplier->on_time_delivery_rate;
+            if ($deliveryRate >= 90) {
+                $deliveryRanges['excellent']++;
+            } elseif ($deliveryRate >= 75) {
+                $deliveryRanges['good']++;
+            } elseif ($deliveryRate >= 60) {
+                $deliveryRanges['fair']++;
+            } else {
+                $deliveryRanges['poor']++;
+            }
+            
+            $avgValue = $supplier->avg_order_value;
+            if ($avgValue >= 1000) {
+                $orderValueRanges['high']++;
+            } elseif ($avgValue >= 500) {
+                $orderValueRanges['medium']++;
+            } elseif ($avgValue >= 100) {
+                $orderValueRanges['low']++;
+            } else {
+                $orderValueRanges['very_low']++;
+            }
+        }
+        
+        // Get top 10 suppliers for chart (from all suppliers)
+        $topSuppliers = collect($processedSuppliers)
+            ->sortByDesc('total_spent')
+            ->take(10)
+            ->values();
+        
+        $topSupplierNames = $topSuppliers->map(function($supplier) {
+            $name = $supplier->name;
+            return strlen($name) > 20 ? substr($name, 0, 20) . '...' : $name;
+        })->toArray();
+        
+        $topSupplierSpends = $topSuppliers->pluck('total_spent')->toArray();
         
         // Overall summary
-        $topSupplier = $suppliersCollection->first();
+        $topSupplier = $processedSuppliers[0] ?? null;
         
         $summary = [
-            'total_suppliers' => $allSuppliers->count(),
+            'total_suppliers' => count($processedSuppliers),
             'total_spent' => $totalSpentAllSuppliers,
-            'avg_order_value' => $totalSpentAllSuppliers > 0 ? ($totalSpentAllSuppliers / $suppliersCollection->sum('total_orders')) : 0,
+            'avg_order_value' => $totalSpentAllSuppliers > 0 ? ($totalSpentAllSuppliers / collect($processedSuppliers)->sum('total_orders')) : 0,
             'top_supplier' => $topSupplier,
         ];
         
-        // \Log::info($suppliersCollection);
-        
-        return view('reports.purchasing.supplier-performance', [
-            'suppliers' => $suppliersCollection,
-            'summary' => $summary,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-            'supplierId' => $supplierId
-        ]);
+        return view('reports.purchasing.supplier-performance', compact(
+            'paginatedSuppliers',  // Changed from $suppliers to $paginatedSuppliers
+            'summary',
+            'abcCounts',
+            'deliveryRanges',
+            'orderValueRanges',
+            'topSupplierNames',
+            'topSupplierSpends',
+            'startDate',
+            'endDate',
+            'supplierId',
+            'perPage'
+        ));
     }
-        
+                    
 
     /**
-     * Purchase Order Status Report
+     * Purchase Order Status Report - Pure Eloquent
      */
     public function purchaseOrderStatus(Request $request)
     {
@@ -237,21 +325,29 @@ class PurchasingReportsController extends Controller
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $supplierId = $request->get('supplier_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Get status distribution
-        $statusQuery = PurchaseOrder::where('tenant_id', $tenantId)
+        // Get ALL purchase orders for status distribution (unpaginated)
+        $statusQuery = PurchaseOrder::with(['supplier', 'location'])
+            ->where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         
         if ($supplierId) {
             $statusQuery->where('supplier_id', $supplierId);
         }
         
-        $statusDistribution = $statusQuery->select('status', DB::raw('COUNT(*) as count'), DB::raw('SUM(total) as total_value'))
-            ->groupBy('status')
-            ->get()
-            ->keyBy('status');
+        $allOrders = $statusQuery->get();
         
-        // Get pending orders
+        // Calculate status distribution using collections
+        $statusDistribution = $allOrders->groupBy('status')->map(function($orders, $status) {
+            return (object)[
+                'status' => $status,
+                'count' => $orders->count(),
+                'total_value' => $orders->sum('total'),
+            ];
+        })->keyBy('status');
+        
+        // Get pending orders (with pagination)
         $pendingQuery = PurchaseOrder::with(['supplier', 'location'])
             ->where('tenant_id', $tenantId)
             ->whereIn('status', ['draft', 'sent', 'pending_approval']);
@@ -260,9 +356,14 @@ class PurchasingReportsController extends Controller
             $pendingQuery->where('supplier_id', $supplierId);
         }
         
-        $pendingOrders = $pendingQuery->orderBy('expected_delivery_date', 'asc')->paginate(15);
+        // Get ALL pending orders for summary total
+        $allPending = $pendingQuery->get();
+        $pendingTotalCount = $allPending->count();
         
-        // Get overdue orders
+        // Apply pagination to pending orders
+        $pendingOrders = $this->paginateCollection($allPending, $perPage, 'pending_page');
+        
+        // Get overdue orders (with pagination)
         $overdueQuery = PurchaseOrder::with(['supplier', 'location'])
             ->where('tenant_id', $tenantId)
             ->whereIn('status', ['sent', 'approved'])
@@ -273,26 +374,45 @@ class PurchasingReportsController extends Controller
             $overdueQuery->where('supplier_id', $supplierId);
         }
         
-        $overdueOrders = $overdueQuery->orderBy('expected_delivery_date', 'asc')->paginate(15);
+        // Get ALL overdue orders for summary total
+        $allOverdue = $overdueQuery->get();
+        $overdueTotalCount = $allOverdue->count();
         
+        // Apply pagination to overdue orders
+        $overdueOrders = $this->paginateCollection($allOverdue, $perPage, 'overdue_page');
+        
+        // Get suppliers for filter dropdown
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
         
+        // Calculate summary stats
+        $completedCount = $statusDistribution->get('completed')?->count ?? 0;
+        $completedValue = $statusDistribution->get('completed')?->total_value ?? 0;
+        $totalOrders = $statusDistribution->sum('count');
+        $totalValue = $statusDistribution->sum('total_value');
+        
         return view('reports.purchasing.purchase-order-status', compact(
             'statusDistribution',
             'pendingOrders',
+            'pendingTotalCount',
             'overdueOrders',
+            'overdueTotalCount',
             'suppliers',
             'startDate',
             'endDate',
-            'supplierId'
+            'supplierId',
+            'perPage',
+            'totalOrders',
+            'totalValue',
+            'completedCount',
+            'completedValue'
         ));
     }
 
     /**
-     * Purchase Receipts Report
+     * Purchase Receipts Report - Pure Eloquent
      */
     public function purchaseReceipts(Request $request)
     {
@@ -302,8 +422,9 @@ class PurchasingReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $supplierId = $request->get('supplier_id');
         $locationId = $request->get('location_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query purchase receipts
+        // Get ALL purchase receipts for summary calculations (unpaginated)
         $query = PurchaseReceipt::with([
             'purchaseOrder.supplier',
             'purchaseOrder.location',
@@ -327,28 +448,34 @@ class PurchasingReportsController extends Controller
             });
         }
         
-        $receipts = $query->orderBy('received_at', 'desc')->paginate(25);
+        // Get ALL receipts for summary calculations
+        $allReceipts = $query->get();
         
-        // Summary statistics
-        $summaryQuery = PurchaseReceiptItem::whereHas('purchaseReceipt', function ($q) use ($tenantId, $startDate, $endDate) {
-                $q->whereBetween('received_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                  ->whereHas('purchaseOrder', function ($q2) use ($tenantId) {
-                      $q2->where('tenant_id', $tenantId);
-                  });
-            })
-            ->select([
-                DB::raw('COUNT(DISTINCT purchase_receipt_id) as total_receipts'),
-                DB::raw('SUM(quantity_received) as total_quantity'),
-                DB::raw('COUNT(DISTINCT purchase_order_item_id) as unique_items'),
-            ])
-            ->first();
-        
+        // Calculate summary statistics using collections
         $summary = [
-            'total_receipts' => $summaryQuery->total_receipts ?? 0,
-            'total_quantity' => $summaryQuery->total_quantity ?? 0,
-            'unique_items' => $summaryQuery->unique_items ?? 0,
-            'total_value' => $this->calculateReceiptsTotalValue($receipts),
+            'total_receipts' => $allReceipts->count(),
+            'total_quantity' => $allReceipts->sum(function($receipt) {
+                return $receipt->items->sum('quantity_received');
+            }),
+            'unique_items' => $allReceipts->flatMap(function($receipt) {
+                return $receipt->items->pluck('purchase_order_item_id');
+            })->unique()->count(),
+            'total_value' => $allReceipts->sum(function($receipt) {
+                return $receipt->items->sum(function($item) {
+                    return $item->quantity_received * ($item->unit_cost ?? $item->purchaseOrderItem->unit_cost ?? 0);
+                });
+            }),
         ];
+        
+        // Apply pagination to receipts
+        $sortedReceipts = $allReceipts->sortByDesc('received_at')->values();
+        $receipts = $this->paginateCollection($sortedReceipts, $perPage, 'page');
+        
+        // Add items_count and total_quantity to each receipt for display
+        $receipts->each(function($receipt) {
+            $receipt->items_count = $receipt->items->count();
+            $receipt->total_quantity = $receipt->items->sum('quantity_received');
+        });
         
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -365,12 +492,13 @@ class PurchasingReportsController extends Controller
             'startDate',
             'endDate',
             'supplierId',
-            'locationId'
+            'locationId',
+            'perPage'
         ));
     }
 
     /**
-     * Supplier Spend Analysis Report
+     * Supplier Spend Analysis Report - Pure Eloquent with Fixed Spend Trend
      */
     public function supplierSpendAnalysis(Request $request)
     {
@@ -378,69 +506,152 @@ class PurchasingReportsController extends Controller
         
         $startDate = $request->get('start_date', now()->subDays(365)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
-        $period = $request->get('period', 'monthly'); // monthly, quarterly, yearly
+        $supplierId = $request->get('supplier_id');
+        $period = $request->get('period', 'monthly');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Get supplier spend data grouped by period
-        $spendData = PurchaseOrder::where('tenant_id', $tenantId)
+        // Get ALL purchase orders for the period
+        $query = PurchaseOrder::with(['supplier', 'location'])
+            ->where('tenant_id', $tenantId)
             ->where('status', 'received')
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->selectRaw('
-                supplier_id,
-                ' . $this->getPeriodSelect($period) . ' as period,
-                COUNT(*) as order_count,
-                SUM(total) as total_spent,
-                AVG(total) as avg_order_value,
-                MIN(total) as min_order_value,
-                MAX(total) as max_order_value
-            ')
-            ->groupBy('supplier_id', DB::raw($this->getPeriodSelect($period)))
-            ->orderBy('period')
-            ->orderBy('total_spent', 'desc')
-            ->with('supplier')
-            ->get();
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         
-        // Group by period for chart data
-        $chartData = $spendData->groupBy('period')->map(function ($periodData, $period) {
-            return [
-                'period' => $period,
-                'total_spent' => $periodData->sum('total_spent'),
-                'order_count' => $periodData->sum('order_count'),
-                'supplier_count' => $periodData->count(),
-            ];
-        })->sortKeys();
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
+        }
         
-        // Top suppliers by total spend
-        $topSuppliers = $spendData->groupBy('supplier_id')->map(function ($supplierData, $supplierId) {
-            $supplier = $supplierData->first()->supplier;
-            return [
+        $allOrders = $query->get();
+        
+        // Group by supplier for supplier spend data
+        $supplierSpendData = $allOrders->groupBy('supplier_id')->map(function($orders, $supplierId) {
+            $supplier = $orders->first()->supplier;
+            $totalSpent = $orders->sum('total');
+            $orderCount = $orders->count();
+            $avgOrderValue = $orderCount > 0 ? $totalSpent / $orderCount : 0;
+            $minOrderValue = $orders->min('total');
+            $maxOrderValue = $orders->max('total');
+            $lastOrderDate = $orders->max('created_at');
+            
+            return (object)[
+                'id' => $supplierId,
+                'name' => $supplier ? $supplier->name : 'Unknown',
+                'contact_person' => $supplier ? $supplier->contact_person : null,
+                'total_spent' => $totalSpent,
+                'order_count' => $orderCount,
+                'avg_order_value' => $avgOrderValue,
+                'min_order_value' => $minOrderValue,
+                'max_order_value' => $maxOrderValue,
+                'last_order_date' => $lastOrderDate,
                 'supplier' => $supplier,
-                'total_spent' => $supplierData->sum('total_spent'),
-                'order_count' => $supplierData->sum('order_count'),
-                'avg_order_value' => $supplierData->avg('total_spent'),
             ];
-        })->sortByDesc('total_spent')->take(10);
+        })->sortByDesc('total_spent')->values();
+        
+        // Calculate summary statistics
+        $totalSpentAll = $supplierSpendData->sum('total_spent');
+        $totalOrdersAll = $supplierSpendData->sum('order_count');
         
         $summary = [
-            'total_spent' => $spendData->sum('total_spent'),
-            'total_orders' => $spendData->sum('order_count'),
-            'unique_suppliers' => $spendData->unique('supplier_id')->count(),
-            'avg_order_value' => $spendData->avg('total_spent'),
-            'periods_analyzed' => $chartData->count(),
+            'total_suppliers' => $supplierSpendData->count(),
+            'total_spent' => $totalSpentAll,
+            'total_orders' => $totalOrdersAll,
+            'avg_order_value' => $totalOrdersAll > 0 ? $totalSpentAll / $totalOrdersAll : 0,
+            'unique_suppliers' => $supplierSpendData->count(),
+            'periods_analyzed' => 0,
         ];
         
+        // Get top supplier
+        $topSupplier = $supplierSpendData->first();
+        
+        // ✅ FIXED: Calculate spend trend by period for chart
+        $spendTrend = collect();
+        
+        // Generate all periods between start and end dates
+        $currentDate = Carbon::parse($startDate);
+        $endDateObj = Carbon::parse($endDate);
+        
+        while ($currentDate <= $endDateObj) {
+            $periodLabel = '';
+            switch ($period) {
+                case 'quarterly':
+                    $quarter = ceil($currentDate->month / 3);
+                    $periodLabel = $currentDate->year . '-Q' . $quarter;
+                    $currentDate->addQuarter();
+                    break;
+                case 'yearly':
+                    $periodLabel = (string)$currentDate->year;
+                    $currentDate->addYear();
+                    break;
+                case 'monthly':
+                default:
+                    $periodLabel = $currentDate->format('Y-m');
+                    $currentDate->addMonth();
+                    break;
+            }
+            $spendTrend[$periodLabel] = 0;
+        }
+        
+        // Fill in actual spend data
+        foreach ($allOrders as $order) {
+            $orderDate = Carbon::parse($order->created_at);
+            switch ($period) {
+                case 'quarterly':
+                    $quarter = ceil($orderDate->month / 3);
+                    $periodLabel = $orderDate->year . '-Q' . $quarter;
+                    break;
+                case 'yearly':
+                    $periodLabel = (string)$orderDate->year;
+                    break;
+                default:
+                    $periodLabel = $orderDate->format('Y-m');
+                    break;
+            }
+            
+            if ($spendTrend->has($periodLabel)) {
+                $spendTrend[$periodLabel] += $order->total;
+            } else {
+                $spendTrend[$periodLabel] = $order->total;
+            }
+        }
+        
+        // Sort by period
+        $spendTrend = $spendTrend->sortKeys();
+        $summary['periods_analyzed'] = $spendTrend->count();
+        
+        // Apply pagination to supplier spend data
+        $supplierSpend = $this->paginateCollection($supplierSpendData, $perPage, 'page');
+        
+        $suppliers = Supplier::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+        
+        // Debug: Log spend trend data
+        \Log::info('Spend Trend Data:', [
+            'period' => $period,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'trend_keys' => $spendTrend->keys(),
+            'trend_values' => $spendTrend->values(),
+            'has_data' => $spendTrend->count()
+        ]);
+        
         return view('reports.purchasing.supplier-spend-analysis', compact(
-            'spendData',
-            'chartData',
-            'topSuppliers',
+            'supplierSpend',
+            'supplierSpendData',
             'summary',
+            'spendTrend',
+            'topSupplier',
+            'suppliers',
             'startDate',
             'endDate',
-            'period'
+            'supplierId',
+            'period',
+            'perPage'
         ));
     }
 
     /**
-     * Purchase Order Items Analysis
+     * Purchase Order Items Analysis - Pure Eloquent
      */
     public function purchaseOrderItems(Request $request)
     {
@@ -450,16 +661,18 @@ class PurchasingReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $supplierId = $request->get('supplier_id');
         $productVariantId = $request->get('variant_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query purchase order items
+        // Get ALL purchase order items for summary calculations (unpaginated)
         $query = PurchaseOrderItem::with([
             'purchaseOrder.supplier',
+            'purchaseOrder.location',
             'productVariant.product',
             'paymentMethod'
         ])
         ->whereHas('purchaseOrder', function ($q) use ($tenantId, $startDate, $endDate) {
             $q->where('tenant_id', $tenantId)
-              ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         });
         
         if ($supplierId) {
@@ -472,22 +685,23 @@ class PurchasingReportsController extends Controller
             $query->where('product_variant_id', $productVariantId);
         }
         
-        $items = $query->orderBy('created_at', 'desc')->paginate(25);
+        // Get ALL items for summary calculations
+        $allItems = $query->get();
         
-        // Summary statistics
+        // Calculate summary statistics from ALL items
         $summary = [
-            'total_items' => $items->total(),
-            'total_quantity' => $items->sum('quantity'),
-            'total_value' => $items->sum('total_cost'),
-            'avg_unit_cost' => $items->avg('unit_cost'),
-            'unique_products' => $items->unique('product_variant_id')->count(),
-            'unique_suppliers' => $items->unique(function ($item) {
-                return $item->purchaseOrder->supplier_id;
+            'total_items' => $allItems->count(),
+            'total_quantity' => $allItems->sum('quantity'),
+            'total_value' => $allItems->sum('total_cost'),
+            'avg_unit_cost' => $allItems->avg('unit_cost'),
+            'unique_products' => $allItems->unique('product_variant_id')->count(),
+            'unique_suppliers' => $allItems->unique(function ($item) {
+                return $item->purchaseOrder->supplier_id ?? null;
             })->count(),
         ];
         
-        // Top items by quantity
-        $topItemsByQuantity = $items->groupBy('product_variant_id')->map(function ($group) {
+        // Top items by quantity from ALL items
+        $topItemsByQuantity = $allItems->groupBy('product_variant_id')->map(function ($group) {
             $firstItem = $group->first();
             return [
                 'product' => $firstItem->productVariant,
@@ -496,6 +710,10 @@ class PurchasingReportsController extends Controller
                 'order_count' => $group->count(),
             ];
         })->sortByDesc('total_quantity')->take(10);
+        
+        // Apply pagination to items
+        $sortedItems = $allItems->sortByDesc('created_at')->values();
+        $items = $this->paginateCollection($sortedItems, $perPage, 'page');
         
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -508,6 +726,21 @@ class PurchasingReportsController extends Controller
             ->orderBy('name')
             ->get();
         
+        // Prepare chart data from top items
+        $chartLabels = [];
+        $chartQuantities = [];
+        $chartValues = [];
+        
+        foreach ($topItemsByQuantity as $item) {
+            $productName = $item['product'] ? ($item['product']->name ?? 'N/A') : 'N/A';
+            if ($item['product'] && $item['product']->product) {
+                $productName = $item['product']->product->name . ' - ' . $item['product']->name;
+            }
+            $chartLabels[] = strlen($productName) > 30 ? substr($productName, 0, 30) . '...' : $productName;
+            $chartQuantities[] = $item['total_quantity'];
+            $chartValues[] = $item['total_value'];
+        }
+        
         return view('reports.purchasing.purchase-order-items', compact(
             'items',
             'summary',
@@ -517,7 +750,11 @@ class PurchasingReportsController extends Controller
             'startDate',
             'endDate',
             'supplierId',
-            'productVariantId'
+            'productVariantId',
+            'perPage',
+            'chartLabels',
+            'chartQuantities',
+            'chartValues'
         ));
     }
 
@@ -582,7 +819,7 @@ class PurchasingReportsController extends Controller
     }
 
     /**
-     * Payment Status Report
+     * Payment Status Report - Pure Eloquent
      */
     public function paymentStatus(Request $request)
     {
@@ -592,16 +829,18 @@ class PurchasingReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $paymentStatus = $request->get('payment_status', 'all');
         $supplierId = $request->get('supplier_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query purchase order items with payment status
+        // Get ALL purchase order items for summary calculations (unpaginated)
         $query = PurchaseOrderItem::with([
             'purchaseOrder.supplier',
+            'purchaseOrder.location',
             'paymentMethod',
-            'productVariant'
+            'productVariant.product'
         ])
         ->whereHas('purchaseOrder', function ($q) use ($tenantId, $startDate, $endDate) {
             $q->where('tenant_id', $tenantId)
-              ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         });
         
         if ($paymentStatus !== 'all') {
@@ -614,48 +853,75 @@ class PurchasingReportsController extends Controller
             });
         }
         
-        $items = $query->orderBy('payment_date', 'asc')->paginate(25);
+        // Get ALL items for summary calculations
+        $allItems = $query->get();
         
-        // Payment status summary
-        $statusSummary = PurchaseOrderItem::whereHas('purchaseOrder', function ($q) use ($tenantId, $startDate, $endDate) {
-                $q->where('tenant_id', $tenantId)
-                  ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-            })
-            ->select('payment_status', DB::raw('COUNT(*) as count'), DB::raw('SUM(total_cost) as total_amount'))
-            ->groupBy('payment_status')
-            ->get()
-            ->keyBy('payment_status');
+        // Calculate payment status summary using collections
+        $statusSummary = $allItems->groupBy('payment_status')->map(function($items, $status) {
+            return (object)[
+                'payment_status' => $status,
+                'count' => $items->count(),
+                'total_amount' => $items->sum('total_cost'),
+            ];
+        })->keyBy('payment_status');
         
-        // Overdue payments
-        $overdueQuery = PurchaseOrderItem::with(['purchaseOrder.supplier', 'paymentMethod'])
-            ->whereHas('purchaseOrder', function ($q) use ($tenantId) {
-                $q->where('tenant_id', $tenantId);
-            })
-            ->where('payment_status', '!=', 'paid')
-            ->whereNotNull('payment_date')
-            ->where('payment_date', '<', now());
+        // Get overdue payments (payment_date passed and not fully paid)
+        $overduePayments = $allItems->filter(function($item) {
+            return $item->payment_status !== 'paid' 
+                && $item->payment_date 
+                && Carbon::parse($item->payment_date)->lt(now());
+        })->sortBy('payment_date')->values();
         
-        if ($supplierId) {
-            $overdueQuery->whereHas('purchaseOrder', function ($q) use ($supplierId) {
-                $q->where('supplier_id', $supplierId);
-            });
-        }
-        
-        $overduePayments = $overdueQuery->orderBy('payment_date', 'asc')->get();
+        // Calculate summary statistics
+        $totalAmountDue = $allItems->where('payment_status', '!=', 'paid')->sum('total_cost');
+        $totalAmountPaid = $allItems->where('payment_status', 'paid')->sum('total_cost');
+        $overdueAmount = $overduePayments->sum('total_cost');
+        $overdueCount = $overduePayments->count();
         
         $summary = [
-            'total_amount_due' => $items->where('payment_status', '!=', 'paid')->sum('total_cost'),
-            'total_amount_paid' => $items->where('payment_status', 'paid')->sum('total_cost'),
-            'overdue_amount' => $overduePayments->sum('total_cost'),
-            'overdue_count' => $overduePayments->count(),
+            'total_amount_due' => $totalAmountDue,
+            'total_amount_paid' => $totalAmountPaid,
+            'overdue_amount' => $overdueAmount,
+            'overdue_count' => $overdueCount,
+            'total_items' => $allItems->count(),
         ];
         
+        // Apply pagination to items
+        $sortedItems = $allItems->sortBy('payment_date')->values();
+        $items = $this->paginateCollection($sortedItems, $perPage, 'page');
+        
+        // Get data for filter dropdowns
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
         
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)->get();
+        
+        // Prepare chart data
+        $statusLabels = [];
+        $statusData = [];
+        $statusColors = [];
+        
+        $statusConfig = [
+            'pending' => ['label' => __('passwords.pending'), 'color' => '#FFC700'],
+            'partial' => ['label' => __('passwords.partial'), 'color' => '#17a2b8'],
+            'paid' => ['label' => __('passwords.paid'), 'color' => '#50CD89'],
+            'overdue' => ['label' => __('passwords.overdue'), 'color' => '#F1416C'],
+            'cancelled' => ['label' => __('passwords.cancelled'), 'color' => '#6c757d']
+        ];
+        
+        foreach ($statusConfig as $status => $config) {
+            $statusItem = $statusSummary->get($status);
+            if ($statusItem || $status == 'overdue') {
+                $statusLabels[] = $config['label'];
+                $amount = $status == 'overdue' ? $overdueAmount : ($statusItem ? $statusItem->total_amount : 0);
+                if ($amount > 0 || $status == 'overdue') {
+                    $statusData[] = $amount;
+                    $statusColors[] = $config['color'];
+                }
+            }
+        }
         
         return view('reports.purchasing.payment-status', compact(
             'items',
@@ -667,12 +933,16 @@ class PurchasingReportsController extends Controller
             'startDate',
             'endDate',
             'paymentStatus',
-            'supplierId'
+            'supplierId',
+            'perPage',
+            'statusLabels',
+            'statusData',
+            'statusColors'
         ));
     }
 
     /**
-     * Received Inventory Report
+     * Received Inventory Report - Pure Eloquent
      */
     public function receivedInventory(Request $request)
     {
@@ -683,12 +953,14 @@ class PurchasingReportsController extends Controller
         $supplierId = $request->get('supplier_id');
         $productVariantId = $request->get('variant_id');
         $includeExpiring = $request->get('include_expiring', false);
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query received product variants
+        // Get ALL received product variants for summary calculations (unpaginated)
         $query = ReceivedProductVariant::with([
             'purchaseOrder.supplier',
+            'purchaseOrder.location',
             'productVariant.product',
-            'receivedBy'
+            'receiver'
         ])
         ->where('tenant_id', $tenantId)
         ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
@@ -705,38 +977,46 @@ class PurchasingReportsController extends Controller
         
         if ($includeExpiring) {
             $query->whereNotNull('expiry_date')
-                  ->where('expiry_date', '<=', now()->addDays(30));
+                ->where('expiry_date', '<=', now()->addDays(30));
         }
         
-        $receivedItems = $query->orderBy('created_at', 'desc')->paginate(25);
+        // Get ALL items for summary calculations
+        $allItems = $query->get();
         
-        // Summary statistics
+        // Calculate summary statistics from ALL items
         $summary = [
-            'total_items' => $receivedItems->total(),
-            'total_quantity' => $receivedItems->sum('quantity_received'),
-            'total_value' => $receivedItems->sum('total_cost'),
-            'unique_products' => $receivedItems->unique('product_variant_id')->count(),
-            'unique_suppliers' => $receivedItems->unique(function ($item) {
-                return $item->purchaseOrder->supplier_id;
+            'total_items' => $allItems->count(),
+            'total_quantity' => $allItems->sum('quantity_received'),
+            'total_value' => $allItems->sum('total_cost'),
+            'unique_products' => $allItems->unique('product_variant_id')->count(),
+            'unique_suppliers' => $allItems->unique(function ($item) {
+                return $item->purchaseOrder->supplier_id ?? null;
             })->count(),
-            'expiring_soon' => $receivedItems->whereNotNull('expiry_date')
-                ->where('expiry_date', '<=', now()->addDays(30))
-                ->where('expiry_date', '>', now())
-                ->count(),
+            'expiring_soon' => $allItems->filter(function($item) {
+                return $item->expiry_date && 
+                    Carbon::parse($item->expiry_date)->lte(now()->addDays(30)) &&
+                    Carbon::parse($item->expiry_date)->gt(now());
+            })->count(),
         ];
         
-        // Batch and expiry analysis
-        $batchAnalysis = $receivedItems->groupBy('batch_number')->map(function ($batchItems, $batchNumber) {
-            return [
-                'batch_number' => $batchNumber,
+        // Batch and expiry analysis from ALL items
+        $batchAnalysis = $allItems->groupBy('batch_number')->map(function ($batchItems, $batchNumber) {
+            $firstItem = $batchItems->first();
+            $expiryDate = $firstItem->expiry_date ? Carbon::parse($firstItem->expiry_date) : null;
+            $daysToExpiry = $expiryDate ? $expiryDate->diffInDays(now(), false) : null;
+            
+            return (object)[
+                'batch_number' => $batchNumber ?: __('passwords.no_batch'),
                 'total_quantity' => $batchItems->sum('quantity_received'),
                 'total_value' => $batchItems->sum('total_cost'),
-                'expiry_date' => $batchItems->first()->expiry_date,
-                'days_to_expiry' => $batchItems->first()->expiry_date 
-                    ? Carbon::parse($batchItems->first()->expiry_date)->diffInDays(now()) 
-                    : null,
+                'expiry_date' => $firstItem->expiry_date,
+                'days_to_expiry' => $daysToExpiry,
             ];
         })->sortByDesc('total_quantity');
+        
+        // Apply pagination to received items
+        $sortedItems = $allItems->sortByDesc('created_at')->values();
+        $receivedItems = $this->paginateCollection($sortedItems, $perPage, 'page');
         
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -759,158 +1039,185 @@ class PurchasingReportsController extends Controller
             'endDate',
             'supplierId',
             'productVariantId',
-            'includeExpiring'
+            'includeExpiring',
+            'perPage'
         ));
     }
 
+
     /**
-     * Supplier Risk Assessment Report
+     * Supplier Risk Assessment Report - Pure Eloquent with Pagination
      */
     public function supplierRiskAssessment(Request $request)
     {
         $tenantId = $this->getTenantId();
+        $perPage = (int)$request->get('per_page', 15);
+        $criticalPerPage = (int)$request->get('critical_per_page', 10);
         
-        // Get all active suppliers with risk metrics
-        $suppliers = Supplier::where('tenant_id', $tenantId)
+        // Get all active suppliers with risk metrics using pure Eloquent
+        $allSuppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->withCount(['purchaseOrders as total_orders'])
-            ->withSum('purchaseOrders as total_spent', 'total') // Fixed: 2 arguments required
-            ->with(['purchaseOrders' => function ($q) {
-                $q->where('status', 'received')
-                ->orderBy('received_at', 'desc')
-                ->limit(10);
-            }])
-            ->get()
-            ->map(function ($supplier) use ($tenantId) {
-                // Calculate risk score based on multiple factors
-                $riskScore = 0;
-                $riskFactors = [];
-                
-                // Factor 1: Order frequency (lower frequency = higher risk)
-                $orderFrequency = $supplier->total_orders > 0 
-                    ? $supplier->purchaseOrders->count() / 30 // Assuming 30 days analysis
-                    : 0;
-                $orderFrequencyRisk = max(0, 30 - ($orderFrequency * 10));
-                $riskScore += $orderFrequencyRisk;
-                if ($orderFrequencyRisk > 15) {
-                    $riskFactors[] = 'low_order_frequency';
-                }
-                
-                // Factor 2: Payment terms (longer terms = higher risk)
-                $paymentTerms = $supplier->payment_terms ?? 30; // Default 30 days
-                $paymentTermRisk = $paymentTerms > 60 ? 30 : 
-                                ($paymentTerms > 45 ? 25 : 
-                                ($paymentTerms > 30 ? 20 : 10));
-                $riskScore += $paymentTermRisk;
-                if ($paymentTerms > 45) {
-                    $riskFactors[] = 'extended_payment_terms';
-                }
-                
-                // Factor 3: Single sourcing risk (if this supplier is critical)
-                $totalSpent = $supplier->purchase_orders_sum_total ?? 0; // Changed from total_spent
-                $isCritical = $totalSpent > 10000; // Example threshold
-                $sourcingRisk = $isCritical ? 25 : 5;
-                $riskScore += $sourcingRisk;
-                if ($isCritical) {
-                    $riskFactors[] = 'single_sourcing_risk';
-                }
-                
-                // Factor 4: Delivery performance
-                $deliveryStats = PurchaseOrder::where('supplier_id', $supplier->id)
-                    ->where('tenant_id', $tenantId)
-                    ->where('status', 'received')
-                    ->selectRaw('
-                        AVG(DATEDIFF(received_at, created_at)) as avg_delivery_days,
-                        COUNT(*) as delivered_orders
-                    ')
-                    ->first();
-                
-                $avgDeliveryDays = $deliveryStats->avg_delivery_days ?? 0;
-                $deliveredOrders = $deliveryStats->delivered_orders ?? 0;
-                
-                $deliveryRisk = $avgDeliveryDays > 21 ? 25 :
-                            ($avgDeliveryDays > 14 ? 20 :
-                            ($avgDeliveryDays > 7 ? 10 : 0));
-                $riskScore += $deliveryRisk;
-                if ($avgDeliveryDays > 14) {
-                    $riskFactors[] = 'slow_delivery';
-                }
-                
-                // Factor 5: Geographic risk (if international)
-                $geographicRisk = $supplier->country_code && !in_array(strtoupper($supplier->country_code), ['US', 'CA', 'MX']) ? 15 : 0;
-                $riskScore += $geographicRisk;
-                if ($geographicRisk > 0) {
-                    $riskFactors[] = 'international_supplier';
-                }
-                
-                // Factor 6: Quality issues (placeholder - would need actual data)
-                $qualityRisk = 0; // Assume no quality issues by default
-                $riskScore += $qualityRisk;
-                
-                // Factor 7: Contract expiration (placeholder)
-                $contractExpirationRisk = 0; // Assume no immediate expiration
-                $riskScore += $contractExpirationRisk;
-                
-                // Categorize risk level
-                if ($riskScore >= 70) {
-                    $riskLevel = 'high';
-                } elseif ($riskScore >= 40) {
-                    $riskLevel = 'medium';
-                } else {
-                    $riskLevel = 'low';
-                }
-                
-                // Calculate additional metrics
-                $supplier->risk_score = min(100, round($riskScore, 1));
-                $supplier->risk_level = $riskLevel;
-                $supplier->risk_factors = $riskFactors;
-                $supplier->avg_delivery_days = round($avgDeliveryDays, 1);
-                $supplier->delivered_orders = $deliveredOrders;
-                $supplier->payment_terms_days = $paymentTerms;
-                $supplier->order_frequency = round($orderFrequency, 2);
-                $supplier->total_spent = $totalSpent; // Add this for easy access in blade
-                
-                // Calculate days since last order
-                $lastOrder = $supplier->purchaseOrders->first();
-                $supplier->last_order_date = $lastOrder ? $lastOrder->created_at : null;
-                $supplier->days_since_last_order = $lastOrder ? $lastOrder->created_at->diffInDays(now()) : null;
-                
-                return $supplier;
-            })
-            ->sortByDesc('risk_score')
-            ->values();
+            ->get();
+        
+        $suppliersWithRisk = collect();
+        
+        foreach ($allSuppliers as $supplier) {
+            // Get purchase orders for delivery stats
+            $receivedOrders = PurchaseOrder::where('supplier_id', $supplier->id)
+                ->where('tenant_id', $tenantId)
+                ->where('status', 'received')
+                ->get();
+            
+            // Calculate delivery statistics using collections
+            $deliveredOrders = $receivedOrders->count();
+            $avgDeliveryDays = 0;
+            
+            if ($deliveredOrders > 0) {
+                $totalDeliveryDays = $receivedOrders->sum(function($order) {
+                    if ($order->received_at && $order->created_at) {
+                        return Carbon::parse($order->created_at)->diffInDays(Carbon::parse($order->received_at));
+                    }
+                    return 0;
+                });
+                $avgDeliveryDays = $totalDeliveryDays / $deliveredOrders;
+            }
+            
+            // Get last 10 orders for order frequency
+            $recentOrders = PurchaseOrder::where('supplier_id', $supplier->id)
+                ->where('tenant_id', $tenantId)
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+            
+            // Calculate order frequency
+            $orderFrequency = $supplier->total_orders > 0 ? $recentOrders->count() / 30 : 0;
+            
+            // Calculate total spent
+            $totalSpent = PurchaseOrder::where('supplier_id', $supplier->id)
+                ->where('tenant_id', $tenantId)
+                ->sum('total');
+            
+            // Calculate risk score factors
+            $riskScore = 0;
+            $riskFactors = [];
+            
+            // Factor 1: Order frequency
+            $orderFrequencyRisk = max(0, 30 - ($orderFrequency * 10));
+            $riskScore += $orderFrequencyRisk;
+            if ($orderFrequencyRisk > 15) $riskFactors[] = 'low_order_frequency';
+            
+            // Factor 2: Payment terms
+            $paymentTerms = $supplier->payment_terms ?? 30;
+            $paymentTermRisk = $paymentTerms > 60 ? 30 : ($paymentTerms > 45 ? 25 : ($paymentTerms > 30 ? 20 : 10));
+            $riskScore += $paymentTermRisk;
+            if ($paymentTerms > 45) $riskFactors[] = 'extended_payment_terms';
+            
+            // Factor 3: Single sourcing risk
+            $isCritical = $totalSpent > 10000;
+            $sourcingRisk = $isCritical ? 25 : 5;
+            $riskScore += $sourcingRisk;
+            if ($isCritical) $riskFactors[] = 'single_sourcing_risk';
+            
+            // Factor 4: Delivery performance
+            $deliveryRisk = $avgDeliveryDays > 21 ? 25 : ($avgDeliveryDays > 14 ? 20 : ($avgDeliveryDays > 7 ? 10 : 0));
+            $riskScore += $deliveryRisk;
+            if ($avgDeliveryDays > 14) $riskFactors[] = 'slow_delivery';
+            
+            // Factor 5: Geographic risk
+            $geographicRisk = ($supplier->country_code && !in_array(strtoupper($supplier->country_code), ['US', 'CA', 'MX'])) ? 15 : 0;
+            $riskScore += $geographicRisk;
+            if ($geographicRisk > 0) $riskFactors[] = 'international_supplier';
+            
+            // Determine risk level
+            if ($riskScore >= 70) {
+                $riskLevel = 'high';
+            } elseif ($riskScore >= 40) {
+                $riskLevel = 'medium';
+            } else {
+                $riskLevel = 'low';
+            }
+            
+            // Last order date
+            $lastOrder = $recentOrders->first();
+            $daysSinceLastOrder = $lastOrder ? Carbon::parse($lastOrder->created_at)->diffInDays(now()) : null;
+            
+            $suppliersWithRisk->push((object)[
+                'id' => $supplier->id,
+                'name' => $supplier->name,
+                'contact_person' => $supplier->contact_person,
+                'email' => $supplier->email,
+                'phone' => $supplier->phone,
+                'country_code' => $supplier->country_code,
+                'payment_terms_days' => $paymentTerms,
+                'total_orders' => $supplier->total_orders,
+                'total_spent' => $totalSpent,
+                'risk_score' => min(100, round($riskScore, 1)),
+                'risk_level' => $riskLevel,
+                'risk_factors' => $riskFactors,
+                'avg_delivery_days' => round($avgDeliveryDays, 1),
+                'delivered_orders' => $deliveredOrders,
+                'order_frequency' => round($orderFrequency, 2),
+                'last_order_date' => $lastOrder ? $lastOrder->created_at : null,
+                'days_since_last_order' => $daysSinceLastOrder,
+            ]);
+        }
+        
+        // Sort by risk score
+        $sortedSuppliers = $suppliersWithRisk->sortByDesc('risk_score')->values();
         
         // Risk distribution
         $riskDistribution = [
-            'high' => $suppliers->where('risk_level', 'high')->count(),
-            'medium' => $suppliers->where('risk_level', 'medium')->count(),
-            'low' => $suppliers->where('risk_level', 'low')->count(),
+            'high' => $sortedSuppliers->where('risk_level', 'high')->count(),
+            'medium' => $sortedSuppliers->where('risk_level', 'medium')->count(),
+            'low' => $sortedSuppliers->where('risk_level', 'low')->count(),
         ];
         
-        // Critical suppliers (high risk and high spend)
-        $criticalSuppliers = $suppliers->where('risk_level', 'high')
-            ->where('total_spent', '>', 5000)
-            ->take(10)
-            ->values();
+        // Critical suppliers (high risk and high spend) - Get ALL first
+        $allCriticalSuppliers = $sortedSuppliers->filter(function($supplier) {
+            return $supplier->risk_level === 'high' && $supplier->total_spent > 5000;
+        })->values();
         
-        // Calculate risk score statistics
+        // Apply pagination to critical suppliers
+        $criticalSuppliers = $this->paginateCollection($allCriticalSuppliers, $criticalPerPage, 'critical_page');
+        
+        // Risk score statistics
         $riskStats = [
-            'avg_risk_score' => $suppliers->avg('risk_score') ?? 0,
-            'max_risk_score' => $suppliers->max('risk_score') ?? 0,
-            'min_risk_score' => $suppliers->min('risk_score') ?? 0,
+            'avg_risk_score' => $sortedSuppliers->avg('risk_score') ?? 0,
+            'max_risk_score' => $sortedSuppliers->max('risk_score') ?? 0,
+            'min_risk_score' => $sortedSuppliers->min('risk_score') ?? 0,
         ];
+        
+        // Apply pagination to main suppliers
+        $suppliers = $this->paginateCollection($sortedSuppliers, $perPage, 'page');
+        
+        // Prepare chart data
+        $riskChartData = [
+            $riskDistribution['high'],
+            $riskDistribution['medium'],
+            $riskDistribution['low']
+        ];
+        $riskLabels = ['High Risk', 'Medium Risk', 'Low Risk'];
+        $riskColors = ['#F1416C', '#FFC700', '#50CD89'];
         
         return view('reports.purchasing.supplier-risk-assessment', compact(
             'suppliers',
+            'sortedSuppliers',
             'riskDistribution',
             'criticalSuppliers',
-            'riskStats'
+            'allCriticalSuppliers',
+            'riskStats',
+            'riskChartData',
+            'riskLabels',
+            'riskColors',
+            'perPage',
+            'criticalPerPage'
         ));
     }
 
 
     /**
-     * Purchase Cost Analysis Report
+     * Purchase Cost Analysis Report - Pure Eloquent
      */
     public function purchaseCostAnalysis(Request $request)
     {
@@ -920,10 +1227,11 @@ class PurchasingReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $productVariantId = $request->get('variant_id');
         $supplierId = $request->get('supplier_id');
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Query purchase costs over time
+        // Get ALL received product variants for the period
         $query = ReceivedProductVariant::with([
-            'productVariant.product',
+            'productVariant.product.category',
             'purchaseOrder.supplier'
         ])
         ->where('tenant_id', $tenantId)
@@ -939,55 +1247,79 @@ class PurchasingReportsController extends Controller
             });
         }
         
-        $costData = $query->select([
-            'product_variant_id',
-            DB::raw('DATE(created_at) as purchase_date'),
-            DB::raw('AVG(unit_cost) as avg_unit_cost'),
-            DB::raw('MIN(unit_cost) as min_unit_cost'),
-            DB::raw('MAX(unit_cost) as max_unit_cost'),
-            DB::raw('SUM(quantity_received) as total_quantity'),
-            DB::raw('SUM(total_cost) as total_cost'),
-        ])
-        ->groupBy('product_variant_id', DB::raw('DATE(created_at)'))
-        ->orderBy('purchase_date')
-        ->get();
+        $allReceivedItems = $query->get();
         
-        // Group by product for analysis
-        $productAnalysis = $costData->groupBy('product_variant_id')->map(function ($productData, $variantId) {
-            $firstItem = $productData->first();
+        // Group by product variant for product analysis
+        $productAnalysisCollection = $allReceivedItems->groupBy('product_variant_id')->map(function ($items, $variantId) {
+            $firstItem = $items->first();
             $product = $firstItem->productVariant;
-            $recentPrice = $productData->sortByDesc('purchase_date')->first()->avg_unit_cost;
-            $oldestPrice = $productData->sortBy('purchase_date')->first()->avg_unit_cost;
             
-            return [
+            // Sort by purchase date for price change calculation
+            $sortedByDate = $items->sortBy('created_at');
+            $oldestPrice = $sortedByDate->first()->unit_cost ?? 0;
+            $newestPrice = $sortedByDate->last()->unit_cost ?? 0;
+            
+            $totalQuantity = $items->sum('quantity_received');
+            $totalCost = $items->sum('total_cost');
+            $avgUnitCost = $totalQuantity > 0 ? $totalCost / $totalQuantity : 0;
+            $priceChange = $newestPrice - $oldestPrice;
+            $priceChangePercentage = $oldestPrice > 0 ? ($priceChange / $oldestPrice) * 100 : 0;
+            $purchaseCount = $items->count();
+            
+            return (object)[
                 'product' => $product,
-                'total_quantity' => $productData->sum('total_quantity'),
-                'total_cost' => $productData->sum('total_cost'),
-                'avg_unit_cost' => $productData->avg('avg_unit_cost'),
-                'price_change' => $recentPrice - $oldestPrice,
-                'price_change_percentage' => $oldestPrice > 0 ? (($recentPrice - $oldestPrice) / $oldestPrice) * 100 : 0,
-                'purchase_count' => $productData->count(),
+                'variant_id' => $variantId,
+                'total_quantity' => $totalQuantity,
+                'total_cost' => $totalCost,
+                'avg_unit_cost' => $avgUnitCost,
+                'oldest_price' => $oldestPrice,
+                'newest_price' => $newestPrice,
+                'price_change' => $priceChange,
+                'price_change_percentage' => $priceChangePercentage,
+                'purchase_count' => $purchaseCount,
             ];
         })->sortByDesc('total_cost');
         
-        // Price trend analysis
-        $priceTrends = $costData->groupBy('purchase_date')->map(function ($dateData, $date) {
-            return [
+        // Calculate summary statistics
+        $summary = [
+            'total_products' => $productAnalysisCollection->count(),
+            'total_quantity' => $productAnalysisCollection->sum('total_quantity'),
+            'total_cost' => $productAnalysisCollection->sum('total_cost'),
+            'avg_price_increase' => $productAnalysisCollection->avg('price_change_percentage') ?? 0,
+            'products_with_price_increase' => $productAnalysisCollection->filter(function($item) {
+                return $item->price_change_percentage > 0;
+            })->count(),
+            'products_with_price_decrease' => $productAnalysisCollection->filter(function($item) {
+                return $item->price_change_percentage < 0;
+            })->count(),
+        ];
+        
+        // Price trend analysis by date
+        $priceTrends = $allReceivedItems->groupBy(function($item) {
+            return $item->created_at->format('Y-m-d');
+        })->map(function ($items, $date) {
+            $totalQuantity = $items->sum('quantity_received');
+            $totalCost = $items->sum('total_cost');
+            $avgUnitCost = $totalQuantity > 0 ? $totalCost / $totalQuantity : 0;
+            
+            return (object)[
                 'date' => $date,
-                'avg_unit_cost' => $dateData->avg('avg_unit_cost'),
-                'total_quantity' => $dateData->sum('total_quantity'),
-                'total_cost' => $dateData->sum('total_cost'),
+                'avg_unit_cost' => $avgUnitCost,
+                'total_quantity' => $totalQuantity,
+                'total_cost' => $totalCost,
             ];
         })->sortKeys();
         
-        $summary = [
-            'total_products' => $productAnalysis->count(),
-            'total_quantity' => $productAnalysis->sum('total_quantity'),
-            'total_cost' => $productAnalysis->sum('total_cost'),
-            'avg_price_increase' => $productAnalysis->avg('price_change_percentage'),
-            'products_with_price_increase' => $productAnalysis->where('price_change_percentage', '>', 0)->count(),
-            'products_with_price_decrease' => $productAnalysis->where('price_change_percentage', '<', 0)->count(),
-        ];
+        // Top 10 products by spend (from full dataset)
+        $topProducts = $productAnalysisCollection->take(10);
+        
+        // Apply pagination to the product analysis table
+        $productAnalysis = $this->paginateCollection($productAnalysisCollection, $perPage, 'page');
+        
+        // Prepare chart data
+        $chartDates = $priceTrends->pluck('date')->toArray();
+        $chartPrices = $priceTrends->pluck('avg_unit_cost')->toArray();
+        $chartQuantities = $priceTrends->pluck('total_quantity')->toArray();
         
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -1002,14 +1334,20 @@ class PurchasingReportsController extends Controller
         
         return view('reports.purchasing.purchase-cost-analysis', compact(
             'productAnalysis',
+            'productAnalysisCollection',
             'priceTrends',
             'summary',
+            'topProducts',
             'variants',
             'suppliers',
+            'chartDates',
+            'chartPrices',
+            'chartQuantities',
             'startDate',
             'endDate',
             'productVariantId',
-            'supplierId'
+            'supplierId',
+            'perPage'
         ));
     }
 

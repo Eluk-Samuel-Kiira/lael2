@@ -76,63 +76,8 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.low-stock-alerts') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('auth.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('auth.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.low-stock-alerts') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
                                         {{-- Severity Level --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.severity_level') }}</label>
@@ -163,6 +108,41 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        {{-- Location & Department - Dependent Dropdown --}}
+                                        <div class="flex-grow-1">
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
+                                        {{-- Action Buttons --}}
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('accounting.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.low-stock-alerts') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('accounting.clear_filters') }}
+                                            </a>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -190,7 +170,7 @@
                                         ['key' => 'critical', 'color' => 'danger', 'icon' => 'ki-shield-cross', 'label' => 'critical_alerts', 'value' => $summary['critical']],
                                         ['key' => 'warning', 'color' => 'warning', 'icon' => 'ki-shield-tick', 'label' => 'warning_alerts', 'value' => $summary['warning']],
                                         ['key' => 'total_items', 'color' => 'primary', 'icon' => 'ki-warning-2', 'label' => 'total_alerts', 'value' => $summary['total_items']],
-                                        ['key' => 'total_value_at_risk', 'color' => 'info', 'icon' => 'ki-dollar', 'label' => 'value_at_risk', 'value' => '$' . number_format($summary['total_value_at_risk'], 2)],
+                                        ['key' => 'total_value_at_risk', 'color' => 'info', 'icon' => 'ki-dollar', 'label' => 'value_at_risk', 'value' => currency_symbol() . number_format($summary['total_value_at_risk'], 2)],
                                     ] as $stat)
                                     <div class="col-md-6 col-lg-3">
                                         <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
@@ -300,85 +280,68 @@
                                         </thead>
                                         <tbody>
                                             @foreach($lowStockItems as $item)
-                                            @php
-                                                // Calculate severity
-                                                $reorderPoint = $item->reorder_point ?: 0;
-                                                $preferredStock = $item->preferred_stock_level ?: 0;
-                                                $currentStock = $item->quantity_on_hand;
-                                                
-                                                // Calculate percentages
-                                                $reorderPercentage = $reorderPoint > 0 ? ($currentStock / $reorderPoint) * 100 : 0;
-                                                $preferredPercentage = $preferredStock > 0 ? ($currentStock / $preferredStock) * 100 : 0;
-                                                
-                                                // Determine severity
-                                                if ($reorderPoint > 0 && $currentStock <= $reorderPoint * 0.5) {
-                                                    $severityColor = 'danger';
-                                                    $severityText = __('pagination.critical');
-                                                    $urgencyText = __('pagination.immediate');
-                                                } elseif ($reorderPoint > 0 && $currentStock <= $reorderPoint) {
-                                                    $severityColor = 'warning';
-                                                    $severityText = __('pagination.warning');
-                                                    $urgencyText = __('pagination.soon');
-                                                } else {
-                                                    $severityColor = 'info';
-                                                    $severityText = __('pagination.normal');
-                                                    $urgencyText = __('pagination.later');
-                                                }
-                                                
-                                                // Calculate stock deficit
-                                                $deficit = max(0, $reorderPoint - $currentStock);
-                                            @endphp
                                             <tr>
                                                 <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
-                                                    <small class="text-muted">{{ $item->variant->barcode ?? '-' }}</small>
+                                                    <div class="fw-semibold">{{ $item->sku }}</div>
+                                                    @if($item->barcode)
+                                                    <small class="text-muted">{{ $item->barcode }}</small>
+                                                    @endif
                                                 </td>
-                                                <td>
+                                                <tr>
                                                     <div class="d-flex align-items-center">
-                                                        @if($item->variant->image_url ?? false)
+                                                        @if($item->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ $item->variant->image_url }}" class="img-fluid" alt="{{ $item->variant->name }}">
+                                                            <img src="{{ asset($item->image_url) }}" class="img-fluid" alt="{{ $item->variant_name }}">
                                                         </div>
                                                         @endif
                                                         <div>
-                                                            <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                            <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                            <div class="fw-bold">{{ $item->variant_name }}</div>
+                                                            <div class="text-muted">{{ $item->product_name }}</div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-primary">{{ $item->departmentItem->name ?? '-' }}</span>
+                                                    <span class="badge badge-light-primary">{{ $item->department_name }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-info">{{ $item->itemLocation->name ?? '-' }}</span>
+                                                    <span class="badge badge-light-info">{{ $item->location_name }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="fw-bold text-{{ $severityColor }}">
-                                                        {{ number_format($currentStock) }}
+                                                <td class="text-center">
+                                                    <span class="fw-bold text-{{ $item->severity_color }}">
+                                                        {{ number_format($item->quantity_on_hand) }}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    {{ $reorderPoint }}
+                                                <td class="text-center">
+                                                    {{ number_format($item->reorder_point) }}
                                                 </td>
-                                                <td>
-                                                    {{ $preferredStock }}
+                                                <td class="text-center">
+                                                    {{ number_format($item->preferred_stock_level) }}
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="fw-bold text-danger">
-                                                        -{{ $deficit }}
+                                                        -{{ number_format($item->deficit) }}
                                                     </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $severityColor }}">
-                                                        {{ $severityText }}
-                                                    </span>
-                                                    <div class="progress mt-1" style="height: 5px; width: 80px;">
-                                                        <div class="progress-bar bg-{{ $severityColor }}" 
-                                                             style="width: {{ min(100, $reorderPercentage) }}%"></div>
+                                                    <div class="small text-muted">
+                                                        {{ currency_symbol() }}{{ number_format($item->deficit_value, 2) }}
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <span class="badge badge-light-dark">{{ $urgencyText }}</span>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $item->severity_color }}">
+                                                        <i class="ki-duotone {{ $item->severity_icon }} fs-2 me-1">
+                                                            <span class="path1"></span>
+                                                            <span class="path2"></span>
+                                                        </i>
+                                                        {{ $item->severity_text }}
+                                                    </span>
+                                                    <div class="progress mt-1" style="height: 5px; width: 80px; margin: 0 auto;">
+                                                        <div class="progress-bar bg-{{ $item->severity_color }}" 
+                                                            style="width: {{ min(100, $item->reorder_percentage) }}%"></div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $item->urgency_color }}">
+                                                        {{ $item->urgency_text }}
+                                                    </span>
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -387,18 +350,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($lowStockItems->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $lowStockItems->firstItem() }} - {{ $lowStockItems->lastItem() }} {{ __('pagination.of') }} {{ $lowStockItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $lowStockItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $lowStockItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>
@@ -438,16 +397,25 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Severity Distribution Chart
-        const criticalCount = @json($summary['critical']);
-        const warningCount = @json($summary['warning']);
-        const normalCount = @json(max(0, $summary['total_items'] - $summary['critical'] - $summary['warning']));
         
+
+        // Severity Distribution Chart
+        const criticalCount = {{ $summary['critical'] }};
+        const warningCount = {{ $summary['warning'] }};
+        const normalCount = {{ max(0, $summary['total_items'] - $summary['critical'] - $summary['warning']) }};
+
         const severityChart = new ApexCharts(document.querySelector("#severityChart"), {
             series: [criticalCount, warningCount, normalCount],
             chart: {
                 type: 'donut',
-                height: 300
+                height: 350,
+                width: '100%',
+                toolbar: {
+                    show: true,
+                    tools: {
+                        download: true
+                    }
+                }
             },
             labels: [
                 '{{ __("pagination.critical") }}',
@@ -456,51 +424,113 @@
             ],
             colors: ['#F1416C', '#FFC700', '#50CD89'],
             legend: {
-                position: 'bottom'
+                position: 'bottom',
+                fontSize: '12px'
             },
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return val + ' items'
+                        const total = criticalCount + warningCount + normalCount;
+                        const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                        return val + ' items (' + percentage + '%)';
                     }
                 }
-            }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val, opts) {
+                    const total = criticalCount + warningCount + normalCount;
+                    const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                    return percentage + '%';
+                }
+            },
+            responsive: [{
+                breakpoint: 480,
+                options: {
+                    chart: {
+                        height: 300
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }]
         });
         severityChart.render();
-        
+
         // Department Distribution Chart
-        const departmentData = @json($lowStockItems->groupBy('department.name')->map->count());
-        
+        @php
+            $departmentData = $lowStockItems->groupBy('department_name')->map(function($items) {
+                return $items->count();
+            })->toArray();
+        @endphp
+
         const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
-            series: Object.values(departmentData),
+            series: [{
+                name: 'Low Stock Items',
+                data: Object.values(@json($departmentData))
+            }],
             chart: {
                 type: 'bar',
-                height: 300
+                height: 350,
+                width: '100%',
+                toolbar: {
+                    show: true,
+                    tools: {
+                        download: true
+                    }
+                }
             },
             plotOptions: {
                 bar: {
                     horizontal: true,
-                    barHeight: '60%'
+                    barHeight: '60%',
+                    borderRadius: 4
                 }
             },
             dataLabels: {
-                enabled: false
+                enabled: true,
+                formatter: function(val) {
+                    return val + ' items';
+                },
+                style: {
+                    fontSize: '11px'
+                }
             },
             xaxis: {
-                categories: Object.keys(departmentData)
+                categories: Object.keys(@json($departmentData)),
+                labels: {
+                    style: {
+                        fontSize: '11px'
+                    }
+                },
+                title: {
+                    text: 'Number of Items',
+                    style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    }
+                }
             },
             yaxis: {
                 title: {
-                    text: 'Number of Items'
+                    text: 'Department',
+                    style: {
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                    }
                 }
             },
             colors: ['#3E97FF'],
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return val + ' items'
+                        return val + ' low stock items';
                     }
                 }
+            },
+            grid: {
+                borderColor: '#e7e7e7'
             }
         });
         departmentChart.render();

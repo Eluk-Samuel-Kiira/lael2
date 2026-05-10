@@ -191,15 +191,12 @@
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.stock_health_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="stockHealthChart" style="height: 300px;"></div>
+                                <div id="stockHealthChart" style="height: 350px;"></div>
                             </div>
                         </div>
                     </div>
@@ -209,15 +206,12 @@
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.value_by_stock_status') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="valueDistributionChart" style="height: 300px;"></div>
+                                <div id="valueDistributionChart" style="height: 350px;"></div>
                             </div>
                         </div>
                     </div>
@@ -360,127 +354,164 @@
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
+                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
                                         <h3 class="fw-bold m-0">{{ __('auth.inventory_valuation') }}</h3>
                                     </div>
+                                    {{-- Safe pagination info badge --}}
+                                    {{-- Safe pagination info badge --}}
                                     @if($variants->count() > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $variants->count() }} {{ __('auth.items') }}
-                                    </span>
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <span class="badge badge-light-primary fs-7">
+                                            @if(method_exists($variants, 'firstItem') && method_exists($variants, 'lastItem'))
+                                                {{ __('accounting.showing') }} 
+                                                <strong>{{ $variants->firstItem() }}</strong>-<strong>{{ $variants->lastItem() }}</strong> 
+                                                {{ __('accounting.of') }} <strong>{{ $variants->total() }}</strong>
+                                            @else
+                                                {{ __('accounting.showing') }} 1-{{ $variants->count() }} {{ __('accounting.of') }} {{ $variants->count() }}
+                                            @endif
+                                        </span>
+                                        
+                                        {{-- Per Page Selector --}}
+                                        @if(method_exists($variants, 'perPage') && method_exists($variants, 'currentPage'))
+                                        <div class="d-flex align-items-center">
+                                            <label class="form-label me-2 mb-0 fs-7 text-muted">{{ __('accounting.show') }}:</label>
+                                            <select class="form-select form-select-sm w-auto" 
+                                                    onchange="changePerPage('page', 'per_page', this.value, '{{ request()->fullUrl() }}')">
+                                                @foreach([10, 15, 25, 50, 100] as $option)
+                                                    <option value="{{ $option }}" {{ ($variants->perPage() ?? 15) == $option ? 'selected' : '' }}>
+                                                        {{ $option }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        @endif
+                                    </div>
                                     @endif
                                 </div>
                             </div>
-                            <div class="card-body p-0">
-                                @if($variants->count() > 0)
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="inventoryTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('auth.sku') }}</th>
-                                                <th>{{ __('accounting.name') }}</th>
-                                                <th>{{ __('accounting.category') }}</th>
-                                                <th>{{ __('auth.quantity') }}</th>
-                                                <th>{{ __('auth.price') }}</th>
-                                                <th>{{ __('auth.cost_price') }}</th>
-                                                <th>{{ __('auth.cost_value') }}</th>
-                                                <th>{{ __('auth.revenue_value') }}</th>
-                                                <th>{{ __('auth.potential_profit') }}</th>
-                                                <th>{{ __('auth.margin_percentage') }}</th>
-                                                <th>{{ __('auth.stock_health') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($sortedVariants as $variant)
-                                            <tr>
-                                                <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        @if($variant->image_url)
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($variant->image_url) }}" alt="{{ $variant->name }}" class="rounded">
-                                                        </div>
-                                                        @endif
-                                                        <div>
-                                                            <span class="fw-bold text-gray-800">{{ $variant->name }}</span>
-                                                            @if($variant->product)
-                                                            <div class="text-muted fs-7">{{ $variant->product->name }}</div>
+                            
+                            @if($variants->count() > 0)
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="inventoryTable">
+                                            <thead>
+                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                                    <th class="min-w-100px ps-4">{{ __('auth.sku') }}</th>
+                                                    <th class="min-w-200px">{{ __('accounting.name') }}</th>
+                                                    <th class="min-w-150px">{{ __('accounting.category') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.quantity') }}</th>
+                                                    <th class="min-w-120px text-end">{{ __('auth.price') }}</th>
+                                                    <th class="min-w-120px text-end">{{ __('auth.cost_price') }}</th>
+                                                    <th class="min-w-120px text-end">{{ __('auth.cost_value') }}</th>
+                                                    <th class="min-w-120px text-end">{{ __('auth.revenue_value') }}</th>
+                                                    <th class="min-w-120px text-end">{{ __('auth.potential_profit') }}</th>
+                                                    <th class="min-w-100px text-center">{{ __('auth.margin_percentage') }}</th>
+                                                    <th class="min-w-120px text-center">{{ __('auth.stock_health') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($variants as $variant)
+                                                <tr>
+                                                    <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            @if($variant->product?->image_url)
+                                                            <div class="symbol symbol-50px me-3">
+                                                                <img src="{{ asset($variant->product->image_url) }}" alt="{{ $variant->product->name }}" class="rounded">
+                                                            </div>
                                                             @endif
+                                                            <div>
+                                                                <span class="fw-bold text-gray-800">{{ $variant->product?->name ?? $variant->name }}</span>
+                                                                @if($variant->name !== ($variant->product?->name ?? ''))
+                                                                <div class="text-muted fs-7">{{ $variant->name }}</div>
+                                                                @endif
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    @if($variant->product && $variant->product->category)
-                                                    <span class="badge badge-light-info">{{ $variant->product->category->name }}</span>
-                                                    @else
-                                                    <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $variant->stock_color }}">
-                                                        {{ $variant->overal_quantity_at_hand }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-800 fw-semibold">${{ number_format($variant->price, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-600">${{ number_format($variant->cost_price ?? 0, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-warning fw-semibold">${{ number_format($variant->cost_value, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-info fw-semibold">${{ number_format($variant->revenue_value, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-{{ $variant->potential_profit >= 0 ? 'success' : 'danger' }} fw-bold">
-                                                        ${{ number_format($variant->potential_profit, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $variant->margin_percentage >= 30 ? 'success' : ($variant->margin_percentage >= 10 ? 'warning' : 'danger') }}">
-                                                        {{ number_format($variant->margin_percentage, 1) }}%
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-{{ $variant->stock_color }}">
-                                                        {{ $variant->stock_status }}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                        {{-- Footer with totals --}}
-                                        <tfoot class="bg-light">
-                                            <tr>
-                                                <td colspan="6" class="text-end fw-bold">{{ __('auth.total') }}:</td>
-                                                <td class="fw-bold text-warning">${{ number_format($totalValuation['total_cost_value'], 2) }}</td>
-                                                <td class="fw-bold text-info">${{ number_format($totalValuation['total_revenue_value'], 2) }}</td>
-                                                <td class="fw-bold text-{{ $totalValuation['total_potential_profit'] >= 0 ? 'success' : 'danger' }}">
-                                                    ${{ number_format($totalValuation['total_potential_profit'], 2) }}
-                                                </td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                                    </td>
+                                                    <td>
+                                                        @if($variant->product?->category)
+                                                        <span class="badge badge-light-info">{{ $variant->product->category->name }}</span>
+                                                        @else
+                                                        <span class="text-muted">-</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-{{ $variant->stock_color }}">
+                                                            {{ number_format($variant->overal_quantity_at_hand) }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-gray-800 fw-semibold">${{ number_format($variant->price, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-gray-600">${{ number_format($variant->cost_price ?? 0, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-warning fw-semibold">${{ number_format($variant->cost_value, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-info fw-semibold">${{ number_format($variant->revenue_value, 2) }}</span>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="text-{{ $variant->potential_profit >= 0 ? 'success' : 'danger' }} fw-bold">
+                                                            ${{ number_format($variant->potential_profit, 2) }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-light-{{ $variant->margin_percentage >= 30 ? 'success' : ($variant->margin_percentage >= 10 ? 'warning' : 'danger') }}">
+                                                            {{ number_format($variant->margin_percentage, 1) }}%
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge badge-{{ $variant->stock_color }}">
+                                                            {{ $variant->stock_status }}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                @endforeach
+                                            </tbody>
+                                            <tfoot class="bg-light">
+                                                <tr>
+                                                    <td colspan="6" class="text-end fw-bold">{{ __('auth.total') }}:</td>
+                                                    <td class="fw-bold text-warning">${{ number_format($totalValuation['total_cost_value'], 2) }}</td>
+                                                    <td class="fw-bold text-info">${{ number_format($totalValuation['total_revenue_value'], 2) }}</td>
+                                                    <td class="fw-bold text-{{ $totalValuation['total_potential_profit'] >= 0 ? 'success' : 'danger' }}">
+                                                        ${{ number_format($totalValuation['total_potential_profit'], 2) }}
+                                                    </td>
+                                                    <td colspan="2"></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table> {{-- ✅ FIXED: Properly closed table tag --}}
+                                    </div>
                                 </div>
-                                @else
-                                <div class="text-center py-10">
-                                    <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                    <p class="text-muted fs-6">{{ __('auth.no_products_found') }}</p>
+                                
+                                {{-- ✅ Clean Pagination --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $variants,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
-                            </div>
+                                
+                            @else
+                                <div class="card-body">
+                                    <div class="text-center py-10">
+                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
+                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                                        <p class="text-muted fs-6">{{ __('auth.no_products_found') }}</p>
+                                        @if(request()->hasAny(['category_id', 'stock_status']))
+                                        <a href="{{ route('reports.products.inventory') }}" class="btn btn-light-primary">
+                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
+                                            {{ __('accounting.clear_filters_view_all') }}
+                                        </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -514,129 +545,106 @@
     </div>
 </div>
 
+
 @push('scripts')
-@if($variants->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Prepare data for charts
-        @php
-            // Calculate stock health distribution
-            $healthyCount = $variants->where('stock_health', 'healthy')->count();
-            $warningCount = $variants->where('stock_health', 'warning')->count();
-            $criticalCount = $variants->where('stock_health', 'critical')->count();
-            
-            // Calculate value by stock status
-            $healthyValue = $variants->where('stock_health', 'healthy')->sum('cost_value');
-            $lowStockValue = $variants->where('overal_quantity_at_hand', '<', 10)
-                ->where('overal_quantity_at_hand', '>', 0)
-                ->sum('cost_value');
-            $outOfStockValue = 0; // Always 0
-            $overstockValue = $variants->where('overal_quantity_at_hand', '>', 100)->sum('cost_value');
-        @endphp
+        @if($variants->count() > 0)
+        // Use data from totalValuation
+        const healthyCount = {{ $totalValuation['healthy_count'] ?? 0 }};
+        const warningCount = {{ $totalValuation['warning_count'] ?? 0 }};
+        const criticalCount = {{ $totalValuation['critical_count'] ?? 0 }};
+        
+        const healthyValue = {{ $totalValuation['healthy_value'] ?? 0 }};
+        const lowStockValue = {{ $totalValuation['low_stock_value'] ?? 0 }};
+        const overstockValue = {{ $totalValuation['overstock_value'] ?? 0 }};
+        
+        console.log('Chart Data:', {
+            counts: { healthyCount, warningCount, criticalCount },
+            values: { healthyValue, lowStockValue, overstockValue }
+        });
         
         // Stock Health Distribution Chart (Pie Chart)
-        const stockHealthChart = new ApexCharts(document.querySelector("#stockHealthChart"), {
-            series: [{{ $healthyCount }}, {{ $warningCount }}, {{ $criticalCount }}],
-            chart: {
-                type: 'pie',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
-                    }
-                }
-            },
-            labels: [
-                '{{ __("auth.healthy") }}',
-                '{{ __("auth.warning") }}',
-                '{{ __("auth.critical") }}'
-            ],
-            colors: ['#50CD89', '#FFC700', '#F1416C'],
-            legend: {
-                position: 'bottom',
-                fontSize: '12px'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(value) {
-                        return value + ' {{ __("auth.item") }}' + (value !== 1 ? 's' : '');
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: true,
-                formatter: function(val, opts) {
-                    return opts.w.config.series[opts.seriesIndex];
-                }
+        const stockHealthElement = document.querySelector("#stockHealthChart");
+        if (stockHealthElement && (healthyCount > 0 || warningCount > 0 || criticalCount > 0)) {
+            const stockHealthChart = new ApexCharts(stockHealthElement, {
+                series: [healthyCount, warningCount, criticalCount],
+                chart: {
+                    type: 'pie',
+                    height: 400,
+                    width: '100%',
+                    toolbar: { show: true, tools: { download: true } }
+                },
+                labels: [
+                    '{{ __("auth.healthy_stock") }} (' + healthyCount + ')',
+                    '{{ __("auth.low_stock") }}/{{ __("auth.overstock") }} (' + warningCount + ')',
+                    '{{ __("auth.out_of_stock") }} (' + criticalCount + ')'
+                ],
+                colors: ['#50CD89', '#FFC700', '#F1416C'],
+                legend: { position: 'bottom', fontSize: '12px' },
+                tooltip: { y: { formatter: function(value) { return value + ' {{ __("auth.items") }}'; } } },
+                dataLabels: { enabled: true, formatter: function(val, opts) { 
+                    return opts.w.config.series[opts.seriesIndex]; 
+                } }
+            });
+            stockHealthChart.render();
+        } else {
+            console.warn('No data for stock health chart or element not found');
+            if (stockHealthElement) {
+                stockHealthElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        });
-        stockHealthChart.render();
+        }
         
         // Value Distribution Chart (Bar Chart)
-        const valueDistributionChart = new ApexCharts(document.querySelector("#valueDistributionChart"), {
-            series: [{
-                name: '{{ __("auth.stock_value") }}',
-                data: [{{ $healthyValue }}, {{ $lowStockValue }}, {{ $outOfStockValue }}, {{ $overstockValue }}]
-            }],
-            chart: {
-                type: 'bar',
-                height: 300,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
-                    }
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    borderRadius: 4,
-                    columnWidth: '60%'
-                }
-            },
-            xaxis: {
-                categories: [
-                    '{{ __("auth.healthy_stock") }}',
-                    '{{ __("auth.low_stock") }}',
-                    '{{ __("auth.out_of_stock") }}',
-                    '{{ __("auth.overstock") }}'
-                ],
-                labels: {
-                    style: {
-                        fontSize: '11px'
-                    }
-                }
-            },
-            yaxis: {
-                title: {
-                    text: '{{ __("auth.value") }} ($)'
+        const valueElement = document.querySelector("#valueDistributionChart");
+        if (valueElement && (healthyValue > 0 || lowStockValue > 0 || overstockValue > 0)) {
+            const valueDistributionChart = new ApexCharts(valueElement, {
+                series: [{
+                    name: '{{ __("auth.stock_value") }} ($)',
+                    data: [healthyValue, lowStockValue, 0, overstockValue]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 400,
+                    width: '100%',
+                    toolbar: { show: true, tools: { download: true } }
                 },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
-                    }
+                plotOptions: { bar: { horizontal: false, borderRadius: 4, columnWidth: '55%' } },
+                xaxis: {
+                    categories: [
+                        '{{ __("auth.healthy_stock") }}',
+                        '{{ __("auth.low_stock") }}',
+                        '{{ __("auth.out_of_stock") }}',
+                        '{{ __("auth.overstock") }}'
+                    ],
+                    labels: { style: { fontSize: '12px' }, rotate: -15 }
+                },
+                yaxis: {
+                    title: { text: '{{ __("auth.value") }} ($)' },
+                    labels: { formatter: function(val) { return '$' + val.toLocaleString(); } }
+                },
+                colors: ['#3E97FF'],
+                tooltip: { y: { formatter: function(value) { return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 }); } } },
+                dataLabels: { 
+                    enabled: true, 
+                    formatter: function(val) { return '$' + val.toLocaleString(); },
+                    offsetY: -20,
+                    style: { fontSize: '11px' }
                 }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(value) {
-                        return '$' + value.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
-                }
-            },
-            dataLabels: {
-                enabled: false
+            });
+            valueDistributionChart.render();
+        } else {
+            console.warn('No data for value distribution chart or element not found');
+            if (valueElement) {
+                valueElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        });
-        valueDistributionChart.render();
+        }
+        @endif
         
-        // Add export functionality
+        // Export function
         window.exportCurrentPage = function(options) {
-            const { tableId, filename, sheetName, format = 'excel' } = options;
+            const { tableId, filename } = options;
             const table = document.getElementById(tableId);
             
             if (!table) {
@@ -649,11 +657,8 @@
             
             for (let i = 0; i < rows.length; i++) {
                 const row = [], cols = rows[i].querySelectorAll('td, th');
-                
                 for (let j = 0; j < cols.length; j++) {
-                    // Clean text - remove HTML tags and trim
                     let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
-                    // Escape quotes and wrap in quotes if contains comma
                     if (text.includes(',') || text.includes('"')) {
                         text = '"' + text.replace(/"/g, '""') + '"';
                     }
@@ -663,22 +668,25 @@
             }
             
             const csvContent = csv.join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            
-            if (navigator.msSaveBlob) {
-                navigator.msSaveBlob(blob, filename + '.csv');
-            } else {
-                link.href = URL.createObjectURL(blob);
-                link.setAttribute("download", filename + '.csv');
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.setAttribute("download", filename + '.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        };
+        
+        // Per page change function
+        window.changePerPage = function(pageName, perPageName, perPage, baseUrl) {
+            const url = new URL(baseUrl);
+            url.searchParams.set(perPageName, perPage);
+            url.searchParams.set(pageName, '1');
+            window.location.href = url.toString();
         };
     });
 </script>
-@endif
 @endpush
-
 @endsection

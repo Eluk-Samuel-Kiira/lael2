@@ -76,45 +76,8 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.stock-aging') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
+                                    {{-- First Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Aging Category --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('pagination.aging_category') }}</label>
@@ -146,20 +109,39 @@
                                             </div>
                                         </div>
                                         
+                                        {{-- Location & Department - Dependent Dropdown --}}
+                                        <div class="flex-grow-1">
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
+                                        
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.stock-aging') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.stock-aging') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -184,62 +166,16 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @php
-                                        $agingStats = [
-                                            [
-                                                'key' => 'expired', 
-                                                'color' => 'danger', 
-                                                'icon' => 'ki-cross', 
-                                                'label' => 'expired',
-                                                'value' => number_format($agingCategories['expired']),
-                                                'subtitle' => 'pagination.immediate_action_required'
-                                            ],
-                                            [
-                                                'key' => '1_week', 
-                                                'color' => 'warning', 
-                                                'icon' => 'ki-clock', 
-                                                'label' => 'within_1_week',
-                                                'value' => number_format($agingCategories['1_week']),
-                                                'subtitle' => 'pagination.urgent_attention'
-                                            ],
-                                            [
-                                                'key' => '1_month', 
-                                                'color' => 'warning', 
-                                                'icon' => 'ki-time', 
-                                                'label' => 'within_1_month',
-                                                'value' => number_format($agingCategories['1_month']),
-                                                'subtitle' => 'pagination.prioritize_usage'
-                                            ],
-                                            [
-                                                'key' => '3_months', 
-                                                'color' => 'info', 
-                                                'icon' => 'ki-calendar-8', 
-                                                'label' => 'within_3_months',
-                                                'value' => number_format($agingCategories['3_months']),
-                                                'subtitle' => 'pagination.monitor_closely'
-                                            ],
-                                            [
-                                                'key' => '6_months', 
-                                                'color' => 'success', 
-                                                'icon' => 'ki-calendar-tick', 
-                                                'label' => 'within_6_months',
-                                                'value' => number_format($agingCategories['6_months']),
-                                                'subtitle' => 'pagination.good_stock'
-                                            ],
-                                            [
-                                                'key' => 'over_6_months', 
-                                                'color' => 'success', 
-                                                'icon' => 'ki-shield-tick', 
-                                                'label' => 'over_6_months',
-                                                'value' => number_format($agingCategories['over_6_months']),
-                                                'subtitle' => 'pagination.long_term_stock'
-                                            ]
-                                        ];
-                                    @endphp
-                                    
-                                    @foreach($agingStats as $stat)
+                                    @foreach([
+                                        ['key' => 'expired', 'color' => 'danger', 'icon' => 'ki-cross', 'label' => 'expired', 'value' => number_format($summary['expired']), 'subtitle' => __('pagination.immediate_action_required')],
+                                        ['key' => '1_week', 'color' => 'warning', 'icon' => 'ki-clock', 'label' => 'within_1_week', 'value' => number_format($summary['1_week']), 'subtitle' => __('pagination.urgent_attention')],
+                                        ['key' => '1_month', 'color' => 'warning', 'icon' => 'ki-time', 'label' => 'within_1_month', 'value' => number_format($summary['1_month']), 'subtitle' => __('pagination.prioritize_usage')],
+                                        ['key' => '3_months', 'color' => 'info', 'icon' => 'ki-calendar-8', 'label' => 'within_3_months', 'value' => number_format($summary['3_months']), 'subtitle' => __('pagination.monitor_closely')],
+                                        ['key' => '6_months', 'color' => 'success', 'icon' => 'ki-calendar-tick', 'label' => 'within_6_months', 'value' => number_format($summary['6_months']), 'subtitle' => __('pagination.good_stock')],
+                                        ['key' => 'over_6_months', 'color' => 'primary', 'icon' => 'ki-shield-tick', 'label' => 'over_6_months', 'value' => number_format($summary['over_6_months']), 'subtitle' => __('pagination.long_term_stock')],
+                                    ] as $stat)
                                     <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush border border-{{ $stat['color'] }} border-dashed h-100">
+                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
                                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                                 <div class="mb-4">
                                                     <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
@@ -254,12 +190,49 @@
                                                     </span>
                                                 </div>
                                                 <div class="text-gray-600 fw-semibold mb-2">
-                                                    {{ __($stat['subtitle']) }}
+                                                    {{ $stat['subtitle'] }}
+                                                </div>
+                                                <div class="text-muted fs-8">
+                                                    {{ __('pagination.' . $stat['label']) }}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     @endforeach
+                                </div>
+                                
+                                {{-- Additional Summary Info --}}
+                                <div class="row mt-6">
+                                    <div class="col-md-6">
+                                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                                            <div class="card-body d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="text-muted">{{ __('pagination.total_items_analyzed') }}</span>
+                                                    <div class="fs-2 fw-bold">{{ number_format($summary['total_items']) }}</div>
+                                                </div>
+                                                <i class="ki-duotone ki-box fs-2tx text-primary">
+                                                    <span class="path1"></span>
+                                                    <span class="path2"></span>
+                                                </i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card card-flush bg-light-danger border border-danger border-dashed">
+                                            <div class="card-body d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="text-muted">{{ __('pagination.total_value_at_risk') }}</span>
+                                                    <div class="fs-2 fw-bold text-danger">
+                                                        {{ currency_symbol() }}{{ number_format($summary['total_value_at_risk'], 2) }}
+                                                    </div>
+                                                </div>
+                                                <i class="ki-duotone ki-dollar fs-2tx text-danger">
+                                                    <span class="path1"></span>
+                                                    <span class="path2"></span>
+                                                </i>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -304,69 +277,77 @@
                                         </thead>
                                         <tbody>
                                             @foreach($agingItems as $item)
-                                            @php
-                                                $daysToExpiry = \Carbon\Carbon::parse($item->expiry_date)->diffInDays(now(), false) * -1;
-                                                
-                                                if ($daysToExpiry < 0) {
-                                                    $statusColor = 'danger';
-                                                    $statusText = __('pagination.expired');
-                                                    $progressColor = 'danger';
-                                                } elseif ($daysToExpiry <= 7) {
-                                                    $statusColor = 'warning';
-                                                    $statusText = __('pagination.critical');
-                                                    $progressColor = 'warning';
-                                                } elseif ($daysToExpiry <= 30) {
-                                                    $statusColor = 'warning';
-                                                    $statusText = __('pagination.warning');
-                                                    $progressColor = 'warning';
-                                                } elseif ($daysToExpiry <= 90) {
-                                                    $statusColor = 'info';
-                                                    $statusText = __('pagination.monitor');
-                                                    $progressColor = 'info';
-                                                } elseif ($daysToExpiry <= 180) {
-                                                    $statusColor = 'success';
-                                                    $statusText = __('pagination.good');
-                                                    $progressColor = 'success';
-                                                } else {
-                                                    $statusColor = 'primary';
-                                                    $statusText = __('pagination.excellent');
-                                                    $progressColor = 'primary';
-                                                }
-                                            @endphp
-                                            <tr class="{{ $daysToExpiry < 0 ? 'table-danger' : '' }}">
+                                            <tr>
                                                 <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
+                                                    <div class="fw-semibold">{{ $item->sku }}</div>
+                                                    @if($item->barcode)
+                                                    <small class="text-muted">{{ $item->barcode }}</small>
+                                                    @endif
                                                 </td>
                                                 <td>
-                                                    <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                    <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                    <div class="d-flex align-items-center">
+                                                        @if($item->image_url)
+                                                        <div class="symbol symbol-50px me-3">
+                                                            <img src="{{ asset($item->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant_name }}">
+                                                        </div>
+                                                        @endif
+                                                        <div>
+                                                            <div class="fw-bold">{{ $item->variant_name }}</div>
+                                                            <div class="text-muted fs-7">{{ $item->product_name }}</div>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-primary">{{ $item->departmentItem->name ?? '-' }}</span>
+                                                    <span class="badge badge-light-primary">{{ $item->department_name }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-info">{{ $item->itemLocation->name ?? '-' }}</span>
+                                                    <span class="badge badge-light-info">{{ $item->location_name }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="badge badge-light-dark">{{ $item->batch_number ?? '-' }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold {{ $daysToExpiry < 0 ? 'text-danger' : 'text-success' }}">
-                                                        {{ \Carbon\Carbon::parse($item->expiry_date)->format('Y-m-d') }}
+                                                    <span class="fw-bold {{ $item->days_to_expiry < 0 ? 'text-danger' : 'text-success' }}">
+                                                        {{ Carbon\Carbon::parse($item->expiry_date)->format('Y-m-d') }}
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold {{ $daysToExpiry < 0 ? 'text-danger' : ($daysToExpiry <= 30 ? 'text-warning' : 'text-success') }}">
-                                                        {{ $daysToExpiry < 0 ? __('pagination.expired') : abs($daysToExpiry) . ' ' . __('pagination.days') }}
+                                                    <span class="fw-bold {{ $item->days_to_expiry < 0 ? 'text-danger' : ($item->days_to_expiry <= 30 ? 'text-warning' : 'text-success') }}">
+                                                        @if($item->days_to_expiry < 0)
+                                                            {{ __('pagination.expired') }}
+                                                        @else
+                                                            {{ number_format($item->days_to_expiry) }} {{ __('pagination.days') }}
+                                                        @endif
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="fw-bold">{{ number_format($item->quantity_on_hand) }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $statusColor }}">
-                                                        {{ $statusText }}
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $item->status_color }} fs-7 py-2 px-3">
+                                                        <i class="ki-duotone 
+                                                            @if($item->category_key == 'expired') ki-cross
+                                                            @elseif($item->category_key == '1_week') ki-warning-2
+                                                            @elseif($item->category_key == '1_month') ki-time
+                                                            @elseif($item->category_key == '3_months') ki-calendar-8
+                                                            @elseif($item->category_key == '6_months') ki-calendar-tick
+                                                            @else ki-shield-tick
+                                                            @endif fs-3 me-1">
+                                                        </i>
+                                                        {{ $item->status_text }}
                                                     </span>
+                                                    <div class="progress mt-2" style="height: 5px; width: 80px; margin: 0 auto;">
+                                                        @php
+                                                            $progressWidth = 100;
+                                                            if ($item->days_to_expiry > 0 && $item->days_to_expiry <= 180) {
+                                                                $progressWidth = (1 - ($item->days_to_expiry / 180)) * 100;
+                                                            } elseif ($item->days_to_expiry > 0) {
+                                                                $progressWidth = 0;
+                                                            }
+                                                        @endphp
+                                                        <div class="progress-bar bg-{{ $item->progress_color }}" 
+                                                            style="width: {{ min(100, $progressWidth) }}%"></div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -375,18 +356,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($agingItems->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $agingItems->firstItem() }} - {{ $agingItems->lastItem() }} {{ __('pagination.of') }} {{ $agingItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $agingItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $agingItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>

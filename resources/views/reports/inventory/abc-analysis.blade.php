@@ -76,7 +76,8 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.abc-analysis') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
+                                    {{-- First Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Date Range --}}
                                         <div class="flex-grow-1">
                                             <label class="form-label required fw-semibold">{{ __('pagination.date_range') }}</label>
@@ -102,24 +103,28 @@
                                             </div>
                                         </div>
                                         
-                                        {{-- Department --}}
+                                        {{-- Location & Department - Dependent Dropdown --}}
                                         <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
                                         </div>
+                                    </div>
+                                    
+                                    {{-- Second Line --}}
+                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
+                                        {{-- Empty spacer --}}
+                                        <div class="flex-grow-1"></div>
                                         
                                         {{-- Action Buttons --}}
                                         <div class="d-flex flex-column justify-content-end">
@@ -305,15 +310,33 @@
                     foreach (['A', 'B', 'C'] as $category) {
                         $allItems = $allItems->merge($abcCategories[$category]['items'] ?? []);
                     }
-                    $sortedItems = $allItems->sortByDesc('inventory_value');
+                    $sortedItems = $allItems->sortByDesc('inventory_value')->values();
+                    
+                    // Apply pagination to sorted items
+                    $currentPage = request()->get('page', 1);
+                    $perPage = 15;
+                    $offset = ($currentPage - 1) * $perPage;
+                    $paginatedItems = $sortedItems->slice($offset, $perPage)->values();
+                    
+                    // Create paginator instance
+                    $itemsPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+                        $paginatedItems,
+                        $sortedItems->count(),
+                        $perPage,
+                        $currentPage,
+                        [
+                            'path' => request()->url(),
+                            'query' => request()->except('page')
+                        ]
+                    );
                 @endphp
-                
+
                 @if($sortedItems->count() > 0)
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
                                     <div class="d-flex align-items-center">
                                         <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
                                             <span class="path1"></span>
@@ -321,9 +344,6 @@
                                         </i>
                                         <h3 class="fw-bold m-0">{{ __('pagination.abc_analysis_details') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $sortedItems->count() }} {{ __('pagination.items') }}
-                                    </span>
                                 </div>
                             </div>
                             <div class="card-body p-0">
@@ -331,20 +351,20 @@
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="abcAnalysisTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">#</th>
-                                                <th>{{ __('pagination.abc_category') }}</th>
-                                                <th>{{ __('pagination.sku') }}</th>
-                                                <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('pagination.department') }}</th>
-                                                <th>{{ __('pagination.inventory_value') }}</th>
-                                                <th>{{ __('pagination.value_percentage') }}</th>
-                                                <th>{{ __('pagination.cumulative_percentage') }}</th>
-                                                <th>{{ __('pagination.total_movement') }}</th>
-                                                <th>{{ __('pagination.recommendation') }}</th>
+                                                <th class="ps-4 min-w-50px">#</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.abc_category') }}</th>
+                                                <th class="min-w-120px">{{ __('pagination.sku') }}</th>
+                                                <th class="min-w-200px">{{ __('pagination.product') }}</th>
+                                                <th class="min-w-150px">{{ __('pagination.department') }}</th>
+                                                <th class="min-w-150px text-end">{{ __('pagination.inventory_value') }}</th>
+                                                <th class="min-w-120px text-center">{{ __('pagination.value_percentage') }}</th>
+                                                <th class="min-w-150px text-center">{{ __('pagination.cumulative_percentage') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.total_movement') }}</th>
+                                                <th class="min-w-200px">{{ __('pagination.recommendation') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($sortedItems as $index => $item)
+                                            @foreach($paginatedItems as $index => $item)
                                             @php
                                                 $categoryColors = ['A' => 'danger', 'B' => 'warning', 'C' => 'success'];
                                                 $categoryColor = $categoryColors[$item->abc_category] ?? 'dark';
@@ -356,13 +376,19 @@
                                                     'C' => __('pagination.abc_recommendation_c')
                                                 ];
                                                 $recommendation = $recommendations[$item->abc_category] ?? '';
+                                                
+                                                // Global ranking across all items
+                                                $globalIndex = $sortedItems->search(function($i) use ($item) {
+                                                    return $i->id === $item->id;
+                                                });
+                                                $displayIndex = $globalIndex !== false ? $globalIndex + 1 : ($index + 1);
                                             @endphp
                                             <tr>
                                                 <td class="ps-4">
-                                                    <span class="fw-bold">{{ $index + 1 }}</span>
+                                                    <span class="fw-bold">{{ $displayIndex }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $categoryColor }}">
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $categoryColor }} fs-7 py-2 px-3">
                                                         {{ __('pagination.abc_category_' . strtolower($item->abc_category)) }}
                                                     </span>
                                                 </td>
@@ -372,38 +398,38 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        @if($item->variant->image_url ?? false)
+                                                        @if($item->variant && $item->variant->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ $item->variant->image_url }}" class="img-fluid" alt="{{ $item->variant->name }}">
+                                                            <img src="{{ asset($item->variant->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
                                                         </div>
                                                         @endif
                                                         <div>
                                                             <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                            <div class="text-muted">{{ $item->variant->product->name ?? '' }}</div>
+                                                            <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-primary">{{ $item->department->name ?? '-' }}</span>
+                                                    <span class="badge badge-light-primary">{{ $item->departmentItem->name ?? '-' }}</span>
                                                 </td>
-                                                <td>
+                                                <td class="text-end">
                                                     <span class="fw-bold text-{{ $categoryColor }}">
                                                         ${{ number_format($item->inventory_value, 2) }}
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="badge badge-light-dark">
                                                         {{ number_format($item->value_percentage, 1) }}%
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="fw-bold {{ $item->cumulative_percentage <= 80 ? 'text-success' : ($item->cumulative_percentage <= 95 ? 'text-warning' : 'text-info') }}">
                                                         {{ number_format($item->cumulative_percentage, 1) }}%
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td class="text-center">
                                                     <span class="badge badge-light-info">
-                                                        {{ number_format($item->total_movement) }}
+                                                        {{ number_format($item->total_movement ?? 0) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -412,7 +438,38 @@
                                             </tr>
                                             @endforeach
                                         </tbody>
+                                        @php
+                                            $pageTotalValue = $paginatedItems->sum('inventory_value');
+                                        @endphp
+                                        <tfoot class="bg-light">
+                                            <tr>
+                                                <td colspan="5" class="text-end fw-bold">{{ __('pagination.current_page_total') }}: </td>
+                                                <td class="text-end fw-bold text-primary">
+                                                    ${{ number_format($pageTotalValue, 2) }}
+                                                </td>
+                                                <td colspan="4"></td>
+                                            </tr>
+                                            @if($sortedItems->count() > $paginatedItems->count())
+                                            <tr>
+                                                <td colspan="5" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }}: </td>
+                                                <td class="text-end fw-bold text-primary">
+                                                    ${{ number_format($sortedItems->sum('inventory_value'), 2) }}
+                                                </td>
+                                                <td colspan="4"></td>
+                                            </tr>
+                                            @endif
+                                        </tfoot>
                                     </table>
+                                </div>
+                                
+                                {{-- Pagination Component --}}
+                                <div class="card-footer">
+                                    @include('partials.pagination', [
+                                        'paginator' => $itemsPaginator,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
                             </div>
                         </div>

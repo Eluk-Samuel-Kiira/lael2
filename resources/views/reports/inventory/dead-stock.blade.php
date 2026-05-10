@@ -76,6 +76,7 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.dead-stock') }}" id="filterForm">
+                                    {{-- First Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Days Threshold --}}
                                         <div class="flex-grow-1">
@@ -85,80 +86,54 @@
                                                     <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                 </span>
                                                 <input type="number" class="form-control" name="days_threshold" 
-                                                    value="{{ $daysThreshold }}" min="30" max="1095"
-                                                    title="{{ __('pagination.minimum_days_without_movement') }}">
+                                                    value="{{ $daysThreshold }}" min="30" max="1095">
                                                 <span class="input-group-text">{{ __('pagination.days') }}</span>
                                             </div>
                                             <div class="form-text">{{ __('pagination.items_without_movement_for_x_days') }}</div>
                                         </div>
                                         
-                                        {{-- Location --}}
+                                        {{-- Location & Department - Dependent Dropdown --}}
                                         <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-location fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="location_id">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}" 
-                                                                {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Department --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-building fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="department_id">
-                                                    <option value="">{{ __('pagination.all_departments') }}</option>
-                                                    @foreach($departments as $department)
-                                                        <option value="{{ $department->id }}" 
-                                                                {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                            {{ $department->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <x-liveblade-dependent-dropdown 
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
                                         </div>
                                     </div>
                                     
+                                    {{-- Second Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Include Expired --}}
                                         <div class="flex-grow-1">
-                                            <div class="form-check form-switch form-check-custom form-check-solid">
+                                            <div class="form-check form-switch form-check-custom form-check-solid mt-6">
                                                 <input class="form-check-input" type="checkbox" name="include_expired" 
                                                     value="1" id="include_expired" 
                                                     {{ $includeExpired ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="include_expired">
-                                                    <span class="fw-semibold">{{ __('pagination.include_expired') }}</span>
-                                                    <div class="form-text">{{ __('pagination.include_expired_items_in_report') }}</div>
+                                                <label class="form-check-label fw-semibold" for="include_expired">
+                                                    {{ __('pagination.include_expired_items') }}
                                                 </label>
                                             </div>
                                         </div>
                                         
                                         {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.dead-stock') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
+                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                                {{ __('pagination.apply_filters') }}
+                                            </button>
+                                            <a href="{{ route('reports.inventory.dead-stock') }}" class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                {{ __('pagination.clear_filters') }}
+                                            </a>
                                         </div>
                                     </div>
                                 </form>
@@ -438,18 +413,14 @@
                                 </div>
                                 
                                 {{-- Pagination --}}
-                                @if($deadStockItems->hasPages())
                                 <div class="card-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="text-muted">
-                                            {{ __('pagination.showing') }} {{ $deadStockItems->firstItem() }} - {{ $deadStockItems->lastItem() }} {{ __('pagination.of') }} {{ $deadStockItems->total() }}
-                                        </div>
-                                        <div>
-                                            {{ $deadStockItems->links() }}
-                                        </div>
-                                    </div>
+                                    @include('partials.pagination', [
+                                        'paginator' => $deadStockItems,
+                                        'pageName' => 'page',
+                                        'perPageName' => 'per_page',
+                                        'showPerPage' => true
+                                    ])
                                 </div>
-                                @endif
                             </div>
                         </div>
                     </div>
@@ -485,137 +456,272 @@
 </div>
 
 @push('scripts')
-@if($deadStockItems->count() > 0)
+@if(isset($deadStockItems) && $deadStockItems->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Idle Time Distribution Chart
+        // ============================================
+        // 1. Idle Time Distribution Chart (Donut)
+        // ============================================
         const idleTimeData = [
             {{ $idleCategories['180_365'] ?? 0 }},
             {{ $idleCategories['365_730'] ?? 0 }},
             {{ $idleCategories['over_730'] ?? 0 }}
         ];
         
-        const idleTimeChart = new ApexCharts(document.querySelector("#idleTimeChart"), {
-            series: idleTimeData,
-            chart: {
-                type: 'donut',
-                height: 300
-            },
-            labels: [
-                '{{ __("pagination.180_365_days") }}',
-                '{{ __("pagination.365_730_days") }}',
-                '{{ __("pagination.over_730_days") }}'
-            ],
-            colors: ['#FFC700', '#F1416C', '#7E8299'],
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val + ' units'
-                    }
-                }
-            }
-        });
-        idleTimeChart.render();
+        const hasIdleData = idleTimeData.some(value => value > 0);
         
-        // Dead Stock by Department Chart
-        @php
-            $departmentData = $deadStockItems->groupBy('department.name')->map(function($items) {
-                return $items->sum('quantity_on_hand');
+        if (hasIdleData) {
+            const idleTimeChart = new ApexCharts(document.querySelector("#idleTimeChart"), {
+                series: idleTimeData,
+                chart: {
+                    type: 'donut',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
+                    }
+                },
+                labels: [
+                    '{{ __("pagination.180_365_days") }} (6-12 months)',
+                    '{{ __("pagination.365_730_days") }} (1-2 years)',
+                    '{{ __("pagination.over_730_days") }} (>2 years)'
+                ],
+                colors: ['#FFC700', '#F1416C', '#7E8299'],
+                legend: {
+                    position: 'bottom',
+                    fontSize: '12px'
+                },
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            const total = idleTimeData.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return val.toLocaleString() + ' units (' + percentage + '%)';
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val, opts) {
+                        const total = idleTimeData.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                        return percentage + '%';
+                    }
+                },
+                responsive: [{
+                    breakpoint: 480,
+                    options: {
+                        chart: {
+                            height: 300
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }]
             });
-        @endphp
+            idleTimeChart.render();
+        } else {
+            document.querySelector("#idleTimeChart").innerHTML = '<div class="text-center text-muted py-5">{{ __("pagination.no_data_available") }}</div>';
+        }
         
-        const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
-            series: [{
-                name: 'Quantity',
-                data: Object.values(@json($departmentData))
-            }],
-            chart: {
-                type: 'bar',
-                height: 300
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: '60%'
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            xaxis: {
-                categories: Object.keys(@json($departmentData))
-            },
-            yaxis: {
-                title: {
-                    text: 'Quantity'
-                }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
+        // ============================================
+        // 2. Dead Stock by Department Chart (Bar)
+        // ============================================
+        const departmentData = @json($departmentDeadStock);
+        
+        if (departmentData && departmentData.length > 0) {
+            const deptNames = departmentData.map(item => item.name);
+            const deptQuantities = departmentData.map(item => item.quantity);
+            
+            const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
+                series: [{
+                    name: 'Dead Stock Quantity',
+                    data: deptQuantities
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 350,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: false,
+                        columnWidth: '60%',
+                        borderRadius: 4,
+                        distributed: false
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
                     formatter: function(val) {
-                        return val + ' units'
+                        return val.toLocaleString();
+                    },
+                    offsetY: -20,
+                    style: {
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }
+                },
+                xaxis: {
+                    categories: deptNames,
+                    labels: {
+                        rotate: -45,
+                        trim: true,
+                        style: {
+                            fontSize: '11px'
+                        }
+                    },
+                    title: {
+                        text: '{{ __("pagination.department") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    }
+                },
+                yaxis: {
+                    title: {
+                        text: '{{ __("pagination.quantity") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    },
+                    labels: {
+                        formatter: function(val) {
+                            return val.toLocaleString();
+                        }
+                    }
+                },
+                colors: ['#F1416C'],
+                tooltip: {
+                    y: {
+                        formatter: function(val, { dataPointIndex }) {
+                            const item = departmentData[dataPointIndex];
+                            return val.toLocaleString() + ' units\n' +
+                                   'Value: $' + item.value.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        }
+                    }
+                },
+                grid: {
+                    borderColor: '#e7e7e7',
+                    row: {
+                        colors: ['#f3f3f3', 'transparent'],
+                        opacity: 0.3
                     }
                 }
-            }
-        });
-        departmentChart.render();
+            });
+            departmentChart.render();
+        } else {
+            document.querySelector("#departmentChart").innerHTML = '<div class="text-center text-muted py-5">{{ __("pagination.no_data_available") }}</div>';
+        }
         
-        // Days Idle Analysis Chart
+        // ============================================
+        // 3. Days Idle Analysis Chart (Horizontal Bar)
+        // ============================================
         @php
-            $daysIdleData = $deadStockItems->pluck('last_movement_date')->map(function($date) {
-                return \Carbon\Carbon::parse($date)->diffInDays(now());
+            // Get top 15 most idle products
+            $topIdleProducts = $sortedDeadStock->take(15);
+            $topIdleDays = $topIdleProducts->pluck('days_idle')->toArray();
+            $topIdleNames = $topIdleProducts->map(function($item) {
+                $name = $item->variant_name;
+                return strlen($name) > 25 ? substr($name, 0, 22) . '...' : $name;
             })->toArray();
-            // Sort and take top 15 for readability
-            arsort($daysIdleData);
-            $topDaysIdle = array_slice($daysIdleData, 0, 15);
-            $productNames = $deadStockItems->take(15)->pluck('variant.name')->toArray();
         @endphp
         
-        const daysIdleChart = new ApexCharts(document.querySelector("#daysIdleChart"), {
-            series: [{
-                name: 'Days Idle',
-                data: @json($topDaysIdle)
-            }],
-            chart: {
-                type: 'bar',
-                height: 300
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: true,
-                    barHeight: '60%'
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            xaxis: {
-                title: {
-                    text: 'Days Since Last Movement'
-                }
-            },
-            yaxis: {
-                labels: {
-                    show: false
-                }
-            },
-            colors: ['#7239EA'],
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val + ' days'
+        const idleDaysData = @json($topIdleDays);
+        const idleProductNames = @json($topIdleNames);
+        
+        if (idleDaysData.length > 0 && idleDaysData.some(day => day > 0)) {
+            const daysIdleChart = new ApexCharts(document.querySelector("#daysIdleChart"), {
+                series: [{
+                    name: 'Days Idle',
+                    data: idleDaysData
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 400,
+                    width: '100%',
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: true
+                        }
                     }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: '70%',
+                        borderRadius: 4
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val) {
+                        return val.toFixed(0) + ' days';
+                    },
+                    style: {
+                        fontSize: '10px'
+                    }
+                },
+                xaxis: {
+                    title: {
+                        text: '{{ __("pagination.days_since_last_movement") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    },
+                    labels: {
+                        formatter: function(val) {
+                            return val.toFixed(0);
+                        }
+                    }
+                },
+                yaxis: {
+                    categories: idleProductNames,
+                    labels: {
+                        style: {
+                            fontSize: '11px'
+                        }
+                    },
+                    title: {
+                        text: '{{ __("pagination.product") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    }
+                },
+                colors: ['#7239EA'],
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            return val.toFixed(0) + ' days idle';
+                        }
+                    }
+                },
+                grid: {
+                    borderColor: '#e7e7e7'
                 }
-            }
-        });
-        daysIdleChart.render();
+            });
+            daysIdleChart.render();
+        } else {
+            document.querySelector("#daysIdleChart").innerHTML = '<div class="text-center text-muted py-5">{{ __("pagination.no_data_available") }}</div>';
+        }
     });
-    
 </script>
 @endif
 
