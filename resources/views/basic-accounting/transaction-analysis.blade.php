@@ -347,11 +347,14 @@
                             </table>
                         </div>
                         
-                        @if($topTransactions instanceof \Illuminate\Pagination\AbstractPaginator && $topTransactions->hasPages())
-                            <div class="mt-4">
-                                {{ $topTransactions->appends(request()->query())->links() }}
-                            </div>
-                        @endif
+                        <div class="card-footer">
+                            @include('partials.pagination', [
+                                'paginator' => $topTransactions,
+                                'pageName' => 'page',
+                                'perPageName' => 'per_page',
+                                'showPerPage' => true
+                            ])
+                        </div>
                     </div>
                 </div>
                 

@@ -233,8 +233,8 @@
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_revenue') }}</td>
                                                 <td class="text-end">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</td>
-                                                <td class="text-end">100%</td
-                                                <td></td
+                                                <td class="text-end">100%</td>
+                                                <td></td>
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -308,8 +308,8 @@
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_expenses') }}</td>
                                                 <td class="text-end">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</td>
-                                                <td class="text-end">100%</td
-                                                <td></td
+                                                <td class="text-end">100%</td>
+                                                <td></td>
                                             </tr>
                                         </tfoot>
                                     </table>
