@@ -1,775 +1,565 @@
 @extends('home.layout')
-@section('content')
-    <!-- Header Section -->
-    <header class="sticky-top bg-white shadow-sm">
-        <nav class="navbar navbar-expand-lg navbar-light py-3">
-            <div class="container">
-                <a class="navbar-brand" href="/">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="200" height="60" viewBox="0 0 200 60">
-                        <defs>
-                            <linearGradient id="lael-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#0046B8"/>
-                                <stop offset="100%" stop-color="#007BFF"/>
-                            </linearGradient>
-                        </defs>
-                        <!-- Gradient blue circle background -->
-                        <circle cx="30" cy="30" r="20" fill="url(#lael-grad)" />
-                        <!-- Minimal exchange symbol /= in white -->
-                        <text x="20" y="38" font-family="Poppins, sans-serif" font-size="24" fill="#FFFFFF" font-weight="700">/=</text>
-                        <!-- Product name -->
-                        <text x="65" y="37" font-family="Poppins, sans-serif" font-size="26" fill="url(#lael-grad)" font-weight="600">LAEL</text>
-                    </svg>
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="#features">Features</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#pricing">Pricing</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#testimonials">Testimonials</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#faq">FAQ</a>
-                        </li>
-                        <li class="nav-item ms-lg-3">
-                            <a class="btn btn-outline-primary" href="#pricing">Get Started</a>
-                        </li>
-                        <li class="nav-item ms-lg-3">
-                            <a class="btn btn-primary" href="{{ route('login') }}">Demo</a>
-                        </li>
-                    </ul>
+
+<!-- ═══════════════════════════════════════
+     HERO
+═══════════════════════════════════════ -->
+<section class="hero" id="home">
+    <div class="hero-bg-grid"></div>
+    <div class="hero-glow-1"></div>
+    <div class="hero-glow-2"></div>
+
+    <div class="container position-relative">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <div class="hero-badge">
+                    <span class="pulse-dot"></span>
+                    Now live &amp; trusted worldwide
+                </div>
+
+                <h1 class="hero-title">
+                    The <span class="highlight">Fastest</span> Point of Sale for Every Business on Earth
+                </h1>
+
+                <p class="hero-sub">
+                    STARPOSS powers retail shops, restaurants, hotels, and multi-chain enterprises across East Africa and beyond — with lightning-fast checkout, multi-currency, and multi-language support built in.
+                </p>
+
+                <div class="hero-cta-group">
+                    <a href="#pricing" class="btn-hero-primary">
+                        <i class="fas fa-rocket"></i> Start Free Trial
+                    </a>
+                    <a href="{{ route('login') }}" class="btn-hero-ghost">
+                        <i class="fas fa-desktop"></i> View Live Demo
+                    </a>
+                </div>
+
+                <div class="hero-stats">
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">5,000+</div>
+                        <div class="hero-stat-label">Active Businesses</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">30+</div>
+                        <div class="hero-stat-label">Countries</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">99.9%</div>
+                        <div class="hero-stat-label">Uptime SLA</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">3s</div>
+                        <div class="hero-stat-label">Avg Checkout</div>
+                    </div>
                 </div>
             </div>
-        </nav>
-    </header>
 
-    <!-- Hero Section -->
-    <section class="hero-section">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-6">
-                    <h1 class="hero-title">Streamline Your Business with LAEL POS</h1>
-                    <p class="hero-subtitle">The all-in-one point of sale solution designed for all businesses. Manage sales, inventory, employees, accounting and reporting in one powerful platform.</p>
-                    <div class="d-flex flex-wrap gap-3">
-                        <a href="#pricing" class="btn btn-primary-custom">Get Started Today</a>
-                        <a href="#features" class="btn btn-outline-light">Learn More</a>
-                    </div>
-                </div>
-                <div class="col-lg-6 text-center">
-                    <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" alt="POS System" class="img-fluid rounded shadow-lg">
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Clients Section -->
-    <section class="clients-section">
-        <div class="container">
-            <h2 class="section-title">Trusted by Businesses Across Africa</h2>
-            <p class="section-subtitle">Join thousands of retailers, restaurants, and service providers who rely on LAEL POS</p>
-            <div class="row align-items-center justify-content-center">
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+1" alt="Client 1" class="img-fluid client-logo">
-                </div>
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+2" alt="Client 2" class="img-fluid client-logo">
-                </div>
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+3" alt="Client 3" class="img-fluid client-logo">
-                </div>
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+4" alt="Client 4" class="img-fluid client-logo">
-                </div>
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+5" alt="Client 5" class="img-fluid client-logo">
-                </div>
-                <div class="col-6 col-md-3 col-lg-2 text-center mb-4">
-                    <img src="https://via.placeholder.com/120x60?text=Client+6" alt="Client 6" class="img-fluid client-logo">
-                </div>
-            </div>
-        </div>
-    </section>
-
-    
-    <!-- Features Section -->
-    <section id="features" class="py-5">
-        <div class="container">
-            <h2 class="section-title">Powerful Features for Your Business</h2>
-            <p class="section-subtitle">Everything you need to manage and grow your business efficiently</p>
-            
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-cash-register"></i>
+            <div class="col-lg-6">
+                <div class="hero-visual">
+                    <div class="floating-tag tag-1">
+                        <div class="tag-icon" style="background:rgba(6,214,160,0.15); color:var(--brand-green);">
+                            <i class="fas fa-check-circle"></i>
                         </div>
-                        <h3 class="feature-title">Selling Interface</h3>
-                        <p class="feature-description">Intuitive point of sale with quick product search, barcode scanning, and multiple payment options.</p>
-                    </div>
-                </div>
-
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-boxes"></i>
+                        <div>
+                            <div style="font-size:0.75rem;color:#E2EAF4;font-weight:600;">Sale Complete</div>
+                            <div style="font-size:0.7rem;color:var(--brand-green);">KES 4,500 received</div>
                         </div>
-                        <h3 class="feature-title">Inventory Management</h3>
-                        <p class="feature-description">Track stock levels, set low stock alerts, and manage suppliers all in one place.</p>
                     </div>
-                </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-chart-bar"></i>
+                    <div class="hero-screen">
+                        <div class="hero-screen-bar">
+                            <span class="screen-dot red"></span>
+                            <span class="screen-dot yellow"></span>
+                            <span class="screen-dot green"></span>
+                            <span style="font-size:0.7rem;color:#4A5568;margin-left:8px;">STARPOSS — Cashier View</span>
                         </div>
-                        <h3 class="feature-title">Detailed Reporting</h3>
-                        <p class="feature-description">Comprehensive sales, inventory, and financial reports to help you make data-driven decisions.</p>
-                    </div>
-                </div>
+                        <div class="pos-interface">
+                            <div class="pos-top-bar">
+                                <div>
+                                    <div class="pos-greeting">Today's Sales</div>
+                                    <div style="font-size:0.7rem;color:var(--brand-green);">↑ 24% from yesterday</div>
+                                </div>
+                                <span class="pos-currency-tag">USD / KES / UGX</span>
+                            </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-users"></i>
+                            <div class="pos-amount">$1,248.00</div>
+
+                            <div class="pos-items">
+                                <div class="pos-item">
+                                    <span class="pos-item-name">Samsung Galaxy A25 × 2</span>
+                                    <span class="pos-item-price">$380.00</span>
+                                </div>
+                                <div class="pos-item">
+                                    <span class="pos-item-name">Phone Case × 5</span>
+                                    <span class="pos-item-price">$25.00</span>
+                                </div>
+                                <div class="pos-item">
+                                    <span class="pos-item-name">Screen Protector × 3</span>
+                                    <span class="pos-item-price">$18.00</span>
+                                </div>
+                                <div class="pos-item" style="border:none;">
+                                    <span style="color:var(--brand-orange);font-weight:600;font-size:0.8rem;">Discount 5%</span>
+                                    <span style="color:var(--brand-orange);font-weight:600;font-size:0.8rem;">-$21.15</span>
+                                </div>
+                            </div>
+
+                            <div class="pos-payment-methods">
+                                <div class="payment-badge active">
+                                    <i class="fas fa-mobile-alt"></i> M-Pesa
+                                </div>
+                                <div class="payment-badge">
+                                    <i class="fas fa-credit-card"></i> Card
+                                </div>
+                                <div class="payment-badge">
+                                    <i class="fas fa-money-bill"></i> Cash
+                                </div>
+                                <div class="payment-badge">
+                                    <i class="fas fa-university"></i> Bank
+                                </div>
+                            </div>
+
+                            <button class="pos-checkout-btn">
+                                <i class="fas fa-bolt"></i> Lightning Checkout
+                            </button>
                         </div>
-                        <h3 class="feature-title">Employee Management</h3>
-                        <p class="feature-description">Manage staff schedules, track performance, and control access with role-based permissions.</p>
                     </div>
-                </div>
 
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-store"></i>
-                        </div>
-                        <h3 class="feature-title">Multi-Store Support</h3>
-                        <p class="feature-description">Manage multiple locations from a single dashboard with centralized control and reporting.</p>
-                    </div>
-                </div>
-
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
+                    <div class="floating-tag tag-2">
+                        <div class="tag-icon" style="background:rgba(255,209,102,0.15); color:var(--brand-accent);">
                             <i class="fas fa-globe"></i>
                         </div>
-                        <h3 class="feature-title">Multi-Currency & Language</h3>
-                        <p class="feature-description">Support for multiple currencies and payment gateways and languages to serve diverse customer bases across the world.</p>
-                    </div>
-                </div>
-
-                <!-- ✅ New Feature: Taxes, Promotions & Discounts -->
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-percentage"></i>
-                        </div>
-                        <h3 class="feature-title">Taxes, Promotions & Discounts</h3>
-                        <p class="feature-description">Flexible configuration for tax rates, discount campaigns, and promotional pricing to boost sales and compliance.</p>
-                    </div>
-                </div>
-
-                <!-- ✅ New Feature: Purchases & Suppliers -->
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-truck-loading"></i>
-                        </div>
-                        <h3 class="feature-title">Purchases & Supplier Management</h3>
-                        <p class="feature-description">Easily record purchases, track supplier balances, and manage purchase orders with real-time stock updates.</p>
-                    </div>
-                </div>
-
-                <!-- Accounting -->
-                <div class="col-md-6 col-lg-4">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-calculator"></i>
-                        </div>
-                        <h3 class="feature-title">Complete Accounting</h3>
-                        <p class="feature-description">Advanced accounting with general ledger, journals, chart of accounts, trial balance, balance sheet, and income statement for full financial control.</p>                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- Pricing Section -->
-    <section id="pricing" class="pricing-section">
-        <div class="container">
-            <h2 class="section-title">Simple, Transparent Pricing</h2>
-            <p class="section-subtitle">Choose the plan that works best for your business. All plans include our core features.</p>
-            
-            <!-- Pricing Tabs -->
-            <ul class="nav nav-tabs justify-content-center mb-5" id="pricingTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="one-time-tab" data-bs-toggle="tab" data-bs-target="#one-time" type="button" role="tab">One-Time Payment</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab">Monthly</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="yearly-tab" data-bs-toggle="tab" data-bs-target="#yearly" type="button" role="tab">Yearly</button>
-                </li>
-            </ul>
-            
-            <div class="tab-content" id="pricingTabsContent">
-                <!-- One-Time Payment Tab -->
-                <div class="tab-pane fade show active" id="one-time" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Starter</h3>
-                                    <div class="pricing-price">$299</div>
-                                    <div class="pricing-period">One-time payment</div>
-                                    <p class="text-muted">Perfect for small businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>1 Store Location</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Basic Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Sales Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>2 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card popular">
-                                <div class="popular-badge">Most Popular</div>
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Business</h3>
-                                    <div class="pricing-price">$699</div>
-                                    <div class="pricing-period">One-time payment</div>
-                                    <p class="text-muted">Ideal for growing businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Up to 3 Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Detailed Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>5 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-primary-custom w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Enterprise</h3>
-                                    <div class="pricing-price">$1,299</div>
-                                    <div class="pricing-period">One-time payment</div>
-                                    <p class="text-muted">For large businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Analytics & Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency & Multi-Language</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Monthly Payment Tab -->
-                <div class="tab-pane fade" id="monthly" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Starter</h3>
-                                    <div class="pricing-price">$29<span class="fs-6">/month</span></div>
-                                    <div class="pricing-period">Monthly billing</div>
-                                    <p class="text-muted">Perfect for small businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>1 Store Location</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Basic Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Sales Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>2 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card popular">
-                                <div class="popular-badge">Most Popular</div>
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Business</h3>
-                                    <div class="pricing-price">$69<span class="fs-6">/month</span></div>
-                                    <div class="pricing-period">Monthly billing</div>
-                                    <p class="text-muted">Ideal for growing businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Up to 3 Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Detailed Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>5 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-primary-custom w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Enterprise</h3>
-                                    <div class="pricing-price">$129<span class="fs-6">/month</span></div>
-                                    <div class="pricing-period">Monthly billing</div>
-                                    <p class="text-muted">For large businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Analytics & Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency & Multi-Language</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Yearly Payment Tab -->
-                <div class="tab-pane fade" id="yearly" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Starter</h3>
-                                    <div class="pricing-price">$299<span class="fs-6">/year</span></div>
-                                    <div class="pricing-period">Save 15% with yearly billing</div>
-                                    <p class="text-muted">Perfect for small businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>1 Store Location</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Basic Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Sales Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>2 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature disabled">
-                                        <i class="fas fa-times"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card popular">
-                                <div class="popular-badge">Most Popular</div>
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Business</h3>
-                                    <div class="pricing-price">$699<span class="fs-6">/year</span></div>
-                                    <div class="pricing-period">Save 15% with yearly billing</div>
-                                    <p class="text-muted">Ideal for growing businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Up to 3 Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Detailed Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>5 User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-primary-custom w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="pricing-card">
-                                <div class="pricing-header">
-                                    <h3 class="pricing-title">Enterprise</h3>
-                                    <div class="pricing-price">$1,299<span class="fs-6">/year</span></div>
-                                    <div class="pricing-period">Save 15% with yearly billing</div>
-                                    <p class="text-muted">For large businesses</p>
-                                </div>
-                                <div class="pricing-features">
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited Store Locations</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Inventory Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Analytics & Reporting</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Unlimited User Accounts</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Supplier Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Advanced Employee Management</span>
-                                    </div>
-                                    <div class="pricing-feature">
-                                        <i class="fas fa-check"></i>
-                                        <span>Multi-Currency & Multi-Language</span>
-                                    </div>
-                                </div>
-                                <div class="pricing-footer">
-                                    <button class="btn btn-outline-primary w-100">Get Started</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="text-center mt-5">
-                <p class="text-muted">All plans include free updates and basic support. Need a custom solution? <a href="#contact">Contact us</a></p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Testimonials Section -->
-    <section id="testimonials" class="testimonial-section">
-        <div class="container">
-            <h2 class="section-title text-white">What Our Customers Say</h2>
-            <p class="section-subtitle text-white-50">Hear from businesses that have transformed their operations with LAEL POS</p>
-            
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-4">
-                    <div class="testimonial-card">
-                        <p class="testimonial-text">"LAEL POS has revolutionized how we manage our retail stores. The inventory management alone has saved us countless hours each week."</p>
-                        <div class="testimonial-author">
-                            <div class="testimonial-avatar">AO</div>
-                            <div>
-                                <h5 class="mb-0">Adebayo Ojo</h5>
-                                <p class="text-white-50 mb-0">Manager, Fashion Hub</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="testimonial-card">
-                        <p class="testimonial-text">"The multi-store feature has been a game-changer for our restaurant chain. We can now monitor all locations in real-time from one dashboard."</p>
-                        <div class="testimonial-author">
-                            <div class="testimonial-avatar">CK</div>
-                            <div>
-                                <h5 class="mb-0">Chidinma Kalu</h5>
-                                <p class="text-white-50 mb-0">Owner, Taste of Africa Restaurants</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-4">
-                    <div class="testimonial-card">
-                        <p class="testimonial-text">"As a small business owner, the affordable pricing and robust features of LAEL POS have helped us compete with larger retailers."</p>
-                        <div class="testimonial-author">
-                            <div class="testimonial-avatar">MA</div>
-                            <div>
-                                <h5 class="mb-0">Mohammed Abubakar</h5>
-                                <p class="text-white-50 mb-0">Owner, City Electronics</p>
-                            </div>
+                        <div>
+                            <div style="font-size:0.75rem;color:#E2EAF4;font-weight:600;">Multi-Language Active</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted-custom);">EN · FR · ES · SW</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- FAQ Section -->
-    <section id="faq" class="faq-section">
-        <div class="container">
-            <h2 class="section-title">Frequently Asked Questions</h2>
-            <p class="section-subtitle">Find answers to common questions about LAEL POS</p>
-            
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <div class="accordion" id="faqAccordion">
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-                                    Is LAEL POS suitable for my business type?
-                                </button>
-                            </h2>
-                            <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body">
-                                    Yes! LAEL POS is designed to work for various business types including retail stores, restaurants, service providers, and more. Our flexible system can be customized to meet your specific needs.
-                                </div>
-                            </div>
+<!-- TRUST BAR -->
+<div class="trust-bar">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-shield-alt"></i> Bank-grade Security</div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-wifi-slash"></i> Works Offline</div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-globe-africa"></i> East Africa Ready</div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-bolt"></i> 3-Second Checkout</div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-headset"></i> 24/7 Support</div>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <div class="trust-item"><i class="fas fa-sync-alt"></i> Free Updates</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     FEATURES
+═══════════════════════════════════════ -->
+<section id="features" class="features-section">
+    <div class="container">
+        <div class="text-center mb-5 animate-on-scroll">
+            <span class="section-label">Powerful Features</span>
+            <h2 class="section-title">Everything Your Business Needs</h2>
+            <p class="section-sub mx-auto">From solo shop owners in Kampala to enterprise chains in Nairobi — STARPOSS scales with you.</p>
+        </div>
+
+        <div class="row g-4">
+            <!-- Feature 1 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <h4>Lightning-Fast Checkout</h4>
+                    <p>Close sales in under 3 seconds with smart barcode scanning, quick product search, and one-tap payment selection. No lag, ever.</p>
+                </div>
+            </div>
+            <!-- Feature 2 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <h4>Smart Inventory Management</h4>
+                    <p>Real-time stock tracking, auto low-stock alerts, batch management, and supplier integration keep your shelves perfectly stocked.</p>
+                </div>
+            </div>
+            <!-- Feature 3 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <h4>Multi-Currency & Payments</h4>
+                    <p>Accept USD, KES, UGX, TZS, EUR and more. Support for Cash, M-Pesa, Airtel Money, Card, Bank Transfer — all in one terminal.</p>
+                </div>
+            </div>
+            <!-- Feature 4 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h4>Multi-Language Support</h4>
+                    <p>Interface available in English, French, Spanish, Swahili and more. Your staff works in their language, your business speaks every language.</p>
+                </div>
+            </div>
+            <!-- Feature 5 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
+                        <i class="fas fa-store-alt"></i>
+                    </div>
+                    <h4>Multi-Location Management</h4>
+                    <p>Control unlimited branches, warehouses, and departments from one dashboard. Real-time inter-branch stock transfers included.</p>
+                </div>
+            </div>
+            <!-- Feature 6 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
+                        <i class="fas fa-calculator"></i>
+                    </div>
+                    <h4>Complete Accounting</h4>
+                    <p>Full double-entry accounting: General Ledger, Chart of Accounts, Trial Balance, Balance Sheet, Income Statement — no separate software needed.</p>
+                </div>
+            </div>
+            <!-- Feature 7 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h4>Advanced Analytics & Reports</h4>
+                    <p>Visual dashboards, custom date-range reports, top-product analysis, profit margins, and exportable financials for informed decisions.</p>
+                </div>
+            </div>
+            <!-- Feature 8 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
+                        <i class="fas fa-users-cog"></i>
+                    </div>
+                    <h4>HR & Employee Management</h4>
+                    <p>Staff profiles, role-based access, shift scheduling, attendance tracking, commission calculation, and payroll management in one place.</p>
+                </div>
+            </div>
+            <!-- Feature 9 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                    <h4>Promotions, Taxes & Discounts</h4>
+                    <p>Flexible tax rates per country, discount campaigns, tiered pricing, loyalty programs, and promotional codes to drive sales legally and strategically.</p>
+                </div>
+            </div>
+            <!-- Feature 10 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
+                        <i class="fas fa-truck-loading"></i>
+                    </div>
+                    <h4>Purchases & Supplier Portal</h4>
+                    <p>Issue purchase orders, track supplier invoices, manage balances, and receive stock directly to any location with automated accounting entries.</p>
+                </div>
+            </div>
+            <!-- Feature 11 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h4>Custom Branding</h4>
+                    <p>White-label receipts, custom logo, business colors, and branded reports that represent your identity to every customer and stakeholder.</p>
+                </div>
+            </div>
+            <!-- Feature 12 -->
+            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="feature-card">
+                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
+                        <i class="fas fa-wifi"></i>
+                    </div>
+                    <h4>Offline Mode</h4>
+                    <p>Keep selling when the internet goes down. All transactions are queued and auto-synced the moment connectivity resumes. Perfect for Uganda's network reality.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hotel Coming Soon -->
+        <div class="row mt-5 animate-on-scroll">
+            <div class="col-12">
+                <div class="hotel-card">
+                    <div class="coming-soon-badge">
+                        <i class="fas fa-clock"></i> Coming Soon
+                    </div>
+                    <h3 style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.8rem;color:#E2EAF4;margin-bottom:0.75rem;">
+                        🏨 Hotel Management Suite
+                    </h3>
+                    <p style="color:var(--text-muted-custom);max-width:600px;margin:0 auto 1.5rem;font-size:0.95rem;">
+                        Front Desk, Housekeeping, Room Management, Reservations, Guest History, Night Audit, Channel Manager, and Booking Engine — fully integrated with your POS.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2 justify-content-center">
+                        <span class="lang-badge"><i class="fas fa-concierge-bell"></i> Front Desk</span>
+                        <span class="lang-badge"><i class="fas fa-bed"></i> Reservations</span>
+                        <span class="lang-badge"><i class="fas fa-calendar-alt"></i> Events & Banqueting</span>
+                        <span class="lang-badge"><i class="fas fa-broom"></i> Housekeeping</span>
+                        <span class="lang-badge"><i class="fas fa-user-friends"></i> Guest Management</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     GLOBAL REACH
+═══════════════════════════════════════ -->
+<section id="reach" class="reach-section">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6 animate-on-scroll">
+                <span class="section-label">Global Presence</span>
+                <h2 class="section-title">Built in East Africa.<br>Deployed Worldwide.</h2>
+                <p class="section-sub mb-4">
+                    STARPOSS was engineered in Uganda to handle real-world African business challenges — unreliable internet, multiple currencies, and diverse payment methods. Then we made it work everywhere else too.
+                </p>
+
+                <div class="mb-4">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">East Africa Focus</p>
+                    <span class="country-chip">🇺🇬 Uganda</span>
+                    <span class="country-chip">🇰🇪 Kenya</span>
+                    <span class="country-chip">🇹🇿 Tanzania</span>
+                    <span class="country-chip">🇷🇼 Rwanda</span>
+                    <span class="country-chip">🇧🇮 Burundi</span>
+                    <span class="country-chip">🇸🇸 South Sudan</span>
+                    <span class="country-chip">🇪🇹 Ethiopia</span>
+                </div>
+
+                <div class="mb-4">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">Also Supported Globally</p>
+                    <span class="country-chip">🇬🇧 United Kingdom</span>
+                    <span class="country-chip">🇫🇷 France</span>
+                    <span class="country-chip">🇺🇸 USA</span>
+                    <span class="country-chip">🇦🇪 UAE</span>
+                    <span class="country-chip">🇮🇳 India</span>
+                    <span class="country-chip">🇿🇦 South Africa</span>
+                    <span class="country-chip">🌍 + More</span>
+                </div>
+
+                <div>
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">Interface Languages</p>
+                    <span class="lang-badge"><i class="fas fa-language"></i> English</span>
+                    <span class="lang-badge"><i class="fas fa-language"></i> Français</span>
+                    <span class="lang-badge"><i class="fas fa-language"></i> Español</span>
+                    <span class="lang-badge"><i class="fas fa-language"></i> Kiswahili</span>
+                    <span class="lang-badge"><i class="fas fa-language"></i> + Adding More</span>
+                </div>
+            </div>
+
+            <div class="col-lg-6 animate-on-scroll delay-2">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="feature-card text-center">
+                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-orange);">30+</div>
+                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Countries Active</div>
                         </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                                    Do I need technical knowledge to use LAEL POS?
-                                </button>
-                            </h2>
-                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body">
-                                    Not at all! LAEL POS is designed with user-friendliness in mind. Our intuitive interface makes it easy for anyone to learn, and we provide comprehensive training materials and customer support.
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="feature-card text-center">
+                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-green);">15+</div>
+                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Currencies Supported</div>
                         </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                                    Can I use LAEL POS offline?
-                                </button>
-                            </h2>
-                            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body">
-                                    Yes, LAEL POS has offline capabilities. You can continue processing sales even when internet connectivity is unstable. Once connection is restored, all data will sync automatically.
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="feature-card text-center">
+                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-accent);">4+</div>
+                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Languages Available</div>
                         </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                                    What payment methods does LAEL POS support?
-                                </button>
-                            </h2>
-                            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body">
-                                    LAEL POS supports multiple payment methods including cash, card payments, mobile money (across various African providers), bank transfers, and more. We continuously add new payment options based on market needs.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
-                                    Is my data secure with LAEL POS?
-                                </button>
-                            </h2>
-                            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                                <div class="accordion-body">
-                                    Absolutely. We take data security seriously. All data is encrypted, and we implement regular backups and security updates to protect your business information.
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="feature-card text-center">
+                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-blue);">10+</div>
+                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Payment Methods</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-    <!-- CTA Section -->
-    <section class="py-5" style="background-color: var(--primary-color);">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-lg-8 text-white">
-                    <h2 class="mb-3">Ready to Transform Your Business?</h2>
-                    <p class="mb-0">Join thousands of businesses across Africa using LAEL POS to streamline operations and drive growth.</p>
+<!-- ═══════════════════════════════════════
+     PRICING
+═══════════════════════════════════════ -->
+<section id="pricing" class="pricing-section">
+    <div class="container">
+        <div class="text-center mb-2 animate-on-scroll">
+            <span class="section-label">Transparent Pricing</span>
+            <h2 class="section-title">Plans That Grow With You</h2>
+            <p class="section-sub mx-auto">No hidden fees. Cancel anytime. All plans include a free trial period.</p>
+        </div>
+
+        <div class="text-center mt-4 mb-2 animate-on-scroll">
+            <div class="billing-tabs" id="billingTabs">
+                <button class="billing-tab active" data-tab="onetime">One-Time</button>
+                <button class="billing-tab" data-tab="monthly">Monthly</button>
+                <button class="billing-tab" data-tab="yearly">Yearly <span style="background:rgba(6,214,160,0.2);color:var(--brand-green);padding:1px 6px;border-radius:4px;font-size:0.7rem;">Save 15%</span></button>
+            </div>
+        </div>
+
+        <!-- Pricing Plans will be rendered by JS from data -->
+        <div id="pricingContainer" class="row g-4 mt-2"></div>
+
+        <p class="text-center mt-4 animate-on-scroll" style="font-size:0.875rem;color:var(--text-muted-custom);">
+            All plans include free updates and basic email support. Need a custom enterprise solution?
+            <a href="#contact" style="color:var(--brand-orange);">Contact our team</a>
+        </p>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     TESTIMONIALS
+═══════════════════════════════════════ -->
+<section id="testimonials" class="testimonials-section">
+    <div class="container">
+        <div class="text-center mb-5 animate-on-scroll">
+            <span class="section-label">Customer Stories</span>
+            <h2 class="section-title">Businesses Love STARPOSS</h2>
+            <p class="section-sub mx-auto">From Kampala markets to Nairobi chains — here's what our customers say.</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"We switched from a basic cashbook to STARPOSS and in 3 months our stock losses dropped by 40%. The inventory alerts alone are worth every penny."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#FF6B2C,#E8541A);">AO</div>
+                        <div>
+                            <div class="author-name">Akello Olivia</div>
+                            <div class="author-role">Owner, Akello General Store — Kampala, Uganda</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-lg-4 text-lg-end">
-                    <a href="#pricing" class="btn btn-light btn-lg">Get Started Now</a>
+            </div>
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"Running 4 restaurant branches in Nairobi used to mean endless spreadsheets. STARPOSS gives me one live dashboard for all locations. Game changer."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#118AB2,#06D6A0);">CK</div>
+                        <div>
+                            <div class="author-name">Chidi Kamau</div>
+                            <div class="author-role">Director, Savanna Eats — Nairobi, Kenya</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"The M-Pesa and Airtel Money integration is seamless. Our customers pay how they want and everything reconciles automatically. Perfect for Tanzania."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#FFD166,#FF6B2C);">MA</div>
+                        <div>
+                            <div class="author-name">Mohammed Ally</div>
+                            <div class="author-role">Manager, TechHub Electronics — Dar es Salaam, Tanzania</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-1">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"We're a French-speaking pharmacy in Burundi. The French interface and multi-currency made STARPOSS the only POS that actually works for us here."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#06D6A0,#118AB2);">JN</div>
+                        <div>
+                            <div class="author-name">Jean Niyongabo</div>
+                            <div class="author-role">Pharmacist — Bujumbura, Burundi</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-2">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"The accounting module replaced our separate software entirely. Trial balance, income statement — all auto-generated from sales. Accountant approved."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#FF6B2C,#FFD166);">RM</div>
+                        <div>
+                            <div class="author-name">Rachel Mugisha</div>
+                            <div class="author-role">CFO, Mugisha Group — Kigali, Rwanda</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate-on-scroll delay-3">
+                <div class="testimonial-card">
+                    <div class="stars">★★★★★</div>
+                    <p class="testimonial-text">"We were skeptical about moving to cloud POS but the offline mode convinced us. Our shop in Gulu has patchy internet — STARPOSS never misses a sale."</p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar" style="background:linear-gradient(135deg,#118AB2,#1A2535);">PO</div>
+                        <div>
+                            <div class="author-name">Patrick Okello</div>
+                            <div class="author-role">Retailer — Gulu, Northern Uganda</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
-@endsection
+<!-- ═══════════════════════════════════════
+     FAQ
+═══════════════════════════════════════ -->
+<section id="faq" class="faq-section">
+    <div class="container">
+        <div class="text-center mb-5 animate-on-scroll">
+            <span class="section-label">FAQ</span>
+            <h2 class="section-title">Got Questions? We Have Answers.</h2>
+            <p class="section-sub mx-auto">Everything you need to know before getting started with STARPOSS.</p>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div id="faqList"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     CTA
+═══════════════════════════════════════ -->
+<section class="cta-section" id="contact">
+    <div class="container position-relative">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-8">
+                <div style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:0.75rem;">Ready to Get Started?</div>
+                <h2 style="font-family:'Sora',sans-serif;font-weight:800;font-size:clamp(1.8rem,3vw,2.8rem);color:#fff;margin-bottom:1rem;">Transform Your Business with STARPOSS Today</h2>
+                <p style="color:rgba(255,255,255,0.8);font-size:1rem;margin:0;">Join 5,000+ businesses across Africa and the world already running smarter with STARPOSS.</p>
+            </div>
+            <div class="col-lg-4 text-lg-end">
+                <a href="#pricing" class="btn btn-light btn-lg px-4 py-3 fw-bold" style="border-radius:12px;font-family:'Sora',sans-serif;">
+                    <i class="fas fa-rocket me-2"></i> Start Free Trial
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
