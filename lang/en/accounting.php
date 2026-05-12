@@ -1008,6 +1008,7 @@ return [
     
     // Table Headers
     'max' => 'Max',
+    'account' => 'Account',
     'current_page' => 'Current Page',
     'all_pages' => 'All Pages',
     'performance' => 'Performance',
