@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserController, RoleController};
+use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserController, RoleController, HomeController};
 use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
@@ -92,6 +92,42 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
     Route::get('/', function () {
         return view('welcome');
     });
+    Route::post('/send-inquiry', [TenantController::class, 'send'])
+    ->name('inquiry.send');
+
+    // Core marketing pages (redirect to home)
+    Route::redirect('/features', '/', 301);
+    Route::redirect('/pricing', '/', 301);
+    Route::redirect('/demo', '/', 301);
+    Route::redirect('/contact', '/', 301);
+    Route::redirect('/about', '/', 301);
+
+    // Industry landing pages (redirect to home)
+    Route::redirect('/pos-for-retail', '/', 301);
+    Route::redirect('/pos-for-restaurants', '/', 301);
+    Route::redirect('/pos-for-hotels', '/', 301);
+    Route::redirect('/pos-for-pharmacies', '/', 301);
+    Route::redirect('/pos-for-supermarkets', '/', 301);
+
+    // Location-based SEO pages (redirect to home)
+    Route::redirect('/pos-system-uganda', '/', 301);
+    Route::redirect('/pos-system-kenya', '/', 301);
+    Route::redirect('/pos-system-tanzania', '/', 301);
+    Route::redirect('/pos-system-rwanda', '/', 301);
+    Route::redirect('/pos-system-east-africa', '/', 301);
+    Route::redirect('/pos-system-africa', '/', 301);
+
+    // ============================================
+    // CONTENT PAGES (THEIR OWN CONTENT)
+    // These 5 pages have real content
+    // ============================================
+    Route::get('/help', [HomeController::class, 'help'])->name('pages.help');
+    Route::get('/docs', [HomeController::class, 'docs'])->name('pages.docs');
+    Route::get('/blog', [HomeController::class, 'blog'])->name('pages.blog');
+    Route::get('/privacy-policy', [HomeController::class, 'privacyPolicy'])->name('pages.privacy');
+    Route::get('/terms-of-service', [HomeController::class, 'termsOfService'])->name('pages.terms');
+
+
 
     // Error Pages
     Route::get('/error-404', function () {

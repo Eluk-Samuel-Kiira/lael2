@@ -203,17 +203,17 @@
                                                                 <div class="d-flex flex-column gap-1">
                                                                     <div class="d-flex align-items-center">
                                                                         <span class="fs-3x fw-bold text-dark">
-                                                                            @if($plan->monthly_price > 0)
-                                                                                ${{ number_format($plan->monthly_price, 2) }}
-                                                                            @elseif($plan->onetime_fee > 0)
+                                                                            @if($plan->onetime_fee > 0)
                                                                                 ${{ number_format($plan->onetime_fee, 2) }}
+                                                                            @elseif($plan->monthly_price > 0)
+                                                                                ${{ number_format($plan->monthly_price, 2) }}
                                                                             @else
                                                                                 Free
                                                                             @endif
                                                                         </span>
-                                                                        @if($plan->monthly_price > 0)
-                                                                            <span class="fs-7 text-gray-400 fw-semibold ms-2">/ month</span>
-                                                                        @endif
+                                                                        {{-- @if($plan->onetime_fee > 0)
+                                                                            <span class="fs-7 text-gray-400 fw-semibold ms-2">Life - Time</span>
+                                                                        @endif --}}
                                                                     </div>
                                                                 </div>
                                                                 
