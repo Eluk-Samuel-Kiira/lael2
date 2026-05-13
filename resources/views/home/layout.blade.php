@@ -12,6 +12,7 @@
     <meta name="author" content="STARPOSS by Stardena">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://starposs.stardena.org/">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
