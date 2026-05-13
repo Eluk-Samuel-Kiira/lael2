@@ -92,7 +92,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
     Route::get('/', function () {
         return view('welcome');
     });
-    Route::post('/send-inquiry', [TenantController::class, 'send'])
+    Route::post('/send-inquiry', [HomeController::class, 'send'])
     ->name('inquiry.send');
 
     // Core marketing pages (redirect to home)
