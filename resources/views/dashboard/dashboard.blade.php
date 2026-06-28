@@ -35,6 +35,7 @@
                 <!-- Stats Cards Row -->
                 <div class="row g-5 g-xl-8 mb-6">
                     <!-- Today's Sales -->
+                    @can('view dashboard sales')
                     <div class="col-xl-3">
                         <div class="card card-xl-stretch mb-5 mb-xl-8">
                             <div class="card-body">
@@ -62,8 +63,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Today's Orders -->
+                    @can('view dashboard orders')
                     <div class="col-xl-3">
                         <div class="card card-xl-stretch mb-5 mb-xl-8">
                             <div class="card-body">
@@ -84,8 +87,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Today's Profit -->
+                    @can('view dashboard profit')
                     <div class="col-xl-3">
                         <div class="card card-xl-stretch mb-5 mb-xl-8">
                             <div class="card-body">
@@ -106,8 +111,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Active Users -->
+                    @can('view dashboard active users')
                     <div class="col-xl-3">
                         <div class="card card-xl-stretch mb-5 mb-xl-8">
                             <div class="card-body">
@@ -128,11 +135,13 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
                 </div>
 
                 <!-- Charts Row -->
                 <div class="row g-5 g-xl-8 mb-6">
                     <!-- Weekly Sales Chart -->
+                    @can('view dashboard weekly sales')
                     <div class="col-xl-8">
                         <div class="card card-flush h-xl-100">
                             <div class="card-header pt-5">
@@ -151,8 +160,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Top Products -->
+                    @can('view dashboard best selling')
                     <div class="col-xl-4">
                         <div class="card card-flush h-xl-100">
                             <div class="card-header pt-5">
@@ -184,11 +195,13 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
                 </div>
 
                 <!-- Second Row -->
                 <div class="row g-5 g-xl-8 mb-6">
                     <!-- Top Categories -->
+                    @can('view dashboard top category')
                     <div class="col-xl-4">
                         <div class="card card-flush h-xl-100">
                             <div class="card-header pt-5">
@@ -214,8 +227,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Inventory Alerts -->
+                    @can('view dashboard inventory alerts')
                     <div class="col-xl-4">
                         <div class="card card-flush h-xl-100">
                             <div class="card-header pt-5">
@@ -252,8 +267,10 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
 
                     <!-- Recent Orders -->
+                    @can('view dashboard recent orders')
                     <div class="col-xl-4">
                         <div class="card card-flush h-xl-100">
                             <div class="card-header pt-5">
@@ -288,153 +305,196 @@
                             </div>
                         </div>
                     </div>
+                    @endcan
+                </div>
 
-                    <!-- Active Users Table -->
-                    <div class="row g-5 g-xl-8 mb-6">
-                        <div class="col-xl-12">
-                            <div class="card card-flush">
-                                <div class="card-header pt-5">
-                                    <h3 class="card-title align-items-start flex-column">
-                                        <span class="card-label fw-bold text-gray-800">{{__('payments.active_users_list')}}</span>
-                                        <span class="text-gray-400 mt-1 fw-semibold fs-6">{{__('payments.users_logged_in_last_15_min')}}</span>
-                                    </h3>
-                                    <div class="card-toolbar">
-                                        <span class="badge badge-light-success fs-base">{{ $activeUsers }} {{__('payments.active')}}</span>
-                                    </div>
+                <!-- Active Users Table -->
+                @can('view dashboard active users')
+                <div class="row g-5 g-xl-8 mb-6">
+                    <div class="col-xl-12">
+                        <div class="card card-flush">
+                            <div class="card-header pt-5">
+                                <h3 class="card-title align-items-start flex-column">
+                                    <span class="card-label fw-bold text-gray-800">{{__('payments.active_users_list')}}</span>
+                                    <span class="text-gray-400 mt-1 fw-semibold fs-6">{{__('payments.users_logged_in_last_15_min')}}</span>
+                                </h3>
+                                <div class="card-toolbar">
+                                    <span class="badge badge-light-success fs-base">{{ $activeUsers }} {{__('payments.active')}}</span>
                                 </div>
-                                <div class="card-body pt-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
-                                            <thead>
-                                                <tr class="fw-bold text-muted">
-                                                    <th class="min-w-200px">{{__('payments.user')}}</th>
-                                                    <th class="min-w-150px">{{__('payments.location_dept')}}</th>
-                                                    <th class="min-w-150px">{{__('payments.device_browser')}}</th>
-                                                    <th class="min-w-150px">{{__('payments.ip_address')}}</th>
-                                                    <th class="min-w-150px">{{__('payments.last_activity')}}</th>
-                                                    <th class="min-w-100px">{{__('payments.status')}}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse($activeUsersList as $session)
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-45px me-3">
-                                                                @if($session->profile_image)
-                                                                    <img src="{{ asset('storage/' . $session->profile_image) }}" alt="">
-                                                                @else
-                                                                    <div class="symbol-label bg-light-primary text-primary fw-bold">
-                                                                        {{ substr($session->first_name, 0, 1) }}{{ substr($session->last_name, 0, 1) }}
-                                                                    </div>
-                                                                @endif
-                                                            </div>
-                                                            <div class="d-flex flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $session->full_name }}</span>
-                                                                <span class="text-gray-400 fw-semibold fs-7">{{ $session->job_title ?? __('payments.staff') }}</span>
-                                                            </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="table-responsive">
+                                    <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
+                                        <thead>
+                                            <tr class="fw-bold text-muted">
+                                                <th class="min-w-200px">{{__('payments.user')}}</th>
+                                                <th class="min-w-150px">{{__('payments.location_dept')}}</th>
+                                                <th class="min-w-150px">{{__('payments.device_browser')}}</th>
+                                                <th class="min-w-150px">{{__('payments.ip_address')}}</th>
+                                                <th class="min-w-150px">{{__('payments.last_activity')}}</th>
+                                                <th class="min-w-100px">{{__('payments.status')}}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @forelse($activeUsersList as $session)
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="symbol symbol-45px me-3">
+                                                            @if($session->profile_image)
+                                                                <img src="{{ asset('storage/' . $session->profile_image) }}" alt="">
+                                                            @else
+                                                                <div class="symbol-label bg-light-primary text-primary fw-bold">
+                                                                    {{ substr($session->first_name, 0, 1) }}{{ substr($session->last_name, 0, 1) }}
+                                                                </div>
+                                                            @endif
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600 fw-semibold">
-                                                            {{ $session->location_name ?? '—' }} / {{ $session->department_name ?? '—' }}
-                                                        </span>
-                                                    </td>
-                                                    <td>
                                                         <div class="d-flex flex-column">
-                                                            <span class="text-gray-800 fw-bold">
-                                                                <i class="fas {{ $session->device_icon }} me-1"></i> {{ $session->device }}
-                                                            </span>
-                                                            <span class="text-gray-400 fw-semibold fs-7">{{ $session->browser }}</span>
+                                                            <span class="text-gray-800 fw-bold">{{ $session->full_name }}</span>
+                                                            <span class="text-gray-400 fw-semibold fs-7">{{ $session->job_title ?? __('payments.staff') }}</span>
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600 fw-semibold">{{ $session->ip_address }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600 fw-semibold">{{ $session->last_seen }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge badge-light-success">{{__('payments.online')}}</span>
-                                                    </td>
-                                                </tr>
-                                                @empty
-                                                <tr>
-                                                    <td colspan="6" class="text-center py-10">
-                                                        <i class="ki-duotone ki-information fs-3x text-muted mb-3"></i>
-                                                        <p class="text-gray-600 fw-semibold fs-6">{{__('payments.no_active_users')}}</p>
-                                                    </td>
-                                                </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="text-gray-600 fw-semibold">
+                                                        {{ $session->location_name ?? '—' }} / {{ $session->department_name ?? '—' }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex flex-column">
+                                                        <span class="text-gray-800 fw-bold">
+                                                            <i class="fas {{ $session->device_icon }} me-1"></i> {{ $session->device }}
+                                                        </span>
+                                                        <span class="text-gray-400 fw-semibold fs-7">{{ $session->browser }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="text-gray-600 fw-semibold">{{ $session->ip_address }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="text-gray-600 fw-semibold">{{ $session->last_seen }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-success">{{__('payments.online')}}</span>
+                                                </td>
+                                            </tr>
+                                            @empty
+                                            <tr>
+                                                <td colspan="6" class="text-center py-10">
+                                                    <i class="ki-duotone ki-information fs-3x text-muted mb-3"></i>
+                                                    <p class="text-gray-600 fw-semibold fs-6">{{__('payments.no_active_users')}}</p>
+                                                </td>
+                                            </tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endcan
+
+                <!-- Dashboard Overview Section (if needed) -->
+                @can('view dashboard overview')
+                <div class="row g-5 g-xl-8 mb-6">
+                    <div class="col-xl-12">
+                        <div class="card card-flush">
+                            <div class="card-header pt-5">
+                                <h3 class="card-title align-items-start flex-column">
+                                    <span class="card-label fw-bold text-gray-800">{{__('payments.dashboard_overview')}}</span>
+                                    <span class="text-gray-400 mt-1 fw-semibold fs-6">{{__('payments.complete_overview')}}</span>
+                                </h3>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="row g-5 g-xl-8">
+                                    <!-- Summary stats or additional content -->
+                                    <div class="col-md-4">
+                                        <div class="border rounded p-5">
+                                            <span class="text-gray-600 fw-bold">{{__('payments.total_sales')}}</span>
+                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ number_format($todayStats['sales'], 2) }}</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="border rounded p-5">
+                                            <span class="text-gray-600 fw-bold">{{__('payments.total_orders')}}</span>
+                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ $todayStats['orders'] }}</h3>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="border rounded p-5">
+                                            <span class="text-gray-600 fw-bold">{{__('payments.total_profit')}}</span>
+                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ number_format($todayStats['profit'], 2) }}</h3>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                @endcan
+
             </div>
         </div>
     </div>
-
 
     @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-
+            @can('view dashboard weekly sales')
             var ctx = document.getElementById('weeklySalesChart');
-            if (!ctx) return;
+            if (ctx) {
+                var salesData  = {!! $weeklySales->pluck('total_sales')->toJson() !!};
+                var categories = {!! $weeklySales->pluck('day_name')->toJson() !!};
 
-            var salesData  = {!! $weeklySales->pluck('total_sales')->toJson() !!};
-            var categories = {!! $weeklySales->pluck('day_name')->toJson() !!};
-
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: categories,
-                    datasets: [{
-                        label: '{{ __("payments.sales") }}',
-                        data: salesData,
-                        backgroundColor: 'rgba(0, 158, 247, 0.85)',
-                        borderColor: 'rgba(0, 158, 247, 1)',
-                        borderWidth: 1,
-                        borderRadius: 6,
-                        borderSkipped: false,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ' ' + parseFloat(context.raw).toFixed(2);
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            label: '{{ __("payments.sales") }}',
+                            data: salesData,
+                            backgroundColor: 'rgba(0, 158, 247, 0.85)',
+                            borderColor: 'rgba(0, 158, 247, 1)',
+                            borderWidth: 1,
+                            borderRadius: 6,
+                            borderSkipped: false,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return ' ' + parseFloat(context.raw).toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                border: { display: false },
+                                ticks: { color: '#a1a5b7', font: { size: 12 } }
+                            },
+                            y: {
+                                grid: { color: '#f1f1f4' },
+                                border: { display: false, dash: [4, 4] },
+                                ticks: {
+                                    color: '#a1a5b7',
+                                    font: { size: 12 },
+                                    callback: function(val) { return val.toLocaleString(); }
                                 }
                             }
                         }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            border: { display: false },
-                            ticks: { color: '#a1a5b7', font: { size: 12 } }
-                        },
-                        y: {
-                            grid: { color: '#f1f1f4' },
-                            border: { display: false, dash: [4, 4] },
-                            ticks: {
-                                color: '#a1a5b7',
-                                font: { size: 12 },
-                                callback: function(val) { return val.toLocaleString(); }
-                            }
-                        }
                     }
-                }
-            });
+                });
+            }
+            @endcan
         });
     </script>
     @endpush

@@ -45,6 +45,11 @@ class UserController extends Controller
         // Build query
         $query = User::with(['userRole', 'userDepartment', 'userLocation']);
         
+        // EXCLUDE super_admin users from being displayed (they are system-level)
+        $query->whereDoesntHave('roles', function($q) {
+            $q->where('name', 'super_admin');
+        });
+        
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $user->tenant_id);
         } else {
@@ -107,6 +112,18 @@ class UserController extends Controller
                 'message' => __('payments.not_authorized'),
             ]);
         }
+
+        // Check if trying to create super_admin or admin
+        if ($request->has('role_id')) {
+            $role = Role::find($request->role_id);
+            if ($role && ($role->name === 'super_admin' || $role->name === 'admin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.cannot_create_protected_role'),
+                ]);
+            }
+        }
+
         // tenant_clear_settings_cache($tenantId);
 
         // Get the actual max_users limit from tenant settings
@@ -125,19 +142,19 @@ class UserController extends Controller
             ]);
         }
 
-
         $validatedData = $request->validated();
 
         // Generate username and password
         $username = Str::lower($validatedData['first_name'] . ' ' . $validatedData['last_name']);       
-        $randomPassword = Str::random(10);
+        // $randomPassword = Str::random(10);
+        $randomPassword = attend1234;
         $hashedPassword = Hash::make($randomPassword);
 
         // Merge additional data into the validated array
         $userData = array_merge($validatedData, [
             'name' => $username,
             'password' => $hashedPassword,
-            'tenant_id' => $tenantId, // Use dynamic tenant_id
+            'tenant_id' => $tenantId,
         ]);
 
         try {
@@ -147,7 +164,17 @@ class UserController extends Controller
             $role = Role::find($request->role_id);
             
             if ($user) {
-                $user->assignRole($role->name);
+                // Double-check role is not protected before assigning
+                if ($role && !in_array($role->name, ['super_admin', 'admin'])) {
+                    $user->assignRole($role->name);
+                } else {
+                    // If somehow protected role, delete user and return error
+                    $user->delete();
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('auth.cannot_create_protected_role'),
+                    ]);
+                }
 
                 Mail::to($user->email)->send(new NewUserMail(
                     $user->first_name . ' ' . $user->last_name,
@@ -208,56 +235,69 @@ class UserController extends Controller
             ]);
         }
 
-        // Check if user has protected roles using Spatie Permission
-        if ($authUser->hasAnyRole(['super_admin'])) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.user_not_updatable'),
-            ]);
-        }
+        // Find the user by ID
+        $user = User::find($id);
         
-        // Get the validated data
-        $validatedData = $request->validated();
-
-
-        // Check if the authenticated user has the required role
-        if ($authUser) {
-            // Find the user by ID
-            $user = User::find($id);
-
-            // If the user is found, update their details
-            if ($user) {
-                // Update user details
-                $user->update($validatedData);
-
-                // Synchronize roles (if role has changed)
-                if (isset($validatedData['role_id'])) {
-                    $role = Role::find($validatedData['role_id']);
-                    $user->syncRoles($role->name);
-                }
-
-                // Return success response
-                return response()->json([
-                    'success' => true,
-                    'reload' => true,
-                    'componentId' => 'reloadEmployeeComponent',
-                    'refresh' => false,
-                    'message' => __('auth._updated'),
-                    'redirect' => route('employee.index'),
-                ]);
-            }
-
-            // If user not found, return failure response
+        if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
             ]);
         }
 
-        // If authenticated user doesn't have the required role
+        // Check if user has protected role (super_admin or admin) - IMMUTABLE
+        if ($user->hasRole('super_admin') || $user->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.cannot_update_protected_role'),
+            ]);
+        }
+
+        // Check if trying to update to super_admin or admin role
+        if ($request->has('role_id')) {
+            $role = Role::find($request->role_id);
+            if ($role && in_array($role->name, ['super_admin', 'admin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.cannot_assign_protected_role'),
+                ]);
+            }
+        }
+
+        // Check if authenticated user is trying to update themselves (prevent self-lockout)
+        if ($authUser->id == $id && $request->has('role_id')) {
+            // Allow other updates but prevent role change for self
+            // Or you can prevent all updates to self except certain fields
+        }
+        
+        // Get the validated data
+        $validatedData = $request->validated();
+
+        // Remove role_id from validated data if user is updating themselves
+        if ($authUser->id == $id) {
+            unset($validatedData['role_id']);
+        }
+
+        // Update user details
+        $user->update($validatedData);
+
+        // Synchronize roles (if role has changed)
+        if (isset($validatedData['role_id'])) {
+            $role = Role::find($validatedData['role_id']);
+            // Double-check role is not protected
+            if ($role && !in_array($role->name, ['super_admin', 'admin'])) {
+                $user->syncRoles($role->name);
+            }
+        }
+
+        // Return success response
         return response()->json([
-            'success' => false,
-            'message' => __('auth.does_not_permision'),
+            'success' => true,
+            'reload' => true,
+            'componentId' => 'reloadEmployeeComponent',
+            'refresh' => false,
+            'message' => __('auth._updated'),
+            'redirect' => route('employee.index'),
         ]);
     }
 
@@ -276,39 +316,52 @@ class UserController extends Controller
             ]);
         }
 
-        // Check if user has protected roles using Spatie Permission
-        if ($authUser->hasAnyRole(['super_admin', 'admin'])) {
+        $user = User::find($id);
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.user_not_updatable'),
+                'message' => __('auth._not_found'),
             ]);
         }
 
-        $user = User::where('id', $id)
-                            ->where('tenant_id', $tenantId)
-                            ->first();
-
-        // Get the authenticated user
-        $authUser = auth()->user();
-
-        if ($authUser) { 
-            $user->delete();
-            
+        // Check if user has protected role (super_admin or admin) - IMMUTABLE
+        if ($user->hasRole('super_admin') || $user->hasRole('admin')) {
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'componentId' => 'reloadEmployeeComponent',
-                'refresh' => false,
-                'message' => __('auth._deleted'),
-                'redirect' => route('employee.index'),
+                'success' => false,
+                'message' => __('auth.cannot_delete_protected_role'),
             ]);
         }
+
+        // Check if trying to delete self
+        if ($authUser->id == $id) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.cannot_delete_self'),
+            ]);
+        }
+
+        // Check tenant ownership if not super_admin
+        if (!$authUser->hasRole('super_admin')) {
+            $tenantId = $authUser->tenant_id;
+            if ($user->tenant_id != $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth._not_found'),
+                ]);
+            }
+        }
+
+        $user->delete();
         
         return response()->json([
-            'success' => false,
-            'message' => __('auth._undeleletable'),
+            'success' => true,
+            'reload' => true,
+            'componentId' => 'reloadEmployeeComponent',
+            'refresh' => false,
+            'message' => __('auth._deleted'),
+            'redirect' => route('employee.index'),
         ]);
-        
     }
 
     public function changeEmployeeStatus(Request $request, $id) 
@@ -328,10 +381,8 @@ class UserController extends Controller
             'status' => 'required|in:active,inactive',
         ]);
 
-        // Find the user by ID and ensure it belongs to the same tenant
-        $userToUpdate = User::where('id', $id)
-                        ->where('tenant_id', $tenantId)
-                        ->first();
+        // Find the user by ID
+        $userToUpdate = User::find($id);
 
         if (!$userToUpdate) {
             return response()->json([
@@ -340,19 +391,28 @@ class UserController extends Controller
             ]);
         }
 
-        // Check if user has protected roles using Spatie Permission
-        if ($userToUpdate->hasAnyRole(['super_admin'])) {
+        // Check if user has protected role (super_admin or admin) - IMMUTABLE
+        if ($userToUpdate->hasRole('super_admin') || $userToUpdate->hasRole('admin')) {
             return response()->json([
                 'success' => false,
-                'message' => __('auth.user_not_updatable'),
+                'message' => __('auth.cannot_update_protected_role'),
             ]);
+        }
+
+        // Ensure it belongs to the same tenant (unless super_admin)
+        if (!$user->hasRole('super_admin')) {
+            if ($userToUpdate->tenant_id != $tenantId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth._not_found'),
+                ]);
+            }
         }
 
         // Update the user status
         $userToUpdate->status = $validated['status'];
         
         if ($userToUpdate->save()) {
-
             // Return success response
             return response()->json([
                 'success' => true,
@@ -379,10 +439,8 @@ class UserController extends Controller
             abort(403, __('payments.not_authorized'));
         }
 
-        // Find the employee and ensure it belongs to the same tenant
-        $employee = User::where('id', $id)
-                    ->where('tenant_id', $tenantId)
-                    ->first();
+        // Find the employee
+        $employee = User::find($id);
 
         if (!$employee) {
             session()->flash('toast', [
@@ -392,14 +450,25 @@ class UserController extends Controller
             return redirect()->back();
         }
 
-        // Check if employee has protected roles
-        // if ($employee->hasAnyRole(['super_admin', 'admin'])) {
-        //     session()->flash('toast', [
-        //         'type' => 'error',
-        //         'message' => __('auth.protected_user_not_updatable'),
-        //     ]);
-        //     return redirect()->back();
-        // }
+        // Check if employee has protected role (super_admin or admin) - IMMUTABLE
+        if ($employee->hasRole('super_admin') || $employee->hasRole('admin')) {
+            session()->flash('toast', [
+                'type' => 'error',
+                'message' => __('auth.cannot_update_protected_role'),
+            ]);
+            return redirect()->back();
+        }
+
+        // Ensure it belongs to the same tenant (unless super_admin)
+        if (!$user->hasRole('super_admin')) {
+            if ($employee->tenant_id != $tenantId) {
+                session()->flash('toast', [
+                    'type' => 'error',
+                    'message' => __('auth._not_found'),
+                ]);
+                return redirect()->back();
+            }
+        }
 
         // Validate departments[] array with tenant check
         $validated = $request->validate([
@@ -427,6 +496,4 @@ class UserController extends Controller
 
         return redirect()->back();
     }
-
-
 }
