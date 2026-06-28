@@ -73,7 +73,7 @@
             <script>
                 (function () {
                     'use strict';
-                    const POLL_MS = 10000; // Check every 10 seconds
+                    const POLL_MS = 60000; // Check every 10 seconds
 
                     function updateSyncStatus() {
                         fetch('/sync/frontend-status', {

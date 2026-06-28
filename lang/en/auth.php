@@ -157,9 +157,17 @@ return [
     'weekly_growth' => 'Weekly Growth',
     'current_daily_average' => 'Current Daily Average',
     '_none' => 'None',
+    'smthin_wrong' => 'Something Went Wrong',
     'max_order' => 'Max Order',
     'last_order' => 'Order',
     'additional_notes' => 'Additional notes or comments...',
+    'cannot_create_protected_role' => 'Cannot create users with super_admin or admin roles.',
+    'cannot_update_protected_role' => 'Administrator users cannot be modified.',
+    'cannot_delete_protected_role' => 'Administrator users cannot be deleted.',
+    'cannot_assign_protected_role' => 'Cannot assign admin role.',
+    'cannot_delete_self' => 'You cannot delete your own account.',
+    'user_not_updatable' => 'This user cannot be updated.',
+    'user_not_deletable' => 'This user cannot be deleted.',
 
 
     // Common terms

@@ -4,13 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\PasswordReset;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
-use Illuminate\View\View;
 use Illuminate\Http\JsonResponse;
 
 class NewPasswordController extends Controller
@@ -18,7 +16,7 @@ class NewPasswordController extends Controller
     /**
      * Display the password reset view.
      */
-    public function create(Request $request): View
+    public function create(Request $request)
     {
         return view('auth.reset-password', ['request' => $request]);
     }
@@ -30,7 +28,8 @@ class NewPasswordController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // \Log::info($request);
+        \Log::info('Password reset request data:', $request->all());
+
         $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
@@ -52,24 +51,22 @@ class NewPasswordController extends Controller
             }
         );
 
-        // If the password was successfully reset, we will redirect the user back to
-        // the application's home authenticated view. If there is an error we can
-        // redirect them back to where they came from with their error message.
-        $status == Password::PASSWORD_RESET
-                    ? redirect()->route('login')->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
-        if ($request->ajax()) {
+        // Check if password was reset successfully
+        if ($status === Password::PASSWORD_RESET) {
             return response()->json([
                 'success' => true,
                 'redirect' => route('login'),
-                'message' => $status
-            ]);
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => "__('smthin_wrong')"
+                'message' => __($status)
             ]);
         }
+
+        // If there was an error
+        return response()->json([
+            'success' => false,
+            'message' => __($status),
+            'errors' => [
+                'email' => [__($status)]
+            ]
+        ], 422);
     }
 }

@@ -20,7 +20,8 @@ use App\Models\{ Tax, Employee, PaymentMethod };
 use App\Models\{ Promotion, Supplier, GeneralLedger, ChartOfAccount, ExpenseCategory };
 use Illuminate\Support\Facades\Auth;
 use App\Services\Payment\PaymentTransactionService;
-
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,7 +40,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        
         View::composer('*', function ($view) {
             // Initialize with empty collections by default
             $data = [
@@ -69,7 +69,6 @@ class AppServiceProvider extends ServiceProvider
                 $tenantId = Auth::user()->tenant_id;
                 
                 $data = [
-
                     'users' => User::where('tenant_id', $tenantId)
                         ->where('status', 'active')
                         ->whereDoesntHave('roles', function ($query) {
@@ -100,72 +99,158 @@ class AppServiceProvider extends ServiceProvider
                     'active_payment_methods' => PaymentMethod::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'chartOfAccounts' => ChartOfAccount::where('tenant_id', $tenantId)
                                         ->where('is_active', true)
-                                        // ->where('account_type', 'like', '%expense%') // Filter for expense accounts
                                         ->orderBy('account_code')
                                         ->get(),
-                    ];
+                ];
             }
 
             $view->with($data);
         });
 
+        // Configure mail settings - only once per request
+        $this->configureMailSettings();
 
-        // After the view composer, add the mail configuration with tenant-specific settings
-        if (Auth::check()) {
-            $tenantId = Auth::user()->tenant_id;
-            
-            // Get settings for the specific tenant
-            $app_mails = Setting::where('tenant_id', $tenantId)->first();
-            
-            if ($app_mails) {
-                $data =  [
-                    'transport' => $app_mails->mail_mailer,
-                    'host' => $app_mails->mail_host,
-                    'port' => $app_mails->mail_port,
-                    'username' => $app_mails->mail_username,
-                    'password' => $app_mails->mail_password,
-                    'encryption' => $app_mails->mail_encryption,
-                    'timeout' => null, 
-                    'local_domain' => env('MAIL_EHLO_DOMAIN'),
-                    'from' => [
-                        'address' => $app_mails->mail_address,
-                        'name' => $app_mails->mail_name,
-                    ],
-                ];
-                \Config::set('mail.mailers.smtp', $data);
-                \Config::set('mail.default', $data['transport']);
-                \Config::set('mail.from', $data['from']); 
-                
-                \Config::set('app.name', $app_mails->app_name); 
-            }
-        }
-
-
-           // ── ONLY run sync observers on LOCAL POS machines ─────────────────────
+        // ── ONLY run sync observers on LOCAL POS machines ─────────────────────
         if (!filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN)) {
             return;
         }
 
         foreach ($this->getSyncModels() as $modelClass) {
-            // Skip if model class doesn't exist (prevents errors during deploy)
             if (!class_exists($modelClass)) {
                 \Log::warning("SyncObserver skipped: Model class not found: {$modelClass}");
                 continue;
             }
-            
-            // Register the observer — period.
             $modelClass::observe(\App\Observers\SyncObserver::class);
         }
-        
+    }
 
+    /**
+     * Configure mail settings based on tenant or fallback to environment variables
+     */
+    private function configureMailSettings(): void
+    {
+        try {
+            // Check if user is authenticated
+            if (Auth::check()) {
+                $tenantId = Auth::user()->tenant_id;
+                
+                // Get settings for the specific tenant
+                $app_mails = Setting::where('tenant_id', $tenantId)->first();
+                
+                // Check if we have valid mail settings from tenant
+                if ($app_mails && $this->hasValidMailSettings($app_mails)) {
+                    // Use tenant mail settings
+                    $this->setMailConfig(
+                        $app_mails->mail_mailer ?? 'smtp',
+                        $app_mails->mail_host,
+                        $app_mails->mail_port,
+                        $app_mails->mail_username,
+                        $app_mails->mail_password,
+                        $app_mails->mail_encryption,
+                        $app_mails->mail_address,
+                        $app_mails->mail_name
+                    );
+                    
+                    // Only log once per request
+                    if (!session()->has('mail_configured')) {
+                        Log::info('Using tenant mail configuration', [
+                            'tenant_id' => $tenantId,
+                            'host' => $app_mails->mail_host,
+                            'from' => $app_mails->mail_address
+                        ]);
+                        session()->put('mail_configured', true);
+                    }
+                    
+                    return;
+                }
+            }
+
+            // Fallback to environment variables - only set if not already configured
+            if (!session()->has('mail_configured_fallback')) {
+                $this->setMailConfig(
+                    env('MAIL_MAILER', 'smtp'),
+                    env('STARDENA_POS_MAIL_HOST', env('MAIL_HOST', 'smtp.mailtrap.io')),
+                    env('STARDENA_POS_MAIL_PORT', env('MAIL_PORT', 2525)),
+                    env('STARDENA_POS_MAIL_USERNAME', env('MAIL_USERNAME')),
+                    env('STARDENA_POS_MAIL_PASSWORD', env('MAIL_PASSWORD')),
+                    env('STARDENA_POS_MAIL_ENCRYPTION', env('MAIL_ENCRYPTION', 'tls')),
+                    env('STARDENA_POS_MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'pos@stardena.org')),
+                    env('STARDENA_POS_MAIL_FROM_NAME', env('MAIL_FROM_NAME', 'STARPOSS Website'))
+                );
+                
+                // Log::info('Using fallback mail configuration from environment');
+                session()->put('mail_configured_fallback', true);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to configure mail settings: ' . $e->getMessage());
+            
+            // Ultimate fallback - only if not already set
+            if (!session()->has('mail_configured_fallback')) {
+                $this->setMailConfig(
+                    env('MAIL_MAILER', 'smtp'),
+                    env('MAIL_HOST', 'smtp.mailtrap.io'),
+                    env('MAIL_PORT', 2525),
+                    env('MAIL_USERNAME'),
+                    env('MAIL_PASSWORD'),
+                    env('MAIL_ENCRYPTION', 'tls'),
+                    env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+                    env('MAIL_FROM_NAME', 'Laravel')
+                );
+                session()->put('mail_configured_fallback', true);
+            }
+        }
+    }
+
+    /**
+     * Check if mail settings are valid
+     */
+    private function hasValidMailSettings($settings): bool
+    {
+        return $settings && 
+               !empty($settings->mail_host) && 
+               !empty($settings->mail_username) && 
+               !empty($settings->mail_password) &&
+               !empty($settings->mail_address);
+    }
+
+    /**
+     * Set mail configuration
+     */
+    private function setMailConfig(
+        string $transport,
+        string $host,
+        int|string $port,
+        string $username,
+        string $password,
+        string $encryption,
+        string $fromAddress,
+        string $fromName
+    ): void {
+        // Set mailer configuration
+        Config::set('mail.mailers.smtp', [
+            'transport' => $transport,
+            'host' => $host,
+            'port' => (int) $port,
+            'encryption' => $encryption,
+            'username' => $username,
+            'password' => $password,
+            'timeout' => null,
+            'local_domain' => env('MAIL_EHLO_DOMAIN'),
+        ]);
+
+        // Set default mailer
+        Config::set('mail.default', $transport);
+
+        // Set from address
+        Config::set('mail.from', [
+            'address' => $fromAddress,
+            'name' => $fromName,
+        ]);
     }
 
     private function getSyncModels(): array
     {
-        // ============================================================
-        // TRANSACTIONAL TABLES (Need Sync - Push to Remote)
-        // These tables contain business transactions that must sync
-        // ============================================================
         return [
             // Sales & Orders
             \App\Models\Order::class,
@@ -211,13 +296,13 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\Supplier::class,
             \App\Models\SupplierTaxLiability::class,
             
-            // Products (transactional variants only — master data is pull-only)
-            \App\Models\Product::class,          // Only if local edits allowed
-            \App\Models\ProductCategory::class,  // Only if local edits allowed
-            \App\Models\ProductVariant::class,   // Only if local edits allowed
+            // Products
+            \App\Models\Product::class,
+            \App\Models\ProductCategory::class,
+            \App\Models\ProductVariant::class,
             \App\Models\VariantTax::class,
             
-            // Promotions (local overrides only)
+            // Promotions
             \App\Models\Promotion::class,
             \App\Models\PromotionProduct::class,
             
@@ -243,12 +328,9 @@ class AppServiceProvider extends ServiceProvider
             // Settings
             \App\Models\Setting::class,
             
-            // Departments & Locations (if locally editable)
+            // Departments & Locations
             \App\Models\Department::class,
             \App\Models\Location::class,
         ];
     }
-
-
-
 }

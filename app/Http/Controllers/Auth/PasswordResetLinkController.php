@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers\Auth;
 
-
 use App\Http\Controllers\Controller;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Illuminate\View\View;
+use Illuminate\Validation\ValidationException;
 
 class PasswordResetLinkController extends Controller
 {
@@ -27,32 +26,51 @@ class PasswordResetLinkController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'email' => ['required', 'email'],
-        ]);
-
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
-
-        $status == Password::RESET_LINK_SENT
-                    ? back()->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
-
-        if ($request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => $status
+        try {
+            $request->validate([
+                'email' => ['required', 'email'],
             ]);
-        } else {
+
+            // We will send the password reset link to this user.
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
+
+            // Check if the reset link was sent successfully
+            if ($status === Password::RESET_LINK_SENT) {
+                return response()->json([
+                    'success' => true,
+                    'message' => __($status),
+                    'redirect' => route('login')
+                ]);
+            }
+
+            // If there was an error
             return response()->json([
                 'success' => false,
-                'message' => __('Something Went Wrong!')
-            ]);
+                'message' => __($status),
+                'errors' => [
+                    'email' => [__($status)]
+                ]
+            ], 422);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+            
+        } catch (\Exception $e) {
+            \Log::error('Password reset link error: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send password reset link. Please try again.',
+                'errors' => [
+                    'email' => ['Failed to send password reset link. Please try again.']
+                ]
+            ], 500);
         }
     }
 }
