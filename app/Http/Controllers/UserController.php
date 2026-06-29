@@ -147,7 +147,7 @@ class UserController extends Controller
         // Generate username and password
         $username = Str::lower($validatedData['first_name'] . ' ' . $validatedData['last_name']);       
         // $randomPassword = Str::random(10);
-        $randomPassword = attend1234;
+        $randomPassword = "attend1234";
         $hashedPassword = Hash::make($randomPassword);
 
         // Merge additional data into the validated array
