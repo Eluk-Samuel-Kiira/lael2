@@ -865,7 +865,11 @@ return [
     'showing' => 'Showing',
     'to' => 'to',
     'of' => 'of',
-    'entries' => 'entries',
+    'dashboard_overview' => 'Dashboard Overview',
+    'complete_overview' => 'Complete Overview',
+    'total_orders' => 'Total Orders',
+    'total_profit' => 'Total Profit',
+    
     
     // Confirmations
     'confirm_approve' => 'Approve Leave?',
