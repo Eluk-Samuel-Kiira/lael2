@@ -15,7 +15,6 @@ class AddNewPermissions extends Command
      * @var string
      */
     protected $signature = 'permissions:add-new
-                            {--dry-run : Show what would be added without making changes}
                             {--role= : Optionally assign new permissions to a specific role}
                             {--skip-admin : Skip assigning permissions to admin role}
                             {--skip-super-admin : Skip assigning permissions to super_admin role}';
@@ -53,15 +52,9 @@ class AddNewPermissions extends Command
         $this->info('🚀 Starting permission sync...');
         $this->newLine();
 
-        $dryRun = $this->option('dry-run');
         $specificRole = $this->option('role');
         $skipAdmin = $this->option('skip-admin');
         $skipSuperAdmin = $this->option('skip-super-admin');
-
-        if ($dryRun) {
-            $this->warn('⚠️  DRY RUN MODE - No changes will be made');
-            $this->newLine();
-        }
 
         $addedCount = 0;
         $skippedCount = 0;
@@ -114,40 +107,6 @@ class AddNewPermissions extends Command
         }
         $this->table(['Permission Name', 'Category', 'Status'], $permissionTableData);
         $this->newLine();
-
-        // Show role assignment plan
-        $this->info('🔐 Role Assignment Plan:');
-        $roleAssignmentData = [];
-        
-        if (!$skipSuperAdmin) {
-            $roleAssignmentData[] = ['super_admin', '✅ Will be assigned'];
-        } else {
-            $roleAssignmentData[] = ['super_admin', '⏭️  Skipped'];
-        }
-        
-        if (!$skipAdmin) {
-            $roleAssignmentData[] = ['admin', '✅ Will be assigned'];
-        } else {
-            $roleAssignmentData[] = ['admin', '⏭️  Skipped'];
-        }
-        
-        if ($specificRole) {
-            $roleAssignmentData[] = [$specificRole, '✅ Will be assigned'];
-        }
-        
-        $this->table(['Role', 'Action'], $roleAssignmentData);
-        $this->newLine();
-
-        if ($dryRun) {
-            $this->warn('⚠️  DRY RUN: These permissions would be added. No actual changes made.');
-            return 0;
-        }
-
-        // Confirm before proceeding
-        if (!$this->confirm('Do you want to add these ' . count($permissionsToAdd) . ' new permissions?', true)) {
-            $this->info('Operation cancelled.');
-            return 0;
-        }
 
         // Begin transaction
         DB::beginTransaction();
