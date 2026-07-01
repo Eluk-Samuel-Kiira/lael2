@@ -1,0 +1,99 @@
+    
+    <div class="modal fade" id="kt_modal_add_location" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered mw-850px">
+            <div class="modal-content">
+                <div class="modal-header" id="kt_modal_add_currency">
+                    <h2 class="fw-bold">{{__('pagination.locations_new')}}</h2>
+                    <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
+                        <i class="ki-duotone ki-cross fs-1">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                        </i>
+                    </div>
+                </div>
+                <div class="modal-body px-5 my-7">
+                    <form id="kt_modal_add_location_form" class="form">
+                        @csrf
+                        <div class="text-center pt-10">
+                            <div class="row g-9 mb-8">
+                                <div class="d-flex flex-column mb-8 fv-row col-md-5">
+                                    <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                        <span class="required">{{__('auth._name')}}</span>
+                                    </label>
+                                    <input type="text" class="form-control form-control-solid" name="name" />
+                                    <div id="name"></div>
+                                </div>
+
+                                <div class="d-flex flex-column mb-8 fv-row col-md-4">
+                                    <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                        <span class="required">{{__('auth._manager')}}</span>
+                                    </label>
+                                    @php
+                                        $formattedUsers = [];
+                                        foreach($users as $user) {
+                                            $formattedUsers[] = (object)[
+                                                'id' => $user->id,
+                                                'name' => $user->name
+                                            ];
+                                        }
+                                    @endphp
+                                    <x-typable-select 
+                                        name="manager_id"
+                                        :options="$formattedUsers"
+                                        placeholder="Type or select manager..."
+                                    />
+                                    <div id="manager_id"></div>
+                                </div>
+
+                                <div class="d-flex flex-column mb-8 fv-row col-md-3">
+                                    <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                        <span class="required">{{__('auth._currency')}}</span>
+                                    </label>
+                                    @php
+                                        $formattedCurrencies = [];
+                                        foreach($currencies as $currency) {
+                                            $formattedCurrencies[] = (object)[
+                                                'id' => $currency->id,
+                                                'name' => $currency->name . ' ' . $currency->code
+                                            ];
+                                        }
+                                    @endphp
+                                    <x-typable-select 
+                                        name="currency_id"
+                                        :options="$formattedCurrencies"
+                                        placeholder="Type or select currency..."
+                                    />
+                                    <div id="currency_id"></div>
+                                </div>
+                            </div>
+
+                            <div class="row g-9 mb-8">
+                                <div class="d-flex flex-column mb-8 fv-row col-md-12">
+                                    <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                        <span class="required">{{__('pagination._address')}}</span>
+                                    </label>
+                                    <input type="text" class="form-control form-control-solid" name="address" />
+                                    <div id="address"></div>
+                                </div>
+                            </div>
+
+                            <button type="reset" class="btn btn-light me-3" id="discardButton" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
+                            <button 
+                                id="submitLocationButton" 
+                                type="button" 
+                                class="btn btn-primary"
+                                onclick="submitLocationForm('kt_modal_add_location_form', 'submitLocationButton', '{{ route('locations.store') }}', 'POST', 'discardButton')">
+                                
+                                <span class="indicator-label">{{__('auth.submit')}}</span>
+                                <span class="indicator-progress">{{__('auth.please_wait')}}
+                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>  
+
+

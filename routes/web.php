@@ -1,0 +1,599 @@
+<?php
+
+use App\Http\Controllers\{ ArtisanCommandController, ProfileController, UserController, RoleController, HomeController};
+use App\Http\Controllers\Home\{ DashboardController, LocationController, SettingsController,  UnitOfMeasureController, CurrencyController};
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
+    EmployeePaymentController, TenantController, EmployeeAdvanceController, LeaveController };
+use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, 
+    InventoryAdjustmentsController, ProductController, ProductCategoryController, ProductImportController};
+use App\Http\Controllers\Orders\{ OrderController, POSController};
+use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
+use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
+use App\Http\Controllers\Accounts\{ AccountingController };
+use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
+    PurchasingReportsController };
+
+    // Route::get('/test-currency', function() {
+    //     return debug_currency_conversion(4, 'AUD');
+    // });
+
+
+
+    // Route::get('/test-aud-detailed', function() {
+    //     $aud = \App\Models\Currency::where('code', 'AUD')->first();
+    //     $usd = \App\Models\Currency::where('code', 'USD')->first();
+        
+    //     $amount = 4;
+        
+    //     // Test 1: Direct calculation
+    //     $directStored = round(($amount / $aud->exchange_rate) * 100);
+    //     $directBack = round(($directStored / 100) * $aud->exchange_rate, 2);
+        
+    //     // Test 2: Your helper
+    //     $helperStored = to_base_currency($amount, $aud);
+    //     $helperBack = from_base_currency($helperStored, $aud);
+        
+    //     // Test 3: Different calculation methods
+    //     $method1 = round(($amount * 100) / $aud->exchange_rate); // (400 cents) / 1.52
+    //     $method2 = round(($amount / $aud->exchange_rate) * 100); // (4 / 1.52) * 100
+    //     $method3 = (int) round($amount * 100 / $aud->exchange_rate); // Same as method1
+        
+    //     return [
+    //         'currency_info' => [
+    //             'AUD' => [
+    //                 'code' => $aud->code,
+    //                 'rate' => $aud->exchange_rate,
+    //                 'multiplier' => $aud->getMultiplier(),
+    //                 'decimal_places' => $aud->decimal_places,
+    //             ],
+    //             'USD' => [
+    //                 'code' => $usd->code,
+    //                 'rate' => $usd->exchange_rate,
+    //                 'multiplier' => $usd->getMultiplier(),
+    //                 'decimal_places' => $usd->decimal_places,
+    //             ]
+    //         ],
+    //         'test_amount' => $amount . ' AUD',
+    //         'direct_calculation' => [
+    //             'stored' => $directStored . ' cents',
+    //             'back' => $directBack . ' AUD',
+    //             'difference' => ($amount - $directBack) . ' AUD',
+    //         ],
+    //         'helper_calculation' => [
+    //             'stored' => $helperStored . ' cents',
+    //             'back' => $helperBack . ' AUD',
+    //             'difference' => ($amount - $helperBack) . ' AUD',
+    //         ],
+    //         'calculation_methods' => [
+    //             'method1: (amount * 100) / rate = ' . round(($amount * 100) / $aud->exchange_rate, 2) . ' cents',
+    //             'method2: (amount / rate) * 100 = ' . round(($amount / $aud->exchange_rate) * 100, 2) . ' cents',
+    //             'method3: round(amount * 100 / rate) = ' . round($amount * 100 / $aud->exchange_rate) . ' cents',
+    //         ],
+    //         'manual_step_by_step' => [
+    //             'step1: 4 AUD ÷ 1.52 = ' . (4/1.52) . ' USD',
+    //             'step2: × 100 = ' . (4/1.52 * 100) . ' cents (before rounding)',
+    //             'step3: rounded = ' . round(4/1.52 * 100) . ' cents',
+    //             'step4: ÷ 100 = ' . (round(4/1.52 * 100) / 100) . ' USD',
+    //             'step5: × 1.52 = ' . (round(4/1.52 * 100) / 100 * 1.52) . ' AUD',
+    //             'step6: rounded to 2 decimals = ' . round(round(4/1.52 * 100) / 100 * 1.52, 2) . ' AUD',
+    //         ],
+    //         'expected_result' => '~4.00 AUD (may be 3.99 or 4.01 due to rounding)',
+    //     ];
+    // });
+
+    // Protect with auth middleware — never expose this publicly!
+    Route::middleware(['auth'])->prefix('admin')->group(function () {
+        Route::get('/artisan',       [ArtisanCommandController::class, 'index'])->name('artisan.index');
+        Route::post('/artisan/run',  [ArtisanCommandController::class, 'run'])->name('artisan.run');
+    });
+
+
+    Route::get('/', function () {
+        return view('welcome');
+    });
+    Route::post('/send-inquiry', [HomeController::class, 'send'])
+    ->name('inquiry.send');
+
+    // Core marketing pages (redirect to home)
+    Route::redirect('/features', '/', 301);
+    Route::redirect('/pricing', '/', 301);
+    Route::redirect('/demo', '/', 301);
+    Route::redirect('/contact', '/', 301);
+    Route::redirect('/about', '/', 301);
+
+    // Industry landing pages (redirect to home)
+    Route::redirect('/pos-for-retail', '/', 301);
+    Route::redirect('/pos-for-restaurants', '/', 301);
+    Route::redirect('/pos-for-hotels', '/', 301);
+    Route::redirect('/pos-for-pharmacies', '/', 301);
+    Route::redirect('/pos-for-supermarkets', '/', 301);
+
+    // Location-based SEO pages (redirect to home)
+    Route::redirect('/pos-system-uganda', '/', 301);
+    Route::redirect('/pos-system-kenya', '/', 301);
+    Route::redirect('/pos-system-tanzania', '/', 301);
+    Route::redirect('/pos-system-rwanda', '/', 301);
+    Route::redirect('/pos-system-east-africa', '/', 301);
+    Route::redirect('/pos-system-africa', '/', 301);
+
+    // ============================================
+    // CONTENT PAGES (THEIR OWN CONTENT)
+    // These 5 pages have real content
+    // ============================================
+    Route::get('/help', [HomeController::class, 'help'])->name('pages.help');
+    Route::get('/docs', [HomeController::class, 'docs'])->name('pages.docs');
+    Route::get('/blog', [HomeController::class, 'blog'])->name('pages.blog');
+    Route::get('/privacy-policy', [HomeController::class, 'privacyPolicy'])->name('pages.privacy');
+    Route::get('/terms-of-service', [HomeController::class, 'termsOfService'])->name('pages.terms');
+
+
+
+    // Error Pages
+    Route::get('/error-404', function () {
+        return response()->view('layouts.error-404', [], 404); 
+    });
+
+    Route::get('/error-500', function () {
+        return response()->view('layouts.error-500', [], 500); 
+    });
+
+    Route::get('/dashboard', [DashboardController::class, 'index'] )->middleware(['auth', 'verified'])->name('dashboard');
+    Route::get('/overview', [DashboardController::class, 'overview'] )->middleware(['auth', 'verified'])->name('overview');
+
+    Route::middleware('auth')->group(function () {
+
+        // Profile
+        Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+        Route::post('/profile/upload-image', [ProfileController::class, 'uploadImage'])->name('profile.upload_image');
+
+
+        // Settings
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::get('/change-locale/{locale}', [SettingsController::class, 'switchLocale'])->name('switch.locale');
+        Route::put('/settings-update', [SettingsController::class, 'updateSettings'])->name('setting.update');
+        Route::post('/logo-upload', [SettingsController::class, 'uploadLogo'])->name('logo.upload');
+        Route::post('/favicon-upload', [SettingsController::class, 'uploadFavicon'])->name('favicon.upload');
+
+        // Units of measure
+        Route::resource('uom', UnitOfMeasureController::class);
+        Route::post('/uom-status/{id}', [UnitOfMeasureController::class, 'changeUOMStatus'])->name('uom.status');
+
+        // Currency
+        Route::resource('currency', CurrencyController::class);
+        Route::post('/currency-status/{id}', [CurrencyController::class, 'changeCurrencyStatus'])->name('currency.status');
+
+        // Department
+        Route::resource('department', DepartmentController::class);
+        Route::post('/department-status/{id}', [DepartmentController::class, 'changeDepartmentStatus'])->name('currency.status');
+
+
+        // Users/Employees
+        Route::resource('employee', UserController::class);
+        Route::post('/employee-status/{id}', [UserController::class, 'changeEmployeeStatus'])->name('employee.status');
+        Route::put('/employees/{id}/departments', [UserController::class, 'updateDepartments'])
+            ->name('employees.updateDepartments');
+
+            
+        Route::post('/employee/documents/upload', [EmployeeDocumentController::class, 'upload'])->name('employee.documents.upload');
+        Route::post('/employee/documents/delete', [EmployeeDocumentController::class, 'delete'])->name('employee.documents.delete');
+        Route::get('/employee/{id}/documents', [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
+        
+
+
+
+        Route::resource('employee-advance', EmployeeAdvanceController::class);
+        // Get active advances for payment form
+        Route::get('/employee-advances/{employeeId}/active', [EmployeeAdvanceController::class, 'getActiveAdvances'])
+            ->name('employee.advances.active');
+        
+        // Approve advance
+        Route::post('/employee-advances/{id}/approve', [EmployeeAdvanceController::class, 'approve'])
+            ->name('employee.advances.approve');
+        
+        // Reject advance
+        Route::post('/employee-advances/{id}/reject', [EmployeeAdvanceController::class, 'reject'])
+            ->name('employee.advances.reject');
+        
+        // Cancel advance
+        Route::post('/employee-advances/{id}/cancel', [EmployeeAdvanceController::class, 'cancel'])
+            ->name('employee.advances.cancel');
+        
+        // Get advance statistics
+        Route::get('/employee-advances/statistics', [EmployeeAdvanceController::class, 'getStatistics'])
+            ->name('employee.advances.statistics');
+        
+        // Export advances
+        Route::get('/employee-advances/export', [EmployeeAdvanceController::class, 'export'])
+            ->name('employee.advances.export');
+
+
+        Route::resource('leave', LeaveController::class);
+        Route::get('/leave/calendar/events', [LeaveController::class, 'getCalendarEvents'])->name('leave.calendar.events');
+        Route::post('/leave/{id}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
+        Route::post('/leave/{id}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
+        Route::post('/leave/{id}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+
+
+        Route::resource('user', EmployeeController::class);
+        Route::post('/user-status/{id}', [EmployeeController::class, 'changeUserStatus']);
+        Route::post('/sync-users-to-employees', [EmployeeController::class, 'syncUsersToEmployees'])
+            ->name('sync.users.to.employees');
+
+        Route::resource('payment', EmployeePaymentController::class);
+        Route::post('/payment-status/{id}', [EmployeePaymentController::class, 'updatePaymentStatus']);
+
+        Route::resource('paymentmethod', PaymentMethodController::class);
+        Route::post('/payment-methods-status/{id}', [PaymentMethodController::class, 'changePaymentMethodStatus'])->name('payment-methods.status');
+        
+        Route::post('payments/calculate-tax-preview', [EmployeePaymentController::class, 'calculateTaxPreview'])
+            ->name('payment.calculate-tax-preview');
+
+        // Roles n Permissions
+        Route::get('/role-index', [RoleController::class, 'index'])->name('role.index');
+        Route::get('/permission-index', [RoleController::class, 'permissionIndex'])->name('permission.index');
+        Route::post('/role-new', [RoleController::class, 'storeRole'])->name('role.store');
+        Route::put('/role-update/{role}', [RoleController::class, 'updateRole'])->name('role.update');
+        Route::delete('/role-destroy/{id}', [RoleController::class, 'destroy'])->name('role.destroy');
+        Route::put('/update-permissions/{id}', [RoleController::class, 'updatePermission'])->name('permission.update');
+        Route::put('/revoke-permissions/{id}', [RoleController::class, 'revokePermission'])->name('permission.revoke');
+
+        // Inventory - Category
+        Route::resource('category', CategoryController::class);
+        Route::post('/category-status/{id}', [CategoryController::class, 'changeCategoryStatus'])->name('category.status');
+
+
+        Route::resource('product-category', ProductCategoryController::class);
+        Route::post('/product-category-status/{id}', [ProductCategoryController::class, 'changeProductCategoryStatus'])->name('product.category.status');
+
+        // Products
+        
+        Route::resource('products', ProductController::class);
+        Route::post('/product-status/{id}', [ProductController::class, 'changeProductStatus'])->name('product.status');
+        Route::post('/product-tax-status/{id}', [ProductController::class, 'changeProductTaxStatus'])->name('product.taxable');
+        Route::resource('variants', ProductVariantController::class);
+        Route::post('/variant-status/{id}', [ProductVariantController::class, 'changeVariantStatus'])->name('variant.status');
+        Route::post('/variant-tax-status/{id}', [ProductVariantController::class, 'changeProductVariantTaxStatus'])->name('product.taxable');
+        Route::post('/product/upload-image', [ProductController::class, 'uploadProductImage'])->name('product.upload_image');
+        Route::post('/variant/upload-image', [ProductVariantController::class, 'uploadVariantImage'])->name('variant.upload_image');
+        Route::put('/products/{product}/update-assignment', [ProductController::class, 'updateProductAssignments'])
+            ->name('assign.product');
+        Route::put('/assignment/{product}', [ProductVariantController::class, 'updateVariantAssignments'])
+            ->name('assign.variant');
+            
+        Route::get('/catalog/import/template', [ProductImportController::class, 'downloadTemplate'])->name('catalog.import.template');
+        Route::post('/catalog/import',          [ProductImportController::class, 'store'])->name('catalog.import.store');
+
+        
+        // Stores and Inventory
+        Route::resource('items', InventoryItemController::class);
+        Route::get('/get-departments', [InventoryItemController::class, 'getDepartmentsByLocation'])->name('get.departments');
+        Route::resource('stocks', InventoryAdjustmentsController::class);
+        Route::put('/transfer-stock/{id}', [InventoryAdjustmentsController::class, 'transferStock'])
+            ->name('transfer.stock');
+
+        Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
+
+
+        
+        // Location
+        Route::resource('locations', LocationController::class);
+        Route::post('/location-primary/{id}', [LocationController::class, 'updatePrimaryStatus']);
+        Route::post('/location-status/{id}', [LocationController::class, 'updateLocationStatus']);
+
+
+        
+        // Orders and Purchases
+        Route::get('/pos-index', [POSController::class, 'index'])->name('pos.index');
+        Route::post('/orders/process-payment', [POSController::class, 'processPayment'])
+            ->name('orders.process-payment');
+        Route::post('/orders/generate-invoice', [POSController::class, 'generateInvoice'])
+            ->name('orders.generate-invoice');
+        Route::post('/orders/checkout', [POSController::class, 'completePayment'])->name('orders.checkout');
+
+        Route::post('/orders/complete-payment', [POSController::class, 'completePayment'])
+            ->name('orders.complete-payment');
+        Route::post('/orders/process-split-payment', [POSController::class, 'processSplitPayment'])
+            ->name('orders.process-split-payment');
+        
+        Route::post('/pos-cancel/{id}', [POSController::class, 'cancel']);
+
+        Route::get('orders/paused', [OrderController::class, 'getPausedOrders'])
+            ->name('orders.paused');
+            
+        Route::resource('orders', OrderController::class);
+
+
+
+        // Taxes and Promotions
+        Route::resource('tax', TaxController::class);
+        Route::post('/tax-status/{id}', [TaxController::class, 'updateTaxStatus']);
+
+        Route::prefix('tax')->name('tax.')->group(function () {
+            Route::get('/liabilities', [TaxLiabilityController::class, 'index'])->name('liabilities.index');
+            Route::post('/liabilities/remit', [TaxLiabilityController::class, 'remitTaxes'])->name('liabilities.remit');
+            Route::get('/liabilities/summary', [TaxLiabilityController::class, 'summary'])->name('liabilities.summary');
+        });
+
+
+        Route::resource('promotion', PromotionController::class);
+        Route::post('/promotion-status/{id}', [PromotionController::class, 'updatePromotionStatus']);
+
+
+        // Suppliers & Purchasing
+        Route::resource('suppliers', SupplierController::class);
+        Route::post('/supplier-status/{id}', [SupplierController::class, 'updateSupplierStatus']);
+        
+        
+        Route::get('/purchase-order', [PurchaseOrderController::class, 'index'])->name('purchase_order.index');
+        Route::post('/purchase-order', [PurchaseOrderController::class, 'store'])->name('purchase-order.store');
+        Route::post('/purchase-status/{id}', [PurchaseOrderController::class, 'submitApproval'])->name('po.submit-approval');
+        Route::post('/purchase-approve/{id}', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
+        Route::post('/purchase-send/{id}', [PurchaseOrderController::class, 'sendToSupplier'])->name('purchase-orders.send');
+        Route::post('/purchase-orders/{purchaseOrder}/receive-items', [PurchaseOrderController::class, 'receiveItems'])->name('purchase-orders.receive-items');
+        Route::post('/purchase-cancel/{id}', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
+        Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('purchase-orders.destroy');
+
+        Route::post('/purchase-orders/calculate-tax-preview', [PurchaseOrderController::class, 'calculateTaxPreview'])
+            ->name('purchase_order.calculate_tax_preview');
+
+        // Expenses
+        Route::resource('expense-category', ExpenseCategoryController::class);
+
+        Route::resource('expense', ExpenseController::class);
+        Route::post('/expense-status/{id}', [ExpenseController::class, 'updateExpenseStatus'])->name('updateExpenseStatus');
+        Route::post('/{id}/approve', [ExpenseController::class, 'approve'])->name('approveExpense');
+
+        Route::put('/expenses/{id}/receipt', [ExpenseController::class, 'updateReceipt'])
+            ->name('expenses.update-receipt')
+            ->middleware('auth');
+        Route::post('/expenses/{id}/approve', [ExpenseController::class, 'approve'])
+            ->name('expenses.approve')
+            ->middleware('auth');
+
+        
+
+        // Tenant Mgt
+        Route::resource('tenant', TenantController::class);
+        Route::prefix('tenant')->name('tenant.')->group(function () {
+            Route::post('/', [TenantController::class, 'store'])->name('store');
+            Route::delete('/{tenant}', [TenantController::class, 'destroy'])->name('destroy');
+            Route::post('/{tenant}/add-admin', [TenantController::class, 'addAdminUser'])->name('add-admin');
+        });
+        Route::post('/billing/refresh-plans', [TenantController::class, 'refreshPlans'])->name('billing.refresh-plans');
+
+
+
+        // Basic Accounting Routes
+        Route::prefix('accounting')->name('accounting.')->group(function () {
+            Route::get('/payment-methods', [AccountingController::class, 'paymentMethods'])->name('payment-methods.index');
+            Route::get('/account-balances', [AccountingController::class, 'accountBalances'])->name('account-balances');
+            Route::get('/transaction-ledger', [AccountingController::class, 'transactionLedger'])->name('transaction-ledger');
+            Route::get('/income-statement', [AccountingController::class, 'incomeStatement'])->name('income-statement');
+            Route::get('/cash-flow', [AccountingController::class, 'cashFlow'])->name('cash-flow');
+            Route::get('/transaction-analysis', [AccountingController::class, 'transactionAnalysis'])->name('transaction-analysis');
+            Route::get('/expense-analysis', [AccountingController::class, 'expenseAnalysis'])->name('expense-analysis');
+            Route::get('/payment-method-analysis', [AccountingController::class, 'paymentMethodAnalysis'])->name('payment-method-analysis');
+            Route::get('/daily-summary', [AccountingController::class, 'dailySummary'])->name('daily-summary');
+            Route::get('/monthly-report', [AccountingController::class, 'monthlyReport'])->name('monthly-report');
+            Route::get('/reconciliation', [AccountingController::class, 'reconciliation'])->name('reconciliation');
+            Route::get('/transaction-ledger/details/{id}', [AccountingController::class, 'getTransactionDetails'])->name('transaction-details');
+        });
+
+
+        Route::prefix('reports/expenses')->name('reports.expenses.')->group(function () {
+            Route::get('summary', [ExpenseReportsController::class, 'summary'])->name('summary');
+            Route::get('by-category', [ExpenseReportsController::class, 'byCategory'])->name('by-category');
+            Route::get('by-vendor', [ExpenseReportsController::class, 'byVendor'])->name('by-vendor');
+            Route::get('by-employee', [ExpenseReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('by-payment-method', [ExpenseReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('recurring', [ExpenseReportsController::class, 'recurring'])->name('recurring');
+            Route::get('budget-vs-actual', [ExpenseReportsController::class, 'budgetVsActual'])->name('budget-vs-actual');
+            Route::get('trends', [ExpenseReportsController::class, 'trends'])->name('trends');
+            Route::get('tax-report', [ExpenseReportsController::class, 'taxReport'])->name('tax-report');
+            Route::get('audit', [ExpenseReportsController::class, 'audit'])->name('audit');
+            
+            // Export routes
+            Route::get('export/summary', [ExpenseReportsController::class, 'exportSummary'])->name('export.summary');
+            Route::get('export/by-category', [ExpenseReportsController::class, 'exportByCategory'])->name('export.by-category');
+            // Add other export routes...
+
+        });
+
+
+
+        // Order Reports Routes
+        Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
+            Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
+            Route::get('by-customer', [OrderReportsController::class, 'byCustomer'])->name('by-customer');
+            Route::get('by-product', [OrderReportsController::class, 'byProduct'])->name('by-product');
+            Route::get('by-payment-method', [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('by-employee', [OrderReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('time-analysis', [OrderReportsController::class, 'timeAnalysis'])->name('time-analysis');
+            Route::get('returns-refunds', [OrderReportsController::class, 'returnsRefunds'])->name('returns-refunds');
+            Route::get('discount-analysis', [OrderReportsController::class, 'discountAnalysis'])->name('discount-analysis');
+            Route::get('sales-forecast', [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
+            Route::get('inventory-sales', [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
+        });
+
+
+        // Product Reports Routes
+        Route::prefix('reports/products')->name('reports.products.')->group(function () {
+            Route::get('summary', [ProductsController::class, 'summary'])->name('summary');
+            Route::get('performance', [ProductsController::class, 'performance'])->name('performance');
+            Route::get('inventory', [ProductsController::class, 'inventory'])->name('inventory');
+            Route::get('stock-movement', [ProductsController::class, 'stockMovement'])->name('stock-movement');
+            Route::get('margin', [ProductsController::class, 'margin'])->name('margin');
+            Route::get('by-category', [ProductsController::class, 'byCategory'])->name('by-category');
+        });
+
+        // Inventory Reports Routes
+        Route::prefix('reports/inventory')->name('reports.inventory.')->group(function () {
+            Route::get('summary', [InventoryReportsController::class, 'summary'])->name('summary');
+            Route::get('turnover', [InventoryReportsController::class, 'turnover'])->name('turnover');
+            Route::get('stock-aging', [InventoryReportsController::class, 'stockAging'])->name('stock-aging');
+            Route::get('low-stock-alerts', [InventoryReportsController::class, 'lowStockAlerts'])->name('low-stock-alerts');
+            Route::get('transactions', [InventoryReportsController::class, 'transactions'])->name('transactions');
+            Route::get('adjustments', [InventoryReportsController::class, 'adjustments'])->name('adjustments');
+            Route::get('abc-analysis', [InventoryReportsController::class, 'abcAnalysis'])->name('abc-analysis');
+            Route::get('movement-analysis', [InventoryReportsController::class, 'movementAnalysis'])->name('movement-analysis');
+            
+            // Additional possible reports
+            Route::get('valuation', [InventoryReportsController::class, 'valuation'])->name('valuation');
+            Route::get('dead-stock', [InventoryReportsController::class, 'deadStock'])->name('dead-stock');
+            Route::get('turnover-ratio', [InventoryReportsController::class, 'turnoverRatio'])->name('turnover-ratio');
+            Route::get('stock-accuracy', [InventoryReportsController::class, 'stockAccuracy'])->name('stock-accuracy');
+            Route::get('excess-stock', [InventoryReportsController::class, 'excessStock'])->name('excess-stock');
+
+            Route::get('/movement-logs', [InventoryReportsController::class, 'getMovementLogs'])
+                ->name('movement-logs');
+        });
+
+        // Purchasing Reports Routes
+        Route::prefix('reports/purchasing')->name('reports.purchasing.')->group(function () {
+            Route::get('purchase-order-summary', [PurchasingReportsController::class, 'purchaseOrderSummary'])->name('purchase-order-summary');
+            Route::get('supplier-performance', [PurchasingReportsController::class, 'supplierPerformance'])->name('supplier-performance');
+            Route::get('purchase-order-status', [PurchasingReportsController::class, 'purchaseOrderStatus'])->name('purchase-order-status');
+            Route::get('purchase-receipts', [PurchasingReportsController::class, 'purchaseReceipts'])->name('purchase-receipts');
+            Route::get('supplier-spend-analysis', [PurchasingReportsController::class, 'supplierSpendAnalysis'])->name('supplier-spend-analysis');
+            Route::get('purchase-order-items', [PurchasingReportsController::class, 'purchaseOrderItems'])->name('purchase-order-items');
+            Route::get('payment-status', [PurchasingReportsController::class, 'paymentStatus'])->name('payment-status');
+            Route::get('received-inventory', [PurchasingReportsController::class, 'receivedInventory'])->name('received-inventory');
+            Route::get('supplier-risk-assessment', [PurchasingReportsController::class, 'supplierRiskAssessment'])->name('supplier-risk-assessment');
+            Route::get('purchase-cost-analysis', [PurchasingReportsController::class, 'purchaseCostAnalysis'])->name('purchase-cost-analysis');
+            
+            Route::get('export', [PurchasingReportsController::class, 'export'])->name('export');
+        });
+        
+        Route::get('/api/purchase-orders/{id}/details', function ($id) {
+            $tenantId = auth()->user()->tenant_id;
+            
+            $order = \App\Models\PurchaseOrder::with([
+                'supplier',
+                'location',
+                'items.productVariant.product',
+                'items' => function ($query) {
+                    $query->select([
+                        'id',
+                        'purchase_order_id',
+                        'product_variant_id',
+                        'product_name',
+                        'sku',
+                        'quantity',
+                        'unit_cost',
+                        'total_cost',
+                        'received_quantity'
+                    ]);
+                }
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->first();
+            
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Purchase order not found'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => $order
+            ]);
+        });
+
+        Route::get('/api/purchase-receipts/{id}/details', function ($id) {
+            $tenantId = auth()->user()->tenant_id;
+            
+            $receipt = \App\Models\PurchaseReceipt::with([
+                'purchaseOrder.supplier',
+                'purchaseOrder.location',
+                'receiver',
+                'items.purchaseOrderItem.productVariant.product'
+            ])
+            ->whereHas('purchaseOrder', function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId);
+            })
+            ->where('id', $id)
+            ->first();
+            
+            if (!$receipt) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Purchase receipt not found'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => $receipt
+            ]);
+        });
+
+        Route::get('/api/suppliers/{id}/spend-details', [PurchasingReportsController::class, 'getSupplierSpendDetails']);
+        
+
+
+        // Advance Accounts
+        Route::middleware(['auth:sanctum', 'tenant'])->prefix('accounting')->group(function () {
+            // Chart of Accounts
+            Route::apiResource('chart-of-accounts', ChartOfAccountController::class);
+            Route::get('chart-of-accounts/{account}/balance', [ChartOfAccountController::class, 'balance']);
+            
+            // Journal Entries
+            Route::apiResource('journal-entries', JournalEntryController::class);
+            Route::post('journal-entries/{journal}/post', [JournalEntryController::class, 'post']);
+            Route::post('journal-entries/{journal}/void', [JournalEntryController::class, 'void']);
+            
+            // Accounting Periods
+            Route::apiResource('accounting-periods', AccountingPeriodController::class);
+            Route::post('accounting-periods/{period}/close', [AccountingPeriodController::class, 'close']);
+            
+            // Reports
+            Route::get('reports/trial-balance', [ReportController::class, 'trialBalance']);
+            Route::get('reports/profit-loss', [ReportController::class, 'profitLoss']);
+            Route::get('reports/balance-sheet', [ReportController::class, 'balanceSheet']);
+            Route::get('reports/general-ledger', [ReportController::class, 'generalLedger']);
+        });
+
+        
+
+
+
+    });
+
+    // Fallback route - must be the LAST route
+    Route::fallback(function () {
+        // Log the 404 error for debugging
+        Log::warning('404 Not Found', [
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'user_id' => auth()->id(),
+        ]);
+        
+        // Check if it's an API request
+        if (request()->expectsJson() || request()->is('api/*')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.route_not_found'),
+                'error_code' => 'ROUTE_NOT_FOUND'
+            ], 404);
+        }
+        
+        // For web requests, show custom 404 page
+        return response()->view('errors.404', [
+            'message' => __('payments.page_not_found'),
+            'previous_url' => url()->previous() !== url()->current() ? url()->previous() : null
+        ], 404);
+    });
+
+    
+
+
+require __DIR__.'/auth.php';
+require __DIR__.'/remote.php';

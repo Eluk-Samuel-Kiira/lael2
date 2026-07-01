@@ -1,0 +1,335 @@
+<?php
+
+namespace App\Http\Controllers\Setting;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Validation\Rule;
+use App\Models\{ Promotion, User };
+
+class PromotionController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view promotion')) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.not_authorized'),
+                ]);
+            }
+            abort(403);
+        }
+        
+        // Get per_page from request, default to 15
+        $perPage = $request->input('per_page', 15);
+        
+        // Validate per_page is in allowed values
+        $allowedPerPage = [15, 25, 50, 100];
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 15;
+        }
+        
+        // Build the query with relationships
+        $query = Promotion::with('Promotioncreator');
+        
+        // If user is NOT super_admin, filter by tenant
+        if (!$user->hasRole('super_admin')) {
+            $query->where('tenant_id', $tenantId);
+        }
+        
+        // Apply search if provided
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('discount_type', 'like', "%{$search}%")
+                ->orWhere('discount_value', 'like', "%{$search}%")
+                ->orWhereHas('Promotioncreator', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        // Paginate with dynamic per_page
+        $promotions = $query->latest()->paginate($perPage);
+        
+        // Preserve per_page and search in pagination links
+        $promotions->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        $bladeToReload = $request->query('bladeFileToReload');
+        
+        // For AJAX requests - return just the component HTML
+        if ($request->ajax() && $bladeToReload === 'reloadPromotionComponent') {
+            return view('promotion.promotion.component', [
+                'all_promotions' => $promotions,
+            ])->render();
+        }
+        
+        // Regular page load
+        return view('promotion.promotion-index', [
+            'all_promotions' => $promotions,
+        ]);
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        //
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('create promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:55',
+                Rule::unique('promotions')->where(function ($query) use ($tenantId) {
+                    return $query->where('tenant_id', $tenantId);
+                })
+            ],
+            'discount_type' => 'required|string|in:fixed_amount,percentage,buy_x_get_y',
+            'discount_value' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date',
+        ]);
+
+        $promotion = Promotion::create([
+            'name' => $request->name,
+            'discount_type' => $request->discount_type,
+            'discount_value' => $request->discount_value,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'created_by' => $user->id,
+            'tenant_id' => $tenantId, 
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'reload' => true,
+            'componentId' => 'reloadPromotionComponent',
+            'refresh' => false,
+            'message' => __('auth._created'),
+            'redirect' => route('promotion.index'),
+        ]);
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(string $id)
+    {
+        //
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(string $id)
+    {
+        //
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, string $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit promotion')) {
+            // abort(403, __('payments.not_authorized')); for reloading pages
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        // Find promotion and ensure it belongs to tenant
+        $promotion = Promotion::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
+
+        if (!$promotion) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.promotion_not_found'),
+            ]);
+        }
+
+        // // ── CHECK IF PROMOTION IS EXPIRED ─────────────────────────────────────
+        // if ($promotion->end_date && now()->gt($promotion->end_date)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => __('auth.cannot_update_expired'),
+        //         // 'error_code' => 'PROMOTION_EXPIRED',
+        //         'expired_at' => $promotion->end_date->format('Y-m-d H:i:s'),
+        //     ]);
+        // }
+
+        // // Also check if start_date is in the past but promotion is still active
+        // if ($promotion->start_date && now()->lt($promotion->start_date)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => __('auth.cannot_update_not_started'),
+        //         // 'error_code' => 'PROMOTION_NOT_STARTED',
+        //         'starts_at' => $promotion->start_date->format('Y-m-d H:i:s'),
+        //     ]);
+        // }
+
+        $request->validate([
+            'name' => [
+                'required',
+                'max:255',
+                Rule::unique('promotions')->where(function ($query) use ($tenantId, $id) {
+                    return $query->where('tenant_id', $tenantId)
+                            ->where('id', '!=', $id);
+                })->ignore($promotion->id),
+            ],
+            'discount_type' => 'required|string|in:fixed_amount,percentage,buy_x_get_y',
+            'discount_value' => 'required',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date',
+        ]);
+
+        $promotion->update([
+            'name' => $request->name,
+            'discount_type' => $request->discount_type,
+            'discount_value' => $request->discount_value,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'created_by' => $user->id,
+            // Don't update tenant_id on update
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'reload' => true,
+            'componentId' => 'reloadPromotionComponent',
+            'refresh' => false,
+            'message' => __('auth._updated'), // Fixed: should be _updated not _created
+            'redirect' => route('promotion.index'),
+        ]);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(string $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('delete promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        // Find promotion and ensure it belongs to tenant
+        $promotion = Promotion::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
+
+        if (!$promotion) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.promotion_not_found'),
+            ]);
+        }
+
+        if ($promotion->is_active == 1) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.still_active'),
+            ]);
+        }
+
+        // Check if promotion is attached to any products
+        $attachedToProducts = DB::table('promotion_products')
+            ->where('promotion_id', $id)
+            ->exists();
+
+        if ($attachedToProducts) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.promotion_attached_to_products'),
+            ]);
+        }
+
+        $promotion->delete();
+        
+        return response()->json([
+            'success' => true,
+            'reload' => true,
+            'componentId' => 'reloadPromotionComponent',
+            'refresh' => false,
+            'message' => __('auth._deleted'), // Fixed: should be _deleted not _updated
+            'redirect' => route('promotion.index'),
+        ]);
+    }
+    
+
+    public function updatePromotionStatus(Request $request, $id) 
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        if (!$user->hasPermissionTo('update promotion')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+        $validated = $request->validate([
+            'status' => 'required|in:1,0',  // Ensures only 'active' or 'inactive' are allowed
+        ]);
+        
+        $promotion = Promotion::where('id', $id)
+                            ->where('tenant_id', $tenantId)
+                            ->first();
+
+    
+        if ($promotion) {
+            $promotion->is_active = $validated['status']; 
+            if ($promotion->save()) {  // Save the user object
+                return response()->json([
+                    'success' => true,
+                    'reload' => true,
+                    'componentId' => 'reloadPromotionComponent',
+                    'refresh' => false,
+                    'message' => __('auth._updated'),
+                    'redirect' => route('promotion.index'),
+                ]);
+            }
+        }
+    
+        // If user not found or status update failed
+        return response()->json([
+            'success' => false,
+            'message' => __('auth._not_found'),
+        ]);
+    }
+}

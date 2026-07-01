@@ -1,0 +1,65 @@
+<x-app-layout>
+    @section('title', __('pagination.product_variant'))
+    @section('content')
+    
+    <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
+            <!-- Left side - Title and Breadcrumb -->
+            <div class="page-title d-flex flex-column">
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
+                    {{__('pagination._product')}}: {{ $product_variants->name }} - ({{ $product_variants->sku }})
+                </h1>
+                <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                    <li class="breadcrumb-item text-muted">
+                        @php
+                            $previousUrl = url()->previous();
+                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
+                            $formattedRouteName = $previousRouteName 
+                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
+                                : __('auth._back');
+                        @endphp
+                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
+                            {{ $formattedRouteName }}
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                    </li>
+                    <li class="breadcrumb-item text-muted">{{__('pagination.product_variant')}}</li>
+                </ul>
+            </div>
+
+            <!-- Right side - Actions -->
+            <div class="d-flex align-items-stretch align-items-sm-center w-100 w-md-auto">
+                <!-- Search Bar -->
+                <div class="w-100 w-sm-250px me-0 me-sm-3">
+                    <x-liveblade-search 
+                        id="variantSearchInput"
+                        componentId="reloadVariantComponent"
+                        route="{{ route('products.show', $product_variants->id) }}"
+                        placeholder="{{__('auth._search')}} {{__('pagination._variants')}}"
+                    />
+                </div>
+                
+                @can('create variant')
+                    <a href="{{ route('variants.show', $product_variants->id) }}" class="btn btn-primary flex-shrink-0">
+                        <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
+                        <span class="d-none d-sm-inline">{{__('pagination.product_variant_new')}}</span>
+                        <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
+                    </a>
+                @endcan
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-flex flex-column flex-column-fluid">
+        <div id="kt_app_content" class="app-content flex-column-fluid">
+            <div id="kt_app_content_container" class="app-container container-xxl">
+                <div id="status"></div>
+                @include('inventory.product-variant.component')
+            </div>
+        </div>
+    </div>
+    
+    @endsection
+</x-app-layout>
