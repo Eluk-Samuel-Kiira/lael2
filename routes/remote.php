@@ -32,3 +32,36 @@ Route::get('/get-departments', [DependentController::class, 'getDepartmentsByLoc
 
 
 
+use App\Http\Controllers\Orders\InvoiceController;
+// Invoice Routes
+Route::prefix('invoices')->name('invoices.')->group(function () {
+    Route::get('/', [InvoiceController::class, 'index'])->name('index');
+    Route::post('/', [InvoiceController::class, 'store'])->name('store');
+    Route::get('/create', [InvoiceController::class, 'create'])->name('create');
+    Route::get('/{id}', [InvoiceController::class, 'show'])->name('show');
+    Route::get('/{id}/edit', [InvoiceController::class, 'edit'])->name('edit');
+    Route::put('/{id}', [InvoiceController::class, 'update'])->name('update');
+    Route::delete('/{id}', [InvoiceController::class, 'destroy'])->name('destroy');
+    Route::post('/{id}/send', [InvoiceController::class, 'send'])->name('send');
+    Route::post('/{id}/status', [InvoiceController::class, 'updateStatus'])->name('update-status');
+    Route::post('/{id}/void', [InvoiceController::class, 'void'])->name('void');
+    Route::get('/{id}/pdf', [InvoiceController::class, 'generatePdf'])->name('pdf');
+    Route::post('/{id}/record-payment', [InvoiceController::class, 'recordPayment'])->name('record-payment');
+});
+
+
+
+
+
+
+
+// Public Invoice Routes (no authentication required)
+Route::prefix('public/invoices')->name('public.invoice.')->group(function () {
+    Route::get('/{token}', [App\Http\Controllers\Public\InvoiceController::class, 'show'])->name('show');
+    Route::get('/{token}/pay', [App\Http\Controllers\Public\InvoiceController::class, 'pay'])->name('pay');
+    Route::post('/{token}/payment', [App\Http\Controllers\Public\InvoiceController::class, 'processPayment'])->name('process-payment');
+});
+
+
+
+

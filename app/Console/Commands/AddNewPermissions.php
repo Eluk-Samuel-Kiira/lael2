@@ -42,6 +42,17 @@ class AddNewPermissions extends Command
             'view dashboard recent orders',
             'view dashboard overview',
         ],
+        'Invoice Management' => [
+            'view invoice',
+            'create invoice',
+            'edit invoice',
+            'delete invoice',
+            'send invoice',
+            'void invoice',
+            'update invoice',
+            'reconcile invoice',
+            'download invoice',
+        ],
     ];
 
     /**

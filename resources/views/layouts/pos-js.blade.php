@@ -911,3 +911,165 @@ function formatPaymentType(type) {
         });
     }
 </script>
+
+
+
+
+
+<script>
+    // Update invoice status — 'paid' and 'partially_paid' are intercepted
+    // and redirected to the Record Payment modal, since the backend now
+    // rejects those two values on this endpoint (they need an amount +
+    // payment method, not a bare status string).
+    function updateInvoiceStatus(invoiceId, selectedStatus) {
+        const statusSelect = document.querySelector(`select[onchange*="updateInvoiceStatus(${invoiceId},"]`);
+
+        if (selectedStatus === 'paid' || selectedStatus === 'partially_paid') {
+            if (statusSelect) {
+                statusSelect.value = statusSelect.getAttribute('data-current-status') || 'draft';
+            }
+            const modalEl = document.getElementById('recordPaymentModal' + invoiceId);
+            if (modalEl) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            } else {
+                toastr.warning('{{ __("payments.use_record_payment_button") }}');
+            }
+            return;
+        }
+
+        if (statusSelect) statusSelect.value = selectedStatus;
+
+        const updateRoute = '/invoices/' + invoiceId + '/status';
+        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
+    }
+
+    // Update invoice (edit)
+    function updateInvoice(invoiceId) {
+        const submitButton = document.getElementById('editInvoiceButton' + invoiceId);
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        const form = document.getElementById('editInvoiceForm' + invoiceId);
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        const updateUrl = '/invoices/' + invoiceId;
+        handleEditResponse(data, updateUrl, invoiceId, submitButton);
+    }
+
+    // Toggle the send modal between "email" and "download PDF" modes
+    function toggleSendChannel(invoiceId) {
+        const isDownload  = document.getElementById('channel-download' + invoiceId).checked;
+        const emailWrap    = document.getElementById('email-field-wrap' + invoiceId);
+        const downloadNote = document.getElementById('download-note' + invoiceId);
+        const emailInput   = emailWrap.querySelector('input[name="email"]');
+
+        emailWrap.classList.toggle('d-none', isDownload);
+        downloadNote.classList.toggle('d-none', !isDownload);
+        emailInput.required = !isDownload;
+    }
+
+    // Send invoice — posts channel (+ email if provided). On success, if the
+    // response includes a download_url (channel = 'download'), open the PDF
+    // in a new tab immediately.
+    function sendInvoice(invoiceId) {
+        const submitButton = document.getElementById('sendInvoiceButton' + invoiceId);
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        const form    = document.getElementById('sendInvoiceForm' + invoiceId);
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        fetch('/invoices/' + invoiceId + '/send', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            if (ok && body.success) {
+                toastr.success(body.message);
+                bootstrap.Modal.getInstance(document.getElementById('sendInvoiceModal' + invoiceId))?.hide();
+                if (body.download_url) {
+                    window.open(body.download_url, '_blank');
+                }
+                setTimeout(() => location.reload(), 400);
+            } else {
+                toastr.error(body.message || '{{ __("payments.invoice_send_failed") }}');
+            }
+        })
+        .catch(err => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            toastr.error('{{ __("payments.invoice_send_failed") }}');
+            console.error('[sendInvoice] error:', err);
+        });
+    }
+
+    // Record a manual payment against an invoice — full or partial.
+    function submitInvoicePayment(invoiceId) {
+        const submitButton = document.getElementById('recordPaymentButton' + invoiceId);
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        const form    = document.getElementById('recordPaymentForm' + invoiceId);
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        if (!payload.payment_method_id) {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            toastr.warning('{{ __("payments.select_payment_method") }}');
+            return;
+        }
+
+        fetch('/invoices/' + invoiceId + '/record-payment', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            if (ok && body.success) {
+                toastr.success(body.message);
+                bootstrap.Modal.getInstance(document.getElementById('recordPaymentModal' + invoiceId))?.hide();
+                setTimeout(() => location.reload(), 400);
+            } else {
+                toastr.error(body.message || '{{ __("payments.payment_record_failed") }}');
+            }
+        })
+        .catch(err => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            toastr.error('{{ __("payments.payment_record_failed") }}');
+            console.error('[submitInvoicePayment] error:', err);
+        });
+    }
+
+
+    function voidInvoice(invoiceId) {
+        const submitButton = document.getElementById('voidInvoiceButton' + invoiceId);
+        const form = document.getElementById('voidInvoiceForm' + invoiceId);
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Show loading state
+        LiveBlade.toggleButtonLoading(submitButton, true);
+        
+        // Send to backend - LiveBlade will handle the response
+        const updateRoute = '/invoices/' + invoiceId + '/void';
+        
+        // Use LiveBlade's built-in method
+        LiveBlade.loopUpdateStatus(updateRoute, data);
+        
+        // Note: LiveBlade.loopUpdateStatus will handle:
+        // - The response
+        // - Showing messages
+        // - Reloading the component
+        // - Everything!
+    }
+
+</script>

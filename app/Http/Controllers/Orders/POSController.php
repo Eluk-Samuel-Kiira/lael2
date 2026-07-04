@@ -376,10 +376,10 @@ class POSController extends Controller
 
     public function generateInvoice(Request $request)
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (! $user->hasPermissionTo('create order')) {
+        if (!$user->hasPermissionTo('create order')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -397,26 +397,26 @@ class POSController extends Controller
             }
 
             // ── Invoices need a real, contactable customer — no walk-ins ──────
-            $customerId      = null;
-            $customerName    = null;
-            $customerEmail   = null;
-            $customerPhone   = null;
+            $customerId = null;
+            $customerName = null;
+            $customerEmail = null;
+            $customerPhone = null;
             $customerAddress = null;
 
             if (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'existing') {
                 $customerId = $cartData['customer']['id'];
-                $customer   = Customer::find($customerId);
+                $customer = Customer::find($customerId);
                 if ($customer) {
-                    $customerName    = trim($customer->first_name . ' ' . $customer->last_name);
-                    $customerEmail   = $customer->email;
-                    $customerPhone   = $customer->phone;
+                    $customerName = trim($customer->first_name . ' ' . $customer->last_name);
+                    $customerEmail = $customer->email;
+                    $customerPhone = $customer->phone;
                     $customerAddress = $customer->address ?? null;
                 }
             } elseif (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'new') {
                 $customerName = $cartData['customer']['name'];
             }
 
-            if (! $customerName) {
+            if (!$customerName) {
                 return response()->json([
                     'success' => false,
                     'message' => __('pagination.customer_required_for_invoice'),
@@ -429,88 +429,77 @@ class POSController extends Controller
             // 'confirmed' — it's a real order, just unpaid — and balance_due
             // is the full total since nothing's been collected yet.
             $order = Order::create([
-                'tenant_id'      => $tenantId,
-                'customer_id'    => $customerId,
-                'customer_name'  => $customerName,
-                'location_id'    => $user->location_id   ?? 1,
-                'department_id'  => $user->department_id ?? 1,
-                'order_number'   => $orderNumber,
-                'type'           => 'sale',
-                'status'         => 'confirmed',
-                'subtotal'       => $cartData['subtotal'],
+                'tenant_id' => $tenantId,
+                'customer_id' => $customerId,
+                'customer_name' => $customerName,
+                'location_id' => $user->location_id ?? 1,
+                'department_id' => $user->department_id ?? 1,
+                'order_number' => $orderNumber,
+                'type' => 'sale',
+                'status' => 'confirmed',
+                'subtotal' => $cartData['subtotal'],
                 'discount_total' => $cartData['discount'],
-                'tax_total'      => $cartData['tax'],
-                'total'          => $cartData['total'],
-                'paid_amount'    => 0,
-                'balance_due'    => $cartData['total'],
-                'source'         => 'invoice',
-                'created_by'     => $user->id,
+                'tax_total' => $cartData['tax'],
+                'total' => $cartData['total'],
+                'paid_amount' => 0,
+                'balance_due' => $cartData['total'],
+                'source' => 'invoice',
+                'created_by' => $user->id,
             ]);
 
             foreach ($cartData['items'] as $item) {
                 $variant = ProductVariant::find($item['variant_id']);
-                if (! $variant) continue;
+                if (!$variant) continue;
 
-                // NOTE: not touching inventory here on purpose. processPayment()
-                // decrements stock because money has actually changed hands.
-                // An unpaid invoice shouldn't move stock yet — that should happen
-                // when the invoice is marked paid (webhook or manual), not here.
                 $order->orderItems()->create([
-                    'product_id'     => $variant->product_id,
-                    'variant_id'     => $variant->id,
-                    'item_name'      => $item['name'],
-                    'sku'            => $variant->sku,
-                    'unit_price'     => $item['price'],
-                    'quantity'       => $item['quantity'],
-                    'tax_amount'     => $item['tax_total'],
-                    'discount'       => $item['discount'],
-                    'total_price'    => $item['total'],
-                    'tax_data'       => json_encode($item['taxes']      ?? []),
+                    'product_id' => $variant->product_id,
+                    'variant_id' => $variant->id,
+                    'item_name' => $item['name'],
+                    'sku' => $variant->sku,
+                    'unit_price' => $item['price'],
+                    'quantity' => $item['quantity'],
+                    'tax_amount' => $item['tax_total'],
+                    'discount' => $item['discount'],
+                    'total_price' => $item['total'],
+                    'tax_data' => json_encode($item['taxes'] ?? []),
                     'promotion_data' => json_encode($item['promotions'] ?? []),
                 ]);
             }
 
-            // Sequential per-tenant invoice number — separate from order_number.
-            $nextSeq       = Invoice::where('tenant_id', $tenantId)->count() + 1;
-            $invoiceNumber = 'INV-' . date('Y') . '-' . str_pad($nextSeq, 5, '0', STR_PAD_LEFT);
+            // ✅ USE THE MODEL'S METHOD TO GENERATE INVOICE NUMBER
+            $invoiceNumber = Invoice::generateInvoiceNumber($tenantId);
 
             $invoice = Invoice::create([
-                'tenant_id'       => $tenantId,
-                'order_id'        => $order->id,
-                'customer_id'     => $customerId,
-                'invoice_number'  => $invoiceNumber,
-                'public_token'    => Str::random(48),
-                'billing_name'    => $customerName,
-                'billing_email'   => $customerEmail,
-                'billing_phone'   => $customerPhone,
+                'tenant_id' => $tenantId,
+                'order_id' => $order->id,
+                'customer_id' => $customerId,
+                'invoice_number' => $invoiceNumber, // Using the model method
+                'public_token' => Invoice::generatePublicToken(),
+                'billing_name' => $customerName,
+                'billing_email' => $customerEmail,
+                'billing_phone' => $customerPhone,
                 'billing_address' => $customerAddress,
-                'issue_date'      => now()->toDateString(),
-                'due_date'        => now()->addDays(14)->toDateString(),
-                'status'          => 'draft',
-                'currency'        => 'UGX',
-                'subtotal'        => $cartData['subtotal'],
-                'discount_total'  => $cartData['discount'],
-                'tax_total'       => $cartData['tax'],
-                'total'           => $cartData['total'],
-                'amount_paid'     => 0,
-                'balance_due'     => $cartData['total'],
-                'created_by'      => $user->id,
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->addDays(14)->toDateString(),
+                'status' => 'draft',
+                'currency' => 'UGX',
+                'subtotal' => $cartData['subtotal'],
+                'discount_total' => $cartData['discount'],
+                'tax_total' => $cartData['tax'],
+                'total' => $cartData['total'],
+                'amount_paid' => 0,
+                'balance_due' => $cartData['total'],
+                'created_by' => $user->id,
             ]);
 
-            // TODO: this is where PDF generation + delivery hook in, e.g.:
-            //   dispatch(new GenerateInvoicePdf($invoice));
-            //   dispatch(new SendInvoiceJob($invoice, channel: 'email'));
-            // Left as a stub deliberately — wanted this reviewed before wiring
-            // in mail/PDF so nothing sends out half-finished.
-
             return response()->json([
-                'success'        => true,
-                'message'        => __('pagination.invoice_generated'),
-                'order_id'       => $order->id,
-                'order_number'   => $orderNumber,
-                'invoice_id'     => $invoice->id,
+                'success' => true,
+                'message' => __('pagination.invoice_generated'),
+                'order_id' => $order->id,
+                'order_number' => $orderNumber,
+                'invoice_id' => $invoice->id,
                 'invoice_number' => $invoiceNumber,
-                'customerName'   => $customerName,
+                'customerName' => $customerName,
             ]);
 
         } catch (\Exception $e) {

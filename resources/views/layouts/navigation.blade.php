@@ -109,6 +109,17 @@
                             </a>
                         </div>
                     </div>
+
+                    <div class="menu-sub menu-sub-accordion">
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('invoices.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title">{{ __('payments.invoices') }}</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
                 @endcan
                 @endif

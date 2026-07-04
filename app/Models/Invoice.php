@@ -10,6 +10,54 @@ class Invoice extends Model
 {
     use SoftDeletes;
 
+    // ============================================================
+    // STATUS CONSTANTS
+    // ============================================================
+    const STATUS_DRAFT = 'draft';
+    const STATUS_SENT = 'sent';
+    const STATUS_VIEWED = 'viewed';
+    const STATUS_PARTIALLY_PAID = 'partially_paid';
+    const STATUS_PAID = 'paid';
+    const STATUS_OVERDUE = 'overdue';
+    const STATUS_VOID = 'void';
+    const STATUS_CANCELLED = 'cancelled';
+
+    const STATUS_LABELS = [
+        self::STATUS_DRAFT => 'Draft',
+        self::STATUS_SENT => 'Sent',
+        self::STATUS_VIEWED => 'Viewed',
+        self::STATUS_PARTIALLY_PAID => 'Partially Paid',
+        self::STATUS_PAID => 'Paid',
+        self::STATUS_OVERDUE => 'Overdue',
+        self::STATUS_VOID => 'Void',
+        self::STATUS_CANCELLED => 'Cancelled',
+    ];
+
+    const STATUS_COLORS = [
+        self::STATUS_DRAFT => 'secondary',
+        self::STATUS_SENT => 'info',
+        self::STATUS_VIEWED => 'primary',
+        self::STATUS_PARTIALLY_PAID => 'warning',
+        self::STATUS_PAID => 'success',
+        self::STATUS_OVERDUE => 'danger',
+        self::STATUS_VOID => 'dark',
+        self::STATUS_CANCELLED => 'danger',
+    ];
+
+    const STATUS_ICONS = [
+        self::STATUS_DRAFT => 'bi-file-earmark',
+        self::STATUS_SENT => 'bi-envelope',
+        self::STATUS_VIEWED => 'bi-eye',
+        self::STATUS_PARTIALLY_PAID => 'bi-wallet2',
+        self::STATUS_PAID => 'bi-check-circle',
+        self::STATUS_OVERDUE => 'bi-exclamation-diamond',
+        self::STATUS_VOID => 'bi-x-circle',
+        self::STATUS_CANCELLED => 'bi-x-octagon',
+    ];
+
+    // ============================================================
+    // FILLABLE & CASTS
+    // ============================================================
     protected $fillable = [
         'tenant_id',
         'order_id',
@@ -57,9 +105,9 @@ class Invoice extends Model
         'balance_due' => 'integer',
     ];
 
-    /**
-     * Accessors - Convert from stored integer to display float
-     */
+    // ============================================================
+    // ACCESSORS & MUTATORS
+    // ============================================================
     public function getSubtotalAttribute(?int $value): ?float
     {
         return from_base_currency($value);
@@ -90,9 +138,6 @@ class Invoice extends Model
         return from_base_currency($value);
     }
 
-    /**
-     * Mutators - Convert from display float to stored integer
-     */
     public function setSubtotalAttribute($value): void
     {
         $this->attributes['subtotal'] = to_base_currency($value);
@@ -123,9 +168,9 @@ class Invoice extends Model
         $this->attributes['balance_due'] = to_base_currency($value);
     }
 
-    /**
-     * Boot method for auto-generating invoice number and public token
-     */
+    // ============================================================
+    // BOOT METHOD
+    // ============================================================
     protected static function boot()
     {
         parent::boot();
@@ -141,9 +186,9 @@ class Invoice extends Model
         });
     }
 
-    /**
-     * Generate sequential invoice number per tenant
-     */
+    // ============================================================
+    // GENERATORS
+    // ============================================================
     public static function generateInvoiceNumber($tenantId): string
     {
         $prefix = 'INV-';
@@ -156,18 +201,29 @@ class Invoice extends Model
             ->first();
 
         if ($lastInvoice) {
-            $lastNumber = (int) substr($lastInvoice->invoice_number, -4);
-            $sequence = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+            $lastNumber = (int) substr($lastInvoice->invoice_number, -5);
+            $sequence = str_pad($lastNumber + 1, 5, '0', STR_PAD_LEFT);
         } else {
-            $sequence = '0001';
+            $sequence = '00001';
         }
 
-        return $prefix . $year . '-' . $sequence;
+        $invoiceNumber = $prefix . $year . '-' . $sequence;
+
+        // ✅ CHECK IF NUMBER ALREADY EXISTS AND INCREMENT IF NEEDED
+        $attempts = 0;
+        while (static::where('tenant_id', $tenantId)
+            ->where('invoice_number', $invoiceNumber)
+            ->exists() && $attempts < 100) {
+            
+            $attempts++;
+            $sequenceNumber = (int) $sequence + $attempts;
+            $sequence = str_pad($sequenceNumber, 5, '0', STR_PAD_LEFT);
+            $invoiceNumber = $prefix . $year . '-' . $sequence;
+        }
+
+        return $invoiceNumber;
     }
 
-    /**
-     * Generate unique public token for invoice
-     */
     public static function generatePublicToken(): string
     {
         return Str::random(64);
@@ -176,7 +232,6 @@ class Invoice extends Model
     // ============================================================
     // RELATIONSHIPS
     // ============================================================
-
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
@@ -197,6 +252,16 @@ class Invoice extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function payments()
+    {
+        return $this->hasMany(InvoicePayment::class);
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
     public function voidedBy()
     {
         return $this->belongsTo(User::class, 'voided_by');
@@ -207,10 +272,7 @@ class Invoice extends Model
         return $this->hasMany(InvoiceSend::class);
     }
 
-    public function payments()
-    {
-        return $this->hasMany(InvoicePayment::class);
-    }
+
 
     public function webhooks()
     {
@@ -218,139 +280,110 @@ class Invoice extends Model
     }
 
     // ============================================================
-    // HELPER METHODS
+    // HELPERS
     // ============================================================
-
-    /**
-     * Get order items through the order relationship
-     */
     public function getItemsAttribute()
     {
         return $this->order ? $this->order->orderItems : collect();
     }
 
-    /**
-     * Check if invoice is paid
-     */
     public function isPaid(): bool
     {
-        return $this->status === 'paid' || $this->balance_due <= 0;
+        return $this->status === self::STATUS_PAID || $this->balance_due <= 0;
     }
 
-    /**
-     * Check if invoice is partially paid
-     */
     public function isPartiallyPaid(): bool
     {
-        return $this->status === 'partially_paid' || 
+        return $this->status === self::STATUS_PARTIALLY_PAID || 
                ($this->amount_paid > 0 && $this->balance_due > 0);
     }
 
-    /**
-     * Check if invoice is overdue
-     */
     public function isOverdue(): bool
     {
-        return $this->status === 'overdue' || 
+        return $this->status === self::STATUS_OVERDUE || 
                ($this->due_date && $this->due_date->isPast() && $this->balance_due > 0);
     }
 
-    /**
-     * Check if invoice is draft
-     */
     public function isDraft(): bool
     {
-        return $this->status === 'draft';
+        return $this->status === self::STATUS_DRAFT;
     }
 
-    /**
-     * Check if invoice is sent
-     */
     public function isSent(): bool
     {
-        return $this->status === 'sent';
+        return $this->status === self::STATUS_SENT;
     }
 
-    /**
-     * Check if invoice is void
-     */
+    public function isViewed(): bool
+    {
+        return $this->status === self::STATUS_VIEWED;
+    }
+
     public function isVoid(): bool
     {
-        return $this->status === 'void';
+        return $this->status === self::STATUS_VOID;
     }
 
-    /**
-     * Check if invoice is cancelled
-     */
     public function isCancelled(): bool
     {
-        return $this->status === 'cancelled';
+        return $this->status === self::STATUS_CANCELLED;
     }
 
-    /**
-     * Mark invoice as sent
-     */
+    public function isOutstanding(): bool
+    {
+        return !in_array($this->status, [self::STATUS_PAID, self::STATUS_VOID, self::STATUS_CANCELLED]) 
+            && $this->balance_due > 0;
+    }
+
+    // ============================================================
+    // STATUS METHODS
+    // ============================================================
     public function markAsSent(): self
     {
-        $this->status = 'sent';
+        $this->status = self::STATUS_SENT;
         $this->sent_at = now();
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Mark invoice as viewed
-     */
     public function markAsViewed(): self
     {
-        $this->status = 'viewed';
+        $this->status = self::STATUS_VIEWED;
         $this->viewed_at = now();
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Mark invoice as paid
-     */
     public function markAsPaid(): self
     {
-        $this->status = 'paid';
+        $this->status = self::STATUS_PAID;
         $this->paid_at = now();
         $this->amount_paid = $this->total;
         $this->balance_due = 0;
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Record partial payment
-     */
     public function recordPayment(float $amount): self
     {
-        $this->amount_paid += $amount;
+        $amountInBase = to_base_currency($amount);
+        $this->amount_paid += $amountInBase;
         $this->balance_due = $this->total - $this->amount_paid;
         
         if ($this->balance_due <= 0) {
-            $this->status = 'paid';
+            $this->status = self::STATUS_PAID;
             $this->paid_at = now();
         } else {
-            $this->status = 'partially_paid';
+            $this->status = self::STATUS_PARTIALLY_PAID;
         }
         
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Void the invoice
-     */
     public function void(?string $reason = null): self
     {
-        $this->status = 'void';
+        $this->status = self::STATUS_VOID;
         $this->voided_at = now();
         
         if ($reason) {
@@ -358,13 +391,9 @@ class Invoice extends Model
         }
         
         $this->save();
-        
         return $this;
     }
 
-    /**
-     * Update balances from payments
-     */
     public function updateBalances(): void
     {
         $totalPaid = $this->payments()
@@ -374,35 +403,54 @@ class Invoice extends Model
         $this->amount_paid = $totalPaid;
         $this->balance_due = $this->total - $totalPaid;
         
-        if ($this->balance_due <= 0 && $this->status !== 'paid') {
-            $this->status = 'paid';
+        if ($this->balance_due <= 0 && $this->status !== self::STATUS_PAID) {
+            $this->status = self::STATUS_PAID;
             $this->paid_at = now();
         } elseif ($this->balance_due > 0 && $this->amount_paid > 0) {
-            $this->status = 'partially_paid';
+            $this->status = self::STATUS_PARTIALLY_PAID;
         }
         
         $this->saveQuietly();
     }
 
-    /**
-     * Get public URL for invoice
-     */
-    public function getPublicUrlAttribute(): string
-    {
-        return route('public.invoice.show', ['token' => $this->public_token]);
-    }
+    // ============================================================
+    // URL HELPERS
+    // ============================================================
 
     /**
-     * Get payment URL for invoice
+     * Get the payment URL for public access
      */
     public function getPaymentUrlAttribute(): string
     {
-        return route('public.invoice.pay', ['token' => $this->public_token]);
+        return route('public.invoice.pay', $this->public_token);
     }
 
     /**
-     * Get raw amounts for calculations
+     * Get the public view URL
      */
+    public function getPublicUrlAttribute(): string
+    {
+        return route('public.invoice.show', $this->public_token);
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return self::STATUS_LABELS[$this->status] ?? $this->status;
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return self::STATUS_COLORS[$this->status] ?? 'secondary';
+    }
+
+    public function getStatusIconAttribute(): string
+    {
+        return self::STATUS_ICONS[$this->status] ?? 'bi-file-earmark';
+    }
+
+    // ============================================================
+    // RAW ACCESSORS
+    // ============================================================
     public function getRawSubtotal(): ?int
     {
         return $this->getRawOriginal('subtotal');
@@ -436,7 +484,6 @@ class Invoice extends Model
     // ============================================================
     // SCOPES
     // ============================================================
-
     public function scopeByTenant($query, $tenantId)
     {
         return $query->where('tenant_id', $tenantId);
@@ -449,32 +496,50 @@ class Invoice extends Model
 
     public function scopeDraft($query)
     {
-        return $query->where('status', 'draft');
+        return $query->where('status', self::STATUS_DRAFT);
     }
 
     public function scopeSent($query)
     {
-        return $query->where('status', 'sent');
+        return $query->where('status', self::STATUS_SENT);
+    }
+
+    public function scopeViewed($query)
+    {
+        return $query->where('status', self::STATUS_VIEWED);
     }
 
     public function scopePaid($query)
     {
-        return $query->where('status', 'paid');
+        return $query->where('status', self::STATUS_PAID);
     }
 
     public function scopeOverdue($query)
     {
-        return $query->where('status', 'overdue')
+        return $query->where('status', self::STATUS_OVERDUE)
             ->orWhere(function($q) {
                 $q->where('balance_due', '>', 0)
                   ->whereDate('due_date', '<', now());
             });
     }
 
+    public function scopeOutstanding($query)
+    {
+        return $query->where('status', '!=', self::STATUS_PAID)
+            ->where('status', '!=', self::STATUS_VOID)
+            ->where('status', '!=', self::STATUS_CANCELLED)
+            ->where('balance_due', '>', 0);
+    }
+
     public function scopeUnpaid($query)
     {
-        return $query->whereIn('status', ['draft', 'sent', 'viewed', 'partially_paid', 'overdue'])
-            ->where('balance_due', '>', 0);
+        return $query->whereIn('status', [
+            self::STATUS_DRAFT, 
+            self::STATUS_SENT, 
+            self::STATUS_VIEWED, 
+            self::STATUS_PARTIALLY_PAID, 
+            self::STATUS_OVERDUE
+        ])->where('balance_due', '>', 0);
     }
 
     public function scopeIssuedBetween($query, $startDate, $endDate)
@@ -487,5 +552,10 @@ class Invoice extends Model
         return $query->whereHas('order', function($q) use ($source) {
             $q->where('source', $source);
         });
+    }
+
+    public function scopeDueDateBetween($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('due_date', [$startDate, $endDate]);
     }
 }

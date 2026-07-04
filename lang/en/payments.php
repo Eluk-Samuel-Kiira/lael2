@@ -896,4 +896,264 @@ return [
     'select_employee' => 'Select Employee',
 
 
+    
+
+
+    
+
+
+
+    // ============================================================
+    // INVOICE INDEX & TABLE
+    // ============================================================
+    'invoices' => 'Invoices',
+    'invoice_table' => 'Invoice Table',
+    'invoice_index' => 'Invoice Index',
+    'invoice' => 'Invoice',
+    'invoice_number' => 'Invoice Number',
+    'customer' => 'Customer',
+    'issue_date' => 'Issue Date',
+    'due_date' => 'Due Date',
+    'amount' => 'Amount',
+    'status' => 'Status',
+    'actions' => 'Actions',
+    'order' => 'Order',
+    'order_reference' => 'Order Reference',
+    'order_status' => 'Order Status',
+    'location' => 'Location',
+    'department' => 'Department',
+    
+    // ============================================================
+    // INVOICE STATUS
+    // ============================================================
+    'balance_due' => 'Balance Due',
+    'overdue' => 'Overdue',
+    'draft' => 'Draft',
+    'sent' => 'Sent',
+    'viewed' => 'Viewed',
+    'partially_paid' => 'Partially Paid',
+    'paid' => 'Paid',
+    'void' => 'Void',
+    'cancelled' => 'Cancelled',
+    'partial' => 'Partial',
+    'unpaid' => 'Unpaid',
+    
+    // Status Labels
+    'status_draft' => 'Draft',
+    'status_sent' => 'Sent',
+    'status_viewed' => 'Viewed',
+    'status_partially_paid' => 'Partially Paid',
+    'status_paid' => 'Paid',
+    'status_overdue' => 'Overdue',
+    'status_void' => 'Void',
+    'status_cancelled' => 'Cancelled',
+    
+    // ============================================================
+    // INVOICE ACTIONS
+    // ============================================================
+    'view_invoice' => 'View Invoice',
+    'edit_invoice' => 'Edit Invoice',
+    'send_invoice' => 'Send Invoice',
+    'delete_invoice' => 'Delete Invoice',
+    'void_invoice' => 'Void Invoice',
+    'download_pdf' => 'Download PDF',
+    'record_payment' => 'Record Payment',
+    'confirm_payment' => 'Confirm Payment',
+    'pay_now' => 'Pay Now',
+    'close' => 'Close',
+    
+    // ============================================================
+    // INVOICE CREATE/EDIT FORM
+    // ============================================================
+    'create_invoice' => 'Create Invoice',
+    'edit_invoice_title' => 'Edit Invoice',
+    'invoice_details' => 'Invoice Details',
+    'select_order' => 'Select Order',
+    'select_customer' => 'Select Customer',
+    'payment_terms' => 'Payment Terms',
+    'immediate' => 'Immediate',
+    'end_of_month' => 'End of Month',
+    'custom' => 'Custom',
+    'payment_term_days' => 'Payment Term Days',
+    'terms_conditions' => 'Terms & Conditions',
+    'send_to' => 'Send To',
+    'email_subject' => 'Email Subject',
+    'email_message' => 'Email Message',
+    'void_reason' => 'Void Reason',
+    'bill_to' => 'Bill To',
+    
+    // ============================================================
+    // INVOICE MODALS
+    // ============================================================
+    // Send Modal
+    'send_invoice_to' => 'Send Invoice To',
+    'recipient_email' => 'Recipient Email',
+    'email_subject_label' => 'Email Subject',
+    'email_message_label' => 'Email Message',
+    'send_invoice_modal_title' => 'Send Invoice',
+    'sending_invoice' => 'Sending Invoice...',
+    'send_via' => 'Send Via',
+    'download_pdf_send_manually' => 'Download PDF (Send Manually)',
+    'customer_email' => 'Customer Email',
+    'enter_customer_email' => 'Enter Customer Email',
+    'no_email_on_file_please_add' => 'No email on file. Please add one.',
+    'download_note_will_mark_sent' => 'Download will mark invoice as sent.',
+    'confirm_send' => 'Confirm Send',
+    'processing' => 'Processing...',
+    'cancel' => 'Cancel',
+    'invoice_ready_for_download' => 'Invoice is ready for download.',
+    
+    // Record Payment Modal
+    'amount_received' => 'Amount Received',
+    'leave_full_amount_or_edit_for_partial' => 'Leave full amount or edit for partial payment',
+    'received_into' => 'Received Into',
+    'select_payment_method' => 'Select Payment Method',
+    'transaction_reference' => 'Transaction Reference',
+    'optional' => 'Optional',
+    'enter_transaction_id' => 'Enter Transaction ID',
+    'eg_cash_received_at_counter' => 'e.g. Cash received at counter',
+    'already_paid' => 'Already Paid',
+    
+    // Void Modal
+    'void_invoice_modal_title' => 'Void Invoice',
+    'void_reason_label' => 'Reason for Voiding',
+    'are_you_sure_void' => 'Are you sure you want to void this invoice?',
+    'void_warning' => 'This action cannot be undone. The invoice number will be retired.',
+    
+    // Delete Modal
+    'delete_invoice_modal_title' => 'Delete Invoice',
+    'are_you_sure_delete' => 'Are you sure you want to delete this invoice?',
+    'delete_warning' => 'This action cannot be undone.',
+    
+    // ============================================================
+    // INVOICE PDF
+    // ============================================================
+    'invoice_pdf_title' => 'Invoice',
+    'invoice_pdf_subtitle' => 'Tax Invoice',
+    'invoice_pdf_date' => 'Date',
+    'invoice_pdf_due_date' => 'Due Date',
+    'invoice_pdf_billing_address' => 'Billing Address',
+    'invoice_pdf_item' => 'Item',
+    'invoice_pdf_quantity' => 'Qty',
+    'invoice_pdf_unit_price' => 'Unit Price',
+    'invoice_pdf_discount' => 'Discount',
+    'invoice_pdf_tax' => 'Tax',
+    'invoice_pdf_total' => 'Total',
+    'invoice_pdf_subtotal' => 'Subtotal',
+    'invoice_pdf_grand_total' => 'Grand Total',
+    'invoice_pdf_amount_paid' => 'Amount Paid',
+    'invoice_pdf_balance_due' => 'Balance Due',
+    'invoice_pdf_thank_you' => 'Thank you for your business!',
+    'invoice_pdf_terms' => 'Terms & Conditions',
+    'invoice_pdf_notes' => 'Notes',
+    'invoice_pdf_payment_instructions' => 'Payment Instructions',
+    'invoice_pdf_payment_link' => 'Pay Online',
+    
+    // ============================================================
+    // INVOICE SEARCH
+    // ============================================================
+    'search_invoice' => 'Search Invoice',
+    'search_by_invoice_number' => 'Search by invoice number, customer name, email, or phone',
+    
+    // ============================================================
+    // INVOICE STATUS MESSAGES
+    // ============================================================
+    'invoice_created' => 'Invoice created successfully!',
+    'invoice_updated' => 'Invoice updated successfully!',
+    'invoice_deleted' => 'Invoice deleted successfully!',
+    'invoice_sent' => 'Invoice sent successfully!',
+    'invoice_voided' => 'Invoice voided successfully!',
+    'invoice_already_exists' => 'This order already has an invoice.',
+    'cannot_edit_sent_invoice' => 'Cannot edit a sent invoice.',
+    'cannot_delete_active_invoice' => 'Cannot delete an active invoice.',
+    'cannot_delete_paid_invoice' => 'Cannot delete a paid invoice.',
+    'cannot_void_paid_invoice' => 'Cannot void a paid invoice.',
+    'cannot_change_invoice_status' => 'Cannot change status of a paid or void invoice.',
+    'payment_method_not_found' => 'Payment method not found.',
+    'amount_exceeds_balance' => 'Amount exceeds balance due.',
+    'payment_recorded' => 'Payment recorded successfully.',
+    'payment_record_failed' => 'Failed to record payment.',
+    'invoice_cannot_be_sent' => 'This invoice cannot be sent.',
+    'invoice_sent_and_stock_reduced' => 'Invoice sent and stock reduced.',
+    'invoice_resent' => 'Invoice resent successfully.',
+    'invoice_send_failed' => 'Failed to send invoice.',
+    'first_send_reduces_stock_warning' => 'First send will reduce stock. Subsequent sends will not affect stock.',
+    'invoice_locked' => 'This invoice is locked and cannot be modified.',
+    'only_draft_invoices_deletable' => 'Only draft invoices can be deleted.',
+    'cannot_void_partially_paid_invoice' => 'Cannot void a partially paid invoice.',
+    'invoice_voided_and_restocked' => 'Invoice voided and stock restored.',
+    'use_pos_to_create_invoice' => 'Please use POS to create invoices.',
+    'customer_email_required' => 'Customer email is required to send invoice.',
+    'no_invoices_found' => 'No Invoices Found',
+    'no_invoices_message' => 'No invoices have been created yet. Create your first invoice by clicking the add button.',
+    'invoice_already_paid' => 'This invoice has already been paid.',
+    'invoice_voided' => 'This invoice has been voided.',
+    'manually_reconciled' => 'Manually reconciled',
+    'invoice_status_updated' => 'Invoice status updated successfully.',
+    
+    // ============================================================
+    // INVOICE EMAIL
+    // ============================================================
+    'invoice_subject' => 'Invoice #:number from :app_name',
+    'invoice_email_body' => 'Please find attached your invoice #:number for :total. Thank you for your business!',
+    'invoice_email_subject' => 'Your Invoice from :app_name',
+    'dear' => 'Dear',
+    'thank_you_business' => 'Thank you for your business!',
+    'this_is_auto_generated' => 'This is an automatically generated email. Please do not reply to this address.',
+    'if_you_have_questions' => 'If you have any questions, please contact us.',
+    'payment_instructions_email' => 'To pay this invoice, please contact our accounts department or use the payment methods provided at checkout.',
+    'bank_transfer_details' => 'Bank transfer details available upon request.',
+    'contact_for_payment' => 'Please contact us to arrange payment for this invoice.',
+    
+    // ============================================================
+    // INVOICE PAYMENT HISTORY
+    // ============================================================
+    'payment_history' => 'Payment History',
+    'payment_status' => 'Payment Status',
+    'transaction_id' => 'Transaction ID',
+    'payment_method' => 'Payment Method',
+    'payment_date' => 'Payment Date',
+    
+    // ============================================================
+    // INVOICE ITEMS
+    // ============================================================
+    'item' => 'Item',
+    'sku' => 'SKU',
+    'qty' => 'Qty',
+    'unit_price' => 'Unit Price',
+    'discount' => 'Discount',
+    'tax' => 'Tax',
+    'total' => 'Total',
+    'subtotal' => 'Subtotal',
+    'grand_total' => 'Grand Total',
+    'amount_paid' => 'Amount Paid',
+    'total_amount' => 'Total Amount',
+    'total_amount_due' => 'Total Amount Due',
+    
+    // ============================================================
+    // SYSTEM MESSAGES
+    // ============================================================
+    'not_authorized' => 'You are not authorized to perform this action.',
+
+    'pay_invoice' => 'Pay Invoice',
+    'secure_payment' => 'Secure payment powered by STARPOSS',
+    'secure_payment_link' => '🔒 Secure payment via our payment gateway',
+    'you_can_also_copy_link' => 'You can also copy and paste this link in your browser to pay later',
+    'max_amount' => 'Maximum amount',
+    'back_to_invoice' => 'Back to Invoice',
+    'payment_method' => 'Payment Method',
+    'pay_now' => 'Pay Now',
+    'processing' => 'Processing...',
+
+    'confirm_delete' => 'Confirm Delete',
+    'are_you_sure_delete' => 'Are you sure you want to delete this invoice?',
+    'delete_warning' => 'This action cannot be undone. This will permanently delete the invoice.',
+    
+    // Void Modal
+    'confirm_void' => 'Confirm Void',
+    'are_you_sure_void' => 'Are you sure you want to void this invoice?',
+    'void_warning' => 'This action cannot be undone. The invoice number will be retired.',
+    'enter_void_reason' => 'Enter reason for voiding (optional)',
+    'confirm_void' => 'Confirm Void',
+    
 ];

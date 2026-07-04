@@ -1245,5 +1245,6 @@ return [
     'generating_invoice' => 'Generating Invoice',
     'invoice_generated' => 'Invoice Generated',
     'invoice_number' => 'Invoice Number',
+    'invoice_generation_failed' => 'Invoice Generation Failed',
 
 ];
