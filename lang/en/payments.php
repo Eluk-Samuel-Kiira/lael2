@@ -1143,7 +1143,6 @@ return [
     'back_to_invoice' => 'Back to Invoice',
     'payment_method' => 'Payment Method',
     'pay_now' => 'Pay Now',
-    'processing' => 'Processing...',
 
     'confirm_delete' => 'Confirm Delete',
     'are_you_sure_delete' => 'Are you sure you want to delete this invoice?',
@@ -1155,5 +1154,6 @@ return [
     'void_warning' => 'This action cannot be undone. The invoice number will be retired.',
     'enter_void_reason' => 'Enter reason for voiding (optional)',
     'confirm_void' => 'Confirm Void',
-    
+    'processing' => 'Processing...',
+
 ];
