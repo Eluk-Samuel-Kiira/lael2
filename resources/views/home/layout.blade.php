@@ -1205,7 +1205,7 @@
                 <a href="/#testimonials" class="d-block py-2 px-1 nav-link-custom border-bottom border-white border-opacity-10">Reviews</a>
                 <a href="/#faq" class="d-block py-2 px-1 nav-link-custom border-bottom border-white border-opacity-10">FAQ</a>
                 <a href="/#contact" class="d-block py-2 px-1 nav-link-custom border-bottom border-white border-opacity-10">Contact</a>
-                <a href="/{{ route('login') }}" class="btn-hero-primary mt-3 w-100 justify-content-center">
+                <a href="{{ route('login') }}" class="btn-hero-primary mt-3 w-100 justify-content-center">
                     <i class="fas fa-play-circle"></i> Live Demo
                 </a>
             </div>
