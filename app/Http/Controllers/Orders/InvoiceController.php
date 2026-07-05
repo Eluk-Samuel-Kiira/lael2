@@ -194,7 +194,7 @@ class InvoiceController extends Controller
         }
 
         $validated = $request->validate([
-            'channel' => 'nullable|in:email,download,sms,whatsapp',
+            'channel' => 'nullable|in:email,print,sms,whatsapp',
             'email'   => 'nullable|email',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',

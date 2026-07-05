@@ -44,7 +44,7 @@
                                 </label>
                             </div>
                             <div class="form-check form-check-custom form-check-solid">
-                                <input class="form-check-input" type="radio" name="channel" value="download"
+                                <input class="form-check-input" type="radio" name="channel" value="print"
                                        id="channel-download{{ $invoice->id }}"
                                        onchange="toggleSendChannel({{ $invoice->id }})">
                                 <label class="form-check-label fw-semibold" for="channel-download{{ $invoice->id }}">
