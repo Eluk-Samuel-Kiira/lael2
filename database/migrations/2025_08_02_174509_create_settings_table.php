@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('settings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->nullable()->constrained()->onDelete('cascade');
-            $table->string('app_name')->default('LAEL');
+            $table->string('app_name')->default('STARDENA SUITE');
             $table->string('favicon')->nullable();
             $table->string('logo')->nullable();
             $table->string('app_email')->nullable();

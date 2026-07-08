@@ -34,7 +34,8 @@
             </button>
         </div>
 
-        <!-- Demo credentials (auto-fill when clicked) -->
+        <!-- Demo credentials - ONLY show on production/stardena domain -->
+        @if(config('app.env') === 'production' || request()->getHost() === 'starpos.stardena.org')
         <div class="text-center">
             <p class="text-gray-400 fw-semibold mb-2">{{ __('auth.for_demo_access') }}</p>
             <button type="button" 
@@ -45,6 +46,7 @@
             </button>
             <p class="text-muted fs-7 mt-2">{{ __('auth.tap_to_fill') }}</p>
         </div>
+        @endif
     </form>
 
     <script>
