@@ -53,7 +53,7 @@ class HomeController extends Controller
 
     public function send(Request $request)
     {
-        Log::info($request);
+        // Log::info($request);
         
         $validated = $request->validate([
             'name'     => 'required|string|max:100',

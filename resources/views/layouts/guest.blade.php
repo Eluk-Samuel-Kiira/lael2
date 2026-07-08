@@ -64,7 +64,7 @@
                         </a>
 
                         <img class="d-none d-lg-block mx-auto w-275px w-md-50 w-xl-500px mb-10 mb-lg-20" src="{{ asset('assets/media/misc/auth-screens.png') }}" alt="" />
-                        <h1 class="d-none d-lg-block text-white fs-2qx fw-bolder text-center mb-7">{{__('POINT OF SALE')}}</h1>
+                        <h1 class="d-none d-lg-block text-white fs-2qx fw-bolder text-center mb-7">{{__('auth._slogan')}}</h1>
                     </div>
                 </div>
             </div>

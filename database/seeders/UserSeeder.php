@@ -426,7 +426,7 @@ class UserSeeder extends Seeder
         $trialUser->assignRole('admin');
         
         // Create other users
-        User::factory()->count(5)->create([
+        User::factory()->count(2)->create([
             'tenant_id' => $tenantId,
         ]);
     }

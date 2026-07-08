@@ -245,29 +245,70 @@ class UserController extends Controller
             ]);
         }
 
-        // Check if user has protected role (super_admin or admin) - IMMUTABLE
-        if ($user->hasRole('super_admin') || $user->hasRole('admin')) {
+        // =============================================
+        // ROLE-BASED ACCESS CONTROL (RBAC)
+        // =============================================
+        
+        // Get the target user's current roles
+        $targetRoles = $user->roles->pluck('name')->toArray();
+        $isTargetSuperAdmin = in_array('super_admin', $targetRoles);
+        $isTargetAdmin = in_array('admin', $targetRoles);
+        
+        // Get authenticated user's roles
+        $authRoles = $authUser->roles->pluck('name')->toArray();
+        $isAuthSuperAdmin = in_array('super_admin', $authRoles);
+        $isAuthAdmin = in_array('admin', $authRoles);
+        
+        // RULE 1: ONLY super_admin can update super_admin users
+        if ($isTargetSuperAdmin && !$isAuthSuperAdmin) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.cannot_update_protected_role'),
             ]);
         }
-
-        // Check if trying to update to super_admin or admin role
+        
+        // RULE 2: ONLY super_admin OR admin can update admin users
+        if ($isTargetAdmin && !$isAuthSuperAdmin && !$isAuthAdmin) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.cannot_update_protected_role'),
+            ]);
+        }
+        
+        // RULE 3: Prevent updating to super_admin or admin role
+        // Only super_admin can assign super_admin role
+        // Only super_admin or admin can assign admin role
         if ($request->has('role_id')) {
-            $role = Role::find($request->role_id);
-            if ($role && in_array($role->name, ['super_admin', 'admin'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('auth.cannot_assign_protected_role'),
-                ]);
+            $newRole = Role::find($request->role_id);
+            
+            if ($newRole) {
+                // Cannot assign super_admin unless you ARE super_admin
+                if ($newRole->name === 'super_admin' && !$isAuthSuperAdmin) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('auth.cannot_assign_protected_role'),
+                    ]);
+                }
+                
+                // Cannot assign admin unless you ARE super_admin or admin
+                if ($newRole->name === 'admin' && !$isAuthSuperAdmin && !$isAuthAdmin) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('auth.cannot_assign_protected_role'),
+                    ]);
+                }
             }
         }
 
-        // Check if authenticated user is trying to update themselves (prevent self-lockout)
-        if ($authUser->id == $id && $request->has('role_id')) {
+        // RULE 4: Prevent self-lockout - users cannot change their own role
+        if ($authUser->id == $id) {
             // Allow other updates but prevent role change for self
-            // Or you can prevent all updates to self except certain fields
+            if ($request->has('role_id')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.cannot_change_own_role'),
+                ]);
+            }
         }
         
         // Get the validated data
@@ -451,13 +492,13 @@ class UserController extends Controller
         }
 
         // Check if employee has protected role (super_admin or admin) - IMMUTABLE
-        if ($employee->hasRole('super_admin') || $employee->hasRole('admin')) {
-            session()->flash('toast', [
-                'type' => 'error',
-                'message' => __('auth.cannot_update_protected_role'),
-            ]);
-            return redirect()->back();
-        }
+        // if ($employee->hasRole('super_admin') || $employee->hasRole('admin')) {
+        //     session()->flash('toast', [
+        //         'type' => 'error',
+        //         'message' => __('auth.cannot_update_protected_role'),
+        //     ]);
+        //     return redirect()->back();
+        // }
 
         // Ensure it belongs to the same tenant (unless super_admin)
         if (!$user->hasRole('super_admin')) {

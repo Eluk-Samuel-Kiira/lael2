@@ -28,7 +28,7 @@ class CategoryFactory extends Factory
             'description' => $this->faker->sentence(),
             'created_by' => User::where('role_id', '1' )->where('status', 'active')->get()->random()->id,
             'is_active' => $this->faker->boolean(90),
-            'tenant_id' => $this->faker->randomElement([1, 2, 3, 4]),
+            'tenant_id' => $this->faker->randomElement([1, 2]),
         ];
     }
 }

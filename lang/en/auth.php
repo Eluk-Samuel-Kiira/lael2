@@ -1127,10 +1127,12 @@ return [
     'good' => 'Good',
     'average' => 'Average',
     'poor' => 'Poor',
+    'cannot_change_own_role' => 'Cannot change own role',
     'error_updating_status' => 'Error Updating Status',
     'needs_improvement' => 'Needs Improvement',
     '_uoms' => 'UOM',
     '_exchange_rate' => 'Exchange Rate Against...',
     '_currency_table' => 'Currency Table',
     '_currency_index' => 'Currency Index',
+    '_slogan' => 'Unify Your Businesses In One.',
 ];

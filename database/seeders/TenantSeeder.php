@@ -50,17 +50,17 @@ class TenantSeeder extends Seeder
             ]);
         }
 
-        // Create other tenants using factory
-        Tenant::factory()
-            ->count(3)
-            ->create()
-            ->each(function ($tenant) {
-                // Skip creating configuration if it's ID 2 (already created above)
-                if ($tenant->id != 2 || $tenant->id != 1) {
-                    $tenant->configuration()->create(
-                        TenantConfiguration::factory()->make()->toArray()
-                    );
-                }
-            });
+        // // Create other tenants using factory
+        // Tenant::factory()
+        //     ->count(3)
+        //     ->create()
+        //     ->each(function ($tenant) {
+        //         // Skip creating configuration if it's ID 2 (already created above)
+        //         if ($tenant->id != 2 || $tenant->id != 1) {
+        //             $tenant->configuration()->create(
+        //                 TenantConfiguration::factory()->make()->toArray()
+        //             );
+        //         }
+        //     });
     }
 }
