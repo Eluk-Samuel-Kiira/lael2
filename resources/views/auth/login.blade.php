@@ -35,7 +35,7 @@
         </div>
 
         <!-- Demo credentials - ONLY show on production/stardena domain -->
-        @if(config('app.env') === 'production' || request()->getHost() === 'starpos.stardena.org')
+        @if(request()->getHost() === 'starpos.stardena.org')
         <div class="text-center">
             <p class="text-gray-400 fw-semibold mb-2">{{ __('auth.for_demo_access') }}</p>
             <button type="button" 
