@@ -85,7 +85,6 @@
                 {{-- Upload form --}}
                 <form id="importCatalogForm" enctype="multipart/form-data">
                     @csrf
-
                     <div class="mb-5">
                         <label class="form-label fw-semibold required">
                             {{ __('pagination.import_step3_label') }}
