@@ -44,7 +44,7 @@
                                         <img src="{{ productImage($product->image_url) }}" alt="" class="symbol-label">
                                     </a>
                                     <div class="ms-5">
-                                        <a href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</a>
+                                        <span href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</span>
                                     </div>
                                 </div>
                             </td>

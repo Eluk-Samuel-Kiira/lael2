@@ -33,14 +33,14 @@
                             <td>{{ $category->parentCategory->name ?? __('pagination._none')}}</td>
                             <td class="d-flex align-items-center">
                                 <div class="symbol symbol-circle symbol-50px overflow-hidden me-3">
-                                    <a href="#">
+                                    <span>
                                         <div class="symbol-label">
                                             <img src="{{ productCategoryImage($category->image_url) }}" alt="{{ $category->name }}" class="w-100" />
                                         </div>
-                                    </a>
+                                    </span>
                                 </div>
                                 <div class="d-flex flex-column">
-                                    <a href="#" class="text-gray-800 text-hover-primary mb-1">{{ $category->name }}</a>
+                                    <span class="text-gray-800 text-hover-primary mb-1">{{ $category->name }}</span>
                                     <!-- <span>{{ $category->name }}</span>  -->
                                 </div>
                             </td>

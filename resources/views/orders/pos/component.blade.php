@@ -10,35 +10,27 @@
                     @foreach ($products as $product)
                         @if ($product->variants->count() > 0)
                             @php
-                                $words = explode(' ', $product->name);
-                                $truncated = count($words) > 2 
-                                    ? implode(' ', array_slice($words, 0, 2)) . '...' 
-                                    : $product->name;
-                                
                                 // Get department IDs as comma-separated string
                                 $departmentIds = $product->departments->pluck('id')->implode(',');
                             @endphp
                             <li class="nav-item mb-3 me-0 product-item" 
                                 style="min-width: 180px;"
                                 data-department="{{ $departmentIds }}"> <!-- Added data attribute -->
-                                <a class="nav-link nav-link-border-solid btn btn-outline btn-flex btn-active-color-primary flex-column flex-stack pt-9 pb-7 page-bg {{ $first ? 'active' : '' }}" 
-                                data-bs-toggle="pill" 
-                                href="#kt_pos_{{ $product->id }}" 
-                                style="width: 100%; height: 180px">
-                                    <div class="nav-icon mb-3">
-                                        <img src="{{ productImage($product->image_url) }}" class="w-50px" alt="" />
-                                    </div>
-                                    <div>
-                                        <span class="text-gray-800 fw-bold fs-2 d-block" 
-                                            data-bs-toggle="tooltip" 
-                                            title="{{ $product->name }}">
-                                            {{ $truncated }}
-                                        </span>
-                                        <span class="text-gray-500 fw-semibold fs-7">
+                                <a class="nav-link nav-link-border-solid btn btn-outline btn-active-color-primary product-card page-bg {{ $first ? 'active' : '' }}" 
+                                    data-bs-toggle="pill" 
+                                    href="#kt_pos_{{ $product->id }}">
+                                        <div class="product-icon">
+                                            <img src="{{ productImage($product->image_url) }}" class="w-50px" alt="" />
+                                        </div>
+                                        <div class="product-name-wrap">
+                                            <span class="product-name" data-bs-toggle="tooltip" title="{{ $product->name }}">
+                                                {{ $product->name }}
+                                            </span>
+                                        </div>
+                                        <span class="product-options">
                                             {{ $product->variants->count() }} {{ __('pagination._options') }}
                                         </span>
-                                    </div>
-                                </a>
+                                    </a>
                             </li>
                             @php $first = false; @endphp
                         @endif
@@ -51,6 +43,61 @@
                     @endif
                 </ul>
                 <!--end::Nav-->
+                
+                <style>
+                    .product-item .product-card {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        width: 100%;
+                        height: 180px;
+                        padding: 14px 10px 10px;
+                        overflow: hidden;
+                        box-sizing: border-box;
+                    }
+
+                    /* Zone 1: icon — fixed size, never shrinks */
+                    .product-item .product-icon {
+                        flex: 0 0 auto;
+                        margin-bottom: 8px;
+                    }
+
+                    /* Zone 2: name — the ONLY flexible zone, allowed to clamp/shrink */
+                    .product-item .product-name-wrap {
+                        flex: 1 1 auto;
+                        min-height: 0;          /* critical: lets flex child shrink below content size */
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100%;
+                        overflow: hidden;
+                    }
+
+                    .product-item .product-name {
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: normal;
+                        word-break: break-word;
+                        text-align: center;
+                        line-height: 1.2;
+                        font-weight: 700;
+                        color: #3f4254;
+                        font-size: clamp(0.75rem, 0.9vw + 0.4rem, 0.95rem); /* smaller, fits 2 lines safely */
+                    }
+
+                    /* Zone 3: options — fixed, always rendered, never clipped */
+                    .product-item .product-options {
+                        flex: 0 0 auto;
+                        font-size: 0.75rem;
+                        font-weight: 600;
+                        color: #99a1b7;
+                        margin-top: 4px;
+                        white-space: nowrap;
+                    }
+                </style>
 
                 <!--begin::Tab Content-->
                 <div class="tab-content" id="variantTabContent">
