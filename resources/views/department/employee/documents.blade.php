@@ -155,13 +155,17 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex gap-2">
-                                                    <a href="{{ Storage::url($doc['path']) }}" target="_blank" class="btn btn-sm btn-icon btn-light btn-active-light-primary">
+                                                    <a href="{{ route('employee.documents.view', ['employeeId' => $employee->id, 'index' => $index]) }}"
+                                                    target="_blank"
+                                                    class="btn btn-sm btn-icon btn-light btn-active-light-primary">
                                                         <i class="bi bi-eye fs-4"></i>
                                                     </a>
-                                                    <a href="{{ Storage::url($doc['path']) }}" download class="btn btn-sm btn-icon btn-light btn-active-light-success">
+                                                    <a href="{{ route('employee.documents.download', ['employeeId' => $employee->id, 'index' => $index]) }}"
+                                                    class="btn btn-sm btn-icon btn-light btn-active-light-success">
                                                         <i class="bi bi-download fs-4"></i>
                                                     </a>
-                                                    <button type="button" onclick="deleteEmployeeDocument({{ $employee->id }}, {{ $index }})" class="btn btn-sm btn-icon btn-light btn-active-light-danger">
+                                                    <button type="button" onclick="deleteEmployeeDocument({{ $employee->id }}, {{ $index }})"
+                                                            class="btn btn-sm btn-icon btn-light btn-active-light-danger">
                                                         <i class="bi bi-trash fs-4"></i>
                                                     </button>
                                                 </div>

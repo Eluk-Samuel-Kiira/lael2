@@ -539,14 +539,39 @@ if (!function_exists('tenant_limits')) {
 
 if (!function_exists('tenant_currency')) {
     /**
-     * Get tenant currency code
+     * Get tenant currency code from tenant_configurations table
      * 
      * @param int|string|null $tenantId Tenant ID (null uses current tenant)
      * @return string
      */
     function tenant_currency($tenantId = null): string
     {
-        return tenant_setting($tenantId, 'plan_currency', 'USD');
+        // If no tenant ID provided, try to get from current tenant
+        if ($tenantId === null) {
+            // Check if we have a current tenant context
+            if (function_exists('tenancy') && tenancy()->initialized) {
+                $tenantId = tenancy()->tenant->id ?? null;
+            }
+            
+            // If still null, try to get from authenticated user
+            if ($tenantId === null && auth()->check()) {
+                $tenantId = auth()->user()->tenant_id ?? null;
+            }
+        }
+        
+        // If we have a tenant ID, fetch from database
+        if ($tenantId !== null) {
+            $config = DB::table('tenant_configurations')
+                ->where('tenant_id', $tenantId)
+                ->first();
+                
+            if ($config && !empty($config->currency_code)) {
+                return $config->currency_code;
+            }
+        }
+        
+        // Default fallback
+        return 'USD';
     }
 }
 

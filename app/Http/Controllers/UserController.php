@@ -179,7 +179,7 @@ class UserController extends Controller
                 Mail::to($user->email)->send(new NewUserMail(
                     $user->first_name . ' ' . $user->last_name,
                     $user->userRole->name ?? 'No Role Assigned',  
-                    $user->departmentName->name ?? 'Restaurant', 
+                    $user->userDepartment->name ?? 'Check with Admin', 
                     $user->email,
                     $randomPassword
                 ));
@@ -278,7 +278,7 @@ class UserController extends Controller
         // RULE 3: Prevent updating to super_admin or admin role
         // Only super_admin can assign super_admin role
         // Only super_admin or admin can assign admin role
-        if ($request->has('role_id')) {
+        if ($request->has('role_id') && !is_null($request->role_id)) {
             $newRole = Role::find($request->role_id);
             
             if ($newRole) {
@@ -303,7 +303,7 @@ class UserController extends Controller
         // RULE 4: Prevent self-lockout - users cannot change their own role
         if ($authUser->id == $id) {
             // Allow other updates but prevent role change for self
-            if ($request->has('role_id')) {
+            if ($request->has('role_id') && !is_null($request->role_id)) {
                 return response()->json([
                     'success' => false,
                     'message' => __('auth.cannot_change_own_role'),
@@ -314,16 +314,21 @@ class UserController extends Controller
         // Get the validated data
         $validatedData = $request->validated();
 
-        // Remove role_id from validated data if user is updating themselves
+        // Remove role_id from validated data if:
+        // 1. User is updating themselves, OR
+        // 2. User is admin and role_id is null
         if ($authUser->id == $id) {
+            unset($validatedData['role_id']);
+        } elseif ($isAuthAdmin && isset($validatedData['role_id']) && is_null($validatedData['role_id'])) {
+            // Admin wants to keep the existing role (remove role_id from update)
             unset($validatedData['role_id']);
         }
 
         // Update user details
         $user->update($validatedData);
 
-        // Synchronize roles (if role has changed)
-        if (isset($validatedData['role_id'])) {
+        // Synchronize roles (only if role_id is provided and not null)
+        if (isset($validatedData['role_id']) && !is_null($validatedData['role_id'])) {
             $role = Role::find($validatedData['role_id']);
             // Double-check role is not protected
             if ($role && !in_array($role->name, ['super_admin', 'admin'])) {

@@ -48,7 +48,7 @@
                             <input type="text" 
                                 name="currency" 
                                 class="form-control form-control-lg form-control-solid mb-3 mb-lg-0" 
-                                value="{{ tenant_currency() }}" 
+                                value="{{ tenant_currency(auth()->user()->tenant_id) }}" 
                                 readonly/>
                             <div id="currency"></div>
                         </div>

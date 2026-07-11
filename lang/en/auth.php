@@ -1138,4 +1138,5 @@ return [
     '_currency_table' => 'Currency Table',
     '_currency_index' => 'Currency Index',
     '_slogan' => 'Unify Your Businesses In One.',
+    
 ];

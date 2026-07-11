@@ -1,10 +1,11 @@
 
 <style>
     /* Ensure menu title and menu link have larger fonts */
-    .menu-item .menu-link .menu-title {
+    .menu-item .menu-link .menu-title-list {
         font-size: 1.1rem; /* Increased font size for the menu title */
         font-weight: bold; /* Bold the menu title */
         font-family: 'Verdana', sans-serif; /* Set a distinct font for menu title */
+        color: #0ec350 !important;
     }
 
     /* Increase font size of the menu link text */
@@ -16,7 +17,7 @@
     /* Increase the size of the icon */
     .menu-item .menu-icon i {
         font-size: 2rem; /* Increase the icon size */
-        color: #007bff; /* Optional: Change the icon color */
+        color: #a6ff00; /* Optional: Change the icon color */
     }
 
     /* Increase the arrow size */
@@ -42,7 +43,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth._dashboard')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('auth._dashboard')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -52,7 +55,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._dashboard') }}</span>
+                                <span class="menu-title-list">{{ __('auth._dashboard') }}</span>
                             </a>
                         </div>
                         @can('view financial dashboard')
@@ -61,7 +64,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._overview') }}</span>
+                                <span class="menu-title-list">{{ __('auth._overview') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -84,7 +87,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination._pos')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('pagination._pos')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -94,7 +99,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.pos_index') }}</span>
+                                <span class="menu-title-list">{{ __('pagination.pos_index') }}</span>
                             </a>
                         </div>
                     </div>
@@ -105,7 +110,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._orders') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._orders') }}</span>
                             </a>
                         </div>
                     </div>
@@ -116,7 +121,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('payments.invoices') }}</span>
+                                <span class="menu-title-list">{{ __('payments.invoices') }}</span>
                             </a>
                         </div>
                     </div>
@@ -137,7 +142,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination.product_catalog')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('pagination.product_catalog')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -148,7 +155,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._category') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._category') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -158,7 +165,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.product_category') }}</span>
+                                <span class="menu-title-list">{{ __('pagination.product_category') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -168,7 +175,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._products') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._products') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -193,7 +200,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('pagination.store_inventory')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('pagination.store_inventory')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -203,7 +212,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.inventory_items') }}</span>
+                                <span class="menu-title-list">{{ __('pagination.inventory_items') }}</span>
                             </a>
                         </div>
 
@@ -212,7 +221,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('passwords.stock_adjustments') }}</span>
+                                <span class="menu-title-list">{{ __('passwords.stock_adjustments') }}</span>
                             </a>
                         </div>
 
@@ -236,7 +245,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('passwords.suppliers_purchase')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('passwords.suppliers_purchase')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -247,7 +258,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('passwords.suppliers') }}</span>
+                                <span class="menu-title-list">{{ __('passwords.suppliers') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -258,7 +269,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('passwords.purchase_order') }}</span>
+                                <span class="menu-title-list">{{ __('passwords.purchase_order') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -271,7 +282,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('passwords.expense-category') }}</span>
+                                <span class="menu-title-list">{{ __('passwords.expense-category') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -282,7 +293,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('passwords.expense') }}</span>
+                                <span class="menu-title-list">{{ __('passwords.expense') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -307,7 +318,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth.human_resource')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('auth.human_resource')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -317,7 +330,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._users_index') }}</span>
+                                <span class="menu-title-list">{{ __('auth._users_index') }}</span>
                             </a>
                         </div>
 
@@ -329,7 +342,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.employee_index') }}</span>
+                                <span class="menu-title-list">{{ __('pagination.employee_index') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -340,7 +353,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth.advance') }}</span>
+                                <span class="menu-title-list">{{ __('auth.advance') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -351,7 +364,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.employee_pay_roll') }}</span>
+                                <span class="menu-title-list">{{ __('pagination.employee_pay_roll') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -362,7 +375,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('payments.leave') }}</span>
+                                <span class="menu-title-list">{{ __('payments.leave') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -374,7 +387,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._roles') }}</span>
+                                <span class="menu-title-list">{{ __('auth._roles') }}</span>
                             </a>
                         </div>
                         
@@ -383,7 +396,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._permissions') }}</span>
+                                <span class="menu-title-list">{{ __('auth._permissions') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -437,7 +450,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.payment_methods') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.payment_methods') }}</span>
                                     </a>
                                 </div>
                                 
@@ -447,7 +460,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.account_balances') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.account_balances') }}</span>
                                     </a>
                                 </div>
                                 
@@ -457,7 +470,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.transaction_ledger') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.transaction_ledger') }}</span>
                                     </a>
                                 </div>
                                 
@@ -467,7 +480,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.income_statement') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.income_statement') }}</span>
                                     </a>
                                 </div>
                                 
@@ -477,7 +490,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.cash_flow') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.cash_flow') }}</span>
                                     </a>
                                 </div>
                                 
@@ -487,7 +500,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.transaction_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.transaction_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -497,7 +510,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.expense_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.expense_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -507,7 +520,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.payment_method_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.payment_method_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -517,7 +530,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.daily_summary') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.daily_summary') }}</span>
                                     </a>
                                 </div>
                                 
@@ -527,7 +540,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.monthly_report') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.monthly_report') }}</span>
                                     </a>
                                 </div>
                                 
@@ -537,7 +550,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('accounting.reconciliation') }}</span>
+                                        <span class="menu-title-list">{{ __('accounting.reconciliation') }}</span>
                                     </a>
                                 </div>
                             </div>
@@ -553,7 +566,9 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{__('accounting.expense_reports')}}</span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{__('accounting.expense_reports')}}
+                                </span>
                                 <span class="menu-arrow"></span>
                             </span>
                             <div class="menu-sub menu-sub-accordion">
@@ -563,7 +578,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.expense_summary')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.expense_summary')}}</span>
                                     </a>
                                 </div>
                                 
@@ -573,7 +588,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.by_category')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.by_category')}}</span>
                                     </a>
                                 </div>
                                 
@@ -583,7 +598,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.by_vendor')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.by_vendor')}}</span>
                                     </a>
                                 </div>
                                 
@@ -593,7 +608,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.employee_expense')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.employee_expense')}}</span>
                                     </a>
                                 </div>
                                 
@@ -603,7 +618,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.by_payment_method')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.by_payment_method')}}</span>
                                     </a>
                                 </div>
                                 
@@ -613,7 +628,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.recurring_expense')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.recurring_expense')}}</span>
                                     </a>
                                 </div>
                                 
@@ -623,7 +638,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.budget_vs_actual')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.budget_vs_actual')}}</span>
                                     </a>
                                 </div>
                                 
@@ -633,7 +648,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.expense_trends')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.expense_trends')}}</span>
                                     </a>
                                 </div>
                                 
@@ -643,7 +658,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.expense_tax_report')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.expense_tax_report')}}</span>
                                     </a>
                                 </div>
                                 
@@ -653,7 +668,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.expense_audit')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.expense_audit')}}</span>
                                     </a>
                                 </div>
                             </div>
@@ -667,7 +682,9 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{__('auth.order_reports')}}</span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{__('auth.order_reports')}}
+                                </span>
                                 <span class="menu-arrow"></span>
                             </span>
                             <div class="menu-sub menu-sub-accordion">
@@ -677,7 +694,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.order_summary')}}</span>
+                                        <span class="menu-title-list">{{__('auth.order_summary')}}</span>
                                     </a>
                                 </div>
                                 
@@ -687,7 +704,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.sales_by_customer')}}</span>
+                                        <span class="menu-title-list">{{__('auth.sales_by_customer')}}</span>
                                     </a>
                                 </div>
                                 
@@ -697,7 +714,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.sales_by_product')}}</span>
+                                        <span class="menu-title-list">{{__('auth.sales_by_product')}}</span>
                                     </a>
                                 </div>
                                 
@@ -707,7 +724,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('accounting.payment_method_analysis')}}</span>
+                                        <span class="menu-title-list">{{__('accounting.payment_method_analysis')}}</span>
                                     </a>
                                 </div>
                                 
@@ -717,7 +734,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.employee_performance')}}</span>
+                                        <span class="menu-title-list">{{__('auth.employee_performance')}}</span>
                                     </a>
                                 </div>
                                 
@@ -727,7 +744,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.time_analysis')}}</span>
+                                        <span class="menu-title-list">{{__('auth.time_analysis')}}</span>
                                     </a>
                                 </div>
                                 
@@ -737,7 +754,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.returns_refunds')}}</span>
+                                        <span class="menu-title-list">{{__('auth.returns_refunds')}}</span>
                                     </a>
                                 </div>
                                 
@@ -747,7 +764,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.discount_analysis')}}</span>
+                                        <span class="menu-title-list">{{__('auth.discount_analysis')}}</span>
                                     </a>
                                 </div>
                                 
@@ -757,7 +774,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.sales_forecast')}}</span>
+                                        <span class="menu-title-list">{{__('auth.sales_forecast')}}</span>
                                     </a>
                                 </div>
                                 
@@ -767,7 +784,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{__('auth.inventory_sales')}}</span>
+                                        <span class="menu-title-list">{{__('auth.inventory_sales')}}</span>
                                     </a>
                                 </div>
                             </div>
@@ -781,7 +798,9 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth.product_reports') }}</span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{ __('auth.product_reports') }}
+                                </span>
                                 <span class="menu-arrow"></span>
                             </span>
                             <div class="menu-sub menu-sub-accordion">
@@ -791,7 +810,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.product_summary') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.product_summary') }}</span>
                                     </a>
                                 </div>
                                 
@@ -801,7 +820,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.product_performance') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.product_performance') }}</span>
                                     </a>
                                 </div>
                                 
@@ -811,7 +830,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.inventory_valuation') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.inventory_valuation') }}</span>
                                     </a>
                                 </div>
                                 
@@ -821,7 +840,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.stock_movement') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.stock_movement') }}</span>
                                     </a>
                                 </div>
                                 
@@ -831,7 +850,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.product_margin') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.product_margin') }}</span>
                                     </a>
                                 </div>
                                 
@@ -841,7 +860,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('auth.by_category') }}</span>
+                                        <span class="menu-title-list">{{ __('auth.by_category') }}</span>
                                     </a>
                                 </div>
                             </div>
@@ -855,7 +874,9 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.inventory_reports') }}</span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{ __('pagination.inventory_reports') }}
+                                </span>
                                 <span class="menu-arrow"></span>
                             </span>
                             <div class="menu-sub menu-sub-accordion">
@@ -865,7 +886,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.inventory_summary') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_summary') }}</span>
                                     </a>
                                 </div>
                                 
@@ -875,7 +896,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.inventory_turnover') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_turnover') }}</span>
                                     </a>
                                 </div>
                                 
@@ -885,7 +906,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.stock_aging') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.stock_aging') }}</span>
                                     </a>
                                 </div>
                                 
@@ -895,7 +916,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.low_stock_alerts') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.low_stock_alerts') }}</span>
                                     </a>
                                 </div>
                                 
@@ -905,7 +926,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.inventory_transactions') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_transactions') }}</span>
                                     </a>
                                 </div>
                                 
@@ -915,7 +936,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.inventory_adjustments') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_adjustments') }}</span>
                                     </a>
                                 </div>
                                 
@@ -925,7 +946,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.abc_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.abc_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -935,7 +956,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.movement_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.movement_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -945,7 +966,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.inventory_valuation') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_valuation') }}</span>
                                     </a>
                                 </div>
                                 
@@ -954,7 +975,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.dead_stock') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.dead_stock') }}</span>
                                     </a>
                                 </div>
                                 
@@ -963,7 +984,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.excess_stock') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.excess_stock') }}</span>
                                     </a>
                                 </div>
                             </div>
@@ -977,7 +998,9 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination.purchasing_reports') }}</span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{ __('pagination.purchasing_reports') }}
+                                </span>
                                 <span class="menu-arrow"></span>
                             </span>
                             <div class="menu-sub menu-sub-accordion">
@@ -987,7 +1010,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.purchase_order_summary') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.purchase_order_summary') }}</span>
                                     </a>
                                 </div>
                                 
@@ -997,7 +1020,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.supplier_performance') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.supplier_performance') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1007,7 +1030,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.purchase_order_status') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.purchase_order_status') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1017,7 +1040,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.purchase_receipts') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.purchase_receipts') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1027,7 +1050,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.supplier_spend_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.supplier_spend_analysis') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1037,7 +1060,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.purchase_order_items') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.purchase_order_items') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1047,7 +1070,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.payment_status') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.payment_status') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1057,7 +1080,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.received_inventory') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.received_inventory') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1067,7 +1090,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.supplier_risk_assessment') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.supplier_risk_assessment') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1077,7 +1100,7 @@
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title">{{ __('pagination.purchase_cost_analysis') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.purchase_cost_analysis') }}</span>
                                     </a>
                                 </div>
                             </div>
@@ -1104,7 +1127,9 @@
                                 <span class="path4"></span>
                             </i>
                         </span>
-                        <span class="menu-title" style="font-family:  {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">{{__('auth.app_setting')}}</span>
+                        <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                            {{__('auth.app_setting')}}
+                        </span>
                         <span class="menu-arrow"></span>
                     </span>
 
@@ -1116,7 +1141,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth.general_setting') }}</span>
+                                <span class="menu-title-list">{{ __('auth.general_setting') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1127,7 +1152,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._uom') }}</span>
+                                <span class="menu-title-list">{{ __('auth._uom') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1140,7 +1165,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._currency') }}</span>
+                                <span class="menu-title-list">{{ __('auth._currency') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1152,7 +1177,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('payments._payment_methods') }}</span>
+                                <span class="menu-title-list">{{ __('payments._payment_methods') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1163,7 +1188,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._locations') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._locations') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1174,7 +1199,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('auth._department') }}</span>
+                                <span class="menu-title-list">{{ __('auth._department') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1185,7 +1210,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._taxes') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._taxes') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1196,7 +1221,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('pagination._promotion') }}</span>
+                                <span class="menu-title-list">{{ __('pagination._promotion') }}</span>
                             </a>
                         </div>
                         @endcan
@@ -1207,7 +1232,7 @@
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title">{{ __('payments.tenants') }}</span>
+                                <span class="menu-title-list">{{ __('payments.tenants') }}</span>
                             </a>
                         </div>
                         @endrole
