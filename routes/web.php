@@ -179,8 +179,11 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             
         Route::post('/employee/documents/upload', [EmployeeDocumentController::class, 'upload'])->name('employee.documents.upload');
         Route::post('/employee/documents/delete', [EmployeeDocumentController::class, 'delete'])->name('employee.documents.delete');
-        Route::get('/employee/{id}/documents', [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
-        
+        Route::get('/employee/{employeeId}/documents', [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
+
+        // New: stream instead of relying on the public symlink
+        Route::get('/employee/{employeeId}/documents/{index}/view', [EmployeeDocumentController::class, 'view'])->name('employee.documents.view');
+        Route::get('/employee/{employeeId}/documents/{index}/download', [EmployeeDocumentController::class, 'download'])->name('employee.documents.download');
 
 
 

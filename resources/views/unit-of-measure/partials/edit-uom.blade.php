@@ -35,8 +35,8 @@
                             </div>
                         </div>
 
-                        <button type="reset" class="btn btn-light me-3" id="closeModalEditButton{{ $uom->id }}" data-bs-dismiss="modal">
-                        <button type="button" id="closeDeleteModal{{$uom->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
+                        <!-- <button type="reset" class="btn btn-light me-3" id="closeModalEditButton{{ $uom->id }}" data-bs-dismiss="modal"> -->
+                        <button type="button" id="closeModalEditButton{{$uom->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
                         <button onclick="editInstanceLoopUOM({{$uom->id }})" id="editUOMButton{{ $uom->id }}" type="button" class="btn btn-primary" id>
                             <span class="indicator-label">{{__('auth._update')}}</span>
                             <span class="indicator-progress">{{__('auth.please_wait') }}

@@ -129,12 +129,12 @@ class EmployeeController extends Controller
             }
 
             // Check if user has protected roles using Spatie Permission
-            if ($user->hasAnyRole(['super_admin', 'admin'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('auth.user_not_updatable'),
-                ]);
-            }
+            // if ($user->hasAnyRole(['super_admin', 'admin'])) {
+            //     return response()->json([
+            //         'success' => false,
+            //         'message' => __('auth.user_not_updatable'),
+            //     ]);
+            // }
 
             // Find the employee and ensure it belongs to tenant
             $employee = Employee::where('id', $id)
@@ -379,7 +379,7 @@ class EmployeeController extends Controller
                         'email' => $user->email,
                         'phone' => $user->telephone_number,
                         'job_title' => $user->job_title,
-                        // 'department_id' => $user->department_id,
+                        'department_id' => $user->department_id,
                         'hire_date' => $user->created_at ?? now(),
                         'is_active' => $user->status === 'active',
                     ];
