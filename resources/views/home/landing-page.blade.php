@@ -1,5 +1,16 @@
 @extends('home.layout')
 
+<!-- Redirect to login if not on allowed domains -->
+@php
+    $allowedDomains = ['starpos.stardena.org', '127.0.0.1', 'localhost'];
+@endphp
+
+@if(!in_array(request()->getHost(), $allowedDomains))
+    <script>
+        window.location.href = '/login';
+    </script>
+@endif
+
 <!-- ═══════════════════════════════════════
      HERO
 ═══════════════════════════════════════ -->
