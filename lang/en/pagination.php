@@ -655,7 +655,7 @@ return [
     'stock_level' => 'Stock Level',
     'reorder_point' => 'Reorder Point',
     'preferred_stock_level' => 'Preferred Stock Level (Low stock alert if below this qty)',
-    'batch_number' => 'Batch Number',
+    
     'expiry_date' => 'Expiry Date',
     'cost_price' => 'Cost Price',
     'selling_price' => 'Selling Price',
@@ -862,7 +862,7 @@ return [
     // Table Headers
     'sku' => 'SKU',
     'product' => 'Product',
-    'batch_number' => 'Batch Number',
+    
     'expiry_date' => 'Expiry Date',
     'days_to_expiry' => 'Days to Expiry',
     'quantity' => 'Quantity',
@@ -944,7 +944,7 @@ return [
     'over_6_months' => 'Over 6 Months',
     'sku' => 'SKU',
     'product' => 'Product',
-    'batch_number' => 'Batch Number',
+    
     'expiry_date' => 'Expiry Date',
     'days_to_expiry' => 'Days to Expiry',
     'quantity' => 'Quantity',
@@ -1247,4 +1247,13 @@ return [
     'invoice_number' => 'Invoice Number',
     'invoice_generation_failed' => 'Invoice Generation Failed',
 
+    'negotiated_discount'                    => 'Negotiated Discount',
+    'please_enter_valid_amount'              => 'Please enter valid amount',
+    'discount_amount'                        => 'Discount Amount',
+    'remove'                                  => 'Remove',
+    'negotiated_discount_help'                => 'Enter the amount agreed with the customer. It will reduce the amount owed and be recorded as a discount on this order.',
+    'discount_applied'                        => 'Discount applied',
+    'discount_applied_successfully'           => 'Discount applied successfully',
+    'discount_exceeds_total'                  => 'Discount cannot exceed the order total',
+    'remove_payments_to_change_discount'      => 'Remove all added payments to change the discount',
 ];

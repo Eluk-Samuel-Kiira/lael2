@@ -469,6 +469,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             
             Route::get('export', [PurchasingReportsController::class, 'export'])->name('export');
         });
+        Route::get('/api/suppliers/{id}/spend-details', [PurchasingReportsController::class, 'getSupplierSpendDetails'])
+            ->name('api.supplier.spend-details');
+
         
         Route::get('/api/purchase-orders/{id}/details', function ($id) {
             $tenantId = auth()->user()->tenant_id;
@@ -535,8 +538,6 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
                 'data' => $receipt
             ]);
         });
-
-        Route::get('/api/suppliers/{id}/spend-details', [PurchasingReportsController::class, 'getSupplierSpendDetails']);
         
 
 

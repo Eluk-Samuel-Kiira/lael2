@@ -85,4 +85,13 @@ class Currency extends Model
         
         return $formatted . ' ' . $this->symbol;
     }
+
+    public static function default()
+    {
+        $tenantId = auth()->check() ? auth()->user()->tenant_id : 1;
+        
+        return static::where('tenant_id', $tenantId)
+            ->where('is_base_currency', true)
+            ->first();
+    }
 }

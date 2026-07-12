@@ -101,14 +101,14 @@
                                                 <td class="text-end">{{ number_format($item->count) }}</td>
                                                 <td class="text-end">
                                                     <span class="fs-6 fw-bold text-gray-800">
-                                                        {{ currency_symbol() }}{{ number_format($item->total_amount, 2) }}
+                                                        {{ number_format($item->total_amount, 2) }} {{ currency_symbol() }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
                                                     @if($item->count > 0)
-                                                        {{ currency_symbol() }}{{ number_format($item->average_amount, 2) }}
+                                                        {{ number_format($item->average_amount, 2) }} {{ currency_symbol() }}
                                                     @else
-                                                        {{ currency_symbol() }}0.00
+                                                        0.00
                                                     @endif
                                                 </td>
                                                 <td>
@@ -128,12 +128,12 @@
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total') }}<tr>
                                                 <td class="text-end">{{ number_format($totalCount) }}</td>
-                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($totalAmount, 2) }}</td>
+                                                <td class="text-end">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</td>
                                                 <td class="text-end">
                                                     @if($totalCount > 0)
-                                                        {{ currency_symbol() }}{{ number_format($totalAmount / $totalCount, 2) }}
+                                                        {{ number_format($totalAmount / $totalCount, 2) }} {{ currency_symbol() }}
                                                     @else
-                                                        {{ currency_symbol() }}0.00
+                                                        0.00
                                                     @endif
                                                 </td>
                                                 <td>100%</td>
@@ -178,14 +178,14 @@
                                                 <td class="text-end">{{ number_format($item->count) }}</td>
                                                 <td class="text-end">
                                                     <span class="fs-6 fw-bold text-gray-800">
-                                                        {{ currency_symbol() }}{{ number_format($item->total_amount, 2) }}
+                                                        {{ number_format($item->total_amount, 2) }} {{ currency_symbol() }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
                                                     @if($item->count > 0)
-                                                        {{ currency_symbol() }}{{ number_format($item->average_amount, 2) }}
+                                                        {{ number_format($item->average_amount, 2) }} {{ currency_symbol() }}
                                                     @else
-                                                        {{ currency_symbol() }}0.00
+                                                        0.00
                                                     @endif
                                                 </td>
                                                 <td>
@@ -205,8 +205,8 @@
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total') }}</td>
                                                 <td class="text-end">{{ $volumeByCategory->sum('count') }}</td>
-                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($categoryTotalAmount, 2) }}</td>
-                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($volumeByCategory->avg('average_amount'), 2) }}</td>
+                                                <td class="text-end">{{ number_format($categoryTotalAmount, 2) }} {{ currency_symbol() }}</td>
+                                                <td class="text-end">{{ number_format($volumeByCategory->avg('average_amount'), 2) }} {{ currency_symbol() }}</td>
                                                 <td>100%</td>
                                             </tr>
                                         </tfoot>
@@ -246,7 +246,7 @@
                                         <td class="text-end">{{ number_format($trend->transaction_count) }}</td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-gray-800">
-                                                {{ currency_symbol() }}{{ number_format($trend->daily_total, 2) }}
+                                                {{ number_format($trend->daily_total, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td>
@@ -257,7 +257,7 @@
                                                 @endphp
                                                 <div class="d-flex align-items-center gap-2">
                                                     <span class="fs-7 fw-bold {{ $change >= 0 ? 'text-success' : 'text-danger' }}">
-                                                        {{ $change >= 0 ? '+' : '' }}{{ currency_symbol() }}{{ number_format(abs($change), 2) }}
+                                                        {{ $change >= 0 ? '+' : '' }}{{ number_format(abs($change), 2) }} {{ currency_symbol() }}
                                                     </span>
                                                     <span class="badge badge-light-{{ $change >= 0 ? 'success' : 'danger' }}">
                                                         {{ $change >= 0 ? '↑' : '↓' }} {{ number_format(abs($percentage), 1) }}%
@@ -269,9 +269,9 @@
                                         </td>
                                         <td class="text-end">
                                             @if($trend->transaction_count > 0)
-                                                {{ currency_symbol() }}{{ number_format($trend->daily_total / $trend->transaction_count, 2) }}
+                                                {{ number_format($trend->daily_total / $trend->transaction_count, 2) }} {{ currency_symbol() }}
                                             @else
-                                                {{ currency_symbol() }}0.00
+                                                0.00
                                             @endif
                                         </td>
                                     </tr>
@@ -324,12 +324,12 @@
                                         <td>{{ $transaction->transaction_category }}</td>
                                         <td class="text-end">
                                             <span class="fs-5 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                {{ currency_symbol() }}{{ number_format($transaction->amount, 2) }}
+                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 text-gray-700">
-                                                {{ currency_symbol() }}{{ number_format($transaction->balance_after, 2) }}
+                                                {{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                     </tr>

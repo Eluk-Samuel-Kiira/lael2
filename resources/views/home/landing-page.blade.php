@@ -1,6 +1,5 @@
 @extends('home.layout')
 
-<!-- Redirect to login if not on allowed domains -->
 @php
     $allowedDomains = ['starpos.stardena.org', '127.0.0.1', 'localhost'];
 @endphp

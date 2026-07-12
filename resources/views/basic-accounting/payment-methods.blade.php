@@ -85,7 +85,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($stats['total_balance'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($stats['total_balance'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.overall_balance') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -217,12 +217,12 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $method->current_balance >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ $method->currency->symbol ?? '$' }}{{ number_format($method->current_balance, 2) }}
+                                                {{ number_format($method->current_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-gray-700">
-                                                {{ $method->currency->symbol ?? '$' }}{{ number_format($method->available_balance, 2) }}
+                                                {{ number_format($method->available_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td>

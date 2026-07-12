@@ -153,7 +153,7 @@
                                     @php
                                         $totalAmount = $transactions->sum('amount');
                                     @endphp
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($totalAmount, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.total_value') }}</span>
                                 </div>
                             </div>
@@ -173,7 +173,7 @@
                                     @php
                                         $averageAmount = $transactions->count() > 0 ? $totalAmount / $transactions->count() : 0;
                                     @endphp
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($averageAmount, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($averageAmount, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.per_transaction') }}</span>
                                 </div>
                             </div>
@@ -263,12 +263,12 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                {{ $transaction->paymentMethod->currency->symbol ?? '$' }}{{ number_format($transaction->amount, 2) }}
+                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-7 text-gray-800 fw-bold">
-                                                {{ $transaction->paymentMethod->currency->symbol ?? '$' }}{{ number_format($transaction->balance_after, 2) }}
+                                                {{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td>
@@ -593,7 +593,7 @@
             document.getElementById('modalReceiptNumber').textContent = transaction.receipt_number || 'N/A';
             
             // Format amounts with proper currency
-            const currencySymbol = currency?.symbol || '$';
+            const currencySymbol = '{{ currency_symbol() }}';
             
             // Amount styling based on transaction type
             const isPositive = ['DEPOSIT', 'TRANSFER_IN', 'REFUND'].includes(transaction.transaction_type);
@@ -602,15 +602,15 @@
             
             document.getElementById('modalAmount').innerHTML = `
                 <span class="${amountClass}">
-                    ${amountSign}${currencySymbol}${parseFloat(transaction.amount).toFixed(2)}
+                    ${amountSign}${parseFloat(transaction.amount).toFixed(2)} ${currencySymbol}
                 </span>
             `;
             
             document.getElementById('modalBalanceBefore').textContent = 
-                `${currencySymbol}${parseFloat(transaction.balance_before).toFixed(2)}`;
+                `${parseFloat(transaction.balance_before).toFixed(2)} ${currencySymbol}`;
             
             document.getElementById('modalBalanceAfter').textContent = 
-                `${currencySymbol}${parseFloat(transaction.balance_after).toFixed(2)}`;
+                `${parseFloat(transaction.balance_after).toFixed(2)} ${currencySymbol}`;
             
             // Transaction info
             document.getElementById('modalPaymentMethod').textContent = 

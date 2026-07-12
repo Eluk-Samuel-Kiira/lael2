@@ -245,6 +245,49 @@
                     </div>
                 </div>
 
+                {{-- Negotiated / Bargain Discount --}}
+                <div class="card card-flush border border-warning border-dashed mb-7" id="pm-bargain-card">
+                    <div class="card-header min-h-50px px-6 pt-5 pb-0 border-0">
+                        <h4 class="card-title fw-bold text-gray-800">
+                            <i class="ki-duotone ki-tag fs-3 text-warning me-2"><span class="path1"></span><span class="path2"></span></i>
+                            {{ __('pagination.negotiated_discount') }}
+                            <span class="text-muted fw-normal fs-7 ms-2">({{ __('pagination.optional') }})</span>
+                        </h4>
+                    </div>
+                    <div class="card-body pt-4 px-6 pb-6">
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold mb-2">{{ __('pagination.discount_amount') }}</label>
+                            <div class="position-relative">
+                                <span class="pm-currency-prefix">{{ currency_symbol() }}</span>
+                                <input type="number"
+                                    class="pm-amount-display"
+                                    id="pm-bargain-input"
+                                    placeholder="0.00" step="0.01" min="0" autocomplete="off">
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-warning w-100 h-45px" id="pm-bargain-apply-btn">
+                            <i class="ki-duotone ki-check fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                            {{ __('pagination.apply') }}
+                        </button>
+
+                        <div class="d-flex align-items-center justify-content-between mt-4 d-none" id="pm-bargain-applied-row">
+                            <span class="badge badge-light-warning fs-7 fw-semibold">
+                                <i class="ki-duotone ki-check-circle fs-5 me-1"><span class="path1"></span><span class="path2"></span></i>
+                                <span id="pm-bargain-applied-text"></span>
+                            </span>
+                            <button type="button" class="btn btn-sm btn-light-danger" id="pm-bargain-remove-btn">
+                                <i class="ki-duotone ki-trash fs-5 me-1"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span></i>
+                                {{ __('pagination.remove') }}
+                            </button>
+                        </div>
+
+                        <div class="form-text mt-2" id="pm-bargain-help">
+                            {{ __('pagination.negotiated_discount_help') }}
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Add payment card --}}
                 <div class="card card-flush border border-primary border-dashed mb-7">
                     <div class="card-header min-h-50px px-6 pt-5 pb-0 border-0">

@@ -126,7 +126,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
                                     {{-- Second Line --}}
                                     <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
                                         {{-- Product Variant --}}
@@ -142,6 +141,22 @@
                                                             @if($variant->product)
                                                                 ({{ $variant->product->name }})
                                                             @endif
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        {{-- NEW: Batch Number Filter --}}
+                                        <div class="flex-grow-1">
+                                            <label class="form-label fw-semibold">{{ __('passwords.batch_number') }}</label>
+                                            <div class="input-group w-100">
+                                                <select class="form-select" name="batch_number" data-control="select2" data-placeholder="{{ __('passwords.select_batch') }}">
+                                                    <option value="">{{ __('passwords.all_batches') }}</option>
+                                                    @foreach($batchNumbers as $batch)
+                                                        <option value="{{ $batch }}" 
+                                                                {{ $batchNumber == $batch ? 'selected' : '' }}>
+                                                            {{ $batch }}
                                                         </option>
                                                     @endforeach
                                                 </select>
@@ -437,18 +452,18 @@
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="receivedInventoryTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">#</th>
-                                                <th>{{ __('passwords.po_number') }}</th>
-                                                <th>{{ __('passwords.product') }}</th>
-                                                <th>{{ __('passwords.supplier') }}</th>
-                                                <th>{{ __('passwords.quantity_received') }}</th>
-                                                <th>{{ __('passwords.unit_cost') }}</th>
-                                                <th>{{ __('passwords.total_cost') }}</th>
-                                                <th>{{ __('passwords.batch_number') }}</th>
-                                                <th>{{ __('passwords.expiry_date') }}</th>
-                                                <th>{{ __('passwords.received_by') }}</th>
-                                                <th>{{ __('passwords.received_date') }}</th>
-                                                <th class="text-end pe-4">{{ __('passwords.expiry_status') }}</th>
+                                                <th class="ps-4" style="width: 60px;">#</th>
+                                                <th style="width: 200px; min-width: 180px;">{{ __('passwords.po_number') }}</th>
+                                                <th style="width: 300px; min-width: 250px;">{{ __('passwords.product') }}</th>
+                                                <th style="width: 200px; min-width: 180px;">{{ __('passwords.supplier') }}</th>
+                                                <th style="width: 140px; min-width: 120px;" class="text-end">{{ __('passwords.quantity_received') }}</th>
+                                                <th style="width: 140px; min-width: 120px;" class="text-end">{{ __('passwords.unit_cost') }}</th>
+                                                <th style="width: 160px; min-width: 140px;" class="text-end">{{ __('passwords.total_cost') }}</th>
+                                                <th style="width: 200px; min-width: 160px;">{{ __('passwords.batch_number') }}</th>
+                                                <th style="width: 160px; min-width: 140px;">{{ __('passwords.expiry_date') }}</th>
+                                                <th style="width: 200px; min-width: 180px;">{{ __('passwords.received_by') }}</th>
+                                                <th style="width: 160px; min-width: 140px;">{{ __('passwords.received_date') }}</th>
+                                                <th class="text-end pe-4" style="width: 150px; min-width: 130px;">{{ __('passwords.expiry_status') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -458,7 +473,7 @@
                                                 $expiryDate = $item->expiry_date ? Carbon\Carbon::parse($item->expiry_date) : null;
                                                 $daysToExpiry = $expiryDate ? now()->diffInDays($expiryDate, false) : null;
                                                 
-                                                // Determine expiry status - use object properties
+                                                // Determine expiry status
                                                 if ($daysToExpiry !== null) {
                                                     if ($daysToExpiry <= 0) {
                                                         $expiryColor = 'danger';
@@ -475,24 +490,23 @@
                                                     }
                                                 }
                                                 
-                                                // Access product variant as object property
                                                 $variant = $item->productVariant;
                                                 $product = $variant ? $variant->product : null;
                                                 $supplier = $po ? $po->supplier : null;
                                             @endphp
-                                            <tr class="{{ $rowClass }}">
+                                            <tr>
                                                 <td class="ps-4">
                                                     <span class="fw-bold">{{ $loop->iteration }}</span>
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-40px me-3">
+                                                        <div class="symbol symbol-40px me-3 flex-shrink-0">
                                                             <div class="symbol-label bg-light-primary text-primary fw-bold">
                                                                 PO
                                                             </div>
                                                         </div>
-                                                        <div>
-                                                            <div class="fw-bold">{{ $po->po_number ?? 'N/A' }}</div>
+                                                        <div class="flex-grow-1">
+                                                            <div class="fw-bold text-nowrap">{{ $po->po_number ?? 'N/A' }}</div>
                                                             <small class="text-muted">
                                                                 {{ $item->created_at->format('M d, Y') }}
                                                             </small>
@@ -502,47 +516,54 @@
                                                 <td>
                                                     <div class="d-flex align-items-center">
                                                         @if($item->productVariant && $item->productVariant->product)
-                                                        <div class="symbol symbol-40px me-3">
+                                                        <div class="symbol symbol-40px me-3 flex-shrink-0">
                                                             <div class="symbol-label bg-light-info text-info fw-bold">
                                                                 {{ substr($item->productVariant->product->name, 0, 2) }}
                                                             </div>
                                                         </div>
                                                         @endif
-                                                        <div>
-                                                            <div class="fw-bold">{{ $item->productVariant->name ?? 'N/A' }}</div>
+                                                        <div class="flex-grow-1">
+                                                            <div class="fw-bold text-truncate" style="max-width: 200px;" title="{{ $item->productVariant->name ?? 'N/A' }}">
+                                                                {{ $item->productVariant->name ?? 'N/A' }}
+                                                            </div>
                                                             <small class="text-muted">
                                                                 {{ $item->productVariant->sku ?? 'N/A' }}
                                                                 @if($item->productVariant && $item->productVariant->product)
-                                                                    <br>{{ $item->productVariant->product->name }}
+                                                                    <br>
+                                                                    <span class="text-truncate d-block" style="max-width: 200px;" title="{{ $item->productVariant->product->name }}">
+                                                                        {{ $item->productVariant->product->name }}
+                                                                    </span>
                                                                 @endif
                                                             </small>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <div class="fw-bold">{{ $po && $po->supplier ? $po->supplier->name : 'N/A' }}</div>
-                                                    <small class="text-muted">
+                                                    <div class="fw-bold text-truncate" style="max-width: 180px;" title="{{ $po && $po->supplier ? $po->supplier->name : 'N/A' }}">
+                                                        {{ $po && $po->supplier ? $po->supplier->name : 'N/A' }}
+                                                    </div>
+                                                    <small class="text-muted text-truncate d-block" style="max-width: 180px;" title="{{ $po && $po->supplier && $po->supplier->contact_person ? $po->supplier->contact_person : 'N/A' }}">
                                                         {{ $po && $po->supplier && $po->supplier->contact_person ? $po->supplier->contact_person : 'N/A' }}
                                                     </small>
                                                 </td>
-                                                <td>
+                                                <td class="text-end">
                                                     <span class="fw-bold">{{ number_format($item->quantity_received) }}</span>
                                                     <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
                                                 </td>
-                                                <td>
+                                                <td class="text-end">
                                                     <span class="fw-bold text-primary">
                                                         {{ currency_symbol() }}{{ number_format($item->unit_cost, 2) }}
                                                     </span>
                                                     <div class="text-muted fs-8">{{ __('passwords.per_unit') }}</div>
                                                 </td>
-                                                <td>
+                                                <td class="text-end">
                                                     <span class="fw-bold text-success">
                                                         {{ currency_symbol() }}{{ number_format($item->total_cost, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
                                                     @if($item->batch_number)
-                                                        <span class="badge badge-light-info">
+                                                        <span class="badge badge-light-info d-inline-block text-truncate" style="max-width: 150px;" title="{{ $item->batch_number }}">
                                                             {{ $item->batch_number }}
                                                         </span>
                                                     @else
@@ -559,20 +580,22 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    @if($item->receivedBy)
-                                                        <div class="fw-bold">{{ $item->receivedBy->name ?? 'N/A' }}</div>
-                                                        <small class="text-muted">
-                                                            {{ $item->receivedBy->email ?? 'N/A' }}
+                                                    @if($item->receiver)
+                                                        <div class="fw-bold text-truncate" style="max-width: 150px;" title="{{ $item->receivedBy->name ?? 'N/A' }}">
+                                                            {{ $item->receiver->name ?? 'N/A' }}
+                                                        </div>
+                                                        <small class="text-muted text-truncate d-block" style="max-width: 150px;" title="{{ $item->receivedBy->email ?? 'N/A' }}">
+                                                            {{ $item->receiver->email ?? 'N/A' }}
                                                         </small>
                                                     @else
-                                                        <span class="text-muted">{{ __('pagination.n_a') }}</span>
+                                                        <span class="text-muted">{{ __('pagination._none') }}</span>
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <span class="text-muted">
+                                                    <span class="text-muted text-nowrap">
                                                         {{ $item->created_at->format('M d, Y') }}
                                                     </span>
-                                                    <div class="text-muted fs-8">
+                                                    <div class="text-muted fs-8 text-nowrap">
                                                         {{ $item->created_at->format('h:i A') }}
                                                     </div>
                                                 </td>
@@ -608,38 +631,38 @@
                     </div>
                 </div>
                 @else
-                    {{-- No Data Message --}}
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        @if($includeExpiring)
-                                        <i class="ki-duotone ki-clock fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_expiring_items') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('passwords.no_items_expiring_within_30_days') }}</p>
-                                        @else
-                                        <i class="ki-duotone ki-inbox fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_received_items') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('passwords.no_received_inventory_for_period') }}</p>
-                                        @endif
-                                        @if(request()->hasAny(['start_date', 'end_date', 'supplier_id', 'variant_id', 'include_expiring']))
-                                        <a href="{{ route('reports.purchasing.received-inventory') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('passwords.clear_filters_view_all') }}
-                                        </a>
-                                        @endif
-                                    </div>
+                {{-- No Data Message --}}
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="text-center py-10">
+                                    @if($includeExpiring)
+                                    <i class="ki-duotone ki-clock fs-4tx text-gray-400 mb-4">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_expiring_items') }}</h4>
+                                    <p class="text-muted fs-6">{{ __('passwords.no_items_expiring_within_30_days') }}</p>
+                                    @else
+                                    <i class="ki-duotone ki-inbox fs-4tx text-gray-400 mb-4">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_received_items') }}</h4>
+                                    <p class="text-muted fs-6">{{ __('passwords.no_received_inventory_for_period') }}</p>
+                                    @endif
+                                    @if(request()->hasAny(['start_date', 'end_date', 'supplier_id', 'variant_id', 'include_expiring']))
+                                    <a href="{{ route('reports.purchasing.received-inventory') }}" class="btn btn-light-primary">
+                                        <i class="ki-duotone ki-cross fs-2 me-2"></i>
+                                        {{ __('passwords.clear_filters_view_all') }}
+                                    </a>
+                                    @endif
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
                 @endif
             </div>
         </div>

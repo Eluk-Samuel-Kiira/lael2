@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str; 
 use App\Models\{ OrderItem, OrderPayment, InventoryLog, Customer, Inventory, OrderTax, InventoryAdjustments,
-                    PaymentMethod };
+                    PaymentMethod, Currency };
 
 
 class POSController extends Controller
@@ -527,6 +527,7 @@ class POSController extends Controller
             $order        = Order::findOrFail($request->order_id);
             $payments     = $request->payments ?? [];
             $isSingleShop = tenant_is_single_shop($tenantId);
+            $bargainDiscount = (float) $request->input('bargain_discount', 0);
 
             if (empty($payments)) {
                 return response()->json([
@@ -614,6 +615,27 @@ class POSController extends Controller
                 ]);
             }
 
+            // ── Apply negotiated/bargain discount (if any) ─────────────────
+            if ($bargainDiscount > 0) {
+                if ($bargainDiscount > $order->total) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('pagination.discount_exceeds_total'),
+                    ]);
+                }
+
+                $order->discount_total += $bargainDiscount;
+                $order->total          -= $bargainDiscount;
+                $order->save();
+                $order->refresh();
+
+                \Log::info('[POS] Bargain discount applied', [
+                    'order_id'         => $order->id,
+                    'bargain_discount' => $bargainDiscount,
+                    'new_total'        => $order->total,
+                ]);
+            }
+
             // ── Validate payment total against (possibly updated) order ────
             $totalPaid = array_sum(array_column($payments, 'amount'));
 
@@ -687,12 +709,10 @@ class POSController extends Controller
 
             // ── Record promotion/discount loss (after all splits processed) ─
             if ($order->discount_total > 0) {
-                $order->load('orderItems'); // ensure items are available for breakdown
-                $primaryMethod = PaymentMethod::findForTenant(
-                    $payments[0]['payment_method_id'], $tenantId
-                );
+                $order->load('orderItems');
+                $primaryMethod = PaymentMethod::findForTenant($payments[0]['payment_method_id'], $tenantId);
                 if ($primaryMethod) {
-                    $this->recordOrderPromotionLoss($order, $primaryMethod);
+                    $this->recordOrderPromotionLoss($order, $primaryMethod, $bargainDiscount);
                 }
             }
 
@@ -895,7 +915,7 @@ class POSController extends Controller
      * Record promotion/discount as a financial loss (revenue reduction).
      * Aggregates per-item promotion_data for a full breakdown in metadata.
      */
-    private function recordOrderPromotionLoss($order, $paymentMethod): void
+    private function recordOrderPromotionLoss($order, $paymentMethod, $bargainDiscount = 0): void
     {
         $totalDiscount = $order->discount_total ?? 0;
 
@@ -956,6 +976,8 @@ class POSController extends Controller
                     'transaction_nature' => 'PROMOTION_LOSS',
                     'processed_by_id'    => auth()->id(),
                     'processed_by_name'  => auth()->user()->name,
+                    'bargain_discount'      => $bargainDiscount,               // ← ADD
+                    'item_level_discount'   => $totalDiscount - $bargainDiscount,
                     'items_with_promotions' => $itemPromotions, // full per-item breakdown
                 ],
             ];

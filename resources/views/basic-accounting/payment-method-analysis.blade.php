@@ -60,7 +60,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($stats['total_balance'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($stats['total_balance'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.overall_balance') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -88,7 +88,7 @@
                                 </div>
                                 <div class="d-flex flex-stack">
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.total_amount') }}</span>
-                                    <span class="fs-6 fw-bold text-gray-700">${{ number_format($stats['total_transaction_amount'], 2) }}</span>
+                                    <span class="fs-6 fw-bold text-gray-700">{{ number_format($stats['total_transaction_amount'], 2) }} {{ currency_symbol() }}</span>
                                 </div>
                             </div>
                         </div>
@@ -178,7 +178,7 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $method->current_balance >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ $method->currency->symbol ?? '$' }}{{ number_format($method->current_balance, 2) }}
+                                                {{ number_format($method->current_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -186,25 +186,25 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-success">
-                                                ${{ number_format($stats['deposit_total'], 2) }}
+                                                {{ number_format($stats['deposit_total'], 2) }} {{ currency_symbol() }}
                                             </span>
                                             <span class="fs-8 text-gray-500 d-block">{{ number_format($stats['deposit_count']) }} {{ __('accounting.txns') }}</span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-danger">
-                                                ${{ number_format($stats['withdrawal_total'], 2) }}
+                                                {{ number_format($stats['withdrawal_total'], 2) }} {{ currency_symbol() }}
                                             </span>
                                             <span class="fs-8 text-gray-500 d-block">{{ number_format($stats['withdrawal_count']) }} {{ __('accounting.txns') }}</span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($netFlow, 2) }}
+                                                {{ number_format($netFlow, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             @if($stats['total_transactions'] > 0)
                                                 <span class="fs-6 text-gray-700">
-                                                    ${{ number_format($stats['total_amount'] / $stats['total_transactions'], 2) }}
+                                                    {{ number_format($stats['total_amount'] / $stats['total_transactions'], 2) }} {{ currency_symbol() }}
                                                 </span>
                                             @else
                                                 <span class="fs-7 text-gray-500">-</span>
@@ -252,7 +252,7 @@
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="text-gray-500 fs-7 me-auto">{{ __('accounting.balance') }}</span>
                                         <span class="fs-6 fw-bold {{ $method->current_balance >= 0 ? 'text-success' : 'text-danger' }}">
-                                            ${{ number_format($method->current_balance, 2) }}
+                                            {{ number_format($method->current_balance, 2) }} {{ currency_symbol() }}
                                         </span>
                                     </div>
                                     
@@ -266,14 +266,14 @@
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="text-gray-500 fs-7 me-auto">{{ __('accounting.deposits') }}</span>
                                         <span class="fs-6 fw-bold text-success">
-                                            ${{ number_format($method->transaction_stats['deposit_total'], 2) }}
+                                            {{ number_format($method->transaction_stats['deposit_total'], 2) }} {{ currency_symbol() }}
                                         </span>
                                     </div>
                                     
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="text-gray-500 fs-7 me-auto">{{ __('accounting.withdrawals') }}</span>
                                         <span class="fs-6 fw-bold text-danger">
-                                            ${{ number_format($method->transaction_stats['withdrawal_total'], 2) }}
+                                            {{ number_format($method->transaction_stats['withdrawal_total'], 2) }} {{ currency_symbol() }}
                                         </span>
                                     </div>
                                     
@@ -283,7 +283,7 @@
                                             $netFlow = $method->transaction_stats['deposit_total'] - $method->transaction_stats['withdrawal_total'];
                                         @endphp
                                         <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                            ${{ number_format($netFlow, 2) }}
+                                            {{ number_format($netFlow, 2) }} {{ currency_symbol() }}
                                         </span>
                                     </div>
                                 </div>

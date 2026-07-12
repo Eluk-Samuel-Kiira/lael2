@@ -1216,4 +1216,9 @@ return [
     'no_cost_data' => 'No Cost Data',
     'no_purchase_cost_data_available' => 'No purchase cost data available for the selected period',
 
+    'batch_number' => 'Batch Number',
+    'select_batch' => 'Select Batch',
+    'all_batches' => 'All Batches',
+    'search_batch_number' => 'Search Batch Number...',
+    'enter_batch_number_to_filter' => 'Enter batch number to filter results',
 ];

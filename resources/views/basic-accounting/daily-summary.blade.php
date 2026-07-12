@@ -122,7 +122,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ currency_symbol() }} {{ number_format($summary['total_amount'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($summary['total_amount'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.total_value') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -145,12 +145,12 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }} {{ number_format($summary['deposit_total'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ number_format($summary['deposit_total'], 2) }} {{ currency_symbol() }} </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_in') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.withdrawals') }}</span>
-                                    <span class="fs-6 fw-bold text-danger">${{ number_format($summary['withdrawal_total'], 2) }}</span>
+                                    <span class="fs-6 fw-bold text-danger">{{ number_format($summary['withdrawal_total'], 2) }} {{ currency_symbol() }} </span>
                                 </div>
                             </div>
                         </div>
@@ -167,7 +167,7 @@
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
                                     <span class="fs-2hx fw-bold {{ $summary['net_cash_flow'] >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        {{ currency_symbol() }} {{ number_format($summary['net_cash_flow'], 2) }}
+                                        {{ number_format($summary['net_cash_flow'], 2) }} {{ currency_symbol() }} 
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.net_movement') }}</span>
                                 </div>
@@ -216,11 +216,11 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $type === 'DEPOSIT' ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($data['total'], 2) }}
+                                                {{ number_format($data['total'], 2) }} {{ currency_symbol() }} 
                                             </span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 text-gray-700">${{ number_format($data['average'], 2) }}</span>
+                                            <span class="fs-6 text-gray-700">{{ number_format($data['average'], 2) }} {{ currency_symbol() }} </span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -283,7 +283,7 @@
                                             <span class="fs-6 text-gray-700">{{ number_format($data['count']) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">${{ number_format($data['total'], 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ number_format($data['total'], 2) }} {{ currency_symbol() }} </span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -347,14 +347,14 @@
                                             </div>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 text-gray-700">${{ number_format($change['starting_balance'], 2) }}</span>
+                                            <span class="fs-6 text-gray-700">{{ number_format($change['starting_balance'], 2) }} {{ currency_symbol() }} </span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">${{ number_format($change['ending_balance'], 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ number_format($change['ending_balance'], 2) }} {{ currency_symbol() }} </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $change['net_change'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($change['net_change'], 2) }}
+                                                {{ number_format($change['net_change'], 2) }} {{ currency_symbol() }} 
                                             </span>
                                         </td>
                                         <td>
@@ -406,7 +406,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($transactions as $transaction)
+                                    @forelse($transactions as $transaction)
                                     <tr>
                                         <td>
                                             <span class="fs-7 fw-bold text-gray-800">{{ $transaction->transaction_date->format('H:i') }}</span>
@@ -430,11 +430,11 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($transaction->amount, 2) }}
+                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-7 text-gray-700">${{ number_format($transaction->balance_after, 2) }}</span>
+                                            <span class="fs-7 text-gray-700">{{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td>
                                             <span class="badge badge-light-{{ $transaction->status === 'COMPLETED' ? 'success' : ($transaction->status === 'PENDING' ? 'warning' : 'danger') }}">
@@ -442,13 +442,39 @@
                                             </span>
                                         </td>
                                     </tr>
-                                    @endforeach
+                                    @empty
+                                    <tr>
+                                        <td colspan="8" class="text-center py-5">
+                                            <div class="text-center">
+                                                <i class="ki-duotone ki-inbox fs-4tx text-gray-400 mb-3">
+                                                    <span class="path1"></span>
+                                                    <span class="path2"></span>
+                                                </i>
+                                                <h5 class="text-gray-600 fw-semibold">{{ __('accounting.no_transactions_for_this_day') }}</h5>
+                                                <p class="text-muted fs-6">{{ __('accounting.try_selecting_a_different_date') }}</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination -->
+                        @if($transactions->count() > 0)
+                        <div class="card-footer">
+                            @include('partials.pagination', [
+                                'paginator' => $transactions,
+                                'pageName' => 'page',
+                                'perPageName' => 'per_page',
+                                'showPerPage' => true,
+                                'perPageOptions' => [10, 15, 25, 50, 100]
+                            ])
+                        </div>
+                        @endif
                     </div>
                 </div>
-                
+                                
             </div>
         </div>
     </div>
