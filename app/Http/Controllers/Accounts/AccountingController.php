@@ -636,27 +636,34 @@ class AccountingController extends Controller
         }
         
         $date = $request->get('date', now()->format('Y-m-d'));
+        $perPage = (int)$request->get('per_page', 15);
         
-        // Get transactions for the day
+        // Get transactions for the day with pagination
         $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereDate('transaction_date', $date)
             ->where('status', 'COMPLETED')
             ->with(['paymentMethod'])
             ->orderBy('transaction_date', 'desc')
+            ->paginate($perPage);
+        
+        // Get ALL transactions for summary calculations (unpaginated)
+        $allTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereDate('transaction_date', $date)
+            ->where('status', 'COMPLETED')
             ->get();
             
         // Summary
         $summary = [
-            'total_transactions' => $transactions->count(),
-            'total_amount' => $transactions->sum('amount'),
-            'deposit_total' => $transactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount'),
-            'withdrawal_total' => $transactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
-            'net_cash_flow' => $transactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount') 
-                              - $transactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
+            'total_transactions' => $allTransactions->count(),
+            'total_amount' => $allTransactions->sum('amount'),
+            'deposit_total' => $allTransactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount'),
+            'withdrawal_total' => $allTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
+            'net_cash_flow' => $allTransactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount') 
+                            - $allTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
         ];
         
-        // Transactions by type
-        $byType = $transactions->groupBy('transaction_type')
+        // Transactions by type (from all transactions)
+        $byType = $allTransactions->groupBy('transaction_type')
             ->map(function ($group, $type) {
                 return [
                     'count' => $group->count(),
@@ -665,8 +672,8 @@ class AccountingController extends Controller
                 ];
             });
             
-        // Transactions by category
-        $byCategory = $transactions->groupBy('transaction_category')
+        // Transactions by category (from all transactions)
+        $byCategory = $allTransactions->groupBy('transaction_category')
             ->map(function ($group, $category) {
                 return [
                     'count' => $group->count(),
@@ -674,9 +681,9 @@ class AccountingController extends Controller
                 ];
             });
             
-        // Balance changes
+        // Balance changes (from all transactions)
         $balanceChanges = [];
-        foreach ($transactions as $transaction) {
+        foreach ($allTransactions as $transaction) {
             if (!isset($balanceChanges[$transaction->payment_method_id])) {
                 $balanceChanges[$transaction->payment_method_id] = [
                     'method' => $transaction->paymentMethod,
@@ -689,7 +696,7 @@ class AccountingController extends Controller
         
         return view('basic-accounting.daily-summary', compact(
             'transactions', 'summary', 'byType', 'byCategory', 
-            'balanceChanges', 'date'
+            'balanceChanges', 'date', 'perPage'
         ));
     }
     

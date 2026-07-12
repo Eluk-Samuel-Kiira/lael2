@@ -186,6 +186,7 @@ function clearCart() {
     // Clear resume state — safety net if cashier abandons a resumed order
     window.resumedOrderId     = null;
     window.resumedOrderNumber = null;
+    bargainDiscount            = 0;
 }
 
 function calculateCartSummary() {
@@ -587,6 +588,7 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
     var CASH_TYPES     = ['cash'];
     var splitPayments  = [];
     var currentOrder   = null;
+    var bargainDiscount = 0;
 
     var g  = id  => document.getElementById(id);
     var qs = sel => document.querySelector(sel);
@@ -645,6 +647,64 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
         var calc = g('pm-cash-calc-'+type); if (calc) calc.classList.add('d-none');
         validateBtn(type); buildQuickAmounts(type); updateRemainingHint(type);
     }
+
+    function updateBargainUI() {
+        var input      = g('pm-bargain-input');
+        var applyBtn   = g('pm-bargain-apply-btn');
+        var removeBtn  = g('pm-bargain-remove-btn');
+        var appliedRow = g('pm-bargain-applied-row');
+        var appliedTxt = g('pm-bargain-applied-text');
+        var help       = g('pm-bargain-help');
+        var locked     = splitPayments.length > 0; // can't change discount once payments exist
+
+        if (input)    input.disabled    = locked || bargainDiscount > 0;
+        if (applyBtn) applyBtn.disabled = locked || bargainDiscount > 0;
+
+        if (bargainDiscount > 0) {
+            appliedRow.classList.remove('d-none');
+            appliedTxt.textContent = '{{ __("pagination.discount_applied") }}: ' + posFmt(bargainDiscount);
+            if (removeBtn) removeBtn.classList.toggle('d-none', locked);
+        } else {
+            appliedRow.classList.add('d-none');
+        }
+
+        if (help) {
+            help.textContent = locked
+                ? '{{ __("pagination.remove_payments_to_change_discount") }}'
+                : '{{ __("pagination.negotiated_discount_help") }}';
+        }
+    }
+
+    function applyBargainDiscount() {
+        var input = g('pm-bargain-input');
+        if (!input || !currentOrder) return;
+
+        var value = parseFloat(input.value);
+        if (!value || value <= 0) { toastr.warning('{{ __("pagination.please_enter_valid_amount") }}'); return; }
+
+        var payableBeforeDiscount = currentOrder.original_total ?? currentOrder.total;
+        if (value >= payableBeforeDiscount) { toastr.warning('{{ __("pagination.discount_exceeds_total") }}'); return; }
+
+        if (!currentOrder.original_total) currentOrder.original_total = currentOrder.total;
+
+        bargainDiscount    = parseFloat(value.toFixed(2));
+        currentOrder.total = parseFloat((currentOrder.original_total - bargainDiscount).toFixed(2));
+
+        g('pm-order-total').textContent = posFmt(currentOrder.total);
+        updateSummary();
+        updateBargainUI();
+        toastr.success('{{ __("pagination.discount_applied_successfully") }}');
+    }
+
+    function removeBargainDiscount() {
+        if (!currentOrder) return;
+        currentOrder.total = currentOrder.original_total ?? currentOrder.total;
+        bargainDiscount = 0;
+        var input = g('pm-bargain-input'); if (input) input.value = '';
+        g('pm-order-total').textContent = posFmt(currentOrder.total);
+        updateSummary();
+        updateBargainUI();
+    }
     function renderTable() {
         var tbody = g('pm-splits-body'); if (!tbody) return;
         if (!splitPayments.length) {
@@ -682,6 +742,7 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
         if (pb) pb.disabled = !(splitPayments.length>0 && remaining<=0.005);
         var activePane = qs('.tab-pane.active[data-payment-type]');
         if (activePane) { var t=activePane.dataset.paymentType; validateBtn(t); buildQuickAmounts(t); updateRemainingHint(t); }
+        updateBargainUI();
     }
     function addPayment(type) {
         var accountEl=g('pm-account-'+type),amountEl=g('pm-amount-'+type),refEl=g('pm-ref-'+type);
@@ -722,6 +783,10 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
         }
 
         currentOrder = cartData; window.currentOrder = cartData; splitPayments = [];
+
+        bargainDiscount = 0;
+        currentOrder.original_total = cartData.total; // baseline before any discount
+        var bargainInput = g('pm-bargain-input'); if (bargainInput) bargainInput.value = '';
 
         g('pm-order-total').textContent = posFmt(cartData.total);
         g('pm-paid-amount').textContent = posFmt(0);
@@ -806,6 +871,7 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
             total_change:   splitPayments.reduce((s,p) => s+p.change,   0),
             cart_updated:   isResumed,
             updated_cart:   cartSnapshot,
+            bargain_discount: bargainDiscount || 0,
             payments: splitPayments.map(p => ({
                 payment_method_id:     p.method_id,
                 amount:                p.amount,
@@ -837,6 +903,7 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
                 // ── Clear resume state now that payment is done ───
                 window.resumedOrderId     = null;
                 window.resumedOrderNumber = null;
+                bargainDiscount            = 0;
 
                 var payModalEl = g('paymentModal');
                 payModalEl.addEventListener('hidden.bs.modal', function onHidden() {
@@ -857,6 +924,8 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
     };
 
     document.addEventListener('click', function (e) {
+        if (e.target.closest('#pm-bargain-apply-btn'))  { applyBargainDiscount();  return; }
+        if (e.target.closest('#pm-bargain-remove-btn')) { removeBargainDiscount(); return; }
         var qb=e.target.closest('.pm-quick-btn');
         if (qb) { var inp=g('pm-amount-'+qb.dataset.paymentType); if (inp) { inp.value=qb.dataset.quickAmount; inp.dispatchEvent(new Event('input',{bubbles:true})); inp.focus(); } return; }
         var addBtn=e.target.closest('.pm-add-btn'); if (addBtn&&!addBtn.disabled) { addPayment(addBtn.dataset.paymentType); return; }

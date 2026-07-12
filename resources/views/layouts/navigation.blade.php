@@ -5,7 +5,7 @@
         font-size: 1.1rem; /* Increased font size for the menu title */
         font-weight: bold; /* Bold the menu title */
         font-family: 'Verdana', sans-serif; /* Set a distinct font for menu title */
-        color: #0ec350 !important;
+        color: #dde9e1 !important;
     }
 
     /* Increase font size of the menu link text */

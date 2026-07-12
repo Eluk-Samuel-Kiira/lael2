@@ -68,7 +68,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">${{ number_format($summary['total_expenses'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ number_format($summary['total_expenses'], 2) }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.total_spent') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -89,7 +89,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">${{ number_format($summary['average_expense'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($summary['average_expense'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.per_transaction') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -112,7 +112,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">${{ number_format($summary['largest_expense'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ number_format($summary['largest_expense'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.single_expense') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -168,13 +168,13 @@
                                             <span class="fs-6 text-gray-700">{{ number_format($category->count) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-danger">${{ number_format($category->total_amount, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-danger">{{ number_format($category->total_amount, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 text-gray-700">${{ number_format($category->average_amount, 2) }}</span>
+                                            <span class="fs-6 text-gray-700">{{ number_format($category->average_amount, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">${{ number_format($category->max_amount, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ number_format($category->max_amount, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -206,9 +206,9 @@
                                     <tr class="fw-bold text-gray-700">
                                         <td>{{ __('accounting.total') }}</td>
                                         <td class="text-end">{{ number_format($expensesByCategory->sum('count')) }}</td>
-                                        <td class="text-end">${{ number_format($expensesByCategory->sum('total_amount'), 2) }}</td>
-                                        <td class="text-end">${{ number_format($expensesByCategory->avg('average_amount'), 2) }}</td>
-                                        <td class="text-end">${{ number_format($expensesByCategory->max('max_amount'), 2) }}</td>
+                                        <td class="text-end">{{ number_format($expensesByCategory->sum('total_amount'), 2) }} {{ currency_symbol() }}</td>
+                                        <td class="text-end">{{ number_format($expensesByCategory->avg('average_amount'), 2) }} {{ currency_symbol() }}</td>
+                                        <td class="text-end">{{ number_format($expensesByCategory->max('max_amount'), 2) }} {{ currency_symbol() }}</td>
                                         <td>100%</td>
                                         <td></td>
                                     </tr>
@@ -262,10 +262,10 @@
                                             <span class="badge badge-light-danger">{{ $expense->transaction_category }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-5 fw-bold text-danger">${{ number_format($expense->amount, 2) }}</span>
+                                            <span class="fs-5 fw-bold text-danger">{{ number_format($expense->amount, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 text-gray-700">${{ number_format($expense->balance_after, 2) }}</span>
+                                            <span class="fs-6 text-gray-700">{{ number_format($expense->balance_after, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td>
                                             <span class="badge badge-light-{{ $expense->status === 'COMPLETED' ? 'success' : ($expense->status === 'PENDING' ? 'warning' : 'danger') }}">

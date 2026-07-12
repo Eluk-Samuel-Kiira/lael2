@@ -420,12 +420,12 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-50px me-3">
+                                                        <div class="symbol symbol-50px me-5 flex-shrink-0"> {{-- Changed me-3 to me-5 --}}
                                                             <div class="symbol-label bg-light-{{ $classColor }} text-{{ $classColor }} fw-bold">
                                                                 {{ strtoupper(substr($supplier->name, 0, 2)) }}
                                                             </div>
                                                         </div>
-                                                        <div>
+                                                        <div class="ms-3"> {{-- Added left margin to text container --}}
                                                             <div class="fw-bold">{{ $supplier->name }}</div>
                                                             <small class="text-muted">{{ $supplier->contact_person ?? __('pagination.no_contact') }}</small>
                                                         </div>

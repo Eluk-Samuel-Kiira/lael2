@@ -760,62 +760,88 @@ class PurchasingReportsController extends Controller
 
     public function getSupplierSpendDetails(Request $request, $supplierId)
     {
-        $tenantId = $this->getTenantId();
-        $period = $request->get('period');
-        $periodType = $request->get('period_type', 'monthly');
-        
-        // Get supplier details
-        $supplier = Supplier::where('tenant_id', $tenantId)
-            ->where('id', $supplierId)
-            ->first();
-        
-        if (!$supplier) {
+        try {
+            $tenantId = $this->getTenantId();
+            $periodType = $request->get('period_type', 'monthly');
+            $startDate = $request->get('start_date', now()->subDays(365)->format('Y-m-d'));
+            $endDate = $request->get('end_date', now()->format('Y-m-d'));
+            
+            // Get supplier details
+            $supplier = Supplier::where('tenant_id', $tenantId)
+                ->where('id', $supplierId)
+                ->first();
+            
+            if (!$supplier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Supplier not found'
+                ], 404);
+            }
+            
+            // Get purchase orders for this supplier within date range
+            $query = PurchaseOrder::where('tenant_id', $tenantId)
+                ->where('supplier_id', $supplierId)
+                ->where('status', 'received')
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->with(['location', 'items.productVariant']);
+            
+            $purchaseOrders = $query->orderBy('created_at', 'desc')->get();
+            
+            // Calculate summary statistics
+            $totalSpent = $purchaseOrders->sum('total');
+            $orderCount = $purchaseOrders->count();
+            $avgOrderValue = $orderCount > 0 ? $totalSpent / $orderCount : 0;
+            $minOrderValue = $purchaseOrders->min('total') ?? 0;
+            $maxOrderValue = $purchaseOrders->max('total') ?? 0;
+            
+            // Format purchase orders for display
+            $formattedOrders = $purchaseOrders->map(function($order) {
+                return [
+                    'id' => $order->id,
+                    'po_number' => $order->po_number,
+                    'created_at' => $order->created_at->format('Y-m-d H:i:s'),
+                    'status' => $order->status,
+                    'total' => $order->total,
+                    'location' => $order->location ? [
+                        'id' => $order->location->id,
+                        'name' => $order->location->name,
+                    ] : null,
+                    'notes' => $order->notes,
+                    'items_count' => $order->items->count(),
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'supplier' => [
+                        'id' => $supplier->id,
+                        'name' => $supplier->name,
+                        'contact_person' => $supplier->contact_person,
+                        'email' => $supplier->email,
+                        'phone' => $supplier->phone,
+                        'address' => $supplier->address,
+                    ],
+                    'purchase_orders' => $formattedOrders,
+                    'total_spent' => $totalSpent,
+                    'order_count' => $orderCount,
+                    'avg_order_value' => $avgOrderValue,
+                    'min_order_value' => $minOrderValue,
+                    'max_order_value' => $maxOrderValue,
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error fetching supplier spend details: ' . $e->getMessage(), [
+                'supplier_id' => $supplierId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Supplier not found'
-            ], 404);
+                'message' => 'Error loading supplier details: ' . $e->getMessage()
+            ], 500);
         }
-        
-        // Build query based on period type
-        $query = PurchaseOrder::where('tenant_id', $tenantId)
-            ->where('supplier_id', $supplierId)
-            ->with('location');
-        
-        // Apply period filter
-        if ($periodType === 'monthly') {
-            $query->whereYear('created_at', substr($period, 0, 4))
-                ->whereMonth('created_at', substr($period, 5));
-        } elseif ($periodType === 'quarterly') {
-            $year = substr($period, 0, 4);
-            $quarter = substr($period, -1);
-            $monthStart = ($quarter - 1) * 3 + 1;
-            $monthEnd = $quarter * 3;
-            
-            $query->whereYear('created_at', $year)
-                ->whereBetween(DB::raw('MONTH(created_at)'), [$monthStart, $monthEnd]);
-        } elseif ($periodType === 'yearly') {
-            $query->whereYear('created_at', $period);
-        }
-        
-        $purchaseOrders = $query->get();
-        
-        // Calculate summary
-        $summary = [
-            'order_count' => $purchaseOrders->count(),
-            'total_spent' => $purchaseOrders->sum('total'),
-            'avg_order_value' => $purchaseOrders->avg('total'),
-            'min_order_value' => $purchaseOrders->min('total'),
-            'max_order_value' => $purchaseOrders->max('total'),
-        ];
-        
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'supplier' => $supplier,
-                'purchase_orders' => $purchaseOrders,
-                ...$summary
-            ]
-        ]);
     }
 
     /**
@@ -952,6 +978,7 @@ class PurchasingReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $supplierId = $request->get('supplier_id');
         $productVariantId = $request->get('variant_id');
+        $batchNumber = $request->get('batch_number'); // NEW: Batch number filter
         $includeExpiring = $request->get('include_expiring', false);
         $perPage = (int)$request->get('per_page', 15);
         
@@ -973,6 +1000,11 @@ class PurchasingReportsController extends Controller
         
         if ($productVariantId) {
             $query->where('product_variant_id', $productVariantId);
+        }
+        
+        // NEW: Filter by batch number
+        if ($batchNumber) {
+            $query->where('batch_number', 'LIKE', '%' . $batchNumber . '%');
         }
         
         if ($includeExpiring) {
@@ -1018,6 +1050,15 @@ class PurchasingReportsController extends Controller
         $sortedItems = $allItems->sortByDesc('created_at')->values();
         $receivedItems = $this->paginateCollection($sortedItems, $perPage, 'page');
         
+        // NEW: Get unique batch numbers for the filter dropdown
+        $batchNumbers = ReceivedProductVariant::where('tenant_id', $tenantId)
+            ->whereNotNull('batch_number')
+            ->where('batch_number', '!=', '')
+            ->select('batch_number')
+            ->distinct()
+            ->orderBy('batch_number')
+            ->pluck('batch_number');
+        
         $suppliers = Supplier::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
@@ -1035,10 +1076,12 @@ class PurchasingReportsController extends Controller
             'batchAnalysis',
             'suppliers',
             'variants',
+            'batchNumbers', // NEW: Pass batch numbers to view
             'startDate',
             'endDate',
             'supplierId',
             'productVariantId',
+            'batchNumber', // NEW: Pass selected batch number
             'includeExpiring',
             'perPage'
         ));

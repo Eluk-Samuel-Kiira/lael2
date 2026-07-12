@@ -85,7 +85,7 @@
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
                                     <span class="fs-2hx fw-bold {{ $summary['total_discrepancy'] == 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        ${{ number_format($summary['total_discrepancy'], 2) }}
+                                        {{ number_format($summary['total_discrepancy'], 2) }} {{ currency_symbol() }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.overall_difference') }}</span>
                                 </div>
@@ -124,7 +124,7 @@
                                     @else
                                     <div class="d-flex flex-column me-7 mb-5">
                                         <span class="fs-4 fw-bold text-danger">{{ $method->name }}</span>
-                                        <span class="fs-6 fw-semibold text-gray-500">${{ number_format($method->reconciliation_data['discrepancy'], 2) }}</span>
+                                        <span class="fs-6 fw-semibold text-gray-500">{{ number_format($method->reconciliation_data['discrepancy'], 2) }} {{ currency_symbol() }}</span>
                                         <div class="d-flex align-items-center mt-2">
                                             <div class="progress h-6px w-100 me-3">
                                                 <div class="progress-bar bg-danger" role="progressbar" style="width: 100%"></div>
@@ -186,19 +186,19 @@
                                             </div>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">${{ number_format($data['current_balance'], 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ number_format($data['current_balance'], 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 text-gray-700">${{ number_format($data['expected_balance'], 2) }}</span>
+                                            <span class="fs-6 text-gray-700">{{ number_format($data['expected_balance'], 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $data['net_change'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($data['net_change'], 2) }}
+                                                {{ number_format($data['net_change'], 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $data['discrepancy'] == 0 ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($data['discrepancy'], 2) }}
+                                                {{ number_format($data['discrepancy'], 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -276,7 +276,7 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                ${{ number_format($transaction->amount, 2) }}
+                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td>

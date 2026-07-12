@@ -71,7 +71,7 @@
                             </div>
                             <div class="card-body d-flex flex-column justify-content-between">
                                 <div class="d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ number_format($revenue, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">
                                         {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($displayStartDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($displayEndDate)->format('M d, Y') }}
                                     </span>
@@ -83,7 +83,7 @@
                                         <div class="d-flex align-items-center mb-2">
                                             <span class="bullet bullet-vertical bg-success me-3"></span>
                                             <span class="text-gray-800 fw-semibold fs-7">{{ $category->transaction_category }}</span>
-                                            <span class="text-gray-500 fs-7 ms-auto">{{ currency_symbol() }}{{ number_format($category->total, 2) }}</span>
+                                            <span class="text-gray-500 fs-7 ms-auto">{{ number_format($category->total, 2) }} {{ currency_symbol() }}</span>
                                         </div>
                                         @endforeach
                                     </div>
@@ -102,7 +102,7 @@
                             </div>
                             <div class="card-body d-flex flex-column justify-content-between">
                                 <div class="d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ number_format($expenses, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">
                                         {{ __('accounting.period') }}: {{ \Carbon\Carbon::parse($displayStartDate)->format('M d, Y') }} - {{ \Carbon\Carbon::parse($displayEndDate)->format('M d, Y') }}
                                     </span>
@@ -114,7 +114,7 @@
                                         <div class="d-flex align-items-center mb-2">
                                             <span class="bullet bullet-vertical bg-danger me-3"></span>
                                             <span class="text-gray-800 fw-semibold fs-7">{{ $category->transaction_category }}</span>
-                                            <span class="text-gray-500 fs-7 ms-auto">{{ currency_symbol() }}{{ number_format($category->total, 2) }}</span>
+                                            <span class="text-gray-500 fs-7 ms-auto">{{ number_format($category->total, 2) }} {{ currency_symbol() }}</span>
                                         </div>
                                         @endforeach
                                     </div>
@@ -134,19 +134,19 @@
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-7">
                                     <span class="fs-2hx fw-bold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        {{ currency_symbol() }}{{ number_format(abs($netIncome), 2) }}
+                                        {{ number_format(abs($netIncome), 2) }} {{ currency_symbol() }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.profit_loss') }}</span>
                                 </div>
                                 <div class="d-flex flex-column">
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.calculation') }}:</span>
                                     <div class="d-flex align-items-center justify-content-center mt-2">
-                                        <span class="text-success fs-5 fw-bold">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
+                                        <span class="text-success fs-5 fw-bold">{{ number_format($revenue, 2) }} {{ currency_symbol() }}</span>
                                         <span class="mx-2 fs-4">-</span>
-                                        <span class="text-danger fs-5 fw-bold">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
+                                        <span class="text-danger fs-5 fw-bold">{{ number_format($expenses, 2) }} {{ currency_symbol() }}</span>
                                         <span class="mx-2 fs-4">=</span>
                                         <span class="{{ $netIncome >= 0 ? 'text-success' : 'text-danger' }} fs-3 fw-bold">
-                                            {{ currency_symbol() }}{{ number_format($netIncome, 2) }}
+                                            {{ number_format($netIncome, 2) }} {{ currency_symbol() }}
                                         </span>
                                     </div>
                                 </div>
@@ -206,7 +206,7 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="fs-5 fw-bold text-success">
-                                                        {{ currency_symbol() }}{{ number_format($category->total, 2) }}
+                                                        {{ number_format($category->total, 2) }} {{ currency_symbol() }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
@@ -232,7 +232,7 @@
                                         <tfoot>
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_revenue') }}</td>
-                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</td>
+                                                <td class="text-end">{{ number_format($revenue, 2) }} {{ currency_symbol() }}</td>
                                                 <td class="text-end">100%</td>
                                                 <td></td>
                                             </tr>
@@ -281,7 +281,7 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="fs-5 fw-bold text-danger">
-                                                        {{ currency_symbol() }}{{ number_format($category->total, 2) }}
+                                                        {{ number_format($category->total, 2) }} {{ currency_symbol() }}
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
@@ -307,7 +307,7 @@
                                         <tfoot>
                                             <tr class="fw-bold text-gray-700">
                                                 <td>{{ __('accounting.total_expenses') }}</td>
-                                                <td class="text-end">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</td>
+                                                <td class="text-end">{{ number_format($expenses, 2) }} {{ currency_symbol() }}</td>
                                                 <td class="text-end">100%</td>
                                                 <td></td>
                                             </tr>
@@ -328,20 +328,20 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
-                                    <span class="fs-2x fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($revenue, 2) }}</span>
+                                    <span class="fs-2x fw-bold text-gray-800">{{ number_format($revenue, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.total_revenue') }}</span>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
-                                    <span class="fs-2x fw-bold text-danger">{{ currency_symbol() }}{{ number_format($expenses, 2) }}</span>
+                                    <span class="fs-2x fw-bold text-danger">{{ number_format($expenses, 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.total_expenses') }}</span>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="d-flex flex-column text-center mb-5">
                                     <span class="fs-2x fw-bold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }}">
-                                        {{ currency_symbol() }}{{ number_format($netIncome, 2) }}
+                                        {{ number_format($netIncome, 2) }} {{ currency_symbol() }}
                                     </span>
                                     <span class="text-gray-500 fs-6">{{ __('accounting.net_income') }}</span>
                                 </div>
@@ -369,10 +369,63 @@
                         </div>
                         @endif
                         
-                        <!-- Visual Chart Placeholder -->
-                        <div class="d-flex justify-content-center mt-8">
-                            <div class="w-100" style="max-width: 600px;">
-                                <canvas id="profitabilityChart" height="200"></canvas>
+                        <!-- CSS-Based Bar Chart -->
+                        <div class="mt-8">
+                            <div class="d-flex justify-content-center">
+                                <div class="w-100" style="max-width: 600px;">
+                                    @php
+                                        $maxValue = max($revenue, $expenses, abs($netIncome), 1);
+                                        $revenuePercent = ($revenue / $maxValue) * 100;
+                                        $expensesPercent = ($expenses / $maxValue) * 100;
+                                        $netIncomePercent = (abs($netIncome) / $maxValue) * 100;
+                                    @endphp
+                                    
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="fw-semibold text-success">{{ __('accounting.revenue') }}</span>
+                                            <span class="fw-bold">{{ number_format($revenue, 2) }} {{ currency_symbol() }}</span>
+                                        </div>
+                                        <div class="progress h-30px" style="height: 30px;">
+                                            <div class="progress-bar bg-success d-flex align-items-center justify-content-end pe-3" 
+                                                role="progressbar" 
+                                                style="width: {{ min(100, $revenuePercent) }}%; font-size: 14px; font-weight: bold;">
+                                                {{ number_format(($revenue / $maxValue) * 100, 1) }}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="fw-semibold text-danger">{{ __('accounting.expenses') }}</span>
+                                            <span class="fw-bold">{{ number_format($expenses, 2) }} {{ currency_symbol() }}</span>
+                                        </div>
+                                        <div class="progress h-30px" style="height: 30px;">
+                                            <div class="progress-bar bg-danger d-flex align-items-center justify-content-end pe-3" 
+                                                role="progressbar" 
+                                                style="width: {{ min(100, $expensesPercent) }}%; font-size: 14px; font-weight: bold;">
+                                                {{ number_format(($expenses / $maxValue) * 100, 1) }}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="fw-semibold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }}">
+                                                {{ __('accounting.net_income') }}
+                                            </span>
+                                            <span class="fw-bold {{ $netIncome >= 0 ? 'text-success' : 'text-danger' }}">
+                                                {{ number_format($netIncome, 2) }} {{ currency_symbol() }}
+                                            </span>
+                                        </div>
+                                        <div class="progress h-30px" style="height: 30px;">
+                                            <div class="progress-bar {{ $netIncome >= 0 ? 'bg-success' : 'bg-danger' }} d-flex align-items-center justify-content-end pe-3" 
+                                                role="progressbar" 
+                                                style="width: {{ min(100, $netIncomePercent) }}%; font-size: 14px; font-weight: bold;">
+                                                {{ number_format((abs($netIncome) / $maxValue) * 100, 1) }}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -381,77 +434,6 @@
             </div>
         </div>
     </div>
-    
-    @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Enable/disable custom date inputs based on period selection
-        const periodSelect = document.querySelector('select[name="period"]');
-        const startDateInput = document.querySelector('input[name="start_date"]');
-        const endDateInput = document.querySelector('input[name="end_date"]');
-        const applyButton = document.querySelector('button[type="submit"]');
-        
-        if (periodSelect) {
-            periodSelect.addEventListener('change', function() {
-                const isCustom = this.value === 'custom';
-                if (startDateInput) startDateInput.disabled = !isCustom;
-                if (endDateInput) endDateInput.disabled = !isCustom;
-                if (applyButton) applyButton.disabled = !isCustom;
-            });
-        }
-        
-        // Initialize profitability chart
-        document.addEventListener('DOMContentLoaded', function() {
-            const ctx = document.getElementById('profitabilityChart');
-            if (ctx && typeof Chart !== 'undefined') {
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['{{ __('accounting.revenue') }}', '{{ __('accounting.expenses') }}', '{{ __('accounting.net_income') }}'],
-                        datasets: [{
-                            label: '{{ __('accounting.amount') }}',
-                            data: [{{ $revenue }}, {{ $expenses }}, {{ $netIncome }}],
-                            backgroundColor: [
-                                'rgba(40, 199, 111, 0.8)',
-                                'rgba(245, 101, 101, 0.8)',
-                                {{ $netIncome >= 0 ? "'rgba(40, 199, 111, 0.8)'" : "'rgba(245, 101, 101, 0.8)'" }}
-                            ],
-                            borderColor: [
-                                'rgb(40, 199, 111)',
-                                'rgb(245, 101, 101)',
-                                {{ $netIncome >= 0 ? "'rgb(40, 199, 111)'" : "'rgb(245, 101, 101)'" }}
-                            ],
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return '{{ currency_symbol() }}' + context.parsed.y.toFixed(2);
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return '{{ currency_symbol() }}' + value;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        });
-    </script>
-    @endpush
     
     @endsection
 </x-app-layout>

@@ -69,7 +69,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($summary['total_current'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800 me-2 lh-1">{{ number_format($summary['total_current'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.current_balance') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -194,17 +194,17 @@
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ $account->current_balance >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ $account->currency->symbol ?? '$' }}{{ number_format($account->current_balance, 2) }}
+                                                {{ number_format($account->current_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-gray-700">
-                                                {{ $account->currency->symbol ?? '$' }}{{ number_format($account->available_balance, 2) }}
+                                                {{ number_format($account->available_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold text-gray-500">
-                                                {{ $account->currency->symbol ?? '$' }}{{ number_format($account->pending_balance, 2) }}
+                                                {{ number_format($account->pending_balance, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td>
@@ -266,12 +266,12 @@
                                         <td>{{ $transaction->transaction_category }}</td>
                                         <td class="text-end">
                                             <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                {{ $transaction->paymentMethod->currency->symbol ?? '$' }}{{ number_format($transaction->amount, 2) }}
+                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
                                             <span class="fs-7 text-gray-500">
-                                                {{ $transaction->paymentMethod->currency->symbol ?? '$' }}{{ number_format($transaction->balance_after, 2) }}
+                                                {{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">

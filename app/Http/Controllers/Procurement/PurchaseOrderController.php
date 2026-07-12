@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\{ Supplier, PurchaseOrder, ProductVariant, PurchaseOrderItem, InventoryItems, PaymentMethod,
         PurchaseReceipt, InventoryTransactions, InventoryAdjustment, PurchaseReceiptItem, SingleShopInventoryLog,
-        Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant };
+        Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant, Tenant };
 use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Str;
 
 
 class PurchaseOrderController extends Controller
@@ -687,6 +688,42 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    /**
+     * Generate batch number combining incoming value with date and random
+     * Format: {INCOMING}-YYYYMMDD-XXXXX
+     */
+    private function generateBatchNumber($incomingBatch)
+    {
+        // Clean the incoming batch number
+        $incomingBatch = strtoupper(trim($incomingBatch));
+        
+        // Remove any special characters that might cause issues
+        $incomingBatch = preg_replace('/[^A-Z0-9]/', '', $incomingBatch);
+        
+        // Format: INCOMING-YYYYMMDD-XXXXX
+        $date = now()->format('Ymd');
+        $random = strtoupper(substr(uniqid(mt_rand(), true), -6));
+        $sequence = $this->getNextBatchSequence();
+        
+        return "{$incomingBatch}-{$date}-{$random}-{$sequence}";
+    }
+
+    /**
+     * Get next sequence number for uniqueness
+     */
+    private function getNextBatchSequence(): string
+    {
+        $lastRecord = PurchaseReceipt::orderBy('id', 'desc')->first();
+        
+        if ($lastRecord && $lastRecord->batch_number) {
+            $parts = explode('-', $lastRecord->batch_number);
+            $lastSeq = end($parts);
+            $newSeq = (int)$lastSeq + 1;
+            return str_pad($newSeq, 4, '0', STR_PAD_LEFT);
+        }
+        
+        return '0001';
+    }
 
 
     public function receiveItems(Request $request, PurchaseOrder $purchaseOrder)
@@ -726,7 +763,6 @@ class PurchaseOrderController extends Controller
             'payment_method_id' => 'required|exists:payment_methods,id',
             'payment_status' => 'nullable|in:pending,partial,paid,overdue',
             'payment_date' => 'nullable|date',
-            'batch_number' => 'nullable|string|max:100',
             'expiry_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
             'selected_taxes' => 'nullable|array',
@@ -734,7 +770,11 @@ class PurchaseOrderController extends Controller
             'total_tax_amount' => 'nullable|numeric|min:0',
             'net_amount' => 'nullable|numeric|min:0',
             'taxable_amount' => 'nullable|numeric|min:0',
+            'batch_number' => 'required|string|max:100', 
         ]);
+
+        // Generate batch number with incoming value + date + random
+        $validated['batch_number'] = $this->generateBatchNumber($request->batch_number);
 
         // Check if purchase order can receive items
         if (!in_array($purchaseOrder->status, ['sent', 'partially_received'])) {

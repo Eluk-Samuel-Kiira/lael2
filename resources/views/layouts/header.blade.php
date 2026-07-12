@@ -154,7 +154,7 @@
                                 <span class="menu-icon" data-kt-element="icon">
                                     <i class="ki-duotone ki-night-day fs-2"><span class="path1"></span><span class="path2"></span></i>
                                 </span>
-                                <span class="menu-title">{{__('auth._light')}}</span>
+                                <span class="enu-link px-5 fs-7">{{__('auth._light')}}</span>
                             </a>
                         </div>
                         <div class="menu-item px-3 my-0">
@@ -162,7 +162,7 @@
                                 <span class="menu-icon" data-kt-element="icon">
                                     <i class="ki-duotone ki-moon fs-2"><span class="path1"></span><span class="path2"></span></i>
                                 </span>
-                                <span class="menu-title">{{__('auth._dark')}}</span>
+                                <span class="enu-link px-5 fs-7">{{__('auth._dark')}}</span>
                             </a>
                         </div>
                         <div class="menu-item px-3 my-0">
@@ -170,7 +170,7 @@
                                 <span class="menu-icon" data-kt-element="icon">
                                     <i class="ki-duotone ki-screen fs-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>
                                 </span>
-                                <span class="menu-title">{{__('auth._system')}}</span>
+                                <span class="enu-link px-5 fs-7">{{__('auth._system')}}</span>
                             </a>
                         </div>
                     </div>

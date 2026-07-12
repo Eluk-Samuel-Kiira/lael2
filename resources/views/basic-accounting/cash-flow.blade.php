@@ -71,7 +71,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ currency_symbol() }}{{ number_format($summary['total_cash_in'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-success me-2 lh-1">{{ number_format($summary['total_cash_in'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_received') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -94,7 +94,7 @@
                             </div>
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
-                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ currency_symbol() }}{{ number_format($summary['total_cash_out'], 2) }}</span>
+                                    <span class="fs-2hx fw-bold text-danger me-2 lh-1">{{ number_format($summary['total_cash_out'], 2) }} {{ currency_symbol() }}</span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.money_paid') }}</span>
                                 </div>
                                 <div class="d-flex flex-stack">
@@ -118,7 +118,7 @@
                             <div class="card-body pt-1">
                                 <div class="d-flex flex-column text-center my-7">
                                     <span class="fs-2hx fw-bold {{ $summary['net_cash_flow'] >= 0 ? 'text-success' : 'text-danger' }} me-2 lh-1">
-                                        {{ currency_symbol() }}{{ number_format($summary['net_cash_flow'], 2) }}
+                                        {{ number_format($summary['net_cash_flow'], 2) }} {{ currency_symbol() }}
                                     </span>
                                     <span class="text-gray-500 pt-1 fw-semibold fs-6">{{ __('accounting.net_movement') }}</span>
                                 </div>
@@ -162,15 +162,15 @@
                                             <span class="fs-8 text-gray-500 d-block">{{ \Carbon\Carbon::parse($day->date)->format('D') }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-success">{{ currency_symbol() }}{{ number_format($day->cash_in, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-success">{{ number_format($day->cash_in, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($day->cash_out, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-danger">{{ number_format($day->cash_out, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
                                             @php $netFlow = $day->cash_in - $day->cash_out; $runningBalance += $netFlow; @endphp
                                             <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ currency_symbol() }}{{ number_format($netFlow, 2) }}
+                                                {{ number_format($netFlow, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -200,7 +200,7 @@
                                             @endif
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($runningBalance, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-gray-800">{{ number_format($runningBalance, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                     </tr>
                                     @endforeach
@@ -208,12 +208,12 @@
                                 <tfoot>
                                     <tr class="fw-bold text-gray-700">
                                         <td>{{ __('accounting.total') }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($dailyCashFlow->sum('cash_in'), 2) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($dailyCashFlow->sum('cash_out'), 2) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($summary['net_cash_flow'], 2) }}</td>
+                                        <td class="text-end">{{ number_format($dailyCashFlow->sum('cash_in'), 2) }} {{ currency_symbol() }}</td>
+                                        <td class="text-end">{{ number_format($dailyCashFlow->sum('cash_out'), 2) }} {{ currency_symbol() }}</td>
+                                        <td class="text-end">{{ number_format($summary['net_cash_flow'], 2) }} {{ currency_symbol() }}</td>
                                         <td class="text-end">{{ number_format($dailyCashFlow->sum('transaction_count')) }}</td>
                                         <td></td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($runningBalance, 2) }}</td>
+                                        <td class="text-end">{{ number_format($runningBalance, 2) }} {{ currency_symbol() }}</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -263,15 +263,15 @@
                                             </div>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-success">{{ currency_symbol() }}{{ number_format($flow->cash_in, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-success">{{ number_format($flow->cash_in, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($flow->cash_out, 2) }}</span>
+                                            <span class="fs-6 fw-bold text-danger">{{ number_format($flow->cash_out, 2) }} {{ currency_symbol() }}</span>
                                         </td>
                                         <td class="text-end">
                                             @php $netFlow = $flow->cash_in - $flow->cash_out; @endphp
                                             <span class="fs-6 fw-bold {{ $netFlow >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ currency_symbol() }}{{ number_format($netFlow, 2) }}
+                                                {{ number_format($netFlow, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
                                         <td class="text-end">
@@ -303,7 +303,7 @@
                                         <td class="text-end">
                                             @if($flow->transaction_count > 0)
                                                 <span class="fs-6 text-gray-700">
-                                                    {{ currency_symbol() }}{{ number_format(($flow->cash_in + $flow->cash_out) / $flow->transaction_count, 2) }}
+                                                    {{ number_format(($flow->cash_in + $flow->cash_out) / $flow->transaction_count, 2) }} {{ currency_symbol() }}
                                                 </span>
                                             @else
                                                 <span class="fs-7 text-gray-500">-</span>

@@ -35,7 +35,7 @@
                         </div>
                         
                         <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-4">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-5">
                                 <div class="mb-3">
                                     <label class="form-label">{{ __('passwords.current_stock_level') }}</label>
                                     <input type="text" class="form-control" 
@@ -43,7 +43,7 @@
                                         value="{{ $item->quantity_allocated }}" readonly>
                                 </div>
                             </div>
-                            <div class="d-flex flex-column mb-8 fv-row col-md-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-7">
                                 <div class="mb-3">
                                     <label class="form-label">{{ __('passwords.transfer_quantity') }}</label>
                                     <input type="number"

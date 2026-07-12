@@ -212,7 +212,7 @@
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
                                                 <th class="ps-4 min-w-50px">#</th>
-                                                <th class="min-w-200px">{{ __('passwords.supplier') }}</th>
+                                                <th style="min-width: 150px;">{{ __('passwords.supplier') }}</th>
                                                 <th class="min-w-100px text-center">{{ __('passwords.total_orders') }}</th>
                                                 <th class="min-w-150px text-end">{{ __('passwords.total_spent') }}</th>
                                                 <th class="min-w-120px text-center">{{ __('passwords.spend_percentage') }}</th>
@@ -252,12 +252,12 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-50px me-3">
+                                                        <div class="symbol symbol-50px me-5 flex-shrink-0"> {{-- me-5 for more margin --}}
                                                             <div class="symbol-label bg-light-{{ $classColor }} text-{{ $classColor }} fw-bold">
                                                                 {{ strtoupper(substr($supplier->name, 0, 2)) }}
                                                             </div>
                                                         </div>
-                                                        <div>
+                                                        <div class="ps-4"> {{-- ps-4 for padding-left --}}
                                                             <div class="fw-bold">{{ $supplier->name }}</div>
                                                             <small class="text-muted">{{ $supplier->contact_person ?? __('pagination.no_contact') }}</small>
                                                         </div>
@@ -585,28 +585,31 @@ function loadSupplierSpendDetails(supplierId, modal) {
         </div>
     `;
     
-    // Get current filter values
+    // Get current filter values from the form
     const startDate = document.querySelector('[name="start_date"]')?.value || '';
     const endDate = document.querySelector('[name="end_date"]')?.value || '';
-    const period = document.querySelector('[name="period"]')?.value || 'monthly';
+    const periodType = document.querySelector('[name="period"]')?.value || 'monthly';
     
     // Build URL with query parameters
-    let url = `/api/suppliers/${supplierId}/spend-details`;
+    const url = `/api/suppliers/${supplierId}/spend-details`;
     const params = new URLSearchParams();
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
-    if (period) params.append('period_type', period);
-    if (params.toString()) url += '?' + params.toString();
+    if (periodType) params.append('period_type', periodType);
     
-    fetch(url, {
+    const fullUrl = params.toString() ? url + '?' + params.toString() : url;
+    
+    fetch(fullUrl, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-        }
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        },
+        credentials: 'same-origin'
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error('Network response was not ok: ' + response.status);
         }
         return response.json();
     })
@@ -619,7 +622,7 @@ function loadSupplierSpendDetails(supplierId, modal) {
                 <div class="alert alert-danger text-center">
                     <i class="ki-duotone ki-cross-circle fs-2 me-2"></i>
                     {{ __("passwords.failed_to_load_supplier_details") }}
-                    <br><small class="text-muted">${data.message || ''}</small>
+                    <br><small class="text-muted">${data.message || 'Unknown error'}</small>
                 </div>
             `;
         }
