@@ -270,7 +270,7 @@
             <div class="card-header pt-5">
                 <h3 class="card-title fw-bold text-gray-800 fs-2qx">{{__('pagination._current_order')}}</h3>
                 <div class="card-toolbar">
-                    <a href="#" class="btn btn-light-primary fs-4 fw-bold py-4" onclick="clearCart()">{{__('pagination.clear_all')}}</a>
+                    <a href="javascript:void(0);" class="btn btn-light-primary fs-4 fw-bold py-4" onclick="clearCart()">{{__('pagination.clear_all')}}</a>
                 </div>
             </div>
 

@@ -13,11 +13,58 @@ use Illuminate\Support\Str;
 class PaymentTransactionService
 {
     /**
+     * Determine if transaction is debit (withdrawal)
+     * ✅ FIX: Add ADJUSTMENT as a transaction type that doesn't affect balance
+     */
+    private function isDebitTransaction(string $transactionType): bool
+    {
+        // ✅ These types DEBIT (reduce) the balance
+        $debitTypes = ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE', 'EXPENSE', 'PURCHASE_ORDER'];
+        
+        // ✅ These types CREDIT (increase) the balance
+        $creditTypes = ['DEPOSIT', 'TRANSFER_IN', 'REFUND', 'RECONCILIATION'];
+        
+        // ✅ These types DO NOT affect balance at all
+        $noBalanceTypes = ['ADJUSTMENT'];
+        
+        // Check if it's a no-balance type first
+        foreach ($noBalanceTypes as $type) {
+            if (strpos($transactionType, $type) !== false) {
+                return false; // Not a debit, but also not a credit
+            }
+        }
+        
+        // Check if it's a debit type
+        foreach ($debitTypes as $debitType) {
+            if (strpos($transactionType, $debitType) !== false || 
+                strpos($transactionType, '_OUT') !== false) {
+                return true;
+            }
+        }
+        
+        // Everything else is treated as credit (DEPOSIT, etc.)
+        return false;
+    }
+    
+    /**
+     * Determine if transaction affects balance
+     * ✅ NEW METHOD: Check if transaction should affect balance
+     */
+    private function affectsBalance(string $transactionType): bool
+    {
+        $noBalanceTypes = ['ADJUSTMENT'];
+        
+        foreach ($noBalanceTypes as $type) {
+            if (strpos($transactionType, $type) !== false) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /**
      * Record a payment transaction and update balance
-     *
-     * @param array $transactionData
-     * @return PaymentTransactionLog|null
-     * @throws \Exception
      */
     public function recordTransaction(array $transactionData): ?PaymentTransactionLog
     {
@@ -38,14 +85,22 @@ class PaymentTransactionService
                 // Calculate net amount
                 $netAmount = $this->calculateNetAmount($transactionData, $paymentMethod);
                 
-                // Determine if it's a debit or credit
-                $isDebit = $this->isDebitTransaction($transactionData['transaction_type']);
+                // ✅ CRITICAL: Check if this transaction affects balance
+                $affectsBalance = $this->affectsBalance($transactionData['transaction_type']);
                 
-                // Calculate new balance
+                // Get current balance
                 $balanceBefore = $paymentMethod->current_balance;
-                $balanceAfter = $isDebit 
-                    ? $balanceBefore - $netAmount
-                    : $balanceBefore + $netAmount;
+                
+                // ✅ If ADJUSTMENT, balance AFTER is the SAME as before
+                if (!$affectsBalance) {
+                    $balanceAfter = $balanceBefore; // No change!
+                } else {
+                    // Normal balance calculation
+                    $isDebit = $this->isDebitTransaction($transactionData['transaction_type']);
+                    $balanceAfter = $isDebit 
+                        ? $balanceBefore - $netAmount
+                        : $balanceBefore + $netAmount;
+                }
                 
                 // Create transaction log
                 $transactionLog = $this->createTransactionLog(
@@ -56,8 +111,11 @@ class PaymentTransactionService
                     $netAmount
                 );
                 
-                // Update payment method balance
-                $this->updatePaymentMethodBalance($paymentMethod, $balanceAfter, $netAmount, $isDebit);
+                // ✅ Only update payment method balance if transaction affects balance
+                if ($affectsBalance) {
+                    $this->updatePaymentMethodBalance($paymentMethod, $balanceAfter, $netAmount, $isDebit ?? false);
+                }
+                // If ADJUSTMENT, balance stays the same - no update needed
                 
                 // Update available balance if needed
                 $this->updateAvailableBalance($paymentMethod, $transactionData);
@@ -78,6 +136,51 @@ class PaymentTransactionService
             }
         });
     }
+
+    /**
+     * Create transaction log record
+     */
+    private function createTransactionLog(
+        array $data,
+        PaymentMethod $paymentMethod,
+        float $balanceBefore,
+        float $balanceAfter,
+        float $netAmount
+    ): PaymentTransactionLog {
+        $transactionData = [
+            'transaction_ref' => Str::uuid(),
+            'payment_method_id' => $data['payment_method_id'],
+            'transaction_type' => $data['transaction_type'],
+            'transaction_category' => $data['transaction_category'],
+            'reference_table' => $data['reference_table'] ?? null,
+            'reference_id' => $data['reference_id'] ?? null,
+            'amount' => $data['amount'],
+            'transaction_fee' => $data['transaction_fee'] ?? 0,
+            'net_amount' => $netAmount,
+            'balance_before' => $balanceBefore,
+            'balance_after' => $balanceAfter, // ✅ Same as before for ADJUSTMENT
+            'currency_id' => $data['currency_id'],
+            'exchange_rate' => $data['exchange_rate'] ?? 1,
+            'status' => $data['status'] ?? 'COMPLETED',
+            'description' => $data['description'] ?? null,
+            'metadata' => $data['metadata'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'external_reference' => $data['external_reference'] ?? null,
+            'bank_reference' => $data['bank_reference'] ?? null,
+            'receipt_number' => $this->generateReceiptNumber(),
+            'user_id' => $data['user_id'],
+            'tenant_id' => $data['tenant_id'],
+            'counterparty_id' => $data['counterparty_id'] ?? null,
+            'counterparty_name' => $data['counterparty_name'] ?? null,
+            'counterparty_account' => $data['counterparty_account'] ?? null,
+            'transaction_date' => $data['transaction_date'] ?? now(),
+            'effective_date' => $data['effective_date'] ?? now(),
+            'settlement_date' => $data['settlement_date'] ?? null,
+        ];
+        
+        return PaymentTransactionLog::create($transactionData);
+    }
+
     
     /**
      * Validate transaction data
@@ -165,68 +268,7 @@ class PaymentTransactionService
         
         return $amount + $fee;
     }
-    
-    /**
-     * Determine if transaction is debit
-     */
-    private function isDebitTransaction(string $transactionType): bool
-    {
-        $debitTypes = ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE', 'EXPENSE', 'PURCHASE_ORDER'];
-        
-        // Check if transaction type starts with any debit type
-        foreach ($debitTypes as $debitType) {
-            if (strpos($transactionType, $debitType) !== false || 
-                strpos($transactionType, '_OUT') !== false) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    /**
-     * Create transaction log record
-     */
-    private function createTransactionLog(
-        array $data,
-        PaymentMethod $paymentMethod,
-        float $balanceBefore,
-        float $balanceAfter,
-        float $netAmount
-    ): PaymentTransactionLog {
-        $transactionData = [
-            'transaction_ref' => Str::uuid(),
-            'payment_method_id' => $data['payment_method_id'],
-            'transaction_type' => $data['transaction_type'],
-            'transaction_category' => $data['transaction_category'],
-            'reference_table' => $data['reference_table'] ?? null,
-            'reference_id' => $data['reference_id'] ?? null,
-            'amount' => $data['amount'],
-            'transaction_fee' => $data['transaction_fee'] ?? 0,
-            'net_amount' => $netAmount,
-            'balance_before' => $balanceBefore,
-            'balance_after' => $balanceAfter,
-            'currency_id' => $data['currency_id'],
-            'exchange_rate' => $data['exchange_rate'] ?? 1,
-            'status' => $data['status'] ?? 'COMPLETED',
-            'description' => $data['description'] ?? null,
-            'metadata' => $data['metadata'] ?? null,
-            'notes' => $data['notes'] ?? null,
-            'external_reference' => $data['external_reference'] ?? null,
-            'bank_reference' => $data['bank_reference'] ?? null,
-            'receipt_number' => $this->generateReceiptNumber(),
-            'user_id' => $data['user_id'],
-            'tenant_id' => $data['tenant_id'],
-            'counterparty_id' => $data['counterparty_id'] ?? null,
-            'counterparty_name' => $data['counterparty_name'] ?? null,
-            'counterparty_account' => $data['counterparty_account'] ?? null,
-            'transaction_date' => $data['transaction_date'] ?? now(),
-            'effective_date' => $data['effective_date'] ?? now(),
-            'settlement_date' => $data['settlement_date'] ?? null,
-        ];
-        
-        return PaymentTransactionLog::create($transactionData);
-    }
+
     
     /**
      * Generate receipt number

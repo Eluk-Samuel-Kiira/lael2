@@ -75,5 +75,37 @@ class Product extends Model
         return $this->belongsToMany(Location::class, 'location_product', 'product_id', 'location_id');
     }
 
+    public function resolvedInventoryStrategy(): string
+    {
+        return $this->inventory_strategy
+            ?? $this->department?->default_inventory_strategy
+            ?? 'quantity'; // tenant/global fallback
+    }
+
+    public function recipe(): HasOne
+    {
+        return $this->hasOne(Recipe::class);
+    }
+
+    public function productionOrders(): HasMany
+    {
+        return $this->hasManyThrough(
+            ProductionOrder::class,
+            ProductVariant::class,
+            'product_id', // product_variants.product_id
+            'output_product_variant_id', // production_orders.output_product_variant_id
+            'id', // products.id
+            'id' // product_variants.id
+        );
+    }
+
+    // This single method is what your POS/inventory code calls everywhere instead of hardcoding logic — handleSingleShopInventory() becomes a dispatcher:
+    // match ($variant->product->resolvedInventoryStrategy()) {
+    //     'quantity' => $this->depleteQuantityOnly($variant, $item, $order),
+    //     'batch'    => $this->depleteFIFOBatch($variant, $item, $order),
+    //     'serial'   => $this->depleteSerialUnit($variant, $item, $order),
+    //     'recipe'   => $this->depleteRecipeIngredients($variant, $item, $order),
+    // };
+
 
 }

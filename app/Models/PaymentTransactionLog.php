@@ -149,6 +149,29 @@ class PaymentTransactionLog extends Model
     const STATUS_CANCELLED = 'CANCELLED';
     const STATUS_REVERSED = 'REVERSED';
 
+    /**
+     * Transaction types that DO NOT affect balance
+     */
+    const NO_BALANCE_TYPES = ['ADJUSTMENT'];
+    
+    /**
+     * Check if transaction type affects balance
+     */
+    public function affectsBalance(): bool
+    {
+        return !in_array($this->transaction_type, self::NO_BALANCE_TYPES);
+    }
+    
+    /**
+     * Check if transaction is a discount record
+     */
+    public function isDiscount(): bool
+    {
+        return $this->transaction_type === 'ADJUSTMENT' && 
+               isset($this->metadata['is_discount']) && 
+               $this->metadata['is_discount'] === true;
+    }
+
     // Relationships
     public function paymentMethod()
     {
