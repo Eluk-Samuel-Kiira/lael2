@@ -289,7 +289,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         
         // Orders and Purchases
+        Route::get('/pos/search', [POSController::class, 'search'])->name('pos.search');
         Route::get('/pos-index', [POSController::class, 'index'])->name('pos.index');
+
         Route::post('/orders/process-payment', [POSController::class, 'processPayment'])
             ->name('orders.process-payment');
         Route::post('/orders/generate-invoice', [POSController::class, 'generateInvoice'])

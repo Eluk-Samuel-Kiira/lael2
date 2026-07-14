@@ -248,7 +248,21 @@
                                             <span class="fs-7 text-gray-800">{{ $transaction->paymentMethod->name ?? 'N/A' }}</span>
                                         </td>
                                         <td>
-                                            <span class="badge badge-light-{{ $transaction->transaction_type === 'DEPOSIT' ? 'success' : ($transaction->transaction_type === 'WITHDRAWAL' ? 'danger' : 'info') }}">
+                                            {{-- ✅ Transaction Type Badge Colors --}}
+                                            @php
+                                                $typeColors = [
+                                                    'DEPOSIT' => 'success',
+                                                    'WITHDRAWAL' => 'danger',
+                                                    'TRANSFER_IN' => 'info',
+                                                    'TRANSFER_OUT' => 'warning',
+                                                    'FEE' => 'secondary',
+                                                    'REFUND' => 'primary',
+                                                    'ADJUSTMENT' => 'info',  // ✅ ADJUSTMENT uses info
+                                                    'RECONCILIATION' => 'dark',
+                                                ];
+                                                $typeColor = $typeColors[$transaction->transaction_type] ?? 'secondary';
+                                            @endphp
+                                            <span class="badge badge-light-{{ $typeColor }}">
                                                 {{ $transaction->transaction_type }}
                                             </span>
                                         </td>
@@ -262,7 +276,21 @@
                                             @endif
                                         </td>
                                         <td class="text-end">
-                                            <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
+                                            {{-- ✅ Amount Color - ADJUSTMENT uses info (neutral) --}}
+                                            @php
+                                                $amountClasses = [
+                                                    'DEPOSIT' => 'text-success',
+                                                    'TRANSFER_IN' => 'text-success',
+                                                    'REFUND' => 'text-success',
+                                                    'WITHDRAWAL' => 'text-danger',
+                                                    'TRANSFER_OUT' => 'text-danger',
+                                                    'FEE' => 'text-danger',
+                                                    'ADJUSTMENT' => 'text-info',  // ✅ ADJUSTMENT uses info
+                                                    'RECONCILIATION' => 'text-dark',
+                                                ];
+                                                $amountClass = $amountClasses[$transaction->transaction_type] ?? 'text-dark';
+                                            @endphp
+                                            <span class="fs-6 fw-bold {{ $amountClass }}">
                                                 {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
                                             </span>
                                         </td>
@@ -272,7 +300,17 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge badge-light-{{ $transaction->status === 'COMPLETED' ? 'success' : ($transaction->status === 'PENDING' ? 'warning' : 'danger') }}">
+                                            @php
+                                                $statusColors = [
+                                                    'COMPLETED' => 'success',
+                                                    'PENDING' => 'warning',
+                                                    'FAILED' => 'danger',
+                                                    'CANCELLED' => 'secondary',
+                                                    'REVERSED' => 'dark',
+                                                ];
+                                                $statusColor = $statusColors[$transaction->status] ?? 'secondary';
+                                            @endphp
+                                            <span class="badge badge-light-{{ $statusColor }}">
                                                 {{ $transaction->status }}
                                             </span>
                                         </td>

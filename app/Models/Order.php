@@ -25,6 +25,8 @@ class Order extends Model
         'total',
         'paid_amount',
         'balance_due',
+        'subtotal_before_bargain',     
+        'bargain_discount_applied',
         'source',
         'notes',
         'created_by',
@@ -38,6 +40,8 @@ class Order extends Model
         'total' => 'integer',
         'paid_amount' => 'integer',
         'balance_due' => 'integer',
+        'subtotal_before_bargain' => 'integer',     
+        'bargain_discount_applied' => 'integer',
     ];
 
     /**
@@ -74,6 +78,29 @@ class Order extends Model
     }
 
     /**
+     * ✅ Accessor for subtotal_before_bargain
+     * The order's total BEFORE any bargain discount was ever applied.
+     * Set once, on first discount application, and never re-derived.
+     */
+    public function getSubtotalBeforeBargainAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    /**
+     * ✅ Accessor for bargain_discount_applied
+     * The bargain-discount component of discount_total, tracked separately
+     * from any item-level/promotion discounts.
+     */
+    public function getBargainDiscountAppliedAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+
+
+
+    /**
      * Mutators - Convert from display float to stored integer
      */
     public function setSubtotalAttribute($value): void
@@ -105,6 +132,27 @@ class Order extends Model
     {
         $this->attributes['balance_due'] = to_base_currency($value);
     }
+
+    /**
+     * ✅ Mutator for subtotal_before_bargain
+     */
+    public function setSubtotalBeforeBargainAttribute($value): void
+    {
+        $this->attributes['subtotal_before_bargain'] = to_base_currency($value);
+    }
+
+    /**
+     * ✅ Mutator for bargain_discount_applied
+     */
+    public function setBargainDiscountAppliedAttribute($value): void
+    {
+        $this->attributes['bargain_discount_applied'] = to_base_currency($value);
+    }
+
+
+
+
+
 
     // Relationships
     public function tenant() 

@@ -1246,6 +1246,7 @@ return [
     'invoice_generated' => 'Invoice Generated',
     'invoice_number' => 'Invoice Number',
     'invoice_generation_failed' => 'Invoice Generation Failed',
+    'discount_cleared_cart_changed' => 'The negotiated discount was cleared because the cart changed. Please re-apply if still needed.',
 
     'negotiated_discount'                    => 'Negotiated Discount',
     'please_enter_valid_amount'              => 'Please enter valid amount',

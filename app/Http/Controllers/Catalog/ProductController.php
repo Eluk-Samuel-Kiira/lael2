@@ -561,6 +561,8 @@ class ProductController extends Controller
 
     public function updateProductAssignments(Request $request, Product $product)
     {
+        // \Log::info($request);
+        // \Log::info($product);
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 

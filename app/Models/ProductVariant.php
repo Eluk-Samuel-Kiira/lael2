@@ -90,4 +90,26 @@ class ProductVariant extends Model
         return $this->belongsToMany(Promotion::class, 'promotion_products', 'variant_id', 'promotion_id');
     }
 
+    
+    public function ingredientRecipes(): HasMany
+    {
+        return $this->hasMany(RecipeIngredient::class, 'ingredient_variant_id');
+    }
+
+    /**
+     * Get production orders where this variant is the output
+     */
+    public function outputProductionOrders(): HasMany
+    {
+        return $this->hasMany(ProductionOrder::class, 'output_product_variant_id');
+    }
+
+    /**
+     * Get production order inputs where this variant is consumed
+     */
+    public function productionOrderInputs(): HasMany
+    {
+        return $this->hasMany(ProductionOrderInput::class, 'input_variant_id');
+    }
+
 }

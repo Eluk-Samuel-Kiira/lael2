@@ -691,15 +691,32 @@ class InvoiceController extends Controller
 
     private function reduceMultiShopStockForInvoice($variant, $item, $order, $user)
     {
-        $inventory = $variant->inventory()
-            ->where('location_id', $user->location_id ?? 1)
-            ->where('department_id', $user->department_id ?? 1)
-            ->first();
+        // ✅ Get inventory_id from the stored inventory_data
+        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
 
-        if (! $inventory) {
+        // ✅ Try to find by inventory_id first
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
+        }
+
+        // ✅ Fallback: query by location and department
+        if (!$inventory) {
+            $inventory = $variant->inventory()
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+
+        if (!$inventory) {
             Log::warning("No inventory found for variant {$variant->id} while sending invoice", [
                 'variant_id' => $variant->id,
                 'order_id'   => $order->id,
+                'inventory_id' => $inventoryId,
+                'department_id' => $departmentId,
+                'location_id' => $locationId,
             ]);
             return;
         }
@@ -758,12 +775,35 @@ class InvoiceController extends Controller
 
     private function restockMultiShopForVoid($variant, $item, $order, $user)
     {
-        $inventory = $variant->inventory()
-            ->where('location_id', $user->location_id ?? 1)
-            ->where('department_id', $user->department_id ?? 1)
-            ->first();
+        // ✅ Get inventory_id from the stored inventory_data
+        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
 
-        if (! $inventory) return;
+        // ✅ Try to find by inventory_id first
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
+        }
+
+        // ✅ Fallback: query by location and department
+        if (!$inventory) {
+            $inventory = $variant->inventory()
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+
+        if (!$inventory) {
+            Log::warning("No inventory found for variant {$variant->id} while voiding invoice", [
+                'variant_id' => $variant->id,
+                'order_id'   => $order->id,
+                'inventory_id' => $inventoryId,
+                'department_id' => $departmentId,
+                'location_id' => $locationId,
+            ]);
+            return;
+        }
 
         $beforeQty = $inventory->quantity_allocated;
         $afterQty  = $beforeQty + $item->quantity;

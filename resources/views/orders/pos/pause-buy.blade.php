@@ -144,7 +144,7 @@
 </div>
 
 
-{{-- ── JAVASCRIPT  (logic unchanged — only pbRenderCard HTML updated) ── --}}
+{{-- ── JAVASCRIPT ─────────────────────────────────────────── --}}
 <script>
 (function () {
 
@@ -240,11 +240,15 @@
         });
     };
 
-    // ── Render card — 100% Metronic classes ──────────────────
+    // ── Render card ──
     function pbRenderCard(order) {
         var SYM       = window.POS_CURRENCY_SYM || '';
         var items     = order.items || [];
         var itemCount = items.reduce(function (s, i) { return s + (parseInt(i.quantity) || 1); }, 0);
+
+        // ✅ Get customer initial for avatar
+        var customerName = order.customer_name || '{{ __("pagination.guest") }}';
+        var initial = customerName.charAt(0).toUpperCase() || 'G';
 
         // Item chips — up to 4 then "+N more"
         var chips = items.slice(0, 4).map(function (item) {
@@ -260,14 +264,14 @@
         }
 
         var total    = parseFloat(order.total || 0).toFixed(2);
-        var customer = escHtml(order.customer_name || '{{ __("pagination.guest") }}');
+        var customer = escHtml(customerName);
         var orderNo  = escHtml(order.order_number  || '#' + order.id);
         var timeAgo  = pbTimeAgo(order.created_at);
 
         return '<div class="card card-flush mx-4 my-3 cursor-pointer border border-2 border-transparent' +
                     ' hover-border-primary transition-all"' +
-                ' onclick="pbClickCard(this)"' +
-                ' data-order=\'' + escAttr(JSON.stringify(order)) + '\'>' +
+                    ' onclick="pbClickCard(this)"' +
+                    ' data-order=\'' + escAttr(JSON.stringify(order)) + '\'>' +
             '<div class="card-body p-5">' +
 
                 // Top row: order info + total
@@ -279,12 +283,11 @@
                             orderNo +
                         '</span>' +
 
-                        // Customer name
+                        // ✅ Customer avatar with initial (no product image)
                         '<div class="d-flex align-items-center gap-2 mt-1">' +
-                            '<span class="symbol symbol-30px symbol-circle">' +
-                                '<span class="symbol-label bg-light-primary">' +
-                                    '<i class="ki-duotone ki-user fs-5 text-primary">' +
-                                    '<span class="path1"></span><span class="path2"></span></i>' +
+                            '<span class="symbol symbol-30px symbol-circle flex-shrink-0">' +
+                                '<span class="symbol-label bg-light-primary text-primary fw-bold fs-6">' +
+                                    initial +
                                 '</span>' +
                             '</span>' +
                             '<span class="fw-bold text-gray-800 fs-6">' + customer + '</span>' +
@@ -352,14 +355,28 @@
         var failed = 0;
 
         items.forEach(function (item) {
+            // ✅ Fix: Get the image URL properly with correct default
+            var imageUrl = '';
+            
+            // Check if item has an image
+            if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
+                imageUrl = item.image_url;
+            } else {
+                // ✅ Use the correct default product image (not user avatar)
+                imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
+            }
+
             var variant = {
                 id:                 item.variant_id || item.id,
                 name:               item.name || item.item_name || 'Item',
                 price:              parseFloat(item.unit_price || item.price || 0),
-                image:              item.image_url || item.image || '{{ asset("assets/media/avatars/blank.png") }}',
+                image:              imageUrl,
                 quantity_available: (item.quantity_available !== undefined) ? item.quantity_available : 9999,
                 taxes:              Array.isArray(item.taxes)      ? item.taxes      : [],
                 promotions:         Array.isArray(item.promotions) ? item.promotions : [],
+                // ✅ Include inventory_id and department_id for multi-shop
+                inventory_id:       item.inventory_id || null,
+                department_id:      item.department_id || null
             };
 
             var targetQty = parseInt(item.quantity) || 1;
