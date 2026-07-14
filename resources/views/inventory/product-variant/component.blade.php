@@ -99,14 +99,14 @@
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <a href="javascript:void(0)" class="symbol symbol-50px" onclick="triggerFileInput(this, {{ $product->id }})">
+                                            <span class="symbol symbol-50px" onclick="triggerFileInput(this, {{ $product->id }})">
                                                 <img src="{{ productVariantImage($product->image_url) }}" alt="" class="symbol-label" id="variantImagePreview_{{ $product->id  }}">
-                                            </a>
+                                            </span>
                                             <!-- Hidden file input -->
                                             <input type="file" id="variantImageInput_{{ $product->id ?? 0 }}" accept="image/*" style="display: none;" onchange="handleImageChange(event, {{ $product->id }})">
 
                                             <div class="ms-5">
-                                                <a href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</a>
+                                                <span class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</span>
                                             </div>
                                         </div>
                                     </td>

@@ -13,6 +13,87 @@
     7. cancelPOSOrder()
 --}}
 
+{{-- pos-js.blade.php --}}
+@php
+    $user = auth()->user();
+    $tenantId = $user?->tenant_id ?? 0;
+    $isSingleShop = $tenantId ? tenant_is_single_shop($tenantId) : false;
+    $locationId = $user?->location_id ?? 1;
+    $currencySymbol = currency_symbol();
+    $currencyCode = currency_code();
+@endphp
+
+<script>
+    // ✅ Pass PHP variables to JavaScript safely
+    window.userData = {
+        tenantId: {{ $tenantId }},
+        isSingleShop: {{ $isSingleShop ? 'true' : 'false' }},
+        locationId: {{ $locationId }},
+        currencySymbol: '{{ $currencySymbol }}',
+        currencyCode: '{{ $currencyCode }}'
+    };
+    
+    // ✅ Use this for the old functions that expect these variables
+    var POS_CURRENCY_SYM = window.userData.currencySymbol;
+    var isSingleShop = window.userData.isSingleShop;
+    
+    // ✅ Override tenant_is_single_shop for JavaScript
+    function tenant_is_single_shop(tenantId) {
+        return window.userData.isSingleShop;
+    }
+</script>
+
+{{-- ═══════════════════════════════════════════════
+     0. DEPARTMENT SELECTION CHECK
+════════════════════════════════════════════════ --}}
+<script>
+    // ✅ Check if department is selected (for multi-shop)
+    function isDepartmentSelected() {
+        @if(!$isSingleShop)
+            const deptFilter = document.getElementById('departmentFilter');
+            if (!deptFilter || !deptFilter.value) {
+                return false;
+            }
+            return true;
+        @else
+            return true; // Single shop doesn't need department
+        @endif
+    }
+
+    // ✅ Show department selection warning
+    function showDepartmentWarning() {
+        toastr.warning('Please select a department first');
+        // Highlight the department filter
+        const deptFilter = document.getElementById('departmentFilter');
+        if (deptFilter) {
+            deptFilter.classList.add('border-danger');
+            setTimeout(() => {
+                deptFilter.classList.remove('border-danger');
+            }, 3000);
+        }
+    }
+
+    // ✅ On page load, if multi-shop, focus on department filter
+    document.addEventListener('DOMContentLoaded', function() {
+        @if(!$isSingleShop)
+            const deptFilter = document.getElementById('departmentFilter');
+            if (deptFilter) {
+                // Show a subtle hint
+                deptFilter.style.borderColor = '#ffc107';
+                setTimeout(() => {
+                    deptFilter.style.borderColor = '';
+                }, 3000);
+                
+                // Disable variant clicks until department is selected
+                document.querySelectorAll('.variant-item').forEach(item => {
+                    item.style.cursor = 'not-allowed';
+                    item.style.opacity = '0.6';
+                });
+            }
+        @endif
+    });
+</script>
+
 {{-- ═══════════════════════════════════════════════
      1. CART FUNCTIONS
 ════════════════════════════════════════════════ --}}
@@ -27,12 +108,83 @@ function getCartTbody() {
     return document.getElementById('pos-cart-tbody');
 }
 
+// ✅ Generate unique cart item key based on shop mode
+function getCartItemKey(variantId, departmentId, inventoryId) {
+    if (!window.userData.isSingleShop) {
+        // Multi-shop: use variant_id + department_id + inventory_id
+        return variantId + '_' + departmentId + '_' + inventoryId;
+    } else {
+        // Single shop: use only variant_id
+        return variantId;
+    }
+}
+
+// ✅ Handle variant click - reads inventory data from the variant card
+function handleVariantClick(el) {
+    @if(!$isSingleShop)
+        if (!isDepartmentSelected()) {
+            showDepartmentWarning();
+            return;
+        }
+    @endif
+
+    const variantId = parseInt(el.dataset.variantId);
+    const name = el.dataset.name;
+    const price = parseFloat(el.dataset.price);
+    const image = el.dataset.image;
+    const taxes = JSON.parse(el.dataset.taxes || '[]');
+    const promotions = JSON.parse(el.dataset.promotions || '[]');
+    
+    let quantityAvailable = 0;
+    let inventoryId = null;
+    let departmentId = null;
+
+    @if(!$isSingleShop)
+        const selectedDept = document.getElementById('departmentFilter').value;
+        const inventoryData = JSON.parse(el.dataset.inventory || '{}');
+        if (inventoryData[selectedDept]) {
+            quantityAvailable = inventoryData[selectedDept].quantity;
+            inventoryId = inventoryData[selectedDept].inventory_id;
+            departmentId = parseInt(selectedDept);
+        } else {
+            toastr.warning('This item is not available in the selected department');
+            return;
+        }
+    @else
+        quantityAvailable = parseFloat(el.querySelector('.variant-qty')?.textContent || 0);
+    @endif
+
+    if (quantityAvailable <= 0) {
+        toastr.error('{{ __("pagination.out_of_stock") }}');
+        return;
+    }
+
+    addToCart({
+        id: variantId,
+        name: name,
+        price: price,
+        image: image,
+        quantity_available: quantityAvailable,
+        taxes: taxes,
+        promotions: promotions,
+        inventory_id: inventoryId,
+        department_id: departmentId
+    });
+}
+
+// ✅ Updated addToCart to handle multi-shop with composite key
 function addToCart(variant) {
     if (variant.quantity_available <= 0) {
         toastr['error']('{{ __("pagination.out_of_stock") }}');
         return;
     }
-    const idx = cart.findIndex(i => i.id === variant.id);
+    
+    // ✅ Generate unique key based on shop mode
+    const itemKey = getCartItemKey(variant.id, variant.department_id, variant.inventory_id);
+    
+    // ✅ Find item by composite key
+    const idx = cart.findIndex(i => i.cartKey === itemKey);
+    
     if (idx > -1) {
         if (cart[idx].quantity < variant.quantity_available) {
             cart[idx].quantity += 1;
@@ -43,11 +195,17 @@ function addToCart(variant) {
         }
     } else {
         const cartItem = {
-            id: variant.id, name: variant.name,
-            price: parseFloat(variant.price), image: variant.image,
-            quantity: 1, quantity_available: variant.quantity_available,
-            taxes: Array.isArray(variant.taxes) ? variant.taxes : [],
-            promotions: Array.isArray(variant.promotions) ? variant.promotions : []
+            id: variant.id,
+            cartKey: itemKey, // ✅ Store the composite key
+            name: variant.name,
+            price: variant.price,
+            image: variant.image,
+            quantity: 1,
+            quantity_available: variant.quantity_available,
+            taxes: variant.taxes || [],
+            promotions: variant.promotions || [],
+            inventory_id: variant.inventory_id || null,
+            department_id: variant.department_id || null
         };
         cart.push(cartItem);
         renderCartItem(cartItem);
@@ -61,23 +219,29 @@ function renderCartItem(item) {
     const lineSubtotal = item.price * item.quantity;
     const newRow = document.createElement('tr');
     newRow.setAttribute('data-item-id', item.id);
+    newRow.setAttribute('data-cart-key', item.cartKey);
+    newRow.setAttribute('data-inventory-id', item.inventory_id || '');
+    newRow.setAttribute('data-department-id', item.department_id || '');
     newRow.innerHTML = `
         <td class="pe-0">
             <div class="d-flex align-items-center gap-3">
                 <img src="${item.image}" class="w-50px h-50px rounded-3 object-fit-cover border" alt="${item.name}" />
                 <div class="d-flex flex-column">
                     <span class="fw-bold text-gray-800 text-hover-primary fs-6">${item.name}</span>
+                    @if(!$isSingleShop)
+                        {{-- ✅ HIDDEN: Department ID removed from cart display --}}
+                    @endif
                 </div>
             </div>
         </td>
         <td class="pe-0">
             <div class="d-flex align-items-center gap-1">
-                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="decreaseQuantity(${item.id})">
+                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="decreaseQuantity('${item.cartKey}')">
                     <i class="ki-duotone ki-minus fs-4"></i>
                 </button>
                 <input type="text" class="form-control border-0 text-center px-0 fs-5 fw-bold text-gray-800 w-35px quantity-input"
-                       name="quantity_${item.id}" value="${item.quantity}" onchange="updateQuantity(${item.id}, this.value)" />
-                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="increaseQuantity(${item.id})">
+                       name="quantity_${item.cartKey}" value="${item.quantity}" onchange="updateQuantity('${item.cartKey}', this.value)" />
+                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="increaseQuantity('${item.cartKey}')">
                     <i class="ki-duotone ki-plus fs-4"></i>
                 </button>
             </div>
@@ -89,18 +253,18 @@ function renderCartItem(item) {
                     <small class="text-muted item-tax-line" style="display:none;"></small>
                     <small class="text-success item-discount-line" style="display:none;"></small>
                 </div>
-                <button type="button" class="btn btn-icon btn-sm btn-light-danger" onclick="removeFromCart(${item.id})">
+                <button type="button" class="btn btn-icon btn-sm btn-light-danger" onclick="removeFromCart('${item.cartKey}')">
                     <i class="bi bi-trash fs-5"></i>
                 </button>
             </div>
         </td>`;
     cartTbody.appendChild(newRow);
-    updateItemExtraLines(item.id);
+    updateItemExtraLines(item.cartKey);
 }
 
-function updateItemExtraLines(itemId) {
-    const item  = cart.find(i => i.id === itemId);
-    const row   = document.querySelector(`tr[data-item-id="${itemId}"]`);
+function updateItemExtraLines(cartKey) {
+    const item  = cart.find(i => i.cartKey === cartKey);
+    const row   = document.querySelector(`tr[data-cart-key="${cartKey}"]`);
     if (!item || !row) return;
     const tax      = computeItemTax(item);
     const discount = computeItemDiscount(item);
@@ -138,42 +302,75 @@ function computeItemDiscount(item) {
 
 function updateCartItem(itemIndex) {
     const item = cart[itemIndex];
-    const row  = document.querySelector(`tr[data-item-id="${item.id}"]`);
+    const row  = document.querySelector(`tr[data-cart-key="${item.cartKey}"]`);
     if (!row) return;
     row.querySelector('.quantity-input').value = item.quantity;
-    updateItemExtraLines(item.id);
+    updateItemExtraLines(item.cartKey);
 }
 
-function increaseQuantity(itemId) {
-    const idx = cart.findIndex(i => i.id === itemId);
+// ✅ Plus button - works on cart items only using cartKey
+function increaseQuantity(cartKey) {
+    const idx = cart.findIndex(i => i.cartKey === cartKey);
     if (idx > -1) {
-        if (cart[idx].quantity < cart[idx].quantity_available) { cart[idx].quantity += 1; updateCartItem(idx); }
-        else toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
+        if (cart[idx].quantity < cart[idx].quantity_available) { 
+            cart[idx].quantity += 1; 
+            updateCartItem(idx); 
+            calculateCartSummary();
+        } else {
+            toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
+        }
+    } else {
+        console.warn('Item not found in cart with key:', cartKey);
+        toastr['error']('Item not found in cart.');
     }
 }
 
-function decreaseQuantity(itemId) {
-    const idx = cart.findIndex(i => i.id === itemId);
-    if (idx > -1 && cart[idx].quantity > 1) { cart[idx].quantity -= 1; updateCartItem(idx); }
+// ✅ Minus button - works on cart items only using cartKey
+function decreaseQuantity(cartKey) {
+    const idx = cart.findIndex(i => i.cartKey === cartKey);
+    if (idx > -1) {
+        if (cart[idx].quantity > 1) { 
+            cart[idx].quantity -= 1; 
+            updateCartItem(idx); 
+            calculateCartSummary();
+        } else {
+            // If quantity is 1, remove the item
+            removeFromCart(cartKey);
+        }
+    } else {
+        console.warn('Item not found in cart with key:', cartKey);
+        toastr['error']('Item not found in cart.');
+    }
 }
 
-function updateQuantity(itemId, newQuantity) {
+function updateQuantity(cartKey, newQuantity) {
     const qty = parseInt(newQuantity);
-    const idx = cart.findIndex(i => i.id === itemId);
+    const idx = cart.findIndex(i => i.cartKey === cartKey);
     if (idx === -1 || isNaN(qty)) return;
-    if (qty > 0 && qty <= cart[idx].quantity_available) { cart[idx].quantity = qty; }
-    else if (qty > cart[idx].quantity_available) { toastr['warning']('{{ __("pagination.max_quantity_reached") }}'); cart[idx].quantity = cart[idx].quantity_available; }
-    updateCartItem(idx);
+    if (qty > 0 && qty <= cart[idx].quantity_available) { 
+        cart[idx].quantity = qty; 
+        updateCartItem(idx);
+        calculateCartSummary();
+    } else if (qty > cart[idx].quantity_available) { 
+        toastr['warning']('{{ __("pagination.max_quantity_reached") }}'); 
+        cart[idx].quantity = cart[idx].quantity_available; 
+        updateCartItem(idx);
+        calculateCartSummary();
+    }
 }
 
-function removeFromCart(itemId) {
-    const idx = cart.findIndex(i => i.id === itemId);
+// ✅ Trash button - works on cart items only using cartKey
+function removeFromCart(cartKey) {
+    const idx = cart.findIndex(i => i.cartKey === cartKey);
     if (idx > -1) {
         cart.splice(idx, 1);
-        const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+        const row = document.querySelector(`tr[data-cart-key="${cartKey}"]`);
         if (row) row.remove();
         calculateCartSummary();
         toastr['success']('{{ __("pagination.item_removed") }}');
+    } else {
+        console.warn('Item not found in cart with key:', cartKey);
+        toastr['error']('Item not found in cart.');
     }
 }
 
@@ -183,7 +380,6 @@ function clearCart() {
     if (tbody) tbody.innerHTML = '';
     calculateCartSummary();
     toastr['success']('{{ __("pagination.cart_cleared") }}');
-    // Clear resume state — safety net if cashier abandons a resumed order
     window.resumedOrderId     = null;
     window.resumedOrderNumber = null;
     bargainDiscount            = 0;
@@ -203,106 +399,6 @@ function calculateCartSummary() {
 document.addEventListener('DOMContentLoaded', () => calculateCartSummary());
 </script>
 
-
-{{-- ═══════════════════════════════════════════════
-     2. SEARCH & DEPARTMENT FILTER
-════════════════════════════════════════════════ --}}
-<script>
-function filterProductsAndVariants(searchTerm) {
-    const searchValue   = searchTerm.toLowerCase().trim();
-    const productItems  = document.querySelectorAll('.product-item');
-    const allVariantItems = document.querySelectorAll('.variant-item');
-    if (searchValue === '') {
-        productItems.forEach(i => i.style.display = '');
-        allVariantItems.forEach(i => i.style.display = '');
-        clearSearchMessage();
-        return;
-    }
-    let visibleProductCount = 0, lastVisiblePill = null;
-    productItems.forEach(item => {
-        const nameEl      = item.querySelector('span.fw-bold, span.text-gray-800');
-        const productName = (nameEl ? nameEl.getAttribute('title') || nameEl.textContent : '').toLowerCase();
-        const tabHref     = item.querySelector('a[href]')?.getAttribute('href');
-        const tabPane     = tabHref ? document.getElementById(tabHref.replace('#', '')) : null;
-        const anyMatch    = tabPane ? Array.from(tabPane.querySelectorAll('.variant-item')).some(v => (v.getAttribute('data-name') || '').includes(searchValue)) : false;
-        if (productName.includes(searchValue) || anyMatch) { item.style.display = ''; visibleProductCount++; lastVisiblePill = item; }
-        else item.style.display = 'none';
-    });
-    allVariantItems.forEach(item => {
-        item.style.display = (item.getAttribute('data-name') || '').toLowerCase().includes(searchValue) ? '' : 'none';
-    });
-    if (visibleProductCount === 1 && lastVisiblePill) {
-        const pillLink = lastVisiblePill.querySelector('a[data-bs-toggle="pill"]');
-        if (pillLink) { window.bootstrap?.Tab ? bootstrap.Tab.getOrCreateInstance(pillLink).show() : pillLink.click(); }
-    }
-    showSearchMessage(visibleProductCount === 0);
-}
-
-function clearSearchMessage() { document.getElementById('pos-search-no-results')?.remove(); }
-
-function showSearchMessage(show) {
-    clearSearchMessage();
-    if (!show) return;
-    const container = document.getElementById('variantTabContent');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.id = 'pos-search-no-results'; div.className = 'text-center py-10';
-    div.innerHTML = `<i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block"></i><span class="text-gray-500 fw-semibold fs-5">{{ __('pagination.no_products_match_search') }}</span>`;
-    container.appendChild(div);
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.tab-pane').forEach(tab => {
-        tab.addEventListener('shown.bs.tab', function () {
-            const si = document.getElementById('variantSearchInput');
-            if (si && si.value.trim()) filterProductsAndVariants(si.value);
-        });
-    });
-
-    const departmentFilter = document.getElementById('departmentFilter');
-    if (departmentFilter) {
-        departmentFilter.addEventListener('change', function () {
-            const sel  = this.value;
-            const pl   = document.getElementById('productList');
-            const tc   = document.getElementById('variantTabContent');
-            const si   = document.getElementById('variantSearchInput');
-            let hasVisible = false;
-            document.querySelectorAll('.product-item').forEach(item => {
-                const depts   = item.getAttribute('data-department').split(',');
-                const matches = sel === '' || depts.includes(sel);
-                item.style.display = matches ? '' : 'none';
-                if (matches) hasVisible = true;
-                const pillLink = item.querySelector('a[href]');
-                const tabPane  = pillLink ? document.getElementById(pillLink.getAttribute('href').replace('#', '')) : null;
-                if (tabPane) tabPane.querySelectorAll('.variant-item').forEach(v => v.style.display = matches ? '' : 'none');
-            });
-            pl.querySelector('.no-products-message')?.remove();
-            document.getElementById('pos-dept-no-variants')?.remove();
-            if (!hasVisible && sel !== '') {
-                if (si) { si.value = ''; si.disabled = true; si.placeholder = '{{ __("pagination.no_products_in_department") }}'; }
-                const mp = document.createElement('div'); mp.className = 'card-header pt-5 no-products-message';
-                mp.innerHTML = '<h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ __("pagination.no_products_in_department") }}</h3>';
-                pl.appendChild(mp);
-                if (tc) { const mt = document.createElement('div'); mt.id = 'pos-dept-no-variants'; mt.className = 'text-center py-10';
-                    mt.innerHTML = `<i class="ki-duotone ki-category fs-3x text-gray-400 mb-3 d-block"><span class="path1"></span><span class="path2"></span></i><span class="text-gray-500 fw-semibold fs-5">{{ __("pagination.no_products_in_department") }}</span>`;
-                    tc.appendChild(mt); }
-                document.querySelectorAll('#variantTabContent .tab-pane').forEach(p => p.style.display = 'none');
-            } else {
-                if (si) { si.disabled = false; si.placeholder = '{{ __("auth._search") }} {{ __("pagination._variants") }}'; if (si.value.trim()) filterProductsAndVariants(si.value); }
-                document.querySelectorAll('#variantTabContent .tab-pane').forEach(p => p.style.display = '');
-                const activePill = document.querySelector('.product-item a.active');
-                const activeParent = activePill?.closest('.product-item');
-                if (activeParent && activeParent.style.display === 'none') {
-                    const first = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
-                    if (first) { window.bootstrap?.Tab ? bootstrap.Tab.getOrCreateInstance(first).show() : first.click(); }
-                }
-            }
-        });
-    }
-});
-</script>
-
-
 {{-- ═══════════════════════════════════════════════
      3. PROCESS PAYMENT (creates/resumes order)
      
@@ -314,10 +410,19 @@ document.addEventListener('DOMContentLoaded', function () {
      and by clearCart() as a safety net.
 ════════════════════════════════════════════════ --}}
 <script>
+
 function processPayment() {
     const submitButton = document.getElementById('processBill');
 
     if (cart.length === 0) { toastr['warning']('{{ __("pagination.cart_empty") }}'); return; }
+
+    // ✅ Check if department is selected (for multi-shop)
+    @if(!$isSingleShop)
+        if (!isDepartmentSelected()) {
+            showDepartmentWarning();
+            return;
+        }
+    @endif
 
     const radioExisting   = document.getElementById('cust-mode-existing');
     const radioNew        = document.getElementById('cust-mode-new');
@@ -351,10 +456,21 @@ function processPayment() {
                 if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
                 if (d > 0) { discountTotal += d; appliedPromotions.push({ id: promo.id, name: promo.name, type: promo.type, value: promo.value, discount: d }); }
             });
-            return { variant_id: item.id, quantity: item.quantity, price: item.price, name: item.name,
-                     subtotal: itemSubtotal, taxes: itemTaxes, tax_total: itemTaxTotal,
-                     discount: discountTotal, promotions: appliedPromotions,
-                     total: itemSubtotal - discountTotal + itemTaxTotal };
+            return { 
+                variant_id: item.id, 
+                quantity: item.quantity, 
+                price: item.price, 
+                name: item.name,
+                subtotal: itemSubtotal, 
+                taxes: itemTaxes, 
+                tax_total: itemTaxTotal,
+                discount: discountTotal, 
+                promotions: appliedPromotions,
+                total: itemSubtotal - discountTotal + itemTaxTotal,
+                // ✅ Include inventory_id and department_id
+                inventory_id: item.inventory_id || null,
+                department_id: item.department_id || null
+            };
         }),
         customer: customerData,
         subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
@@ -387,11 +503,6 @@ function processPayment() {
             enrichedCart.customerName = data.customerName;
             enrichedCart.order_id     = data.order_id;
 
-            // ── DO NOT clear resumedOrderId here ──────────────────────────
-            // openPaymentModal() needs it to recalculate the live cart total.
-            // processSplitPayments() needs it to send cart_updated=true.
-            // Both will use it and then clear it themselves.
-
             if (typeof window.openPaymentModal === 'function') {
                 window.openPaymentModal(enrichedCart);
             } else {
@@ -408,11 +519,20 @@ function processPayment() {
     });
 }
 </script>
+
 <script>
 function generateInvoice() {
     const submitButton = document.getElementById('generateInvoiceBtn');
 
     if (cart.length === 0) { toastr['warning']('{{ __("pagination.cart_empty") }}'); return; }
+
+    // ✅ Check if department is selected (for multi-shop)
+    @if(!$isSingleShop)
+        if (!isDepartmentSelected()) {
+            showDepartmentWarning();
+            return;
+        }
+    @endif
 
     const radioExisting   = document.getElementById('cust-mode-existing');
     const radioNew        = document.getElementById('cust-mode-new');
@@ -429,8 +549,6 @@ function generateInvoice() {
         customerData = { type: 'new', name: custNewInput.value.trim() };
     }
 
-    // Same cart-to-payload shape as processPayment() — kept identical
-    // so both endpoints receive data in the exact same format.
     const cartData = {
         items: cart.map(item => {
             const itemSubtotal = item.price * item.quantity;
@@ -448,10 +566,21 @@ function generateInvoice() {
                 if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
                 if (d > 0) { discountTotal += d; appliedPromotions.push({ id: promo.id, name: promo.name, type: promo.type, value: promo.value, discount: d }); }
             });
-            return { variant_id: item.id, quantity: item.quantity, price: item.price, name: item.name,
-                     subtotal: itemSubtotal, taxes: itemTaxes, tax_total: itemTaxTotal,
-                     discount: discountTotal, promotions: appliedPromotions,
-                     total: itemSubtotal - discountTotal + itemTaxTotal };
+            return { 
+                variant_id: item.id, 
+                quantity: item.quantity, 
+                price: item.price, 
+                name: item.name,
+                subtotal: itemSubtotal, 
+                taxes: itemTaxes, 
+                tax_total: itemTaxTotal,
+                discount: discountTotal, 
+                promotions: appliedPromotions,
+                total: itemSubtotal - discountTotal + itemTaxTotal,
+                // ✅ Include inventory_id and department_id
+                inventory_id: item.inventory_id || null,
+                department_id: item.department_id || null
+            };
         }),
         customer: customerData,
         subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
@@ -494,6 +623,7 @@ function generateInvoice() {
     });
 }
 </script>
+
 
 {{-- ═══════════════════════════════════════════════
      4. CURRENCY + RECEIPT GENERATOR + PAYMENT MODAL
@@ -856,15 +986,26 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
                         if (promo.type==='fixed_amount') d = promo.value*item.quantity;
                         if (d>0) { discTotal+=d; promos.push({id:promo.id,name:promo.name,type:promo.type,value:promo.value,discount:d}); }
                     });
-                    return { variant_id:item.id, name:item.name, price:item.price, quantity:item.quantity,
-                             subtotal:itemSubtotal, taxes:itemTaxes, tax_total:taxTotal,
-                             discount:discTotal, promotions:promos,
-                             total:parseFloat((itemSubtotal-discTotal+taxTotal).toFixed(2)) };
+                    return { 
+                        variant_id: item.id, 
+                        name: item.name, 
+                        price: item.price, 
+                        quantity: item.quantity,
+                        subtotal: itemSubtotal, 
+                        taxes: itemTaxes, 
+                        tax_total: taxTotal,
+                        discount: discTotal, 
+                        promotions: promos,
+                        total: parseFloat((itemSubtotal-discTotal+taxTotal).toFixed(2)),
+                        // ✅ Include inventory_id and department_id
+                        inventory_id: item.inventory_id || null,
+                        department_id: item.department_id || null
+                    };
                 })
             };
         }
 
-        // ── Explicit payload — no Object.assign spread ────────
+        // ── Explicit payload ────────────────────────────────────
         var payload = {
             order_id:       currentOrder.order_id || currentOrder.id,
             total_tendered: splitPayments.reduce((s,p) => s+p.tendered, 0),
@@ -980,10 +1121,6 @@ function formatPaymentType(type) {
         });
     }
 </script>
-
-
-
-
 
 <script>
     // Update invoice status — 'paid' and 'partially_paid' are intercepted

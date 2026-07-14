@@ -26,13 +26,18 @@
 
                         <div class="row g-3 tax-options" style="{{ $product->is_taxable == 1 ? '' : 'display:none;' }}">
                             @foreach($taxes as $tax)
+                                @php
+                                    // ✅ Check if this tax is already assigned to the product
+                                    $isTaxAssigned = $product->taxes->contains($tax->id);
+                                @endphp
                                 <div class="col-md-6">
                                     <div class="form-check">
                                         <input type="checkbox" 
                                             class="form-check-input"
                                             name="taxes[]" 
                                             value="{{ $tax->id }}"
-                                            id="tax_{{ $product->id }}_{{ $tax->id }}">
+                                            id="tax_{{ $product->id }}_{{ $tax->id }}"
+                                            {{ $isTaxAssigned ? 'checked' : '' }}>
                                         <label class="form-check-label" for="tax_{{ $product->id }}_{{ $tax->id }}">
                                             {{ ucwords(str_replace('_', ' ', $tax->name)) }} - {{ $tax->code }}
                                         </label>
@@ -51,13 +56,18 @@
                         <h6 class="fw-bold mb-3">{{ __('pagination.assign_promotions') }}</h6>
                         <div class="row g-3">
                             @foreach($promotions as $promotion)
+                                @php
+                                    // ✅ Check if this promotion is already assigned to the product
+                                    $isPromoAssigned = $product->promotions->contains($promotion->id);
+                                @endphp
                                 <div class="col-md-6">
                                     <div class="form-check">
                                         <input type="checkbox" 
                                             class="form-check-input"
                                             name="promotions[]" 
                                             value="{{ $promotion->id }}"
-                                            id="promo_{{ $product->id }}_{{ $promotion->id }}">
+                                            id="promo_{{ $product->id }}_{{ $promotion->id }}"
+                                            {{ $isPromoAssigned ? 'checked' : '' }}>
                                         <label class="form-check-label" for="promo_{{ $product->id }}_{{ $promotion->id }}">
                                             {{ ucwords(str_replace('_', ' ', $promotion->name)) }}
                                         </label>
@@ -72,8 +82,9 @@
                         <h6 class="fw-bold mb-3">{{ __('pagination.allocate_locations_departments') }}</h6>
                         @unless(tenant_is_single_shop(auth()->user()->tenant_id))
                             @php
-                                $selectedDepartments = old('departments', $product->departments->pluck('id')->toArray() ?? []);
-                                $selectedLocations = old('locations', $product->locations->pluck('id')->toArray() ?? []);
+                                // ✅ Get currently selected departments and locations
+                                $selectedDepartments = $product->departments->pluck('id')->toArray();
+                                $selectedLocations = $product->locations->pluck('id')->toArray();
                             @endphp
 
                             @foreach($locations as $location)
@@ -175,24 +186,3 @@
         </div>
     </div>
 </div>
-
-<style>
-    /* Indeterminate checkbox styling */
-    .location-checkbox:indeterminate {
-        background-color: var(--bs-primary);
-        border-color: var(--bs-primary);
-        position: relative;
-    }
-
-    .location-checkbox:indeterminate::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 8px;
-        height: 2px;
-        background-color: white;
-        border-radius: 2px;
-    }
-</style>

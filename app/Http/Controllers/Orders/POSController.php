@@ -15,12 +15,13 @@ use App\Models\{ OrderItem, OrderPayment, InventoryLog, Customer, Inventory, Ord
 
 class POSController extends Controller
 {
+
     public function index(Request $request)
     {
         Artisan::call('optimize:clear');
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-                
+        
         if (!$user->hasPermissionTo('view order')) {
             return response()->json([
                 'success' => false,
@@ -28,145 +29,141 @@ class POSController extends Controller
             ]);
         }
 
-        // Check if this is a single shop tenant
         $isSingleShop = tenant_is_single_shop($tenantId);
-        // dd($isSingleShop);
-
         $now = now();
+        $departmentId = $request->input('department', '');
 
-        if ($isSingleShop) {
-            // Single shop: Get all product variants regardless of department, inventory, location
-            $products = Product::with([
-                    'taxes' => fn($q) => $q->where('is_active', 1),
-                    'promotions' => fn($q) => $q
-                        ->where('is_active', 1)
-                        ->where('start_date', '<=', $now)
-                        ->where('end_date', '>=', $now),
-                    'variants' => function($query) {
-                        $query->where('is_active', 1)
-                            ->orderBy('name');
-                    },
-                    'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                    'variants.variantPromotions' => fn($q) => $q
-                        ->where('is_active', 1)
-                        ->where('start_date', '<=', $now)
-                        ->where('end_date', '>=', $now),
-                ])
-                ->where('tenant_id', $tenantId) // Added tenant filter
-                ->where('is_active', 1)
-                ->whereHas('variants') // Only products that have variants
-                ->latest()
-                ->get();
+        // ✅ Get user departments (for multi-shop)
+        $user_departments = $user->departments()->get();
 
-        } else {
-            // Multi-shop: Filter variants by inventory in user's departments (same location)
-            $user_departments = $user->departments()->pluck('departments.id');
-            $user_location_id = $user->location_id;
-
-            $products = Product::with([
-                'departments',
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q
-                    ->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function($query) use ($user_departments, $user_location_id) {
-                    $query->where('is_active', 1)
-                        ->whereHas('inventory')
-                        ->with(['inventory' => function($q) use ($user_departments, $user_location_id) {
-                            $q->whereIn('department_id', $user_departments)
-                            ->where('location_id', $user_location_id);
-                        }]);
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q
-                    ->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-            ])
+        // ✅ Build the base query with filters
+        $productsQuery = Product::query()
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->whereHas('variants', function($q) use ($user_departments, $user_location_id) {
-                $q->where('is_active', 1)
-                ->whereHas('inventory', function($query) use ($user_departments, $user_location_id) {
-                    $query->whereIn('department_id', $user_departments)
-                            ->where('location_id', $user_location_id);
-                });
-            })
-            ->latest()
-            ->get();
+            ->whereHas('variants', function($q) {
+                $q->where('is_active', 1);
+            });
 
-            // DEBUG: Check what inventory is actually being loaded
-            // \Log::info("=== INVENTORY DEBUG ===");
-            // foreach ($products as $product) {
-            //     foreach ($product->variants as $variant) {
-            //         \Log::info("Variant {$variant->id} inventory count: " . $variant->inventory->count());
-            //         foreach ($variant->inventory as $inv) {
-            //             \Log::info("  - Inventory ID: {$inv->id}, Dept: {$inv->department_id}, Loc: {$inv->location_id}");
-            //         }
-            //     }
-            // }
+        // ✅ Apply department filter for multi-shop
+        if (!$isSingleShop && !empty($departmentId)) {
+            $productsQuery->whereHas('departments', function($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
 
-            // Also check if there are any inventory records that should match but aren't being loaded
-            $expectedInventory = \DB::table('inventory_items')
-                ->whereIn('variant_id', [228, 229])
-                ->whereIn('department_id', $user_departments)
-                ->where('location_id', $user_location_id)
-                ->get();
+        // ✅ IMPORTANT: Limit to only 20 products for initial load
+        $products = $productsQuery->limit(20)->get();
 
-            \Log::info("Expected inventory records from DB: " . $expectedInventory->count());
-            foreach ($expectedInventory as $inv) {
-                \Log::info("  - Variant: {$inv->variant_id}, Dept: {$inv->department_id}, Loc: {$inv->location_id}");
+        // ✅ Eager load relationships based on what we have
+        if ($isSingleShop) {
+            $products->load([
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) {
+                    $query->where('is_active', 1)->orderBy('name');
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ]);
+
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
+                    $variant->quantity_source = 'overall';
+                    $variant->inventory_by_dept = [];
+                }
+            }
+        } else {
+            $userDepartmentIds = $user->departments()->pluck('departments.id');
+            $userLocationId = $user->location_id;
+
+            $products->load([
+                'departments',
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) use ($userDepartmentIds, $userLocationId, $now) {
+                    $query->where('is_active', 1)
+                        ->whereHas('inventory', function($q) use ($userDepartmentIds, $userLocationId) {
+                            $q->whereIn('department_id', $userDepartmentIds)
+                            ->where('location_id', $userLocationId);
+                        })
+                        ->with(['inventory' => function($q) use ($userDepartmentIds, $userLocationId) {
+                            $q->whereIn('department_id', $userDepartmentIds)
+                            ->where('location_id', $userLocationId);
+                        }])
+                        ->with(['variantTaxes' => fn($q) => $q->where('is_active', 1)])
+                        ->with(['variantPromotions' => fn($q) => $q
+                            ->where('is_active', 1)
+                            ->where('start_date', '<=', $now)
+                            ->where('end_date', '>=', $now)
+                        ]);
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ]);
+
+            // Attach inventory_by_dept to each variant
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $inventoryByDept = [];
+                    $totalQty = 0;
+                    foreach ($variant->inventory as $inv) {
+                        $inventoryByDept[$inv->department_id] = [
+                            'inventory_id' => $inv->id,
+                            'quantity' => $inv->quantity_allocated,
+                            'location_id' => $inv->location_id,
+                            'department_id' => $inv->department_id,
+                        ];
+                        $totalQty += $inv->quantity_allocated;
+                    }
+                    $variant->inventory_by_dept = $inventoryByDept;
+                    $variant->quantity_available = $totalQty;
+                    $variant->quantity_source = 'inventory_allocated';
+                }
             }
         }
-        
 
-
-        
-        // Compute applicable taxes and promotions per variant
+        // ✅ Compute taxes and promotions
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
-                /** ---------------- Taxes ---------------- */
-                $applicableTaxes = collect();
+                /** ---------------- TAXES ---------------- */
                 if ((int)$variant->is_taxable === 0) {
-                    $applicableTaxes = collect();
+                    $variant->applicable_taxes = collect();
                 } else {
-                    if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+                    $applicableTaxes = collect();
+                    
+                    if ($variant->variantTaxes->isNotEmpty()) {
+                        $applicableTaxes = $variant->variantTaxes->keyBy('id');
+                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
                         $applicableTaxes = $product->taxes->keyBy('id');
                     }
-                    if ($variant->variantTaxes->isNotEmpty()) {
-                        foreach ($variant->variantTaxes as $vtax) {
-                            $applicableTaxes[$vtax->id] = $vtax; // override if same id
-                        }
-                    }
+
+                    $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
+                        $rate = (float) $t->rate;
+                        return [
+                            'id'   => (int)$t->id,
+                            'name' => $t->name,
+                            'rate' => $rate,
+                            'type' => $t->type,
+                        ];
+                    })->values();
                 }
 
-                $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
-                    $rate = (float) $t->rate;
-
-                    return [
-                        'id'   => (int)$t->id,
-                        'name' => $t->name,
-                        'rate'  => $t->type === 'fixed'
-                                ? $rate // convert & format if fixed amount
-                                : $rate,
-                        'type' => $t->type,
-                    ];
-                })->values();
-
-                /** ---------------- Promotions ---------------- */
+                /** ---------------- PROMOTIONS ---------------- */
                 $applicablePromos = collect();
 
-                // Start with product-level promos
-                if ($product->promotions->isNotEmpty()) {
-                    $applicablePromos = $product->promotions->keyBy('id');
-                }
-
-                // Merge variant promos (override if same id)
                 if ($variant->variantPromotions->isNotEmpty()) {
-                    foreach ($variant->variantPromotions as $vpromo) {
-                        $applicablePromos[$vpromo->id] = $vpromo;
-                    }
+                    $applicablePromos = $variant->variantPromotions->keyBy('id');
+                } else if ($product->promotions->isNotEmpty()) {
+                    $applicablePromos = $product->promotions->keyBy('id');
                 }
 
                 $variant->applicable_promotions = $applicablePromos->map(function ($p) {
@@ -174,46 +171,232 @@ class POSController extends Controller
                     return [
                         'id'          => (int)$p->id,
                         'name'        => $p->name,
-                        'type'        => $p->discount_type,   // 'percentage' | 'fixed' | 'buy_x_get_y'
-                        'value'       => $p->discount_type === 'fixed'
-                                        ? $value   // show in system currency convert to needed currency
-                                        : $value, 
+                        'type'        => $p->discount_type,
+                        'value'       => $value,
                         'start_date'  => $p->start_date,
                         'end_date'    => $p->end_date,
                     ];
                 })->values();
 
-                /** ---------------- Quantity Handling ---------------- */
-                if ($isSingleShop) {
-                    // Single shop: Use overal_quantity_at_hand directly
-                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
-                    $variant->quantity_source = 'overall';
-                } else {
-                    // Multi-shop: Calculate from inventory using quantity_allocated
-                    $inventory = $variant->inventory; // Now a Collection due to hasMany relationship
-
-                    if ($inventory->isNotEmpty()) {
-                        // Sum up quantity_allocated from all inventory records in the collection
-                        $variant->quantity_available = $inventory->sum('quantity_allocated') ?? 0;
-                    } else {
-                        $variant->quantity_available = 0;
-                    }
-                    $variant->quantity_source = 'inventory_allocated';
-                }
-
-                /** ---------------- Currency Casting ---------------- */
-                // Always raw in USD
-                $variant->price      = $variant->price;
-                $variant->cost_price = $variant->cost_price; // They are auto converted in the model by accessors
+                $variant->price = $variant->price;
+                $variant->cost_price = $variant->cost_price;
             }
         }
 
-        // Only include user_departments for multi-shop scenario
-        $user_departments = $user->departments()->get();
+        return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop'));
+    }
 
-        // \Log::info($products->toArray());
+    /**
+     * Search products and variants for POS
+     */
+    public function search(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
 
-        return view('orders.pos-index', compact('user_departments', 'products'));
+        if (!$user->hasPermissionTo('view order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $isSingleShop = tenant_is_single_shop($tenantId);
+        $now = now();
+        $searchTerm = $request->input('search', '');
+        $departmentId = $request->input('department', '');
+
+        // If no search term, return empty
+        if (empty($searchTerm)) {
+            return response()->json([
+                'success' => true,
+                'products' => [],
+                'has_more' => false,
+            ]);
+        }
+
+        // Build the query
+        $productsQuery = Product::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1);
+
+        // Search by product name, SKU, or variant name/SKU
+        $productsQuery->where(function($q) use ($searchTerm) {
+            $q->where('name', 'LIKE', "%{$searchTerm}%")
+            ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
+            ->orWhereHas('variants', function($vq) use ($searchTerm) {
+                $vq->where('name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+            });
+        });
+
+        // Apply department filter for multi-shop
+        if (!$isSingleShop && !empty($departmentId)) {
+            $productsQuery->whereHas('departments', function($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
+
+        // Limit results for performance
+        $products = $productsQuery->limit(20)->get();
+
+        // If no products found via product search, try direct variant search
+        if ($products->isEmpty()) {
+            $variantIds = ProductVariant::where('is_active', 1)
+                ->where('tenant_id', $tenantId)
+                ->where(function($q) use ($searchTerm) {
+                    $q->where('name', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+                })
+                ->pluck('product_id')
+                ->unique()
+                ->toArray();
+
+            if (!empty($variantIds)) {
+                $products = Product::whereIn('id', $variantIds)
+                    ->where('tenant_id', $tenantId)
+                    ->where('is_active', 1)
+                    ->limit(20)
+                    ->get();
+            }
+        }
+
+        // Load relationships
+        if ($isSingleShop) {
+            $products->load([
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) {
+                    $query->where('is_active', 1)->orderBy('name');
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ]);
+
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
+                    $variant->quantity_source = 'overall';
+                    $variant->inventory_by_dept = [];
+                }
+            }
+        } else {
+            $userDepartmentIds = $user->departments()->pluck('departments.id');
+            $userLocationId = $user->location_id;
+
+            $products->load([
+                'departments',
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) use ($userDepartmentIds, $userLocationId, $now) {
+                    $query->where('is_active', 1)
+                        ->whereHas('inventory', function($q) use ($userDepartmentIds, $userLocationId) {
+                            $q->whereIn('department_id', $userDepartmentIds)
+                            ->where('location_id', $userLocationId);
+                        })
+                        ->with(['inventory' => function($q) use ($userDepartmentIds, $userLocationId) {
+                            $q->whereIn('department_id', $userDepartmentIds)
+                            ->where('location_id', $userLocationId);
+                        }])
+                        ->with(['variantTaxes' => fn($q) => $q->where('is_active', 1)])
+                        ->with(['variantPromotions' => fn($q) => $q
+                            ->where('is_active', 1)
+                            ->where('start_date', '<=', $now)
+                            ->where('end_date', '>=', $now)
+                        ]);
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ]);
+
+            // Attach inventory_by_dept to each variant
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $inventoryByDept = [];
+                    $totalQty = 0;
+                    foreach ($variant->inventory as $inv) {
+                        $inventoryByDept[$inv->department_id] = [
+                            'inventory_id' => $inv->id,
+                            'quantity' => $inv->quantity_allocated,
+                            'location_id' => $inv->location_id,
+                            'department_id' => $inv->department_id,
+                        ];
+                        $totalQty += $inv->quantity_allocated;
+                    }
+                    $variant->inventory_by_dept = $inventoryByDept;
+                    $variant->quantity_available = $totalQty;
+                    $variant->quantity_source = 'inventory_allocated';
+                }
+            }
+        }
+
+        // Compute taxes and promotions
+        foreach ($products as $product) {
+            foreach ($product->variants as $variant) {
+                // Taxes
+                if ((int)$variant->is_taxable === 0) {
+                    $variant->applicable_taxes = collect();
+                } else {
+                    $applicableTaxes = collect();
+                    
+                    if ($variant->variantTaxes->isNotEmpty()) {
+                        $applicableTaxes = $variant->variantTaxes->keyBy('id');
+                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+                        $applicableTaxes = $product->taxes->keyBy('id');
+                    }
+
+                    $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
+                        $rate = (float) $t->rate;
+                        return [
+                            'id'   => (int)$t->id,
+                            'name' => $t->name,
+                            'rate' => $rate,
+                            'type' => $t->type,
+                        ];
+                    })->values();
+                }
+
+                // Promotions
+                $applicablePromos = collect();
+
+                if ($variant->variantPromotions->isNotEmpty()) {
+                    $applicablePromos = $variant->variantPromotions->keyBy('id');
+                } else if ($product->promotions->isNotEmpty()) {
+                    $applicablePromos = $product->promotions->keyBy('id');
+                }
+
+                $variant->applicable_promotions = $applicablePromos->map(function ($p) {
+                    $value = (float) $p->discount_value;
+                    return [
+                        'id'          => (int)$p->id,
+                        'name'        => $p->name,
+                        'type'        => $p->discount_type,
+                        'value'       => $value,
+                        'start_date'  => $p->start_date,
+                        'end_date'    => $p->end_date,
+                    ];
+                })->values();
+
+                $variant->price = $variant->price;
+                $variant->cost_price = $variant->cost_price;
+            }
+        }
+
+        // ✅ Return JSON response
+        return response()->json([
+            'success' => true,
+            'products' => $products,
+            'has_more' => $products->count() >= 20,
+            'is_single_shop' => $isSingleShop,
+        ]);
     }
 
 
@@ -253,10 +436,10 @@ class POSController extends Controller
                     ]);
                 }
 
-                \Log::info('[PauseBuy] Resuming existing order', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                ]);
+                // \Log::info('[PauseBuy] Resuming existing order', [
+                //     'order_id' => $order->id,
+                //     'order_number' => $order->order_number,
+                // ]);
 
                 return response()->json([
                     'success' => true,
@@ -302,7 +485,6 @@ class POSController extends Controller
                 'total' => $cartData['total'],
                 'paid_amount' => 0,
                 'balance_due' => 0,
-                // ✅ Set these to null initially
                 'subtotal_before_bargain' => null,
                 'bargain_discount_applied' => 0,
                 'source' => 'pos',
@@ -313,7 +495,6 @@ class POSController extends Controller
                 $variant = ProductVariant::find($item['variant_id']);
                 if (!$variant) continue;
 
-                $inventoryData = [];
                 if ($isSingleShop) {
                     $inventoryData = [
                         'initial_stock' => $variant->overal_quantity_at_hand,
@@ -321,18 +502,52 @@ class POSController extends Controller
                         'shop_type' => 'single_shop',
                     ];
                 } else {
-                    $inventory = $variant->inventory()
-                        ->where('location_id', $user->location_id ?? 1)
-                        ->where('department_id', $user->department_id ?? 1)
-                        ->first();
-                    $inventoryData = [
-                        'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                        'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                        'inventory_id' => $inventory?->id,
-                        'location_id' => $user->location_id ?? 1,
-                        'department_id' => $user->department_id ?? 1,
-                        'shop_type' => 'multi_shop',
-                    ];
+                    // ✅ Use inventory_id and department_id from cart
+                    $inventoryId = $item['inventory_id'] ?? null;
+                    $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
+                    $locationId = $user->location_id ?? 1;
+
+                    if ($inventoryId) {
+                        $inventory = InventoryItems::find($inventoryId);
+                        if ($inventory) {
+                            $inventoryData = [
+                                'initial_stock' => $inventory->quantity_allocated,
+                                'current_stock' => $inventory->quantity_allocated - $item['quantity'],
+                                'inventory_id'  => $inventory->id,
+                                'location_id'   => $inventory->location_id,
+                                'department_id' => $inventory->department_id,
+                                'shop_type'     => 'multi_shop',
+                            ];
+                        } else {
+                            // Fallback: query inventory
+                            $inventory = $variant->inventory()
+                                ->where('location_id', $locationId)
+                                ->where('department_id', $departmentId)
+                                ->first();
+                            $inventoryData = [
+                                'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                                'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                                'inventory_id'  => $inventory?->id,
+                                'location_id'   => $locationId,
+                                'department_id' => $departmentId,
+                                'shop_type'     => 'multi_shop',
+                            ];
+                        }
+                    } else {
+                        // Fallback: query inventory
+                        $inventory = $variant->inventory()
+                            ->where('location_id', $locationId)
+                            ->where('department_id', $departmentId)
+                            ->first();
+                        $inventoryData = [
+                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                            'inventory_id'  => $inventory?->id,
+                            'location_id'   => $locationId,
+                            'department_id' => $departmentId,
+                            'shop_type'     => 'multi_shop',
+                        ];
+                    }
                 }
 
                 $order->orderItems()->create([
@@ -342,8 +557,8 @@ class POSController extends Controller
                     'sku' => $variant->sku,
                     'unit_price' => $item['price'],
                     'quantity' => $item['quantity'],
-                    'tax_amount' => $item['tax_total'],
-                    'discount' => $item['discount'],
+                    'tax_amount' => $item['tax_total'] ?? 0,
+                    'discount' => $item['discount'] ?? 0,
                     'total_price' => $item['total'],
                     'inventory_data' => json_encode($inventoryData),
                     'tax_data' => json_encode($item['taxes'] ?? []),
@@ -384,6 +599,7 @@ class POSController extends Controller
 
         try {
             $cartData = json_decode($request->cart_data, true);
+            $isSingleShop = tenant_is_single_shop($tenantId);
 
             if (empty($cartData['items'])) {
                 return response()->json([
@@ -435,7 +651,6 @@ class POSController extends Controller
                 'total' => $cartData['total'],
                 'paid_amount' => 0,
                 'balance_due' => $cartData['total'],
-                // ✅ Set these to null initially
                 'subtotal_before_bargain' => null,
                 'bargain_discount_applied' => 0,
                 'source' => 'invoice',
@@ -446,6 +661,60 @@ class POSController extends Controller
                 $variant = ProductVariant::find($item['variant_id']);
                 if (!$variant) continue;
 
+                // ✅ For invoices, we also need to track inventory
+                if ($isSingleShop) {
+                    $inventoryData = [
+                        'initial_stock' => $variant->overal_quantity_at_hand,
+                        'current_stock' => $variant->overal_quantity_at_hand - $item['quantity'],
+                        'shop_type' => 'single_shop',
+                    ];
+                } else {
+                    // ✅ Use inventory_id and department_id from cart for invoices too
+                    $inventoryId = $item['inventory_id'] ?? null;
+                    $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
+                    $locationId = $user->location_id ?? 1;
+
+                    if ($inventoryId) {
+                        $inventory = InventoryItems::find($inventoryId);
+                        if ($inventory) {
+                            $inventoryData = [
+                                'initial_stock' => $inventory->quantity_allocated,
+                                'current_stock' => $inventory->quantity_allocated - $item['quantity'],
+                                'inventory_id'  => $inventory->id,
+                                'location_id'   => $inventory->location_id,
+                                'department_id' => $inventory->department_id,
+                                'shop_type'     => 'multi_shop',
+                            ];
+                        } else {
+                            $inventory = $variant->inventory()
+                                ->where('location_id', $locationId)
+                                ->where('department_id', $departmentId)
+                                ->first();
+                            $inventoryData = [
+                                'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                                'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                                'inventory_id'  => $inventory?->id,
+                                'location_id'   => $locationId,
+                                'department_id' => $departmentId,
+                                'shop_type'     => 'multi_shop',
+                            ];
+                        }
+                    } else {
+                        $inventory = $variant->inventory()
+                            ->where('location_id', $locationId)
+                            ->where('department_id', $departmentId)
+                            ->first();
+                        $inventoryData = [
+                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                            'inventory_id'  => $inventory?->id,
+                            'location_id'   => $locationId,
+                            'department_id' => $departmentId,
+                            'shop_type'     => 'multi_shop',
+                        ];
+                    }
+                }
+
                 $order->orderItems()->create([
                     'product_id' => $variant->product_id,
                     'variant_id' => $variant->id,
@@ -453,9 +722,10 @@ class POSController extends Controller
                     'sku' => $variant->sku,
                     'unit_price' => $item['price'],
                     'quantity' => $item['quantity'],
-                    'tax_amount' => $item['tax_total'],
-                    'discount' => $item['discount'],
+                    'tax_amount' => $item['tax_total'] ?? 0,
+                    'discount' => $item['discount'] ?? 0,
                     'total_price' => $item['total'],
+                    'inventory_data' => json_encode($inventoryData),
                     'tax_data' => json_encode($item['taxes'] ?? []),
                     'promotion_data' => json_encode($item['promotions'] ?? []),
                 ]);
@@ -508,7 +778,7 @@ class POSController extends Controller
 
     public function processSplitPayment(Request $request)
     {
-        \Log::info('processSplitPayment called', $request->all());
+        // \Log::info('processSplitPayment called', $request->all());
         
         try {
             $user = Auth::user();
@@ -526,16 +796,16 @@ class POSController extends Controller
             $isSingleShop = tenant_is_single_shop($tenantId);
             $bargainDiscount = (float) $request->input('bargain_discount', 0);
 
-            \Log::info('[POS] Current order state', [
-                'order_id' => $order->id,
-                'subtotal' => $order->subtotal,
-                'tax_total' => $order->tax_total,
-                'total' => $order->total,
-                'discount_total' => $order->discount_total,
-                'subtotal_before_bargain' => $order->subtotal_before_bargain,
-                'bargain_discount_applied' => $order->bargain_discount_applied,
-                'bargain_discount_requested' => $bargainDiscount,
-            ]);
+            // \Log::info('[POS] Current order state', [
+            //     'order_id' => $order->id,
+            //     'subtotal' => $order->subtotal,
+            //     'tax_total' => $order->tax_total,
+            //     'total' => $order->total,
+            //     'discount_total' => $order->discount_total,
+            //     'subtotal_before_bargain' => $order->subtotal_before_bargain,
+            //     'bargain_discount_applied' => $order->bargain_discount_applied,
+            //     'bargain_discount_requested' => $bargainDiscount,
+            // ]);
 
             if (empty($payments)) {
                 return response()->json([
@@ -559,7 +829,6 @@ class POSController extends Controller
                     $variant = ProductVariant::find($item['variant_id']);
                     if (!$variant) continue;
 
-                    $inventoryData = [];
                     if ($isSingleShop) {
                         $inventoryData = [
                             'initial_stock' => $variant->overal_quantity_at_hand,
@@ -567,18 +836,52 @@ class POSController extends Controller
                             'shop_type' => 'single_shop',
                         ];
                     } else {
-                        $inventory = $variant->inventory()
-                            ->where('location_id', $user->location_id ?? 1)
-                            ->where('department_id', $user->department_id ?? 1)
-                            ->first();
-                        $inventoryData = [
-                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                            'inventory_id' => $inventory?->id,
-                            'location_id' => $user->location_id ?? 1,
-                            'department_id' => $user->department_id ?? 1,
-                            'shop_type' => 'multi_shop',
-                        ];
+                        // ✅ Use inventory_id and department_id from cart
+                        $inventoryId = $item['inventory_id'] ?? null;
+                        $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
+                        $locationId = $user->location_id ?? 1;
+
+                        if ($inventoryId) {
+                            $inventory = InventoryItems::find($inventoryId);
+                            if ($inventory) {
+                                $inventoryData = [
+                                    'initial_stock' => $inventory->quantity_allocated,
+                                    'current_stock' => $inventory->quantity_allocated - $item['quantity'],
+                                    'inventory_id'  => $inventory->id,
+                                    'location_id'   => $inventory->location_id,
+                                    'department_id' => $inventory->department_id,
+                                    'shop_type'     => 'multi_shop',
+                                ];
+                            } else {
+                                // Fallback: query inventory
+                                $inventory = $variant->inventory()
+                                    ->where('location_id', $locationId)
+                                    ->where('department_id', $departmentId)
+                                    ->first();
+                                $inventoryData = [
+                                    'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                                    'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                                    'inventory_id'  => $inventory?->id,
+                                    'location_id'   => $locationId,
+                                    'department_id' => $departmentId,
+                                    'shop_type'     => 'multi_shop',
+                                ];
+                            }
+                        } else {
+                            // Fallback: query inventory
+                            $inventory = $variant->inventory()
+                                ->where('location_id', $locationId)
+                                ->where('department_id', $departmentId)
+                                ->first();
+                            $inventoryData = [
+                                'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                                'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                                'inventory_id'  => $inventory?->id,
+                                'location_id'   => $locationId,
+                                'department_id' => $departmentId,
+                                'shop_type'     => 'multi_shop',
+                            ];
+                        }
                     }
 
                     $order->orderItems()->create([
@@ -637,10 +940,10 @@ class POSController extends Controller
                     $order->save();
                     $order->refresh();
                     
-                    \Log::info('[POS] Bargain anchor created', [
-                        'order_id' => $order->id,
-                        'base_total' => $baseTotal,
-                    ]);
+                    // \Log::info('[POS] Bargain anchor created', [
+                    //     'order_id' => $order->id,
+                    //     'base_total' => $baseTotal,
+                    // ]);
                     
                     $anchor = $order->subtotal_before_bargain;
                 }
@@ -673,14 +976,14 @@ class POSController extends Controller
                 $order->save();
                 $order->refresh();
 
-                \Log::info('[POS] Bargain discount applied', [
-                    'order_id' => $order->id,
-                    'bargain_discount' => $bargainDiscount,
-                    'anchor_total' => $anchor,
-                    'other_discount' => $otherDiscount,
-                    'new_total' => $order->total,
-                    'discount_total' => $order->discount_total,
-                ]);
+                // \Log::info('[POS] Bargain discount applied', [
+                //     'order_id' => $order->id,
+                //     'bargain_discount' => $bargainDiscount,
+                //     'anchor_total' => $anchor,
+                //     'other_discount' => $otherDiscount,
+                //     'new_total' => $order->total,
+                //     'discount_total' => $order->discount_total,
+                // ]);
             }
 
             // ── Validate payment total against (possibly updated) order ────
@@ -1182,36 +1485,44 @@ class POSController extends Controller
         ]);
     }
 
+
     /**
      * Handle inventory updates for multi shop
      */
     private function handleMultiShopInventory($variant, $item, $order, $user = null)
     {
-        // \Log::info('Yes it reached');
-        // Get the user if not passed
         if (!$user) {
             $user = Auth::user();
         }
 
-        // Get the specific inventory item for this location/department
-        // IMPORTANT: inventory() is a relationship, not a property
-        $inventory = $variant->inventory()
-            ->where('location_id', $user->location_id ?? 1)
-            ->where('department_id', $user->department_id ?? 1)
-            ->first();
+        // ✅ Get inventory_id from inventory_data JSON
+        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
+
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
+        } else {
+            // Fallback: query inventory
+            $inventory = $variant->inventory()
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
 
         if (!$inventory) {
             \Log::warning("No inventory found for variant {$variant->id} in multi-shop mode", [
                 'variant_id' => $variant->id,
-                'location_id' => $user->location_id ?? 1,
-                'department_id' => $user->department_id ?? 1,
+                'location_id' => $locationId,
+                'department_id' => $departmentId,
                 'order_id' => $order->id
             ]);
             return;
         }
 
         $beforeQty = $inventory->quantity_allocated;
-        $afterQty = $beforeQty - $item['quantity'];
+        $afterQty = $beforeQty - $item->quantity;
 
         // Update inventory
         $inventory->update([
@@ -1231,11 +1542,11 @@ class POSController extends Controller
 
         // Record transaction (movement)
         InventoryTransactions::create([
-            'quantity' => -$item['quantity'],
+            'quantity' => -$item->quantity,
             'reference_id' => $order->id,
             'reference_type' => 'order',
             'type' => 'sale',
-            'notes' => 'Sold ' . $item['quantity'] . ' units of ' . $variant->sku,
+            'notes' => 'Sold ' . $item->quantity . ' units of ' . $variant->sku,
             'inventory_id' => $inventory->id,
             'created_by' => auth()->id(),
             'tenant_id' => $order->tenant_id,
@@ -1244,9 +1555,9 @@ class POSController extends Controller
         \Log::info('Multi-shop inventory updated', [
             'variant_id' => $variant->id,
             'inventory_id' => $inventory->id,
-            'location_id' => $user->location_id ?? 1,
-            'department_id' => $user->department_id ?? 1,
-            'quantity_sold' => $item['quantity'],
+            'location_id' => $locationId,
+            'department_id' => $departmentId,
+            'quantity_sold' => $item->quantity,
             'before' => $beforeQty,
             'after' => $afterQty
         ]);
