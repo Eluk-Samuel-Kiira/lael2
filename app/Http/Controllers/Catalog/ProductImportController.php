@@ -64,7 +64,7 @@ class ProductImportController extends Controller
             'categories'     => ['created' => 0, 'skipped' => 0, 'errors' => []],
             'sub_categories' => ['created' => 0, 'skipped' => 0, 'errors' => []],
             'products'       => ['created' => 0, 'skipped' => 0, 'errors' => []],
-            'variants'       => ['created' => 0, 'skipped' => 0, 'errors' => []],
+            'variants'       => ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []],
         ];
 
         DB::beginTransaction();
@@ -390,6 +390,18 @@ class ProductImportController extends Controller
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // In store(), update the initial $report array to track 'updated' counts:
+    // ═══════════════════════════════════════════════════════════════════════════
+    /*
+    $report = [
+        'categories'     => ['created' => 0, 'skipped' => 0, 'errors' => []],
+        'sub_categories' => ['created' => 0, 'skipped' => 0, 'errors' => []],
+        'products'       => ['created' => 0, 'skipped' => 0, 'errors' => []],
+        'variants'       => ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []],
+    ];
+    */
+
     // ───────────────────────────────────────────────────────────────────────────
     // 4. VARIANTS
     //    Columns: product_sku | variant_sku | name | barcode | price | cost_price
@@ -398,6 +410,12 @@ class ProductImportController extends Controller
     //    variant_sku is REQUIRED — the sheet must supply one for every row.
     //    barcode is OPTIONAL — leave the cell blank and a standard EAN-13
     //    barcode will be auto-generated for you.
+    //
+    //    RE-IMPORT BEHAVIOUR: if a variant with this SKU already exists for
+    //    this tenant, its price and cost_price are UPDATED from the sheet
+    //    instead of the row being skipped. Everything else about the existing
+    //    variant (name, barcode, weight, quantity, flags) is left untouched —
+    //    only price and cost_price are ever overwritten by a re-import.
     // ───────────────────────────────────────────────────────────────────────────
     private function importVariants($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -472,16 +490,24 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            // ── SKU duplicate check (sheet-supplied SKU, always required) ───────
-            $skuExists = ProductVariant::where('tenant_id', $tenantId)
-                                        ->where('sku', $varSku)
-                                        ->exists();
-            if ($skuExists) {
-                $stat['skipped']++;
+            // ── Check for an existing variant with this SKU (this tenant) ───────
+            // If found: this is a RE-IMPORT — update price/cost_price and move
+            // on, rather than treating it as a duplicate to skip.
+            $existingVariant = ProductVariant::where('tenant_id', $tenantId)
+                                            ->where('sku', $varSku)
+                                            ->first();
+
+            if ($existingVariant) {
+                $existingVariant->update([
+                    'price'      => (int) $price,
+                    'cost_price' => (int) $costPrice,
+                ]);
+
+                $stat['updated'] = ($stat['updated'] ?? 0) + 1;
                 continue;
             }
 
-            // ── Auto-generate barcode if left blank ─────────────────────────────
+            // ── New variant — auto-generate barcode if left blank ───────────────
             if ($barcode === null) {
                 $barcode = $this->generateUniqueBarcode($tenantId);
             } else {
