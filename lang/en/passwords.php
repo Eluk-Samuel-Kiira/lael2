@@ -983,6 +983,7 @@ return [
     'purchase_order_items' => 'Purchase Order Items',
     'product' => 'Product',
     'product_variant' => 'Product Variant',
+    '_variant' => 'Variant',
     'all_products' => 'All Products',
     'quantity' => 'Quantity',
     'unit_cost' => 'Unit Cost',

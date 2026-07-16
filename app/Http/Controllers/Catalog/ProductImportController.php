@@ -197,26 +197,51 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            // Duplicate check (scoped to tenant)
+            // Duplicate check (scoped to tenant) — this is the FAST PATH that
+            // catches most duplicates without ever hitting the database's
+            // unique constraint. It won't catch a cross-tenant name collision
+            // if the DB constraint is still a global unique(name) — that's
+            // what the try/catch below is for.
             $exists = Category::where('tenant_id', $tenantId)
-                               ->where('name', $name)
-                               ->exists();
+                            ->where('name', $name)
+                            ->exists();
 
             if ($exists) {
                 $stat['skipped']++;
                 continue;
             }
 
-            Category::create([
-                'name'        => $name,
-                'slug'        => $this->uniqueSlug('categories', Str::slug($name), $tenantId),
-                'description' => $desc ?: null,
-                'is_active'   => in_array($active, [0, 1]) ? $active : 1,
-                'created_by'  => $userId,
-                'tenant_id'   => $tenantId,
-            ]);
+            // ── Safety net: even if our pre-check above passes (e.g. another
+            // tenant already owns this name and the DB constraint is still a
+            // bare unique(name) rather than unique(tenant_id, name)), catch
+            // the resulting QueryException here instead of letting it bubble
+            // up and roll back the ENTIRE import (categories, sub-categories,
+            // products, variants — everything already processed in this
+            // request). One bad row should only cost you one row. ──────────
+            try {
+                Category::create([
+                    'name'        => $name,
+                    'slug'        => $this->uniqueSlug('categories', Str::slug($name), $tenantId),
+                    'description' => $desc ?: null,
+                    'is_active'   => in_array($active, [0, 1]) ? $active : 1,
+                    'created_by'  => $userId,
+                    'tenant_id'   => $tenantId,
+                ]);
 
-            $stat['created']++;
+                $stat['created']++;
+
+            } catch (\Illuminate\Database\QueryException $e) {
+                // 23000 = SQL integrity constraint violation (duplicate key, etc.)
+                if ($e->getCode() === '23000') {
+                    $stat['skipped']++;
+                    $stat['errors'][] = "Row {$rowNum}: \"{$name}\" already exists (possibly under another account) and was skipped.";
+                    continue;
+                }
+
+                // Anything else is unexpected — re-throw so it's logged and
+                // surfaced properly rather than silently swallowed.
+                throw $e;
+            }
         }
     }
 
@@ -369,6 +394,10 @@ class ProductImportController extends Controller
     // 4. VARIANTS
     //    Columns: product_sku | variant_sku | name | barcode | price | cost_price
     //             | overal_quantity_at_hand | weight | weight_unit_id | is_taxable | is_active
+    //
+    //    variant_sku is REQUIRED — the sheet must supply one for every row.
+    //    barcode is OPTIONAL — leave the cell blank and a standard EAN-13
+    //    barcode will be auto-generated for you.
     // ───────────────────────────────────────────────────────────────────────────
     private function importVariants($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -383,7 +412,7 @@ class ProductImportController extends Controller
             $prodSku   = $row[0]  ?? '';
             $varSku    = $row[1]  ?? '';
             $name      = $row[2]  ?? '';
-            $barcode   = $row[3]  !== '' ? $row[3]  : null;
+            $barcode   = isset($row[3]) && $row[3] !== '' ? $row[3] : null;
             $price     = $row[4]  ?? '';
             $costPrice = $row[5]  ?? '';
             $qty       = isset($row[6])  && $row[6]  !== '' ? (int) $row[6]  : 0;
@@ -421,8 +450,8 @@ class ProductImportController extends Controller
             // ── Resolve parent product ─────────────────────────────────────────
             if (!isset($productCache[$prodSku])) {
                 $productCache[$prodSku] = Product::where('tenant_id', $tenantId)
-                                                  ->where('sku', $prodSku)
-                                                  ->first();
+                                                ->where('sku', $prodSku)
+                                                ->first();
             }
             $product = $productCache[$prodSku];
 
@@ -435,15 +464,15 @@ class ProductImportController extends Controller
             $uomKey = (int) $weightUnitId;
             if (!isset($uomCache[$uomKey])) {
                 $uomCache[$uomKey] = UnitOfMeasure::where('id', $uomKey)
-                                                   ->where('tenant_id', $tenantId)
-                                                   ->first();
+                                                ->where('tenant_id', $tenantId)
+                                                ->first();
             }
             if (!$uomCache[$uomKey]) {
                 $stat['errors'][] = "Row {$rowNum}: Unit of Measure ID \"{$weightUnitId}\" not found.";
                 continue;
             }
 
-            // ── Duplicate checks ───────────────────────────────────────────────
+            // ── SKU duplicate check (sheet-supplied SKU, always required) ───────
             $skuExists = ProductVariant::where('tenant_id', $tenantId)
                                         ->where('sku', $varSku)
                                         ->exists();
@@ -452,7 +481,10 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            if ($barcode) {
+            // ── Auto-generate barcode if left blank ─────────────────────────────
+            if ($barcode === null) {
+                $barcode = $this->generateUniqueBarcode($tenantId);
+            } else {
                 $barcodeExists = ProductVariant::where('tenant_id', $tenantId)
                                                 ->where('barcode', $barcode)
                                                 ->exists();
@@ -481,6 +513,46 @@ class ProductImportController extends Controller
 
             $stat['created']++;
         }
+    }
+
+    // ───────────────────────────────────────────────────────────────────────────
+    // BARCODE AUTO-GENERATION (only — SKU stays required from the sheet)
+    // ───────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Generate a unique, standard-format EAN-13 barcode, scoped per tenant.
+     */
+    private function generateUniqueBarcode(int $tenantId): string
+    {
+        do {
+            $digits = (string) random_int(1, 9);
+            for ($i = 0; $i < 11; $i++) {
+                $digits .= (string) random_int(0, 9);
+            }
+
+            $barcode = $digits . $this->calculateEan13CheckDigit($digits);
+
+            $exists = ProductVariant::where('tenant_id', $tenantId)
+                ->where('barcode', $barcode)
+                ->exists();
+        } while ($exists);
+
+        return $barcode;
+    }
+
+    /**
+     * Standard EAN-13 check digit algorithm (odd positions x1, even x3, mod 10).
+     */
+    private function calculateEan13CheckDigit(string $twelveDigits): int
+    {
+        $sum = 0;
+        for ($i = 0; $i < 12; $i++) {
+            $digit  = (int) $twelveDigits[$i];
+            $weight = ($i % 2 === 0) ? 1 : 3;
+            $sum   += $digit * $weight;
+        }
+
+        return (10 - ($sum % 10)) % 10;
     }
 
     // ───────────────────────────────────────────────────────────────────────────

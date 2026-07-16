@@ -13,9 +13,9 @@
                                 value="1" />
                         </div>
                     </th>
-                    <th class="min-w-125px">{{__('pagination.product_id')}}</th>
-                    <th class="min-w-125px">{{__('auth._name')}}</th> 
                     <th class="min-w-125px">{{__('pagination._sku')}}</th> 
+                    <th class="min-w-125px">{{__('auth._name')}}</th> 
+                    <th class="min-w-125px">{{__('passwords.product_variant')}}</th> 
                     <th class="min-w-125px">{{__('pagination._category')}}</th> 
                     <th class="min-w-125px">{{__('pagination._type')}}</th>
                     <th class="min-w-125px">{{__('pagination.is_taxable')}}</th> 
@@ -35,22 +35,31 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="badge badge-light fw-bold">{{__('ID-')}}{{ $product->id }}</div>
+                                <div class="badge badge-light fw-bold">{{ $product->sku }}</div>
                             </td>
-
                             <td>
                                 <div class="d-flex align-items-center">
-                                    <a href="#" class="symbol symbol-50px">
+                                    <span class="symbol symbol-50px">
                                         <img src="{{ productImage($product->image_url) }}" alt="" class="symbol-label">
-                                    </a>
+                                    </span>
                                     <div class="ms-5">
-                                        <span href="#" class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</span>
+                                        <span class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</span>
                                     </div>
                                 </div>
                             </td>
 
                             <td>
-                                <div class="badge badge-light fw-bold">{{ $product->sku }}</div>
+                                @can('view variant')
+                                    <a href="{{ route('products.show', $product->id) }}" target="_blank"
+                                        class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2">
+                                        <i class="bi bi-eye me-1 fs-5"></i> 
+                                        <span>{{ __('pagination._variantions') }}</span>
+                                        {{-- ✅ Badge showing variant count --}}
+                                        <span class="badge badge-light-primary ms-2 fs-7">
+                                            {{ $product->variants->count() }}
+                                        </span>
+                                    </a>
+                                @endcan
                             </td>
                             <td>{{ $product->category->name }}</td>
                             <td>
@@ -90,12 +99,6 @@
                                             data-bs-target="#updateProductLoc{{$product->id}}">
                                             <i class="bi bi-building me-1 fs-5"></i> <span>{{ __('pagination._allocation') }}</span>
                                         </button>
-                                    @endcan
-                                    @can('view variant')
-                                        <a href="{{ route('products.show', $product->id) }}" 
-                                            class="btn btn-sm btn-light btn-active-color-success d-flex align-items-center px-3 py-2">
-                                            <i class="bi bi-eye me-1 fs-5"></i> <span>{{ __('pagination._variantions') }}</span>
-                                        </a>
                                     @endcan
                                     @can('edit product')
                                         <button 

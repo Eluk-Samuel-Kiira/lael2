@@ -202,6 +202,8 @@ return [
     'product_variant_new' => 'New Product Variant',
     'product_index' => 'Product Index',
     '_variants' => 'Variants',
+    '_variant' => 'Variant',
+    'image_upload_hint' => 'Image Upload Hint',
     '_variantions' => 'Variantions',
     'variant_id' => 'Variant ID',
     '_barcode' => 'Barcode',
