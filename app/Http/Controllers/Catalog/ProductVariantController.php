@@ -34,7 +34,7 @@ class ProductVariantController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('create variant')) {
             abort(403, __('payments.not_authorized'));
         }
@@ -61,14 +61,18 @@ class ProductVariantController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
+            // ── SKU is now OPTIONAL — nullable means the unique rule below is
+            // skipped entirely when left blank, so it won't false-fail. We
+            // auto-generate one below if the field comes back empty. ──────────
             'variants.*.sku' => [
-                'required',
+                'nullable',
                 'string',
                 'max:50',
                 Rule::unique('product_variants')->where(function ($query) use ($tenantId) {
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
+            // ── Barcode was already nullable; same auto-generation applies. ────
             'variants.*.barcode' => [
                 'nullable',
                 'string',
@@ -93,22 +97,8 @@ class ProductVariantController extends Controller
                     }
                 }
             ],
-            'variants.*.image' => 'required|image|mimes:jpg,jpeg,png,gif|max:4048',
+            'variants.*.image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:4048',
         ]);
-
-        // Check maximum variants limit for this product
-        // $currentVariantCount = ProductVariant::where('product_id', $validated['product_id'])
-        //                                     ->where('tenant_id', $tenantId)
-        //                                     ->count();
-        // $maxVariants = tenant_setting($tenantId, 'max_variants_per_product', 10); // Default to 10 if not set
-
-        // if (($currentVariantCount + count($validated['variants'])) > $maxVariants) {
-        //     session()->flash('toast', [
-        //         'type' => 'error',
-        //         'message' => __('auth.maximum_variants_reached', ['max' => $maxVariants]),
-        //     ]);
-        //     return redirect()->back();
-        // }
 
         DB::beginTransaction();
 
@@ -116,8 +106,18 @@ class ProductVariantController extends Controller
             foreach ($validated['variants'] as $variantData) {
                 $variantData['product_id'] = $request->product_id;
                 $variantData['created_by'] = $user->id;
-                $variantData['tenant_id'] = $tenantId;
-                
+                $variantData['tenant_id']  = $tenantId;
+
+                // ── Auto-generate SKU if left blank ─────────────────────────
+                if (empty($variantData['sku'])) {
+                    $variantData['sku'] = $this->generateUniqueSku($tenantId);
+                }
+
+                // ── Auto-generate barcode if left blank ─────────────────────
+                if (empty($variantData['barcode'])) {
+                    $variantData['barcode'] = $this->generateUniqueBarcode($tenantId);
+                }
+
                 // Handle image upload
                 if (isset($variantData['image'])) {
                     $path = $variantData['image']->store('variants', 'public');
@@ -137,7 +137,7 @@ class ProductVariantController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             \Log::error('Product variant creation failed', [
                 'product_id' => $request->product_id,
                 'tenant_id' => $tenantId,
@@ -151,6 +151,79 @@ class ProductVariantController extends Controller
         }
 
         return redirect()->route('products.show', $request['product_id']);
+    }
+
+    /**
+     * Generate a unique 7-character alphanumeric SKU, scoped per tenant.
+     *
+     * Format: 2 letters (tenant-agnostic prefix) + 5 uppercase alphanumeric
+     * characters, e.g. "VR7K2QD". Excludes ambiguous characters (0/O, 1/I/L)
+     * to keep SKUs easy to read off a shelf label or receipt.
+     */
+    private function generateUniqueSku(int $tenantId): string
+    {
+        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0,O,1,I,L
+        $prefix   = 'VR'; // short, constant — feel free to swap for a category code
+
+        do {
+            $random = '';
+            for ($i = 0; $i < 5; $i++) {
+                $random .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            $sku = $prefix . $random; // 7 characters total
+
+            $exists = ProductVariant::where('tenant_id', $tenantId)
+                ->where('sku', $sku)
+                ->exists();
+        } while ($exists);
+
+        return $sku;
+    }
+
+    /**
+     * Generate a unique, standard-format EAN-13 barcode, scoped per tenant.
+     *
+     * EAN-13 is the common retail barcode standard (what you see on shelf
+     * products worldwide) — 12 random digits plus a computed check digit,
+     * making it scannable by any standard barcode reader/POS scanner.
+     */
+    private function generateUniqueBarcode(int $tenantId): string
+    {
+        do {
+            // 12 random digits (first digit avoided as 0 to keep it looking
+            // like a normal retail prefix, purely cosmetic — not a real GS1
+            // registered prefix since these are internally generated codes)
+            $digits = (string) random_int(1, 9);
+            for ($i = 0; $i < 11; $i++) {
+                $digits .= (string) random_int(0, 9);
+            }
+
+            $barcode = $digits . $this->calculateEan13CheckDigit($digits);
+
+            $exists = ProductVariant::where('tenant_id', $tenantId)
+                ->where('barcode', $barcode)
+                ->exists();
+        } while ($exists);
+
+        return $barcode;
+    }
+
+    /**
+     * Standard EAN-13 check digit algorithm (odd positions x1, even x3,
+     * mod 10). Given the first 12 digits, returns the 13th check digit.
+     */
+    private function calculateEan13CheckDigit(string $twelveDigits): int
+    {
+        $sum = 0;
+        for ($i = 0; $i < 12; $i++) {
+            $digit  = (int) $twelveDigits[$i];
+            $weight = ($i % 2 === 0) ? 1 : 3;
+            $sum   += $digit * $weight;
+        }
+
+        $checkDigit = (10 - ($sum % 10)) % 10;
+
+        return $checkDigit;
     }
 
 
