@@ -63,7 +63,7 @@ class ProductImportController extends Controller
         $report = [
             'categories'     => ['created' => 0, 'skipped' => 0, 'errors' => []],
             'sub_categories' => ['created' => 0, 'skipped' => 0, 'errors' => []],
-            'products'       => ['created' => 0, 'skipped' => 0, 'errors' => []],
+            'products'       => ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []],
             'variants'       => ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []],
         ];
 
@@ -314,6 +314,12 @@ class ProductImportController extends Controller
     // ───────────────────────────────────────────────────────────────────────────
     // 3. PRODUCTS
     //    Columns: sku | name | sub_category_name | type | description | is_taxable | is_active
+    //
+    //    RE-IMPORT BEHAVIOUR: if a product with this SKU already exists for
+    //    this tenant, only its `name` is UPDATED from the sheet. Everything
+    //    else about the existing product (category, type, description,
+    //    tax/active flags) is left untouched. If the SKU is new, a brand
+    //    new product is inserted as before.
     // ───────────────────────────────────────────────────────────────────────────
     private function importProducts($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -364,11 +370,41 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            // ── Duplicate check ────────────────────────────────────────────────
-            $skuExists  = Product::where('tenant_id', $tenantId)->where('sku', $sku)->exists();
+            // ── Check for an existing product with this SKU (this tenant) ──────
+            // If found: this is a RE-IMPORT — update the name only, rather
+            // than treating it as a duplicate to skip.
+            $existingProduct = Product::where('tenant_id', $tenantId)
+                                       ->where('sku', $sku)
+                                       ->first();
+
+            if ($existingProduct) {
+                if ($existingProduct->name !== $name) {
+                    // Make sure the new name doesn't collide with a
+                    // *different* product before renaming this one.
+                    $nameConflict = Product::where('tenant_id', $tenantId)
+                                            ->where('name', $name)
+                                            ->where('id', '!=', $existingProduct->id)
+                                            ->exists();
+
+                    if ($nameConflict) {
+                        $stat['errors'][] = "Row {$rowNum}: Cannot rename product \"{$sku}\" to \"{$name}\" — that name is already used by another product.";
+                        continue;
+                    }
+
+                    $existingProduct->update([
+                        'name' => $name,
+                    ]);
+                }
+
+                $stat['updated'] = ($stat['updated'] ?? 0) + 1;
+                continue;
+            }
+
+            // ── New product — name must not already be taken ───────────────────
             $nameExists = Product::where('tenant_id', $tenantId)->where('name', $name)->exists();
 
-            if ($skuExists || $nameExists) {
+            if ($nameExists) {
+                $stat['errors'][] = "Row {$rowNum}: Product name \"{$name}\" already exists under a different SKU. Row skipped.";
                 $stat['skipped']++;
                 continue;
             }
@@ -390,18 +426,6 @@ class ProductImportController extends Controller
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // In store(), update the initial $report array to track 'updated' counts:
-    // ═══════════════════════════════════════════════════════════════════════════
-    /*
-    $report = [
-        'categories'     => ['created' => 0, 'skipped' => 0, 'errors' => []],
-        'sub_categories' => ['created' => 0, 'skipped' => 0, 'errors' => []],
-        'products'       => ['created' => 0, 'skipped' => 0, 'errors' => []],
-        'variants'       => ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => []],
-    ];
-    */
-
     // ───────────────────────────────────────────────────────────────────────────
     // 4. VARIANTS
     //    Columns: product_sku | variant_sku | name | barcode | price | cost_price
@@ -412,10 +436,11 @@ class ProductImportController extends Controller
     //    barcode will be auto-generated for you.
     //
     //    RE-IMPORT BEHAVIOUR: if a variant with this SKU already exists for
-    //    this tenant, its price and cost_price are UPDATED from the sheet
-    //    instead of the row being skipped. Everything else about the existing
-    //    variant (name, barcode, weight, quantity, flags) is left untouched —
-    //    only price and cost_price are ever overwritten by a re-import.
+    //    this tenant, its `name`, `price`, `cost_price`, and `weight_unit_id`
+    //    are UPDATED from the sheet instead of the row being skipped.
+    //    Everything else about the existing variant (barcode, weight,
+    //    quantity, flags) is left untouched — only those four fields are
+    //    ever overwritten by a re-import.
     // ───────────────────────────────────────────────────────────────────────────
     private function importVariants($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -491,16 +516,19 @@ class ProductImportController extends Controller
             }
 
             // ── Check for an existing variant with this SKU (this tenant) ───────
-            // If found: this is a RE-IMPORT — update price/cost_price and move
-            // on, rather than treating it as a duplicate to skip.
+            // If found: this is a RE-IMPORT — update name/price/cost_price/
+            // weight_unit_id and move on, rather than treating it as a
+            // duplicate to skip.
             $existingVariant = ProductVariant::where('tenant_id', $tenantId)
                                             ->where('sku', $varSku)
                                             ->first();
 
             if ($existingVariant) {
                 $existingVariant->update([
-                    'price'      => (int) $price,
-                    'cost_price' => (int) $costPrice,
+                    'name'        => $name,
+                    'price'       => (int) $price,
+                    'cost_price'  => (int) $costPrice,
+                    'weight_unit' => $uomKey,
                 ]);
 
                 $stat['updated'] = ($stat['updated'] ?? 0) + 1;
