@@ -24,120 +24,100 @@ class DashboardController extends Controller
         $startOfWeek = Carbon::now()->startOfWeek();
         $endOfWeek = Carbon::now()->endOfWeek();
         
-        // Today's stats
+        // ✅ Today's stats - Using models with accessors
+        $todayOrders = Order::where('tenant_id', $tenantId)
+            ->whereDate('created_at', $today)
+            ->whereIn('status', ['completed', 'processing'])
+            ->get();
+        
         $todayStats = [
-            'sales' => Order::where('tenant_id', $tenantId)
-                ->whereDate('created_at', $today)
-                ->whereIn('status', ['completed', 'processing'])
-                ->sum('total') / 100, // Convert from cents
-            
-            'orders' => Order::where('tenant_id', $tenantId)
-                ->whereDate('created_at', $today)
-                ->whereIn('status', ['completed', 'processing'])
-                ->count(),
-            
-            'customers' => Order::where('tenant_id', $tenantId)
-                ->whereDate('created_at', $today)
-                ->whereIn('status', ['completed', 'processing'])
-                ->distinct('customer_id')
-                ->count('customer_id'),
-            
+            'sales' => $todayOrders->sum('total'), // Accessor converts from cents
+            'orders' => $todayOrders->count(),
+            'customers' => $todayOrders->pluck('customer_id')->unique()->count(),
             'profit' => $this->calculateTodayProfit($tenantId, $today),
         ];
         
-        // Weekly sales trend (last 7 days) - padded with zeros for missing days
-        $salesRaw = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [Carbon::now()->subDays(6)->startOfDay(), Carbon::now()->endOfDay()])
-            ->whereIn('status', ['completed', 'processing'])
-            ->select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('SUM(total) as total_sales'),
-                DB::raw('COUNT(*) as order_count')
-            )
-            ->groupBy(DB::raw('DATE(created_at)'))
-            ->orderBy('date')
-            ->get()
-            ->keyBy('date'); // key by date for easy lookup
-
-        // Build full 7-day collection with zeros for missing days
+        // ✅ Weekly sales trend - Using models
         $weeklySales = collect();
         for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i)->format('Y-m-d');
-            $dayName = Carbon::now()->subDays($i)->format('D');
-
-            if ($salesRaw->has($date)) {
-                $item = $salesRaw->get($date);
-                $item->total_sales = $item->total_sales / 100;
-                $item->day_name = $dayName;
-                $weeklySales->push($item);
-            } else {
-                $weeklySales->push((object)[
-                    'date'        => $date,
-                    'total_sales' => 0,
-                    'order_count' => 0,
-                    'day_name'    => $dayName,
-                ]);
-            }
+            $date = Carbon::now()->subDays($i);
+            $dayName = $date->format('D');
+            $dateStr = $date->format('Y-m-d');
+            
+            $dayOrders = Order::where('tenant_id', $tenantId)
+                ->whereDate('created_at', $dateStr)
+                ->whereIn('status', ['completed', 'processing'])
+                ->get();
+            
+            $weeklySales->push((object)[
+                'date'        => $dateStr,
+                'total_sales' => $dayOrders->sum('total'), // Accessor converts
+                'order_count' => $dayOrders->count(),
+                'day_name'    => $dayName,
+            ]);
         }
         
-        // Best selling products
-        $bestSellers = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('product_variants', 'order_items.variant_id', '=', 'product_variants.id')
-            ->where('orders.tenant_id', $tenantId)
-            ->whereBetween('orders.created_at', [Carbon::now()->subDays(30), Carbon::now()])
-            ->whereIn('orders.status', ['completed', 'processing'])
-            ->select(
-                'product_variants.id',
-                'product_variants.name',
-                'product_variants.sku',
-                DB::raw('SUM(order_items.quantity) as total_quantity'),
-                DB::raw('SUM(order_items.total_price) as total_revenue')
-            )
-            ->groupBy('product_variants.id', 'product_variants.name', 'product_variants.sku')
-            ->orderBy('total_quantity', 'desc')
-            ->limit(5)
+        // ✅ Best selling products - Using models
+        $bestSellers = OrderItem::whereHas('order', function($query) use ($tenantId) {
+                $query->where('tenant_id', $tenantId)
+                    ->whereBetween('created_at', [Carbon::now()->subDays(30), Carbon::now()])
+                    ->whereIn('status', ['completed', 'processing']);
+            })
+            ->with('variant')
             ->get()
-            ->map(function($item) {
-                $item->total_revenue = $item->total_revenue / 100;
-                return $item;
-            });
+            ->groupBy('variant_id')
+            ->map(function($items) {
+                $variant = $items->first()->variant;
+                return (object)[
+                    'id' => $variant->id ?? null,
+                    'name' => $variant->name ?? 'Unknown',
+                    'sku' => $variant->sku ?? '',
+                    'total_quantity' => $items->sum('quantity'),
+                    'total_revenue' => $items->sum(function($item) {
+                        return $item->unit_price * $item->quantity; // Accessor on unit_price
+                    }),
+                ];
+            })
+            ->sortByDesc('total_quantity')
+            ->take(5)
+            ->values();
         
-        // Top categories
-        $topCategories = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('product_variants', 'order_items.variant_id', '=', 'product_variants.id')
-            ->join('products', 'product_variants.product_id', '=', 'products.id')
-            ->join('product_categories', 'products.category_id', '=', 'product_categories.id')
-            ->where('orders.tenant_id', $tenantId)
-            ->whereBetween('orders.created_at', [Carbon::now()->subDays(30), Carbon::now()])
-            ->whereIn('orders.status', ['completed', 'processing'])
-            ->select(
-                'product_categories.id',
-                'product_categories.name',
-                DB::raw('SUM(order_items.quantity) as total_quantity'),
-                DB::raw('SUM(order_items.total_price) as total_revenue')
-            )
-            ->groupBy('product_categories.id', 'product_categories.name')
-            ->orderBy('total_revenue', 'desc')
-            ->limit(5)
+        // ✅ Top categories - Using models
+        $topCategories = OrderItem::whereHas('order', function($query) use ($tenantId) {
+                $query->where('tenant_id', $tenantId)
+                    ->whereBetween('created_at', [Carbon::now()->subDays(30), Carbon::now()])
+                    ->whereIn('status', ['completed', 'processing']);
+            })
+            ->with(['variant.product.category'])
             ->get()
-            ->map(function($item) {
-                $item->total_revenue = $item->total_revenue / 100;
-                return $item;
-            });
+            ->filter(function($item) {
+                return $item->variant && $item->variant->product && $item->variant->product->category;
+            })
+            ->groupBy('variant.product.category_id')
+            ->map(function($items) {
+                $category = $items->first()->variant->product->category;
+                return (object)[
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'total_quantity' => $items->sum('quantity'),
+                    'total_revenue' => $items->sum(function($item) {
+                        return $item->unit_price * $item->quantity;
+                    }),
+                ];
+            })
+            ->sortByDesc('total_revenue')
+            ->take(5)
+            ->values();
         
-        // Recent orders
+        // ✅ Recent orders
         $recentOrders = Order::where('tenant_id', $tenantId)
             ->with(['customer', 'orderCreater'])
             ->whereIn('status', ['completed', 'processing', 'confirmed'])
             ->orderBy('created_at', 'desc')
             ->limit(10)
-            ->get()
-            ->map(function($order) {
-                $order->total = $order->total / 100;
-                return $order;
-            });
+            ->get(); // Accessor on 'total' handles conversion
         
-        // Inventory alerts
+        // ✅ Inventory alerts
         $lowStockItems = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where('overal_quantity_at_hand', '<', 10)
@@ -151,7 +131,7 @@ class DashboardController extends Controller
             ->where('overal_quantity_at_hand', '<=', 0)
             ->count();
         
-        // User sessions (active users for this tenant)
+        // ✅ User sessions (active users for this tenant)
         $activeUsers = DB::table('sessions')
             ->join('users', 'sessions.user_id', '=', 'users.id')
             ->where('users.tenant_id', $tenantId)
@@ -218,17 +198,13 @@ class DashboardController extends Controller
                 return $session;
             });
         
-        // Key metrics comparison (today vs yesterday)
-        $yesterdayStats = Order::where('tenant_id', $tenantId)
+        // ✅ Key metrics comparison (today vs yesterday)
+        $yesterdayOrders = Order::where('tenant_id', $tenantId)
             ->whereDate('created_at', Carbon::yesterday())
             ->whereIn('status', ['completed', 'processing'])
-            ->select(
-                DB::raw('SUM(total) as total_sales'),
-                DB::raw('COUNT(*) as order_count')
-            )
-            ->first();
+            ->get();
         
-        $yesterdaySales = ($yesterdayStats->total_sales ?? 0) / 100;
+        $yesterdaySales = $yesterdayOrders->sum('total'); // Accessor converts
         $salesChange = $yesterdaySales > 0 
             ? (($todayStats['sales'] - $yesterdaySales) / $yesterdaySales) * 100 
             : 100;
@@ -250,17 +226,23 @@ class DashboardController extends Controller
     
     private function calculateTodayProfit($tenantId, $today)
     {
-        $todayOrders = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('product_variants', 'order_items.variant_id', '=', 'product_variants.id')
-            ->where('orders.tenant_id', $tenantId)
-            ->whereDate('orders.created_at', $today)
-            ->whereIn('orders.status', ['completed', 'processing'])
-            ->select(
-                DB::raw('SUM((order_items.unit_price - product_variants.cost_price) * order_items.quantity) as total_profit')
-            )
-            ->first();
+        $todayOrderItems = OrderItem::whereHas('order', function($query) use ($tenantId, $today) {
+                $query->where('tenant_id', $tenantId)
+                    ->whereDate('created_at', $today)
+                    ->whereIn('status', ['completed', 'processing']);
+            })
+            ->with('variant')
+            ->get();
         
-        return ($todayOrders->total_profit ?? 0) / 100;
+        $totalProfit = 0;
+        foreach ($todayOrderItems as $item) {
+            if ($item->variant) {
+                $profit = ($item->unit_price - $item->variant->cost_price) * $item->quantity;
+                $totalProfit += $profit;
+            }
+        }
+        
+        return $totalProfit; // Accessor on cost_price and unit_price handle conversion
     }
     
     public function overview(Request $request)
@@ -275,7 +257,7 @@ class DashboardController extends Controller
         // Get date filters
         $startDate = $request->get('start_date', Carbon::today()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::today()->format('Y-m-d'));
-        $filterType = $request->get('filter_type', 'today'); // today, yesterday, this_week, this_month, custom
+        $filterType = $request->get('filter_type', 'today');
         
         // Adjust dates based on filter type
         switch($filterType) {
@@ -297,32 +279,44 @@ class DashboardController extends Controller
         $startDateTime = Carbon::parse($startDate)->startOfDay();
         $endDateTime = Carbon::parse($endDate)->endOfDay();
         
-        // Financial Summary
-        $financialSummary = Order::where('tenant_id', $tenantId)
+        // ✅ Financial Summary - Using models
+        $filteredOrders = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->whereIn('status', ['completed', 'processing'])
-            ->select(
-                DB::raw('SUM(total) as total_sales'),
-                DB::raw('SUM(tax_total) as total_tax'),
-                DB::raw('SUM(discount_total) as total_discounts'),
-                DB::raw('COUNT(*) as order_count'),
-                DB::raw('AVG(total) as average_order')
-            )
-            ->first();
+            ->get();
         
-        // Calculate profit
-        $profitData = OrderItem::join('orders', 'order_items.order_id', '=', 'orders.id')
-            ->join('product_variants', 'order_items.variant_id', '=', 'product_variants.id')
-            ->where('orders.tenant_id', $tenantId)
-            ->whereBetween('orders.created_at', [$startDateTime, $endDateTime])
-            ->whereIn('orders.status', ['completed', 'processing'])
-            ->select(
-                DB::raw('SUM((order_items.unit_price - product_variants.cost_price) * order_items.quantity) as gross_profit'),
-                DB::raw('SUM(order_items.total_price) as revenue')
-            )
-            ->first();
+        $financialSummary = (object)[
+            'total_sales' => $filteredOrders->sum('total'), // Accessor
+            'total_tax' => $filteredOrders->sum('tax_total'), // Accessor
+            'total_discounts' => $filteredOrders->sum('discount_total'), // Accessor
+            'order_count' => $filteredOrders->count(),
+            'average_order' => $filteredOrders->count() > 0 ? $filteredOrders->avg('total') : 0,
+        ];
         
-        // Payment method breakdown
+        // ✅ Calculate profit - Using models
+        $profitItems = OrderItem::whereHas('order', function($query) use ($tenantId, $startDateTime, $endDateTime) {
+                $query->where('tenant_id', $tenantId)
+                    ->whereBetween('created_at', [$startDateTime, $endDateTime])
+                    ->whereIn('status', ['completed', 'processing']);
+            })
+            ->with('variant')
+            ->get();
+        
+        $grossProfit = 0;
+        $revenue = 0;
+        foreach ($profitItems as $item) {
+            $revenue += $item->unit_price * $item->quantity;
+            if ($item->variant) {
+                $grossProfit += ($item->unit_price - $item->variant->cost_price) * $item->quantity;
+            }
+        }
+        
+        $profitData = (object)[
+            'gross_profit' => $grossProfit,
+            'revenue' => $revenue,
+        ];
+        
+        // ✅ Payment method breakdown
         $paymentBreakdown = DB::table('order_payments')
             ->join('orders', 'order_payments.order_id', '=', 'orders.id')
             ->join('payment_methods', 'order_payments.payment_method_id', '=', 'payment_methods.id')
@@ -339,54 +333,45 @@ class DashboardController extends Controller
             ->orderBy('total_amount', 'desc')
             ->get()
             ->map(function($item) {
+                // PaymentMethod model accessor doesn't apply here since we're using DB
+                // But we can manually convert
                 $item->total_amount = $item->total_amount / 100;
                 return $item;
             });
         
-        // Hourly breakdown for the selected day(s)
-        $hourlyBreakdown = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDateTime, $endDateTime])
-            ->whereIn('status', ['completed', 'processing'])
-            ->select(
-                DB::raw('HOUR(created_at) as hour'),
-                DB::raw('COUNT(*) as order_count'),
-                DB::raw('SUM(total) as hourly_total')
-            )
-            ->groupBy(DB::raw('HOUR(created_at)'))
-            ->orderBy('hour')
-            ->get()
-            ->map(function($item) {
-                $item->hourly_total = $item->hourly_total / 100;
-                return $item;
+        // ✅ Hourly breakdown - Using models
+        $hourlyBreakdown = collect();
+        for ($hour = 0; $hour < 24; $hour++) {
+            $hourOrders = $filteredOrders->filter(function($order) use ($hour) {
+                return $order->created_at->hour == $hour;
             });
+            
+            $hourlyBreakdown->push((object)[
+                'hour' => $hour,
+                'order_count' => $hourOrders->count(),
+                'hourly_total' => $hourOrders->sum('total'), // Accessor
+            ]);
+        }
         
-        // Top transactions
+        // ✅ Top transactions
         $topTransactions = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->whereIn('status', ['completed', 'processing'])
             ->with(['customer', 'orderCreater'])
             ->orderBy('total', 'desc')
             ->limit(10)
-            ->get()
-            ->map(function($order) {
-                $order->total = $order->total / 100;
-                return $order;
-            });
+            ->get(); // Accessor on total handles conversion
         
-        // Expense summary (refunds, discounts)
+        // ✅ Expense summary (refunds, discounts)
+        $refundOrders = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDateTime, $endDateTime])
+            ->where('type', 'return')
+            ->get();
+        
         $expenseSummary = [
-            'refunds' => Order::where('tenant_id', $tenantId)
-                ->whereBetween('created_at', [$startDateTime, $endDateTime])
-                ->where('type', 'return')
-                ->sum('total') / 100,
-            'discounts' => Order::where('tenant_id', $tenantId)
-                ->whereBetween('created_at', [$startDateTime, $endDateTime])
-                ->whereIn('status', ['completed', 'processing'])
-                ->sum('discount_total') / 100,
-            'tax_collected' => Order::where('tenant_id', $tenantId)
-                ->whereBetween('created_at', [$startDateTime, $endDateTime])
-                ->whereIn('status', ['completed', 'processing'])
-                ->sum('tax_total') / 100,
+            'refunds' => $refundOrders->sum('total'), // Accessor
+            'discounts' => $filteredOrders->sum('discount_total'), // Accessor
+            'tax_collected' => $filteredOrders->sum('tax_total'), // Accessor
         ];
         
         return view('dashboard.overview', compact(
@@ -401,5 +386,4 @@ class DashboardController extends Controller
             'filterType'
         ));
     }
-
 }
