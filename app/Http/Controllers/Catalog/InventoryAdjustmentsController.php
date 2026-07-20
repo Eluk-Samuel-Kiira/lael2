@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\InventoryItems;
 use App\Models\InventoryAdjustments;
 use App\Models\{ InventoryTransactions, Department, Location };
-use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Facades\{ Auth, DB, Log };
 
 class InventoryAdjustmentsController extends Controller
 {
@@ -146,6 +146,8 @@ class InventoryAdjustmentsController extends Controller
      */
     public function update(Request $request, string $id)
     {     
+        Log::info('Stock adjustment request:', $request->all());
+        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -176,8 +178,8 @@ class InventoryAdjustmentsController extends Controller
             ]);
         }
 
-        // Validate only the fields we need from the request
-        $validated = $request->validate([
+        // ✅ Validate the request with proper custom rules
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'overal_quantity_at_hand' => 'required|integer|min:0',
             'current_quantity' => 'required|integer|min:0',
             'adjust_amount' => [
@@ -186,33 +188,76 @@ class InventoryAdjustmentsController extends Controller
                 function ($attribute, $value, $fail) use ($item) {
                     // For positive (adding to branch), check overall stock
                     if ($value > 0 && $value > $item->variant->overal_quantity_at_hand) {
-                        $fail(__('pagination.adjust_amount_exceeds_stock'));
+                        $fail(__('pagination.adjust_amount_exceeds_stock') . ' Available: ' . $item->variant->overal_quantity_at_hand);
                     }
                     // For negative (removing from branch), check branch stock
                     if ($value < 0 && abs($value) > $item->quantity_allocated) {
-                        $fail(__('pagination.cannot_remove_more_than_allocated'));
+                        $fail(__('pagination.cannot_remove_more_than_allocated') . ' Available: ' . $item->quantity_allocated);
                     }
                 }
             ],
         ]);
 
-        // Calculate new quantity automatically
+        // ✅ Check if validation failed
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        // ✅ Calculate new quantity automatically
         $validated['new_quantity'] = $validated['current_quantity'] + $validated['adjust_amount'];
 
-        // Ensure new quantity is not negative
+        // ✅ Ensure new quantity is not negative
         if ($validated['new_quantity'] < 0) {
             return response()->json([
                 'success' => false,
                 'message' => __('pagination.new_quantity_negative'),
-            ]);
+                'errors' => [
+                    'adjust_amount' => [__('pagination.new_quantity_negative')]
+                ]
+            ], 422);
         }
 
-        // Skip if no actual adjustment is being made
+        // ✅ Skip if no actual adjustment is being made
         if ($validated['adjust_amount'] == 0) {
             return response()->json([
                 'success' => true,
                 'message' => __('pagination.no_adjustment_needed'),
             ]);
+        }
+
+        // ✅ Additional check: Ensure we don't go below zero
+        if ($validated['new_quantity'] < 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.new_quantity_negative'),
+                'errors' => [
+                    'adjust_amount' => [__('pagination.new_quantity_negative')]
+                ]
+            ], 422);
+        }
+
+        // ✅ Additional check: Ensure overall stock doesn't go negative
+        $newOverallQuantity = $item->variant->overal_quantity_at_hand;
+        if ($validated['adjust_amount'] > 0) {
+            $newOverallQuantity = $item->variant->overal_quantity_at_hand - $validated['adjust_amount'];
+        } else {
+            $newOverallQuantity = $item->variant->overal_quantity_at_hand + abs($validated['adjust_amount']);
+        }
+        
+        if ($newOverallQuantity < 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.overall_stock_cannot_be_negative'),
+                'errors' => [
+                    'adjust_amount' => [__('pagination.overall_stock_cannot_be_negative')]
+                ]
+            ], 422);
         }
 
         // Start transaction
@@ -224,15 +269,7 @@ class InventoryAdjustmentsController extends Controller
                 'quantity_allocated' => (int) $validated['new_quantity']
             ]);
 
-            // Update variant overall quantity - FIXED LOGIC
-            if ($validated['adjust_amount'] > 0) {
-                // Moving FROM overall TO branch: decrease overall
-                $newOverallQuantity = $item->variant->overal_quantity_at_hand - $validated['adjust_amount'];
-            } else {
-                // Moving FROM branch BACK TO overall: increase overall
-                $newOverallQuantity = $item->variant->overal_quantity_at_hand + abs($validated['adjust_amount']);
-            }
-            
+            // Update variant overall quantity
             $item->variant->overal_quantity_at_hand = max(0, $newOverallQuantity);
             $item->variant->save();
 
@@ -256,7 +293,7 @@ class InventoryAdjustmentsController extends Controller
 
             // ✅ Record transaction (movement)
             InventoryTransactions::create([
-                'quantity'       => (int) $validated['adjust_amount'], // Keep original sign
+                'quantity'       => (int) $validated['adjust_amount'],
                 'reference_id'   => $item->id,
                 'reference_type' => 'adjustment',
                 'type'           => 'adjustment',
@@ -273,7 +310,7 @@ class InventoryAdjustmentsController extends Controller
                 'reload' => true,
                 'refresh' => false,
                 'componentId' => 'reloadStockComponent',
-                'message' => __('passwords._stock_adjusted'),
+                'message' => __('passwords._stock_adjusted') . ' (' . abs($validated['adjust_amount']) . ' units ' . $direction . ')',
                 'redirect' => route('stocks.index'),
             ]);
 
@@ -290,9 +327,10 @@ class InventoryAdjustmentsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('pagination.adjustment_failed') . ': ' . $e->getMessage(),
-            ]);
+            ], 500);
         }
     }
+    
     
     /**
      * Remove the specified resource from storage.

@@ -27,6 +27,9 @@ class PurchaseOrder extends Model
         'received_total',
         'notes',
         'created_by',
+        'total_paid',
+        'payment_status',
+
         
         // Status tracking fields
         'submitted_at',
@@ -57,12 +60,18 @@ class PurchaseOrder extends Model
         'sent_at' => 'datetime',
         'received_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'total_paid' => 'integer',
     ];
 
     /**
      * Accessors - Convert from stored integer to display float
      */
     public function getSubtotalAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getTotalPaidAttribute(?int $value): ?float
     {
         return from_base_currency($value);
     }
@@ -124,6 +133,11 @@ class PurchaseOrder extends Model
     public function setReceivedTotalAttribute($value): void
     {
         $this->attributes['received_total'] = to_base_currency($value);
+    }
+    
+    public function setTotalPaidAttribute($value): void
+    {
+        $this->attributes['total_paid'] = to_base_currency($value);
     }
 
     

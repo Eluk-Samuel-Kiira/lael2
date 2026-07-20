@@ -1,4 +1,3 @@
- 
 <div class="modal fade" id="editProduct{{ $product->id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-850px">
         <div class="modal-content">
@@ -63,17 +62,57 @@
                         <div class="row g-9 mb-8">
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination._price')}}  {{ currency_code() }}</span>
+                                    <span class="required">{{__('pagination._price')}} {{ currency_code() }}</span>
                                 </label>
-                                <input type="number" value="{{ $product->price }}" class="form-control form-control-solid" name="price" />
+                                <input type="number" value="{{ $product->price }}" class="form-control form-control-solid" name="price" step="0.01" />
                                 <div id="price{{ $product->id }}"></div>
                             </div>
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('pagination.cost_price')}}  {{ currency_code() }}</span>
+                                    {{__('pagination.net_selling_price')}} {{ currency_code() }}
                                 </label>
-                                <input type="number" value="{{ $product->cost_price }}" class="form-control form-control-solid" name="cost_price" />
+                                <input type="number" value="{{ $product->net_selling_price }}" class="form-control form-control-solid" name="net_selling_price" step="0.01" placeholder="Price after discount" />
+                                <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') }}</div>
+                                <div id="net_selling_price{{ $product->id }}"></div>
+                            </div>
+                        </div>
+
+                        {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
+                        <div class="row g-9 mb-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    <span class="required">{{__('pagination.cost_price')}} {{ currency_code() }}</span>
+                                </label>
+                                <input type="number" value="{{ $product->cost_price }}" class="form-control form-control-solid" name="cost_price" step="0.01" />
                                 <div id="cost_price{{ $product->id }}"></div>
+                            </div>
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    {{__('pagination.net_cost_price')}} {{ currency_code() }}
+                                </label>
+                                <input type="number" value="{{ $product->net_cost_price }}" class="form-control form-control-solid" name="net_cost_price" step="0.01" placeholder="Supplier cost" />
+                                <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') }}</div>
+                                <div id="net_cost_price{{ $product->id }}"></div>
+                            </div>
+                        </div>
+
+                        {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
+                        <div class="row g-9 mb-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    {{__('pagination.discount_percentage')}} (%)
+                                </label>
+                                <input type="number" value="{{ $product->discount_percentage ?? 0 }}" class="form-control form-control-solid" name="discount_percentage" step="0.01" min="0" max="100" />
+                                <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') }}</div>
+                                <div id="discount_percentage{{ $product->id }}"></div>
+                            </div>
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                    {{__('pagination.markup_percentage')}} (%)
+                                </label>
+                                <input type="number" value="{{ $product->markup_percentage ?? 0 }}" class="form-control form-control-solid" name="markup_percentage" step="0.01" min="0" />
+                                <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') }}</div>
+                                <div id="markup_percentage{{ $product->id }}"></div>
                             </div>
                         </div>
 
@@ -82,7 +121,7 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                     <span class="required">{{__('pagination._weight')}} </span>
                                 </label>
-                                <input type="number" value="{{ $product->weight }}" class="form-control form-control-solid" name="weight" />
+                                <input type="number" value="{{ $product->weight }}" class="form-control form-control-solid" name="weight" step="0.01" />
                                 <div id="weight{{ $product->id }}"></div>
                             </div>
                             <div class="d-flex flex-column mb-8 fv-row col-md-6">
@@ -98,12 +137,9 @@
                                 <div id="weight_unit{{ $product->id }}"></div>
                             </div>
                         </div>
-                        
-                        
-                        
 
                         <button type="button" id="closeModalEditButton{{$product->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
-                        <button onclick="editProductVariantInstanceLoop({{$product->id }})" id="editUOMButton{{ $product->id }}" type="button" class="btn btn-primary" id>
+                        <button onclick="editProductVariantInstanceLoop({{$product->id }})" id="editUOMButton{{ $product->id }}" type="button" class="btn btn-primary">
                             <span class="indicator-label">{{__('auth._update')}}</span>
                             <span class="indicator-progress">{{__('auth.please_wait') }}
                             <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
@@ -113,6 +149,4 @@
             </div>
         </div>
     </div>
-</div>  
-
-
+</div>

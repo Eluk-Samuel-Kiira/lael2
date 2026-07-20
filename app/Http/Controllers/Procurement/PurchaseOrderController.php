@@ -583,13 +583,18 @@ class PurchaseOrderController extends Controller
         }
         
         $validated = $request->validate([
-            'status' => 'required', 
+            'payment_method_id' => 'required|exists:payment_methods,id',
+            'payment_amount' => 'required|numeric|min:0.01',
+            'payment_status' => 'nullable|in:pending,partial,paid,overdue',
+            'payment_date' => 'nullable|date',
+            'supplier_email' => 'nullable|email',
+            'notes' => 'nullable|string|max:500',
         ]);
         
-        $purchase = PurchaseOrder::with(['supplier', 'items.productVariant'])
-                        ->where('id', $id)
-                        ->where('tenant_id', $tenantId)
-                        ->first();
+        $purchase = PurchaseOrder::with(['supplier', 'items'])
+            ->where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
 
         if (!$purchase) {
             return response()->json([
@@ -598,68 +603,173 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        // Check if status is already sent
-        if ($purchase->status === 'sent') {
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.already_sent'),
-            ]);
-        }
-
-        // Validate that status transition is allowed (only from approved to sent)
-        if ($purchase->status !== 'approved') {
+        // ✅ Allow payments even if already sent
+        // Only prevent sending if already sent (but still allow payments)
+        $isAlreadySent = $purchase->status === 'sent';
+        
+        // For first-time send, status must be 'approved'
+        if (!$isAlreadySent && $purchase->status !== 'approved') {
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.can_only_send_from_approved'),
             ]);
         }
 
-        // Validate that the requested status is sent
-        if ($validated['status'] !== 'sent') {
+        // ✅ Calculate remaining balance
+        $totalAmount = $purchase->total ?? 0;
+        $totalPaid = $purchase->total_paid ?? 0;
+        $remainingBalance = $totalAmount - $totalPaid;
+        
+        // ✅ Validate payment amount
+        $paymentAmount = (float) $validated['payment_amount'];
+        
+        if ($paymentAmount > $remainingBalance) {
             return response()->json([
                 'success' => false,
-                'message' => __('passwords.invalid_status_transition'),
+                'message' => __('payments.payment_exceeds_balance') . ' ' . __('payments.balance') . ': ' . number_format($remainingBalance, 2),
             ]);
         }
 
         DB::beginTransaction();
+
         try {
-            // Update purchase order status
-            $purchase->status = $validated['status'];
-            $purchase->sent_at = now();
-            $purchase->sent_by = auth()->id();
+            $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
             
-            if ($purchase->save()) {  
-                DB::commit();
-                
-                // Send email to supplier if email exists
-                if ($purchase->supplier && $purchase->supplier->email) {
-                    $this->sendPurchaseOrderEmail($purchase);
-                }
-
-
-                return response()->json([
-                    'success' => true,
-                    'reload' => true,
-                    'refresh' => false,
-                    'componentId' => 'reloadPurchasesComponent',
-                    'message' => __('passwords.send_supplier_success'),
-                    'redirect' => route('purchase_order.index'),
-                ]);
+            if (!$paymentMethod) {
+                throw new \Exception(__('pagination.payment_method_not_found'));
             }
 
-            DB::rollBack();
+            // ── Determine payment status ──────────────────────────────────────────
+            $newTotalPaid = $totalPaid + $paymentAmount;
+            $newRemainingBalance = $totalAmount - $newTotalPaid;
+            
+            if ($newRemainingBalance <= 0) {
+                $paymentStatus = 'paid';
+            } elseif ($paymentAmount > 0 && $paymentAmount < $remainingBalance) {
+                $paymentStatus = 'partial';
+            } else {
+                $paymentStatus = $validated['payment_status'] ?? 'partial';
+            }
+
+            // ── Record payment transaction ──────────────────────────────────────────
+            $transactionData = [
+                'user_id' => $user->id,
+                'tenant_id' => $tenantId,
+                'payment_method_id' => $paymentMethod->id,
+                'transaction_type' => 'WITHDRAWAL',
+                'transaction_category' => 'PURCHASE_ORDER',
+                'amount' => $paymentAmount,
+                'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+                'reference_table' => 'purchase_orders',
+                'reference_id' => $purchase->id,
+                'description' => 'Purchase Order Payment - PO #' . $purchase->po_number . ' (' . $paymentStatus . ')',
+                'notes' => 'Payment of ' . number_format($paymentAmount, 2) . ' sent to supplier for PO #' . $purchase->po_number . 
+                        ($validated['notes'] ? ' - ' . $validated['notes'] : ''),
+                'metadata' => [
+                    'purchase_order_number' => $purchase->po_number,
+                    'supplier_id' => $purchase->supplier_id,
+                    'supplier_name' => $purchase->supplier->name,
+                    'payment_status' => $paymentStatus,
+                    'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
+                    'total_amount' => $totalAmount,
+                    'payment_amount' => $paymentAmount,
+                    'total_paid_before' => $totalPaid,
+                    'total_paid_after' => $newTotalPaid,
+                    'balance_before' => $remainingBalance,
+                    'balance_after' => $newRemainingBalance,
+                    'transaction_nature' => 'PURCHASE_PAYMENT',
+                    'sent_by_id' => $user->id,
+                    'sent_by_name' => $user->name,
+                    'is_additional_payment' => $isAlreadySent,
+                ],
+            ];
+
+            if (isset($validated['payment_date'])) {
+                $transactionData['effective_date'] = $validated['payment_date'];
+            }
+
+            $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
+
+            // ── Update purchase order items with payment info ─────────────────────
+            $updateData = [];
+            if (isset($validated['payment_method_id'])) {
+                $updateData['payment_method_id'] = $validated['payment_method_id'];
+            }
+            if ($paymentStatus) {
+                $updateData['payment_status'] = $paymentStatus;
+            }
+            if (isset($validated['payment_date'])) {
+                $updateData['payment_date'] = $validated['payment_date'];
+            }
+            
+            if (!empty($updateData)) {
+                $purchase->items()->update($updateData);
+            }
+
+            // ── Update purchase order ──────────────────────────────────────────────
+            $purchase->total_paid = $newTotalPaid;
+            $purchase->payment_status = $paymentStatus;
+            
+            // ✅ Only set status to 'sent' if it's the first send
+            if (!$isAlreadySent) {
+                $purchase->status = 'sent';
+                $purchase->sent_at = now();
+                $purchase->sent_by = $user->id;
+            }
+            
+            $purchase->save();
+
+            DB::commit();
+
+            // ── Send email to supplier (only on first send) ──────────────────────────
+            if (!$isAlreadySent) {
+                $emailToUse = $validated['supplier_email'] ?? $purchase->supplier->email;
+                if ($emailToUse) {
+                    try {
+                        $this->sendPurchaseOrderEmail($purchase, $emailToUse);
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to send PO email: ' . $e->getMessage());
+                    }
+                }
+            }
+
+            // ── Build response message ──────────────────────────────────────────────
+            $message = '';
+            if ($isAlreadySent) {
+                $message = __('passwords.payment_recorded_success') . ' ' . number_format($paymentAmount, 2) . '. ';
+                if ($newRemainingBalance <= 0) {
+                    $message .= __('passwords.po_fully_paid');
+                } else {
+                    $message .= __('passwords.balance_remaining') . ': ' . number_format($newRemainingBalance, 2);
+                }
+            } else {
+                $message = $paymentStatus === 'paid' 
+                    ? __('passwords.send_supplier_success_paid')
+                    : __('passwords.send_supplier_success_partial') . ' ' . number_format($paymentAmount, 2) . '. ' . __('passwords.balance_remaining') . ': ' . number_format($newRemainingBalance, 2);
+            }
+
             return response()->json([
-                'success' => false,
-                'message' => __('passwords.status_update_failed'),
+                'success' => true,
+                'reload' => true,
+                'refresh' => false,
+                'componentId' => 'reloadPurchasesComponent',
+                'message' => $message,
+                'redirect' => route('purchase_order.index'),
+                'transaction_ref' => $transactionLog->transaction_ref ?? null,
+                'payment_status' => $paymentStatus,
+                'balance_remaining' => $newRemainingBalance,
+                'total_paid' => $newTotalPaid,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Send to supplier failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.error_occurred') . $e->getMessage(),
-            ]);
+            ], 500);
         }
     }
 
@@ -738,6 +848,19 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
+        // ✅ Check if PO is fully paid before allowing receipt
+        $totalAmount = $purchaseOrder->total ?? 0;
+        $totalPaid = $purchaseOrder->total_paid ?? 0;
+        $balance = $totalAmount - $totalPaid;
+        
+        if ($balance > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.cannot_receive_unpaid_items') . ' ' . __('passwords.balance_remaining') . ': ' . number_format($balance, 2),
+                'balance' => $balance,
+            ], 422);
+        }
+
         $items = $request->input('items', []);
         
         // If items is empty or missing, get all purchase order items and set quantity to 0
@@ -760,9 +883,6 @@ class PurchaseOrderController extends Controller
             'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity_received' => 'required|integer|min:0',
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'payment_status' => 'nullable|in:pending,partial,paid,overdue',
-            'payment_date' => 'nullable|date',
             'expiry_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
             'selected_taxes' => 'nullable|array',
@@ -788,7 +908,7 @@ class PurchaseOrderController extends Controller
         try {
             $totalReceived = 0;
             $receiptItems = [];
-            $currentReceiptSubtotal = 0; // Subtotal for this receipt only
+            $currentReceiptSubtotal = 0;
             $user = auth()->user();
             $isSingleShop = tenant_is_single_shop($tenantId);
 
@@ -970,7 +1090,7 @@ class PurchaseOrderController extends Controller
                 }
             }
             
-            // Calculate current receipt total payable
+            // Calculate current receipt total payable (for tracking only, no payment)
             $currentReceiptPayable = $currentReceiptSubtotal + $currentReceiptAdditiveTax - $currentReceiptWithholdingTax;
             
             // Get current cumulative totals from the purchase order
@@ -984,7 +1104,7 @@ class PurchaseOrderController extends Controller
             $newCumulativeTotal = $cumulativeTotal + $currentReceiptPayable;
             
             // Log the calculation for debugging
-            \Log::info('Receipt calculation', [
+            \Log::info('Receipt calculation (no payment)', [
                 'receipt_subtotal' => $currentReceiptSubtotal,
                 'receipt_additive_tax' => $currentReceiptAdditiveTax,
                 'receipt_withholding_tax' => $currentReceiptWithholdingTax,
@@ -998,86 +1118,9 @@ class PurchaseOrderController extends Controller
                 'cumulative_total_after' => $newCumulativeTotal,
             ]);
 
-            // PROCESS PAYMENT for this receipt
-            if (isset($validated['payment_method_id']) && $currentReceiptPayable > 0) {
-                $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
-                
-                if (!$paymentMethod) {
-                    throw new \Exception(__('pagination.payment_method_not_found'));
-                }
-                
-                $validation = $paymentMethod->validateTransaction($currentReceiptPayable);
-                if (!$validation['success']) {
-                    throw new \Exception($validation['message']);
-                }
+            // ✅ REMOVED: Payment transaction - payment already happened when sending to supplier
 
-                $taxDescription = '';
-                if ($currentReceiptTaxAmount > 0) {
-                    $taxSummary = collect($taxBreakdown)->map(function($tax) {
-                        $prefix = $tax['is_withholding_tax'] ? '-' : '+';
-                        return $prefix . number_format($tax['amount'], 2);
-                    })->implode(', ');
-                    $taxDescription = " (Taxes: {$taxSummary})";
-                }
-
-                $transactionData = [
-                    'user_id' => $user->id,
-                    'tenant_id' => $tenantId,
-                    'payment_method_id' => $paymentMethod->id,
-                    'transaction_type' => 'WITHDRAWAL',
-                    'transaction_category' => 'PURCHASE_ORDER',
-                    'amount' => $currentReceiptPayable,
-                    'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                    'reference_table' => 'purchase_orders',
-                    'reference_id' => $purchaseOrder->id,
-                    'description' => 'Purchase Order Payment - PO #' . $purchaseOrder->po_number . ' - Receipt #' . $purchaseReceipt->id . $taxDescription,
-                    'notes' => 'Payment for receipt #' . $purchaseReceipt->id . ($currentReceiptTaxAmount > 0 ? ' with tax adjustments' : ''),
-                    'metadata' => [
-                        'purchase_order_number' => $purchaseOrder->po_number,
-                        'receipt_id' => $purchaseReceipt->id,
-                        'total_items_received' => $totalReceived,
-                        'receipt_subtotal' => $currentReceiptSubtotal,
-                        'receipt_additive_tax' => $currentReceiptAdditiveTax,
-                        'receipt_withholding_tax' => $currentReceiptWithholdingTax,
-                        'receipt_tax' => $currentReceiptTaxAmount,
-                        'cumulative_subtotal' => $newCumulativeSubtotal,
-                        'cumulative_tax' => $newCumulativeTaxTotal,
-                        'cumulative_total' => $newCumulativeTotal,
-                        'payment_status' => $validated['payment_status'] ?? 'paid',
-                        'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
-                        'items_count' => count($validated['items']),
-                        'receiver_id' => $user->id,
-                        'receiver_name' => $user->name,
-                        'transaction_nature' => 'PURCHASE_PAYMENT',
-                    ],
-                ];
-
-                if (isset($validated['payment_date'])) {
-                    $transactionData['effective_date'] = $validated['payment_date'];
-                }
-
-                $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
-            }
-
-            // Update payment information for items in this receipt
-            if (isset($validated['payment_method_id']) || isset($validated['payment_status'])) {
-                $itemIds = collect($validated['items'])
-                    ->pluck('purchase_order_item_id')
-                    ->toArray();
-                
-                $updateData = [];
-                if (isset($validated['payment_method_id'])) {
-                    $updateData['payment_method_id'] = $validated['payment_method_id'];
-                }
-                if (isset($validated['payment_status'])) {
-                    $updateData['payment_status'] = $validated['payment_status'];
-                }
-                if (isset($validated['payment_date'])) {
-                    $updateData['payment_date'] = $validated['payment_date'];
-                }
-                
-                PurchaseOrderItem::whereIn('id', $itemIds)->update($updateData);
-            }
+            // ✅ REMOVED: Payment method update on items - handled when sending
 
             // Update purchase order with CUMULATIVE totals
             $purchaseOrder->received_subtotal = $newCumulativeSubtotal;
@@ -1105,7 +1148,7 @@ class PurchaseOrderController extends Controller
                     'receipt_additive_tax' => $currentReceiptAdditiveTax,
                     'receipt_withholding_tax' => $currentReceiptWithholdingTax,
                     'receipt_tax' => $currentReceiptTaxAmount,
-                    'receipt_paid' => $currentReceiptPayable,
+                    'receipt_payable' => $currentReceiptPayable,
                     'cumulative_subtotal' => $newCumulativeSubtotal,
                     'cumulative_tax' => $newCumulativeTaxTotal,
                     'cumulative_total' => $newCumulativeTotal,
@@ -1123,14 +1166,6 @@ class PurchaseOrderController extends Controller
                         'due_date' => $liability->due_date,
                     ];
                 });
-            }
-            
-            if (isset($paymentMethod)) {
-                $response['payment_info'] = [
-                    'payment_method' => $paymentMethod->name,
-                    'amount_withdrawn' => $currentReceiptPayable,
-                    'transaction_completed' => true,
-                ];
             }
             
             session()->flash('toast', [

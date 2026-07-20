@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\InventoryItems;
-use App\Models\{ ProductVariant, Department, Location };
+use App\Models\{ ProductVariant, Department, Location, InventoryAdjustments, InventoryTransactions };
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 
@@ -111,11 +111,22 @@ class InventoryItemController extends Controller
         // Regular page load with locations and departments for filters
         $locations = Location::where('tenant_id', $tenantId)->get();
         $departments = Department::where('tenant_id', $tenantId)->get();
+
+        // Active variants for this tenant — used by both the single-item
+        // "Create" modal and the new "Bulk Add" modal. (Kept explicit here
+        // rather than relying on it being available some other way, so the
+        // bulk modal doesn't silently break if that assumption ever changes.)
+        $variantsQuery = ProductVariant::query()->where('is_active', 1);
+        if (!$user->hasRole('super_admin')) {
+            $variantsQuery->where('tenant_id', $tenantId);
+        }
+        $variants = $variantsQuery->orderBy('name')->get(['id', 'sku', 'name', 'overal_quantity_at_hand']);
         
         return view('store.items-index', [
             'items' => $items,
             'locations' => $locations,
             'departments' => $departments,
+            'variants' => $variants,
         ]);
     }
 
@@ -274,6 +285,144 @@ class InventoryItemController extends Controller
     }
 
     /**
+     * Batch-create inventory placeholder rows for every selected
+     * variant × department combination, quantity fixed at zero.
+     *
+     * This exists purely to remove the tedium of creating one inventory
+     * item at a time through the single-item modal when rolling a large
+     * catalog (hundreds of variants) out across many locations/departments
+     * (hundreds of combinations). Nothing about stock levels is decided
+     * here — every row starts at 0 on-hand / 0 allocated and gets adjusted
+     * later through the normal edit flow or a stock receipt.
+     *
+     * Combinations that already exist (same variant + department + tenant)
+     * are silently skipped rather than erroring the whole batch out, since
+     * re-running this against an already-seeded department is expected
+     * ("select everything again" is easier than remembering what's missing).
+     *
+     * (POST) /items/batch
+     */
+    public function storeBatch(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('create inventory record')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $validated = $request->validate([
+            'variant_ids'       => 'required|array|min:1',
+            'variant_ids.*'     => 'integer',
+            'department_ids'    => 'required|array|min:1',
+            'department_ids.*'  => 'integer',
+        ]);
+
+        // ── Re-scope everything to this tenant server-side. Never trust the
+        // ids the browser sent beyond "the user picked these checkboxes" —
+        // a tampered payload could otherwise reach into another tenant's
+        // variants/departments. ──────────────────────────────────────────
+        $variantIds = ProductVariant::where('tenant_id', $tenantId)
+                            ->whereIn('id', $validated['variant_ids'])
+                            ->pluck('id');
+
+        $departments = Department::where('tenant_id', $tenantId)
+                            ->whereIn('id', $validated['department_ids'])
+                            ->get(['id', 'location_id']);
+
+        if ($variantIds->isEmpty() || $departments->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.no_valid_selection'),
+            ]);
+        }
+
+        // ── Work out which of the requested combinations already exist so
+        // we skip them instead of tripping a unique-constraint error and
+        // losing the whole batch. ────────────────────────────────────────
+        $existingKeys = DB::table('inventory_items')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('variant_id', $variantIds)
+            ->whereIn('department_id', $departments->pluck('id'))
+            ->get(['variant_id', 'department_id'])
+            ->map(fn ($row) => $row->variant_id . '-' . $row->department_id)
+            ->flip();
+
+        $now     = now();
+        $rows    = [];
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($departments as $department) {
+            foreach ($variantIds as $variantId) {
+                $key = $variantId . '-' . $department->id;
+
+                if (isset($existingKeys[$key])) {
+                    $skipped++;
+                    continue;
+                }
+
+                $rows[] = [
+                    'variant_id'            => $variantId,
+                    'department_id'         => $department->id,
+                    'location_id'           => $department->location_id,
+                    'quantity_on_hand'      => 0,
+                    'quantity_allocated'    => 0,
+                    'preferred_stock_level' => 0,
+                    'batch_number'          => null,
+                    'expiry_date'           => null,
+                    'created_by'            => $user->id,
+                    'tenant_id'             => $tenantId,
+                    'created_at'            => $now,
+                    'updated_at'            => $now,
+                ];
+                $created++;
+            }
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Insert in chunks so one giant catalog rollout never becomes a
+            // single multi-thousand-row query.
+            foreach (array_chunk($rows, 500) as $chunk) {
+                DB::table('inventory_items')->insert($chunk);
+            }
+
+            DB::commit();
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Batch inventory item creation failed', [
+                'tenant_id' => $tenantId,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.create_failed'),
+            ]);
+        }
+
+        return response()->json([
+            'success'     => true,
+            'reload'      => true,
+            'refresh'     => false,
+            'componentId' => 'reloadItemComponent',
+            'message'     => __('pagination.batch_create_summary', [
+                'created' => $created,
+                'skipped' => $skipped,
+            ]),
+            'created'     => $created,
+            'skipped'     => $skipped,
+        ]);
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(string $id)
@@ -317,7 +466,7 @@ class InventoryItemController extends Controller
             ]);
         }
 
-        // Fetch live variant stock from DB and ensure it belongs to tenant
+        // Fetch live variant stock
         $variant = $item->variant()->where('tenant_id', $tenantId)->first();
         
         if (!$variant) {
@@ -329,27 +478,23 @@ class InventoryItemController extends Controller
 
         // Validate request
         $validated = $request->validate([
-            'department_id'       => [
+            'department_id' => [
                 'required',
                 'exists:departments,id',
                 function ($attribute, $value, $fail) use ($tenantId, $request) {
-                    // Check if department exists and belongs to tenant
                     $department = Department::where('id', $value)
                                         ->where('tenant_id', $tenantId)
                                         ->first();
-                    
                     if (!$department) {
                         $fail(__('pagination.department_invalid'));
                         return;
                     }
-                    
-                    // Check if department belongs to the selected location
                     if ($department->location_id != $request->location_id) {
                         $fail(__('pagination.department_not_belong_to_location'));
                     }
                 }
             ],
-            'location_id'         => [
+            'location_id' => [
                 'required',
                 'integer',
                 'exists:locations,id',
@@ -362,22 +507,23 @@ class InventoryItemController extends Controller
                     }
                 }
             ],
-            'expiry_date'         => ['nullable','date','after_or_equal:today'],
-            'quantity_on_hand'    => ['required','integer','min:0'],
-            'quantity_allocated'  => [
+            'expiry_date' => ['nullable', 'date', 'after_or_equal:today'],
+            'preferred_stock_level' => ['nullable', 'integer', 'min:0'],
+            'preferred_stock_level' => ['nullable', 'integer', 'min:0'],
+            'quantity_allocated' => [
                 'required',
                 'integer',
                 'min:0',
                 function ($attribute, $value, $fail) use ($variant, $item) {
                     $available = $variant->overal_quantity_at_hand + $item->quantity_allocated;
                     if ($value > $available) {
-                        $fail(__('pagination.allocated_not_greater_than_at_hand'));
+                        $fail(__('pagination.allocated_not_greater_than_at_hand') . " Available: {$available}");
                     }
                 }
             ],
         ]);
 
-        // Add unique rule separately
+        // Unique rule
         $uniqueRule = Rule::unique('inventory_items')->where(function ($q) use ($tenantId, $item, $request) {
             return $q->where('variant_id', $item->variant_id)
                     ->where('department_id', $request->department_id)
@@ -395,14 +541,54 @@ class InventoryItemController extends Controller
         DB::beginTransaction();
 
         try {
-            // Update inventory item
+            // ✅ Calculate allocation difference
+            $oldAllocated = $item->quantity_allocated;
+            $newAllocated = (int) $validated['quantity_allocated'];
+            $allocationDiff = $newAllocated - $oldAllocated;
+            
+            // ✅ Check stock availability
+            if ($allocationDiff > $variant->overal_quantity_at_hand) {
+                throw new \Exception("Insufficient stock available");
+            }
+
+            // ✅ Determine direction for notes
+            $direction = $allocationDiff > 0 
+                ? 'Allocated ' . $allocationDiff . ' units from overall stock to branch' 
+                : 'Returned ' . abs($allocationDiff) . ' units from branch to overall stock';
+            
+            $action = $allocationDiff > 0 ? 'Added' : 'Returned';
+
+            // ✅ Record adjustment BEFORE updating (audit trail)
+            InventoryAdjustments::create([
+                'quantity_before' => $oldAllocated,
+                'quantity_after'  => $newAllocated,
+                'reason'          => 'inventory_allocation_update',
+                'notes'           => $action . ' ' . abs($allocationDiff) . ' units ' . ($allocationDiff > 0 ? 'to branch' : 'to overall stock') . ' for ' . $variant->name,
+                'inventory_id'    => $item->id,
+                'created_by'      => auth()->id() ?? null,
+                'tenant_id'       => $item->tenant_id,
+            ]);
+
+            // ✅ Update inventory item
             $item->update($validated);
 
-            // Adjust variant stock manually
-            $variant->overal_quantity_at_hand = 
-                ($variant->overal_quantity_at_hand + $item->quantity_allocated) - $validated['quantity_allocated'];
-
+            // ✅ Update variant stock
+            $variant->overal_quantity_at_hand = $variant->overal_quantity_at_hand - $allocationDiff;
             $variant->save();
+
+            // ✅ Record transaction (movement) ONLY if there's an actual change
+            if ($allocationDiff != 0) {
+                InventoryTransactions::create([
+                    'quantity'       => $allocationDiff,
+                    'reference_id'   => $item->id,
+                    'reference_type' => 'inventory_item',
+                    'type'           => 'transfer_in',
+                    'notes'          => $direction . ' for ' . $variant->name,
+                    'inventory_id'   => $item->id,
+                    'created_by'     => auth()->id() ?? null,
+                    'tenant_id'      => $item->tenant_id,
+                ]);
+            }
 
             DB::commit();
 
@@ -426,7 +612,7 @@ class InventoryItemController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => __('auth.update_failed'),
+                'message' => __('auth.update_failed') . ': ' . $e->getMessage(),
             ]);
         }
     }

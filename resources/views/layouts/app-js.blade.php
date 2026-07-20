@@ -487,27 +487,23 @@
 </script>
 
 
-<!-- Inventory Mgt -->
+
+<!-- Inventory Mgt - Simplified Working Version -->
 <script>
     
+    // ── Transfer Stock ─────────────────────────────────────────
     function updateInventoryTransfer(uniqueId) {
         const submitButton = document.getElementById('editInvTransferButton' + uniqueId);
         LiveBlade.toggleButtonLoading(submitButton, true);
 
-        // Select the form and create FormData from it
         var form = document.getElementById('stockItemTransfer' + uniqueId);
         var formData = new FormData(form);
-
         var data = Object.fromEntries(formData.entries());
-        // console.log(data);
 
-        // Set up the URL dynamically
         var updateUrl = '/transfer-stock/' + uniqueId;
-        // console.log(updateUrl);
         handleTransferStock(data, updateUrl, uniqueId, submitButton);
     }
 
-        // General Update or Edit Function 
     function handleTransferStock(data, updateUrl, uniqueId, submitButton) {
         LiveBlade.editLoopForms(data, updateUrl)
         .then(noErrorStatus => {
@@ -523,71 +519,165 @@
             LiveBlade.toggleButtonLoading(submitButton, false);
         });
     }
+
+// ── Adjustment Stock ────────────────────────────────────────
+function updateInventoryAdjustment(uniqueId) {
+    const submitButton = document.getElementById('editInvAdjustButton' + uniqueId);
     
-    function initializeStockInputs() {
-        // Select all quantity inputs
-        document.querySelectorAll(".quantity-input").forEach(input => {
-            // Remove any existing listener first (optional, safer)
-            input.replaceWith(input.cloneNode(true));
-        });
+    // ✅ Get the form and values
+    const form = document.getElementById('adjustStockForm' + uniqueId);
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    
+    // ✅ Get the adjust amount
+    const adjustAmount = parseInt(data.adjust_amount) || 0;
+    const overallStock = parseInt(data.overal_quantity_at_hand) || 0;
+    const currentStock = parseInt(data.current_quantity) || 0;
+    
+    // ✅ Client-side validation before submitting
+    if (adjustAmount > 0 && adjustAmount > overallStock) {
+        const errorEl = document.getElementById(`adjustError${uniqueId}`);
+        if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.textContent = 'Cannot allocate more than available. Available: ' + overallStock;
+        }
+        toastr.error('Cannot allocate more than available. Available: ' + overallStock);
+        return;
+    }
+    
+    if (adjustAmount < 0 && Math.abs(adjustAmount) > currentStock) {
+        const errorEl = document.getElementById(`adjustError${uniqueId}`);
+        if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.textContent = 'Cannot remove more than allocated. Available: ' + currentStock;
+        }
+        toastr.error('Cannot remove more than allocated. Available: ' + currentStock);
+        return;
+    }
+    
+    // ✅ Clear any previous errors
+    const errorEl = document.getElementById(`adjustError${uniqueId}`);
+    if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
+    
+    // ✅ Proceed with submission
+    LiveBlade.toggleButtonLoading(submitButton, true);
 
-        // Re-select cloned inputs
-        document.querySelectorAll(".quantity-input").forEach(input => {
-            input.addEventListener("input", function () {
-                let itemId      = this.dataset.itemId;
-                let overallEl   = document.getElementById("overallQty" + itemId);
-                let newStockEl  = document.getElementById("newStock" + itemId);
+    var updateUrl = '{{ route('stocks.update', ['stock' => ':id']) }}'.replace(':id', uniqueId);
+    
+    // Use handleEditResponse which should handle 422 errors
+    handleEditResponse(data, updateUrl, uniqueId, submitButton);
+}
 
-                let overallInit = parseInt(this.dataset.overall) || 0;
-                let current     = parseInt(this.dataset.current) || 0;
-                let adjust      = parseInt(this.value) || 0;
+// ── Handle Adjustment Input with Real-time Validation ──────
+function handleAdjustmentInput(e) {
+    const input = e.target;
+    const itemId = input.dataset.itemId;
+    const overallInit = parseInt(input.dataset.overall) || 0;
+    const current = parseInt(input.dataset.current) || 0;
+    let adjust = parseInt(input.value) || 0;
 
-                let newStock    = current;
-                let newOverall  = overallInit;
+    const overallEl = document.getElementById(`overallQty${itemId}`);
+    const newStockEl = document.getElementById(`newStock${itemId}`);
+    const errorEl = document.getElementById(`adjustError${itemId}`);
+    const summaryEl = document.getElementById(`adjustmentSummary${itemId}`);
+    const submitBtn = document.getElementById(`editInvAdjustButton${itemId}`);
 
-                if (adjust > 0) {
-                    if (adjust > overallInit) {
-                        this.value = overallInit;
-                        adjust     = overallInit;
-                        toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
-                    }
-                    newStock   = current + adjust;
-                    newOverall = overallInit - adjust;
-                } else if (adjust < 0) {
-                    let absAdjust = Math.abs(adjust);
-                    if (absAdjust > current) {
-                        this.value = -current;
-                        adjust     = -current;
-                        toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
-                    }
-                    newStock   = current + adjust;
-                    newOverall = overallInit + Math.abs(adjust);
-                }
+    let newStock = current;
+    let newOverall = overallInit;
 
-                newStockEl.value  = newStock;
-                overallEl.value   = newOverall;
-            });
-        });
+    // Clear previous errors
+    if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
+    input.classList.remove('is-invalid');
+    
+    // ✅ Enable submit button by default
+    if (submitBtn) submitBtn.disabled = false;
+
+    // Positive adjustment (add to branch from overall)
+    if (adjust > 0) {
+        if (adjust > overallInit) {
+            if (errorEl) {
+                errorEl.style.display = 'block';
+                errorEl.textContent = 'Cannot allocate more than available. Available: ' + overallInit;
+            }
+            input.classList.add('is-invalid');
+            input.value = overallInit;
+            adjust = overallInit;
+            if (submitBtn) submitBtn.disabled = true;
+            toastr['warning']('Not enough overall stock');
+        }
+        newStock = current + adjust;
+        newOverall = overallInit - adjust;
+    } 
+    // Negative adjustment (remove from branch back to overall)
+    else if (adjust < 0) {
+        const absAdjust = Math.abs(adjust);
+        if (absAdjust > current) {
+            if (errorEl) {
+                errorEl.style.display = 'block';
+                errorEl.textContent = 'Cannot remove more than allocated. Available: ' + current;
+            }
+            input.classList.add('is-invalid');
+            input.value = -current;
+            adjust = -current;
+            if (submitBtn) submitBtn.disabled = true;
+            toastr['warning']('Cannot remove more than allocated');
+        }
+        newStock = current + adjust;
+        newOverall = overallInit + Math.abs(adjust);
     }
 
-    
-    function updateInventoryAdjustment(uniqueId) {
-        const submitButton = document.getElementById('editInvAdjustButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
+    // Update preview fields
+    if (newStockEl) newStockEl.value = newStock;
+    if (overallEl) overallEl.value = newOverall;
 
-        // Select the form and create FormData from it
-        var form = document.getElementById('adjustStockForm' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('stocks.update', ['stock' => ':id']) }}'.replace(':id', uniqueId);
-
-        // console.log(updateUrl);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
+    // Color code the new stock level
+    if (newStockEl) {
+        if (newStock < 5) {
+            newStockEl.className = 'form-control text-center fs-3 fw-bold text-danger';
+        } else if (newStock < 10) {
+            newStockEl.className = 'form-control text-center fs-3 fw-bold text-warning';
+        } else {
+            newStockEl.className = 'form-control text-center fs-3 fw-bold text-success';
+        }
     }
+
+    // Update overall quantity color
+    if (overallEl) {
+        if (newOverall < 5) {
+            overallEl.className = 'form-control text-center fs-3 fw-bold text-danger';
+        } else if (newOverall < 10) {
+            overallEl.className = 'form-control text-center fs-3 fw-bold text-warning';
+        } else {
+            overallEl.className = 'form-control text-center fs-3 fw-bold text-success';
+        }
+    }
+
+    // Update summary
+    if (summaryEl) {
+        if (adjust === 0) {
+            summaryEl.textContent = 'No adjustment has been made yet';
+            summaryEl.className = 'text-muted';
+        } else {
+            const direction = adjust > 0 ? 'Added to branch' : 'Returned to overall';
+            const absAdjust = Math.abs(adjust);
+            summaryEl.innerHTML = `
+                <span class="text-${adjust > 0 ? 'success' : 'warning'} fw-bold">
+                    ${direction}: ${absAdjust} units
+                </span>
+                <span class="text-muted ms-2">
+                    | Branch: ${current} → ${newStock}
+                    | Overall: ${overallInit} → ${newOverall}
+                </span>
+            `;
+        }
+    }
+}
 
 </script>
 
@@ -697,23 +787,129 @@
 <script>
     
 
+    function calculateAllocation(input, itemId, availableStock, currentAllocated) {
+        const newQuantity = parseInt(input.value) || 0;
+        const errorElement = document.getElementById(`new_quantity_error_${itemId}`);
+        const updateBtn = document.getElementById(`updateItemButton${itemId}`);
+        
+        // Calculate the difference
+        const difference = newQuantity - currentAllocated;
+        const remainingAfterAllocation = availableStock - difference;
+        
+        // Update display elements
+        document.getElementById(`display_new_allocated_${itemId}`).textContent = newQuantity;
+        document.getElementById(`display_remaining_${itemId}`).textContent = remainingAfterAllocation;
+        
+        // ✅ Update the hidden quantity_allocated field
+        const quantityAllocatedInput = document.getElementById(`quantity_allocated_${itemId}`);
+        if (quantityAllocatedInput) {
+            quantityAllocatedInput.value = newQuantity;
+        }
+        
+        // Validate: Cannot allocate more than available stock
+        if (difference > availableStock) {
+            errorElement.textContent = `Cannot allocate more than available stock. Available: ${availableStock}`;
+            errorElement.style.display = 'block';
+            input.classList.add('is-invalid');
+            updateBtn.disabled = true;
+            return;
+        }
+        
+        // Validate: Cannot allocate negative
+        if (newQuantity < 0) {
+            errorElement.textContent = 'Quantity cannot be negative';
+            errorElement.style.display = 'block';
+            input.classList.add('is-invalid');
+            updateBtn.disabled = true;
+            return;
+        }
+        
+        // All validations passed
+        errorElement.style.display = 'none';
+        input.classList.remove('is-invalid');
+        updateBtn.disabled = false;
+        
+        // Color code the remaining stock indicator
+        const remainingEl = document.getElementById(`display_remaining_${itemId}`);
+        if (remainingAfterAllocation < 5) {
+            remainingEl.className = 'badge badge-light-danger fs-6 ms-2';
+        } else if (remainingAfterAllocation < 10) {
+            remainingEl.className = 'badge badge-light-warning fs-6 ms-2';
+        } else {
+            remainingEl.className = 'badge badge-light-info fs-6 ms-2';
+        }
+    }
+
+    // ── Edit inventory item using LiveBlade ─────────────────────
     function editItemInstanceLoop(uniqueId) {
         const submitButton = document.getElementById('updateItemButton' + uniqueId);
+        
+        // ✅ Get the form
+        const form = document.getElementById('kt_modal_item_form' + uniqueId);
+        const formData = new FormData(form);
+        
+        // ✅ Get the new quantity from the input
+        const newQuantityInput = document.getElementById(`new_quantity_${uniqueId}`);
+        const newQuantity = parseInt(newQuantityInput?.value) || 0;
+        
+        // ✅ Get current allocated
+        const currentAllocatedInput = document.getElementById(`quantity_allocated_${uniqueId}`);
+        const currentAllocated = parseInt(currentAllocatedInput?.value) || 0;
+        
+        // ✅ Get available stock
+        const availableStockInput = document.getElementById(`available_stock_${uniqueId}`);
+        const availableStock = parseInt(availableStockInput?.value) || 0;
+        
+        // ✅ Calculate difference
+        const difference = newQuantity - currentAllocated;
+        
+        // ✅ Validate before submitting
+        if (difference > availableStock) {
+            toastr.error(`Cannot allocate more than available stock. Available: ${availableStock}`);
+            return;
+        }
+        
+        if (newQuantity < 0) {
+            toastr.error('Quantity cannot be negative');
+            return;
+        }
+        
+        // ✅ Convert FormData to object and override quantity_allocated
+        const data = Object.fromEntries(formData.entries());
+        
+        // ✅ IMPORTANT: Override quantity_allocated with new_quantity value
+        data.quantity_allocated = newQuantity;
+        
+        // ✅ Remove fields that shouldn't be sent
+        delete data.new_quantity;
+        delete data.available_stock;
+        
+        // ✅ Set up the URL dynamically
+        const updateUrl = '{{ route('items.update', ['item' => ':id']) }}'.replace(':id', uniqueId);
+        
+        // ✅ Show loading state
         LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_modal_item_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('items.update', ['item' => ':id']) }}'.replace(':id', uniqueId);
-
-        // console.log(updateUrl);
+        
+        // ✅ Use the LiveBlade helper to handle the response
         handleEditResponse(data, updateUrl, uniqueId, submitButton);
     }
+
+    // ── Reset form when modal is closed ──────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('[id^="editItem"]').forEach(modal => {
+            modal.addEventListener('hidden.bs.modal', function() {
+                const itemId = this.id.replace('editItem', '');
+                const errorEl = document.getElementById(`new_quantity_error_${itemId}`);
+                if (errorEl) errorEl.style.display = 'none';
+                
+                const input = document.getElementById(`new_quantity_${itemId}`);
+                if (input) input.classList.remove('is-invalid');
+                
+                const btn = document.getElementById(`updateItemButton${itemId}`);
+                if (btn) btn.disabled = false;
+            });
+        });
+    });
 
     function submitItemForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
         const form = document.getElementById(formId);
@@ -2158,7 +2354,7 @@
     // Reintialize the datatables after submission
     function initializeComponentScripts() {
         // initialize stock adjustment inputs
-        initializeStockInputs();
+        // initializeStockInputs();
         
         // Initialize pagination and search capibilities
         if (typeof window.LiveBladeRefresh === 'function') {

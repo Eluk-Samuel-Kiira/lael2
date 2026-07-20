@@ -13,10 +13,10 @@
                     <th class="min-w-125px">{{__('auth._name')}}</th> 
                     <th class="min-w-125px">{{__('auth._department')}}</th> 
                     <th class="min-w-125px">{{__('pagination._location')}}</th>  
-                    <th class="min-w-125px">{{__('pagination.batch_number')}}</th> 
-                    <th class="min-w-125px">{{__('pagination.quantity_on_hand')}}</th>
+                    <!-- <th class="min-w-125px">{{__('pagination.batch_number')}}</th>  -->
+                    <th class="min-w-125px">{{__('pagination.overall_quantity')}}</th>
                     <th class="min-w-125px">{{__('pagination.quantity_allocated')}}</th> 
-                    <th class="min-w-125px">{{__('pagination.quantity_on_order')}}</th>
+                    <!-- <th class="min-w-125px">{{__('pagination.quantity_on_order')}}</th> -->
                     <th class="min-w-125px">{{__('pagination.preferred_stock_level')}}</th>
                     <th class="min-w-125px">{{__('pagination.expiry_date')}}</th> 
                     <th class="min-w-125px">{{__('auth._creater')}}</th> 
@@ -59,21 +59,24 @@
                             <div class="badge badge-light fw-bold">{{ $item->itemLocation->name ?? __('pagination._none') }}</div>
                         </td>
                         
-                        <td>
+                        <!-- <td>
                             <span class="badge badge-light-info">{{ $item->batch_number ?? __('pagination._none') }}</span>
-                        </td>
+                        </td> -->
                         
                         <td>
-                            <span class="badge badge-light-success">{{ $item->quantity_on_hand ?? 0 }}</span>
+                            {{-- Pulled from product_variants.overal_quantity_at_hand (via the $item->variant
+                                 relation) rather than inventory_items.quantity_on_hand — the variant row is
+                                 the source of truth for stock on hand. --}}
+                            <span class="badge badge-light-success">{{ $item->variant->overal_quantity_at_hand ?? 0 }}</span>
                         </td>
                         
                         <td>
                             <span class="badge badge-light-warning">{{ $item->quantity_allocated ?? 0 }}</span>
                         </td>
                         
-                        <td>
+                        <!-- <td>
                             {{ $item->quantity_on_order ?? 0 }}
-                        </td>
+                        </td> -->
                         
                         <td>
                             <span class="badge badge-light-primary">{{ $item->preferred_stock_level ?? __('pagination._none') }}</span>

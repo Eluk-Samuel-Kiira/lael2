@@ -96,22 +96,40 @@
                                     
                                     @if($order->status === 'approved')
                                         @can('send purchase_orders')
-                                            <button class="btn btn-sm btn-primary" onclick="sendToSupplier({{ $order->id }})">
+                                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#sendToSupplierModal{{ $order->id }}">
+                                                <i class="bi bi-send me-1"></i>
                                                 {{ __('passwords.send_supplier') }}
                                             </button>
                                         @endcan
                                     @endif
                                     
                                     @if(in_array($order->status, ['sent', 'partially_received']))
-                                        @can('receive purchase_orders')
+                                    @can('receive purchase_orders')
+                                        @php
+                                            $totalAmount = $order->total ?? 0;
+                                            $totalPaid = $order->total_paid ?? 0;
+                                            $balanceRemaining = $totalAmount - $totalPaid;
+                                            $isFullyPaid = $balanceRemaining <= 0;
+                                        @endphp
+                                        
+                                        @if($isFullyPaid)
                                             <button class="btn btn-sm btn-info" 
                                                     data-bs-toggle="modal" 
                                                     data-bs-target="#receiveItemsModal{{ $order->id }}"
                                                     data-total-pending="{{ $order->items->sum('quantity') - $order->items->sum('received_quantity') }}">
+                                                <i class="bi bi-box-seam me-1"></i>
                                                 {{ __('passwords.receive_items') }}
                                             </button>
-                                        @endcan
-                                    @endif
+                                        @else
+                                            <button class="btn btn-sm btn-warning" 
+                                                    onclick="showPaymentRequired({{ $order->id }}, {{ $balanceRemaining }})">
+                                                <i class="bi bi-credit-card me-1"></i>
+                                                {{ __('passwords.pay_balance_first') }}
+                                                ({{ number_format($balanceRemaining, 2) }})
+                                            </button>
+                                        @endif
+                                    @endcan
+                                @endif
                                     
                                     @if(in_array($order->status, ['draft', 'pending_approval', 'approved']))
                                         @can('cancel purchase_orders')
@@ -187,6 +205,7 @@
 
                                 @include('procurement.purchase-order.view') 
                                 @include('procurement.purchase-order.receive') 
+                                @include('procurement.purchase-order.send-to-supplier') 
                             </td>
                         </tr>
                     @endforeach

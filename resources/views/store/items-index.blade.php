@@ -57,6 +57,12 @@
                 />
 
                 @can('create inventory record')
+                <button type="button" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_batch_add_inventory">
+                    <i class="ki-duotone ki-copy fs-2 me-1"></i>
+                    <span class="d-none d-sm-inline">{{__('pagination.bulk_add_inventory')}}</span>
+                    <span class="d-inline d-sm-none">{{__('auth._bulk')}}</span>
+                </button>
+
                 <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_inventory">
                     <i class="ki-duotone ki-plus fs-2 me-1"></i>
                     <span class="d-none d-sm-inline">{{__('auth._create')}} {{__('pagination.inventory_item')}}</span>
@@ -65,6 +71,7 @@
                 @endcan
 
                 @include('store.inventory-items.create')
+                @include('store.inventory-items.batch-create')
             </div>
         </div>
     </div>
