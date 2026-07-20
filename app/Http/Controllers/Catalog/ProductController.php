@@ -381,54 +381,74 @@ class ProductController extends Controller
             ]);
         }
 
-        // Check if product has any variants
-        $hasVariants = ProductVariant::where('product_id', $id)
+        // ✅ Get variant count
+        $variantCount = ProductVariant::where('product_id', $id)
             ->where('tenant_id', $tenantId)
-            ->exists();
+            ->count();
 
-        if ($hasVariants) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.product_has_variants'),
-            ]);
-        }
 
-        // Check if product is referenced in orders
-        $hasOrders = DB::table('order_items')
-            ->where('product_id', $id)
-            ->where('tenant_id', $tenantId)
-            ->exists();
 
-        if ($hasOrders) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.product_has_orders'),
-            ]);
-        }
-
-        // Check if product is referenced in inventory
-        $hasInventory = DB::table('inventory_items')
-            ->where('product_id', $id)
-            ->where('tenant_id', $tenantId)
-            ->exists();
-
-        if ($hasInventory) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth.product_has_inventory'),
-            ]);
-        }
-
-        $product->delete();
+        // ✅ Begin transaction to delete product and its variants
+        DB::beginTransaction();
         
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'componentId' => 'reloadProductComponent',
-            'refresh' => false,
-            'message' => __('auth._deleted'),
-            'redirect' => route('products.index'),
-        ]);
+        try {
+            // ✅ Get all variant IDs to delete inventory records too
+            $variantIds = ProductVariant::where('product_id', $id)
+                ->where('tenant_id', $tenantId)
+                ->pluck('id')
+                ->toArray();
+
+            // ✅ Delete inventory records for all variants
+            if (!empty($variantIds)) {
+                DB::table('inventory_items')
+                    ->whereIn('variant_id', $variantIds)
+                    ->where('tenant_id', $tenantId)
+                    ->delete();
+
+                // ✅ Delete variant taxes and promotions if they exist
+                DB::table('variant_taxes')
+                    ->whereIn('variant_id', $variantIds)
+                    ->delete();
+
+                DB::table('promotion_products')
+                    ->whereIn('variant_id', $variantIds)
+                    ->delete();
+            }
+
+            // ✅ Delete all variants
+            ProductVariant::where('product_id', $id)
+                ->where('tenant_id', $tenantId)
+                ->delete();
+
+            // ✅ Delete product
+            $product->delete();
+
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'componentId' => 'reloadProductComponent',
+                'refresh' => false,
+                'message' => __('auth._deleted') . ' (' . $variantCount . ' variants deleted)',
+                'redirect' => route('products.index'),
+                'variants_deleted' => $variantCount,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('Product deletion failed', [
+                'product_id' => $id,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.delete_failed') . ': ' . $e->getMessage(),
+            ]);
+        }
     }
 
     

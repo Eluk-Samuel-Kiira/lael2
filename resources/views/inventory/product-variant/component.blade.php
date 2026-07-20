@@ -69,13 +69,23 @@
                                     <input class="form-check-input" type="checkbox" data-kt-check="true" data-kt-check-target="#kt_table_users .form-check-input" value="1" />
                                 </div>
                             </th>
-                            <th class="min-w-125px">{{__('pagination.variant_id')}}</th>
+                            <!-- <th class="min-w-125px">{{__('pagination.variant_id')}}</th> -->
                             <th class="min-w-125px">{{__('auth._name')}}</th> 
                             <th class="min-w-125px">{{__('pagination._sku')}}</th> 
                             <th class="min-w-125px">{{__('pagination._barcode')}}</th>
-                            <th class="min-w-125px">{{__('pagination.overall_quantity')}}</th>
+                            <th class="min-w-125px">
+                                @if(tenant_is_single_shop(auth()->user()->tenant_id))
+                                    {{ __('pagination.quantity_on_hand') }}
+                                @else
+                                    {{ __('pagination.overall_quantity') }}
+                                @endif
+                            </th>
                             <th class="min-w-125px">{{__('pagination._price')}}</th> 
-                            <th class="min-w-125px">{{__('pagination.cost_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.net_selling_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.gross_cost_price')}}</th> 
+                            <th class="min-w-125px">{{__('pagination.net_cost_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.discount_percentage')}}</th> 
+                            <th class="min-w-125px">{{__('pagination.markup_percentage')}}</th> 
                             <th class="min-w-125px">{{__('pagination._weight')}}</th> 
                             <th class="min-w-125px">{{__('pagination.weight_unit')}}</th>
                             <th class="min-w-125px">{{__('pagination.is_taxable')}}</th>  
@@ -94,9 +104,9 @@
                                             <input class="form-check-input" type="checkbox" value="1" />
                                         </div>
                                     </td>
-                                    <td>
+                                    <!-- <td>
                                         <div class="badge badge-light fw-bold">{{ $product->id }}</div>
-                                    </td>
+                                    </td> -->
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <span class="symbol symbol-50px" onclick="triggerFileInput(this, {{ $product->id }})">
@@ -115,10 +125,40 @@
                                     </td>
                                     <td>{{ $product->barcode }}</td>
                                     <td class="fw-bold text-warning ms-3">{{ $product->overal_quantity_at_hand }}</td>
-                                    <td class="fw-bold text-primary ms-3"> {{ $product->price }}  {{ currency_code() }}</td>
+                                    
+                                    <td class="fw-bold text-primary ms-3">{{ $product->price }} {{ currency_code() }}</td>
+                                    
                                     <td>
+                                        <span class="badge badge-light-success fw-bold">
+                                            {{ $product->net_selling_price ?? $product->price }} {{ currency_code() }}
+                                        </span>
+                                    </td>
+                                    
+                                    <td> 
                                         <div class="badge badge-light fw-bold text-success">{{ $product->cost_price }} {{ currency_code() }}</div>
                                     </td>
+
+                                    <td>
+                                        <div class="badge badge-light fw-bold text-info">{{ $product->net_cost_price ?? $product->cost_price }} {{ currency_code() }}</div>
+                                    </td>
+                                    
+                                    
+                                    <td>
+                                        @if($product->discount_percentage > 0)
+                                            <span class="badge badge-light-danger fw-bold">{{ $product->discount_percentage }}%</span>
+                                        @else
+                                            <span class="badge badge-light-secondary fw-bold">0%</span>
+                                        @endif
+                                    </td>
+                                    
+                                    <td>
+                                        @if($product->markup_percentage > 0)
+                                            <span class="badge badge-light-success fw-bold">{{ number_format($product->markup_percentage, 2) }}%</span>
+                                        @else
+                                            <span class="badge badge-light-secondary fw-bold">0%</span>
+                                        @endif
+                                    </td>
+                                    
                                     <td>{{ $product->weight }}</td>
                                     <td>
                                         <div class="badge badge-light fw-bold">{{ $product->unitMeasure->name ?? __('pagination._none') }}</div>
@@ -166,7 +206,6 @@
                                                     <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                                 </button>
                                             @endcan
-                                            {{--
                                             @can('delete variant')
                                                 <button type="button" 
                                                     class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
@@ -175,7 +214,6 @@
                                                     <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('auth._delete') }}</span>
                                                 </button>
                                             @endcan 
-                                            --}}
                                         </div>
 
                                         <!-- Delete User Modal -->

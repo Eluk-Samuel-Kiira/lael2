@@ -18,9 +18,18 @@ return [
 
 
 
-
-
-    
+    'variant_has_inventory' => 'This variant has existing inventory:',
+    'inventory_will_be_deleted' => 'will be deleted along with this variant.',
+    'units' => 'units',
+    'variant_deleted_with_inventory' => 'Variant deleted with inventory',
+    'are_you_sure_delete_variant_with_inventory' => 'Are you sure you want to delete this variant? All inventory records will also be deleted.',
+    'variant_has_orders' => 'This variant has existing orders',
+    'variant_used_in_recipes' => 'This variant is used in recipes',
+    'cannot_delete_with_orders' => 'Cannot delete a variant that has been used in orders.',
+    'cannot_delete_used_in_recipes' => 'Cannot delete a variant that is used in recipes.',
+    'are_you_sure_delete_variant' => 'Are you sure you want to delete this variant?',
+    '_bulk' => 'Bulk', 
+    '_select_all' => 'Select All', 
     
     // Document related
     'documents' => 'Documents',

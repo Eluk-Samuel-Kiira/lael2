@@ -29,7 +29,6 @@
 
 
 
-
 <script>
     // Function to print purchase order as receipt
     function printPurchaseOrder(orderId) {
@@ -39,130 +38,120 @@
             return;
         }
 
-        // Extract all data from the modal
-        const poNumber = modalElement.querySelector('.modal-header h2')?.innerText || 'Purchase Order';
+        // ── Extract Data from Modal ──────────────────────────────────────────────
         
-        // Get supplier name
-        let supplier = '—';
-        const supplierEl = modalElement.querySelector('.fw-bold.fs-5.text-gray-800');
-        if (supplierEl) {
-            supplier = supplierEl.innerText.trim();
-        } else {
-            const supplierCard = modalElement.querySelector('.col-md-4 .fw-bold.fs-5');
-            if (supplierCard) supplier = supplierCard.innerText.trim();
+        // PO Number and Status
+        const poNumber = modalElement.querySelector('.badge-light-primary.py-2.px-3.fs-7')?.innerText?.trim() || 'PO-';
+        const statusBadge = modalElement.querySelector('.badge.badge-light')?.innerText?.trim() || '';
+        
+        // Supplier
+        let supplierName = '—';
+        let supplierEmail = '';
+        let supplierPhone = '';
+        const supplierCard = modalElement.querySelector('.col-md-4 .fw-bold.fs-5.text-gray-800');
+        if (supplierCard) {
+            supplierName = supplierCard.innerText.trim();
+            const supplierDetails = modalElement.querySelectorAll('.col-md-4 .text-muted.fs-7');
+            if (supplierDetails.length >= 2) {
+                supplierEmail = supplierDetails[0]?.innerText?.trim() || '';
+                supplierPhone = supplierDetails[1]?.innerText?.trim() || '';
+            }
         }
         
-        // Get expected delivery
+        // Expected Delivery
         let expectedDelivery = '—';
-        const deliveryEl = modalElement.querySelector('.col-md-4 .fw-bold.fs-5 i');
-        if (deliveryEl && deliveryEl.parentElement) {
-            expectedDelivery = deliveryEl.parentElement.innerText.replace('expected_delivery', '').trim();
+        const deliveryEl = modalElement.querySelector('.col-md-4 .fw-bold.fs-5.text-gray-800');
+        if (deliveryEl) {
+            const text = deliveryEl.innerText.trim();
+            if (text.match(/\d{4}/)) {
+                expectedDelivery = text;
+            }
         }
         
-        // Get location
+        // Location
         let location = '—';
-        const locationEl = modalElement.querySelector('.col-md-4 .text-muted.fs-7');
+        const locationEl = modalElement.querySelector('.col-md-4 .text-muted.fs-7:last-child');
         if (locationEl) {
-            location = locationEl.innerText.replace('location', '').trim();
+            const text = locationEl.innerText.trim();
+            if (text && !text.includes('TIN:') && !text.includes('@')) {
+                location = text;
+            }
         }
         
-        // Get items from table
+        // Created Date
+        let createdDate = '';
+        const createdEl = modalElement.querySelector('.text-muted.fs-7 i.bi-clock')?.parentElement;
+        if (createdEl) {
+            createdDate = createdEl.innerText.replace('Created:', '').trim();
+        }
+        if (!createdDate) {
+            createdDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        
+        // ── Items ──────────────────────────────────────────────────────────────────
         const items = [];
-        const tableRows = modalElement.querySelectorAll('tbody tr');
+        const tableRows = modalElement.querySelectorAll('.table tbody tr');
         tableRows.forEach(row => {
             const cells = row.querySelectorAll('td');
-            if (cells.length >= 7) {
+            if (cells.length >= 8) {
+                const productName = cells[0]?.querySelector('.fw-bold.text-gray-800')?.innerText?.trim() || '—';
+                const sku = cells[0]?.querySelector('.text-muted.fs-7')?.innerText?.replace('SKU:', '').trim() || '';
+                
+                const orderedQty = parseFloat(cells[1]?.innerText?.replace(/,/g, '')) || 0;
+                const unitCost = parseFloat(cells[2]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                const receivedQty = parseFloat(cells[3]?.innerText?.replace(/,/g, '')) || 0;
+                const pendingQty = parseFloat(cells[4]?.innerText?.replace(/,/g, '')) || 0;
+                const orderedValue = parseFloat(cells[5]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                const receivedValue = parseFloat(cells[6]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                const pendingValue = parseFloat(cells[7]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                const taxAmount = parseFloat(cells[8]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                
                 items.push({
-                    product: cells[0]?.innerText.trim() || '—',
-                    quantity: cells[1]?.innerText.trim() || '0',
-                    received: cells[2]?.innerText.trim() || '0',
-                    pending: cells[3]?.innerText.trim() || '0',
-                    unitCost: cells[4]?.innerText.trim() || '0',
-                    tax: cells[5]?.innerText.trim() || '0',
-                    total: cells[6]?.innerText.trim() || '0'
+                    product: productName,
+                    sku: sku,
+                    orderedQty: orderedQty,
+                    unitCost: unitCost,
+                    receivedQty: receivedQty,
+                    pendingQty: pendingQty,
+                    orderedValue: orderedValue,
+                    receivedValue: receivedValue,
+                    pendingValue: pendingValue,
+                    taxAmount: taxAmount
                 });
             }
         });
-
-        // Get totals from the order summary section
-        let subtotal = '0';
-        let taxTotal = '0';
-        let grandTotal = '0';
         
-        // Method 1: Look for order summary table
-        const summaryTable = modalElement.querySelector('.order-summary-table, table.table-sm');
-        if (summaryTable) {
-            const rows = summaryTable.querySelectorAll('tr');
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 2) {
-                    const label = cells[0]?.innerText?.toLowerCase() || '';
-                    const value = cells[1]?.innerText || '0';
-                    const numericValue = value.replace(/[^0-9.-]/g, '');
-                    
-                    if (label.includes('subtotal')) {
-                        subtotal = numericValue;
-                    } else if (label.includes('tax')) {
-                        taxTotal = numericValue;
-                    } else if (label.includes('grand') || label.includes('total')) {
-                        grandTotal = numericValue;
-                    }
-                }
-            });
-        }
+        // ── Totals ─────────────────────────────────────────────────────────────────
+        let subtotal = 0;
+        let receivedSubtotal = 0;
+        let pendingSubtotal = 0;
+        let taxTotal = 0;
         
-        // Method 2: Look for tfoot in items table
-        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
-            const tfootRows = modalElement.querySelectorAll('tfoot tr');
-            if (tfootRows.length >= 3) {
-                subtotal = tfootRows[0]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
-                taxTotal = tfootRows[1]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
-                grandTotal = tfootRows[2]?.querySelector('td:last-child')?.innerText?.replace(/[^0-9.-]/g, '') || '0';
+        const tfootRow = modalElement.querySelector('.table tfoot tr');
+        if (tfootRow) {
+            const cells = tfootRow.querySelectorAll('td');
+            if (cells.length >= 5) {
+                subtotal = parseFloat(cells[1]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                receivedSubtotal = parseFloat(cells[2]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                pendingSubtotal = parseFloat(cells[3]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
+                taxTotal = parseFloat(cells[4]?.innerText?.replace(/[^0-9.]/g, '')) || 0;
             }
         }
         
-        // Method 3: Look for the order totals in the footer card
-        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
-            const totalsCard = modalElement.querySelector('.totals-card, .card-dashed');
-            if (totalsCard) {
-                const numbers = totalsCard.innerText.match(/[\d,]+\.?\d*/g);
-                if (numbers && numbers.length >= 3) {
-                    grandTotal = numbers[numbers.length - 1];
-                    taxTotal = numbers[numbers.length - 2] || '0';
-                    subtotal = numbers[numbers.length - 3] || '0';
-                }
-            }
-        }
-        
-        // Method 4: Get from the main order object if available
-        if (subtotal === '0' || taxTotal === '0' || grandTotal === '0') {
-            const orderTotalEl = modalElement.querySelector('.fw-bold.text-primary.fs-5');
-            if (orderTotalEl) {
-                grandTotal = orderTotalEl.innerText.replace(/[^0-9.-]/g, '');
-            }
-        }
-        
-        // Get created date
-        let createdDate = new Date().toLocaleDateString();
-        const createdDateEl = modalElement.querySelector('.timeline-content .text-muted.fs-8:first-child');
-        if (createdDateEl) {
-            createdDate = createdDateEl.innerText;
-        }
-        
-        // Get notes
+        // ── Notes ──────────────────────────────────────────────────────────────────
         let notes = '';
-        const notesEl = modalElement.querySelector('.card-body p');
+        const notesEl = modalElement.querySelector('.card-body p.mb-0.text-gray-700');
         if (notesEl) {
             notes = notesEl.innerText;
         }
         
-        // Parse numbers to ensure they're valid
-        subtotal = parseFloat(subtotal) || 0;
-        taxTotal = parseFloat(taxTotal) || 0;
-        grandTotal = parseFloat(grandTotal) || 0;
+        // ── Helper: Format number with commas ─────────────────────────────────────
+        function formatNumber(value) {
+            return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
 
-        // Create receipt HTML
-        const printWindow = window.open('', '_blank', 'width=1000,height=900');
+        // ── Create Print HTML ─────────────────────────────────────────────────────
+        const printWindow = window.open('', '_blank', 'width=1000,height=800');
         
         printWindow.document.write(`
             <!DOCTYPE html>
@@ -170,337 +159,319 @@
             <head>
                 <title>Purchase Order - ${poNumber}</title>
                 <meta charset="UTF-8">
-                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
                 <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    body {
-                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        font-size: 14px;
-                        line-height: 1.5;
-                        color: #1e293b;
-                        background: #f1f5f9;
-                        padding: 40px;
-                    }
-                    
-                    .print-container {
-                        max-width: 1200px;
-                        margin: 0 auto;
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { 
+                        font-family: Arial, Helvetica, sans-serif;
+                        font-size: 12px; 
+                        line-height: 1.4; 
+                        color: #1e293b; 
+                        padding: 15px;
                         background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 20px 35px -8px rgba(0,0,0,0.1);
-                        overflow: hidden;
+                    }
+                    .print-container {
+                        max-width: 100%;
+                        background: white;
                     }
                     
                     .print-header {
-                        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-                        color: white;
-                        padding: 32px 40px;
-                        text-align: center;
+                        border-bottom: 2px solid #0f172a;
+                        padding: 10px 0 15px 0;
+                        margin-bottom: 15px;
                     }
-                    
-                    .print-header h1 {
-                        font-size: 28px;
-                        font-weight: 700;
-                        margin-bottom: 8px;
-                        letter-spacing: -0.5px;
+                    .print-header .top-row {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
                     }
-                    
-                    .print-header .po-number {
-                        font-size: 18px;
-                        font-weight: 500;
-                        opacity: 0.9;
-                        margin-top: 8px;
+                    .print-header h1 { 
+                        font-size: 20px; 
+                        font-weight: 700; 
+                        color: #0f172a;
                     }
-                    
-                    .print-header .date {
-                        font-size: 14px;
-                        opacity: 0.7;
-                        margin-top: 8px;
+                    .print-header .po-number { 
+                        font-size: 14px; 
+                        font-weight: 600; 
+                        color: #334155;
+                        margin-top: 2px;
                     }
-                    
-                    .print-body {
-                        padding: 40px;
+                    .print-header .date { 
+                        font-size: 11px; 
+                        color: #64748b; 
+                    }
+                    .print-header .status { 
+                        display: inline-block; 
+                        padding: 2px 12px; 
+                        border-radius: 12px; 
+                        font-size: 11px; 
+                        font-weight: 600; 
+                        margin-top: 4px;
+                        background: #e2e8f0; 
+                        color: #0f172a;
+                        border: 1px solid #cbd5e1;
+                    }
+                    .print-header .right-text {
+                        text-align: right;
+                        font-size: 11px;
+                        color: #64748b;
                     }
                     
                     .info-grid {
-                        display: grid;
-                        grid-template-columns: repeat(3, 1fr);
-                        gap: 24px;
-                        margin-bottom: 32px;
-                        padding-bottom: 24px;
-                        border-bottom: 2px solid #e2e8f0;
-                    }
-                    
-                    .info-card {
-                        background: #f8fafc;
-                        padding: 16px 20px;
-                        border-radius: 12px;
-                        border: 1px solid #e2e8f0;
-                    }
-                    
-                    .info-label {
-                        font-size: 12px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        color: #64748b;
-                        margin-bottom: 8px;
-                    }
-                    
-                    .info-value {
-                        font-size: 16px;
-                        font-weight: 600;
-                        color: #0f172a;
-                    }
-                    
-                    .items-table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 24px 0;
-                    }
-                    
-                    .items-table th {
-                        text-align: left;
-                        padding: 12px 16px;
-                        background: #f1f5f9;
-                        font-weight: 600;
-                        font-size: 13px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                        color: #475569;
-                        border-bottom: 2px solid #e2e8f0;
-                    }
-                    
-                    .items-table td {
-                        padding: 12px 16px;
+                        display: grid; 
+                        grid-template-columns: repeat(3, 1fr); 
+                        gap: 10px;
+                        margin-bottom: 15px; 
+                        padding-bottom: 12px; 
                         border-bottom: 1px solid #e2e8f0;
-                        color: #334155;
                     }
+                    .info-card { 
+                        padding: 8px 12px; 
+                        border: 1px solid #e2e8f0; 
+                        border-radius: 4px; 
+                    }
+                    .info-label { 
+                        font-size: 9px; 
+                        font-weight: 700; 
+                        text-transform: uppercase; 
+                        letter-spacing: 0.5px; 
+                        color: #64748b; 
+                    }
+                    .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+                    .info-sub { font-size: 11px; color: #64748b; }
                     
-                    .items-table .text-right {
-                        text-align: right;
+                    .items-table { 
+                        width: 100%; 
+                        border-collapse: collapse; 
+                        margin: 10px 0; 
+                        font-size: 11px; 
                     }
+                    .items-table th {
+                        text-align: left; 
+                        padding: 5px 6px; 
+                        font-weight: 700; 
+                        font-size: 9px; 
+                        text-transform: uppercase; 
+                        color: #475569; 
+                        border-bottom: 2px solid #e2e8f0;
+                        background: #f8fafc;
+                    }
+                    .items-table td { 
+                        padding: 5px 6px; 
+                        border-bottom: 1px solid #f1f5f9; 
+                        color: #334155; 
+                    }
+                    .items-table .text-right { text-align: right; }
+                    .items-table .text-center { text-align: center; }
+                    .items-table .fw-bold { font-weight: 600; }
+                    .items-table .text-muted { color: #94a3b8; font-size: 10px; }
                     
-                    .items-table .text-center {
-                        text-align: center;
+                    .badge { 
+                        display: inline-block; 
+                        padding: 1px 6px; 
+                        font-size: 9px; 
+                        font-weight: 600; 
+                        border-radius: 3px; 
                     }
-                    
-                    .badge {
-                        display: inline-block;
-                        padding: 4px 8px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        border-radius: 6px;
-                    }
-                    
-                    .badge-success {
-                        background: #dcfce7;
-                        color: #166534;
-                    }
-                    
-                    .badge-warning {
-                        background: #fef9c3;
-                        color: #854d0e;
-                    }
+                    .badge-success { background: #dcfce7; color: #166534; }
+                    .badge-warning { background: #fef9c3; color: #854d0e; }
                     
                     .totals-section {
-                        margin-top: 24px;
-                        padding-top: 24px;
+                        margin-top: 10px; 
+                        padding-top: 10px; 
                         border-top: 2px solid #e2e8f0;
-                        display: flex;
+                        display: flex; 
                         justify-content: flex-end;
                     }
-                    
-                    .totals-card {
-                        width: 350px;
-                        background: #f8fafc;
-                        padding: 20px;
-                        border-radius: 12px;
+                    .totals-card { 
+                        width: 280px; 
+                        padding: 10px 14px; 
+                        border: 1px solid #e2e8f0; 
+                        border-radius: 4px; 
                     }
-                    
                     .total-row {
-                        display: flex;
-                        justify-content: space-between;
-                        padding: 8px 0;
-                        font-size: 14px;
+                        display: flex; 
+                        justify-content: space-between; 
+                        padding: 2px 0; 
+                        font-size: 11px;
                     }
-                    
+                    .total-row .label { color: #64748b; }
+                    .total-row .value { font-weight: 500; }
                     .total-row.grand-total {
-                        margin-top: 8px;
-                        padding-top: 12px;
+                        margin-top: 4px; 
+                        padding-top: 6px; 
                         border-top: 2px solid #e2e8f0;
-                        font-size: 18px;
-                        font-weight: 700;
+                        font-size: 14px; 
+                        font-weight: 700; 
                         color: #0f172a;
                     }
                     
-                    .notes-section {
-                        margin-top: 32px;
-                        padding: 20px;
-                        background: #fef9e7;
-                        border-radius: 12px;
-                        border-left: 4px solid #f59e0b;
+                    .notes-section { 
+                        margin-top: 12px; 
+                        padding: 8px 12px; 
+                        background: #fefce8; 
+                        border-radius: 4px; 
+                        border-left: 3px solid #eab308; 
+                    }
+                    .notes-section strong { font-size: 10px; }
+                    .notes-section .content { font-size: 11px; color: #334155; }
+                    
+                    .footer { 
+                        margin-top: 15px; 
+                        padding-top: 10px; 
+                        border-top: 1px solid #e2e8f0; 
+                        text-align: center; 
+                        font-size: 10px; 
+                        color: #94a3b8; 
                     }
                     
-                    .footer {
-                        margin-top: 40px;
-                        padding-top: 24px;
-                        border-top: 1px solid #e2e8f0;
-                        text-align: center;
-                        font-size: 12px;
-                        color: #94a3b8;
+                    .no-print { 
+                        text-align: center; 
+                        padding: 10px; 
+                        background: #f8fafc; 
+                        border-top: 1px solid #e2e8f0; 
                     }
-                    
-                    .no-print {
-                        text-align: center;
-                        padding: 20px;
-                        background: #f8fafc;
-                        border-top: 1px solid #e2e8f0;
+                    .btn { 
+                        padding: 5px 14px; 
+                        font-size: 12px; 
+                        font-weight: 500; 
+                        border-radius: 4px; 
+                        border: none; 
+                        cursor: pointer; 
+                        margin: 0 4px; 
                     }
-                    
-                    .btn {
-                        padding: 10px 24px;
-                        font-size: 14px;
-                        font-weight: 500;
-                        border-radius: 8px;
-                        border: none;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        margin: 0 8px;
-                    }
-                    
-                    .btn-primary {
-                        background: #3b82f6;
-                        color: white;
-                    }
-                    
-                    .btn-primary:hover {
-                        background: #2563eb;
-                    }
-                    
-                    .btn-secondary {
-                        background: #64748b;
-                        color: white;
-                    }
-                    
-                    .btn-secondary:hover {
-                        background: #475569;
-                    }
+                    .btn-primary { background: #3b82f6; color: white; }
+                    .btn-secondary { background: #64748b; color: white; }
                     
                     @media print {
-                        body {
-                            background: white;
-                            padding: 0;
-                        }
-                        .print-container {
-                            box-shadow: none;
-                            border-radius: 0;
-                        }
-                        .no-print {
-                            display: none !important;
-                        }
-                        .btn {
-                            display: none;
-                        }
+                        body { padding: 0.2in; margin: 0; }
+                        .print-container { box-shadow: none; border-radius: 0; }
+                        .no-print { display: none !important; }
+                        .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    }
+                    
+                    @page {
+                        margin: 8mm;
+                        size: A4 portrait;
                     }
                 </style>
             </head>
             <body>
                 <div class="print-container">
+                    <!-- Header -->
                     <div class="print-header">
-                        <h1>PURCHASE ORDER</h1>
-                        <div class="po-number">${poNumber}</div>
-                        <div class="date">${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                        <div class="top-row">
+                            <div>
+                                <h1>PURCHASE ORDER</h1>
+                                <div class="po-number">${poNumber}</div>
+                                <div class="date">${createdDate}</div>
+                                <div class="status">${statusBadge}</div>
+                            </div>
+                            <div class="right-text">
+                                <div>Generated: ${new Date().toLocaleDateString()}</div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="print-body">
-                        <!-- Information Grid -->
-                        <div class="info-grid">
-                            <div class="info-card">
-                                <div class="info-label">SUPPLIER</div>
-                                <div class="info-value">${supplier}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">EXPECTED DELIVERY</div>
-                                <div class="info-value">${expectedDelivery}</div>
-                            </div>
-                            <div class="info-card">
-                                <div class="info-label">LOCATION</div>
-                                <div class="info-value">${location}</div>
-                            </div>
+                    <!-- Information Grid -->
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <div class="info-label">SUPPLIER</div>
+                            <div class="info-value">${supplierName}</div>
+                            ${supplierEmail ? `<div class="info-sub">${supplierEmail}</div>` : ''}
+                            ${supplierPhone ? `<div class="info-sub">${supplierPhone}</div>` : ''}
                         </div>
-                        
-                        <!-- Items Table -->
-                        <table class="items-table">
-                            <thead>
+                        <div class="info-card">
+                            <div class="info-label">EXPECTED DELIVERY</div>
+                            <div class="info-value">${expectedDelivery}</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">LOCATION</div>
+                            <div class="info-value">${location}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Items Table -->
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th style="width:22%;">PRODUCT</th>
+                                <th style="width:8%;" class="text-center">QTY</th>
+                                <th style="width:12%;" class="text-right">UNIT COST</th>
+                                <th style="width:10%;" class="text-center">RECEIVED</th>
+                                <th style="width:10%;" class="text-center">PENDING</th>
+                                <th style="width:12%;" class="text-right">ORDERED</th>
+                                <th style="width:12%;" class="text-right">RECEIVED</th>
+                                <th style="width:12%;" class="text-right">PENDING</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(item => `
                                 <tr>
-                                    <th>PRODUCT</th>
-                                    <th class="text-center">QTY</th>
-                                    <th class="text-center">RECEIVED</th>
-                                    <th class="text-center">PENDING</th>
-                                    <th class="text-right">UNIT COST</th>
-                                    <th class="text-right">TAX</th>
-                                    <th class="text-right">TOTAL</th>
-                                  </tr>
-                            </thead>
-                            <tbody>
-                                ${items.map(item => `
-                                 <tr>
-                                     <td><strong>${item.product}</strong></td>
-                                     <td class="text-center">${item.quantity}</td>
-                                     <td class="text-center"><span class="badge badge-success">${item.received}</span></td>
-                                     <td class="text-center"><span class="badge badge-warning">${item.pending}</span></td>
-                                     <td class="text-right">${parseFloat(item.unitCost).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                     <td class="text-right">${parseFloat(item.tax).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                     <td class="text-right"><strong>${parseFloat(item.total).toLocaleString(undefined, {minimumFractionDigits: 2})}</strong></td>
-                                 </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        
-                        <!-- Totals Section -->
-                        <div class="totals-section">
-                            <div class="totals-card">
-                                <div class="total-row">
-                                    <span>Subtotal:</span>
-                                    <span>${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                </div>
-                                <div class="total-row">
-                                    <span>Tax Total:</span>
-                                    <span>${taxTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                </div>
-                                <div class="total-row grand-total">
-                                    <span>GRAND TOTAL:</span>
-                                    <span>${grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                </div>
+                                    <td>
+                                        <div class="fw-bold">${item.product}</div>
+                                        ${item.sku ? `<div class="text-muted">SKU: ${item.sku}</div>` : ''}
+                                    </td>
+                                    <td class="text-center">${item.orderedQty}</td>
+                                    <td class="text-right">${formatNumber(item.unitCost)}</td>
+                                    <td class="text-center"><span class="badge badge-success">${item.receivedQty}</span></td>
+                                    <td class="text-center"><span class="badge badge-warning">${item.pendingQty}</span></td>
+                                    <td class="text-right">${formatNumber(item.orderedValue)}</td>
+                                    <td class="text-right">${formatNumber(item.receivedValue)}</td>
+                                    <td class="text-right">${formatNumber(item.pendingValue)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot style="background: #f8fafc; font-weight: 600; border-top: 2px solid #e2e8f0;">
+                            <tr>
+                                <td colspan="5" class="text-right">TOTALS:</td>
+                                <td class="text-right">${formatNumber(subtotal)}</td>
+                                <td class="text-right">${formatNumber(receivedSubtotal)}</td>
+                                <td class="text-right">${formatNumber(pendingSubtotal)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    
+                    <!-- Totals Section -->
+                    <div class="totals-section">
+                        <div class="totals-card">
+                            <div class="total-row">
+                                <span class="label">Ordered Value:</span>
+                                <span class="value">${formatNumber(subtotal)}</span>
+                            </div>
+                            <div class="total-row">
+                                <span class="label">Received Value:</span>
+                                <span class="value">${formatNumber(receivedSubtotal)}</span>
+                            </div>
+                            <div class="total-row">
+                                <span class="label">Pending Value:</span>
+                                <span class="value">${formatNumber(pendingSubtotal)}</span>
+                            </div>
+                            <div class="total-row">
+                                <span class="label">Tax Total:</span>
+                                <span class="value">${formatNumber(taxTotal)}</span>
+                            </div>
+                            <div class="total-row grand-total">
+                                <span>TOTAL ORDER VALUE:</span>
+                                <span>${formatNumber(subtotal + taxTotal)}</span>
                             </div>
                         </div>
-                        
-                        ${notes ? `
-                        <div class="notes-section">
-                            <strong>NOTES</strong>
-                            <div>${notes}</div>
-                        </div>
-                        ` : ''}
-                        
-                        <div class="footer">
-                            <div>Thank you for your business!</div>
-                            <div style="margin-top: 8px;">Generated on ${new Date().toLocaleString()}</div>
-                        </div>
+                    </div>
+                    
+                    ${notes ? `
+                    <div class="notes-section">
+                        <strong>NOTES</strong>
+                        <div class="content">${notes}</div>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="footer">
+                        <div>Thank you for your business!</div>
+                        <div style="margin-top: 2px;">Generated on ${new Date().toLocaleString()}</div>
                     </div>
                     
                     <div class="no-print">
-                        <button onclick="window.print()" class="btn btn-primary">
-                            Print
-                        </button>
-                        <button onclick="window.close()" class="btn btn-secondary">
-                            Close
-                        </button>
+                        <button onclick="window.print()" class="btn btn-primary">Print</button>
+                        <button onclick="window.close()" class="btn btn-secondary">Close</button>
                     </div>
                 </div>
                 
@@ -508,7 +479,7 @@
                     window.onload = function() {
                         setTimeout(function() {
                             window.print();
-                        }, 500);
+                        }, 600);
                     };
                 <\/script>
             </body>
@@ -521,9 +492,6 @@
     // Function to download as PDF
     function downloadPurchaseOrder(orderId) {
         printPurchaseOrder(orderId);
-        // setTimeout(() => {
-        //     // alert('To save as PDF, click "Print" then select "Save as PDF" as your printer.');
-        // }, 1000);
     }
 </script>
 
@@ -532,385 +500,380 @@
 
 
 
-
-
-
-
-
-
-
 <script>
     // Global variable to track item count
-let purchaseOrderItemCount = 0;
+    let purchaseOrderItemCount = 0;
 
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Purchase order form initialized');
-    
-    // Set the first item ID
-    const firstItem = document.querySelector('.purchase-order-item');
-    if (firstItem) {
-        firstItem.id = 'item_0';
-        purchaseOrderItemCount = 0;
-        console.log('First item ID set to:', firstItem.id);
-    }
-    
-    // Initialize product search for existing items
-    initProductSearch();
-    
-    // Enable remove button if needed
-    updateRemoveButtons();
-    
-    // Initialize order summary
-    updateOrderSummary();
-    
-    // Add event listeners to existing quantity and unit cost inputs
-    initializeExistingInputs();
-});
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Purchase order form initialized');
+        
+        // Set the first item ID
+        const firstItem = document.querySelector('.purchase-order-item');
+        if (firstItem) {
+            firstItem.id = 'item_0';
+            purchaseOrderItemCount = 0;
+            console.log('First item ID set to:', firstItem.id);
+        }
+        
+        // Initialize product search for existing items
+        initProductSearch();
+        
+        // Enable remove button if needed
+        updateRemoveButtons();
+        
+        // Initialize order summary
+        updateOrderSummary();
+        
+        // Add event listeners to existing quantity and unit cost inputs
+        initializeExistingInputs();
+    });
 
-// Initialize product search for all typable inputs
-function initProductSearch() {
-    document.querySelectorAll('.product-typable-input').forEach(input => {
-        if (input.dataset.initialized === 'true') return;
-        input.dataset.initialized = 'true';
-        
-        const itemIndex = input.dataset.itemIndex;
-        const hiddenInput = document.getElementById(`product_id_${itemIndex}`);
-        const unitCostInput = document.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
-        const quantityInput = document.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
-        
-        function updateProduct() {
-            const selectedValue = input.value;
-            const datalist = document.getElementById(input.getAttribute('list'));
-            let selectedId = '';
-            let costPrice = 0;
+    // Initialize product search for all typable inputs
+    function initProductSearch() {
+        document.querySelectorAll('.product-typable-input').forEach(input => {
+            if (input.dataset.initialized === 'true') return;
+            input.dataset.initialized = 'true';
             
-            if (datalist) {
-                const options = datalist.querySelectorAll('option');
-                for (let opt of options) {
-                    if (opt.value === selectedValue) {
-                        selectedId = opt.dataset.id;
-                        costPrice = parseFloat(opt.dataset.costPrice) || 0;
-                        break;
+            const itemIndex = input.dataset.itemIndex;
+            const hiddenInput = document.getElementById(`product_id_${itemIndex}`);
+            const unitCostInput = document.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
+            const quantityInput = document.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
+            
+            function updateProduct() {
+                const selectedValue = input.value;
+                const datalist = document.getElementById(input.getAttribute('list'));
+                let selectedId = '';
+                let costPrice = 0;
+                
+                if (datalist) {
+                    const options = datalist.querySelectorAll('option');
+                    for (let opt of options) {
+                        if (opt.value === selectedValue) {
+                            selectedId = opt.dataset.id;
+                            costPrice = parseFloat(opt.dataset.costPrice) || 0;
+                            break;
+                        }
                     }
                 }
+                
+                hiddenInput.value = selectedId;
+                if (unitCostInput && costPrice > 0) {
+                    unitCostInput.value = costPrice.toFixed(2);
+                    if (quantityInput) {
+                        calculateItemTotal(parseInt(itemIndex));
+                    }
+                } else if (!selectedValue) {
+                    hiddenInput.value = '';
+                    if (unitCostInput) unitCostInput.value = '0.00';
+                    if (quantityInput) calculateItemTotal(parseInt(itemIndex));
+                }
             }
             
-            hiddenInput.value = selectedId;
-            if (unitCostInput && costPrice > 0) {
-                unitCostInput.value = costPrice.toFixed(2);
-                if (quantityInput) {
-                    calculateItemTotal(parseInt(itemIndex));
-                }
-            } else if (!selectedValue) {
-                hiddenInput.value = '';
-                if (unitCostInput) unitCostInput.value = '0.00';
-                if (quantityInput) calculateItemTotal(parseInt(itemIndex));
+            input.addEventListener('change', updateProduct);
+            input.addEventListener('blur', updateProduct);
+            
+            // Initial sync if there's a value
+            if (input.value) {
+                updateProduct();
             }
-        }
-        
-        input.addEventListener('change', updateProduct);
-        input.addEventListener('blur', updateProduct);
-        
-        // Initial sync if there's a value
-        if (input.value) {
-            updateProduct();
-        }
-    });
-}
-
-// Initialize event listeners for existing inputs
-function initializeExistingInputs() {
-    console.log('Initializing existing inputs...');
-    
-    // Add input event listeners to quantity and unit cost fields
-    document.querySelectorAll('input[name^="items["][name$="[quantity]"]').forEach(input => {
-        console.log('Found quantity input:', input.name);
-        
-        input.removeEventListener('input', input._quantityHandler);
-        input._quantityHandler = function() {
-            try {
-                const matches = this.name.match(/\[(\d+)\]/);
-                if (matches && matches[1]) {
-                    const itemIndex = parseInt(matches[1]);
-                    calculateItemTotal(itemIndex);
-                }
-            } catch (error) {
-                console.error('Error in quantity input listener:', error);
-            }
-        };
-        input.addEventListener('input', input._quantityHandler);
-    });
-    
-    document.querySelectorAll('input[name^="items["][name$="[unit_cost]"]').forEach(input => {
-        console.log('Found unit cost input:', input.name);
-        
-        input.removeEventListener('input', input._costHandler);
-        input._costHandler = function() {
-            try {
-                const matches = this.name.match(/\[(\d+)\]/);
-                if (matches && matches[1]) {
-                    const itemIndex = parseInt(matches[1]);
-                    calculateItemTotal(itemIndex);
-                }
-            } catch (error) {
-                console.error('Error in unit cost input listener:', error);
-            }
-        };
-        input.addEventListener('input', input._costHandler);
-    });
-}
-
-// Function to add new purchase order item row
-function addPurchaseOrderItem() {
-    purchaseOrderItemCount++;
-    
-    const container = document.getElementById('purchase_order_items_container');
-    if (!container) {
-        console.error('Purchase order items container not found');
-        return;
+        });
     }
-    
-    // Build variant options for datalist
-    let variantOptions = '';
-    @foreach($variants as $variant)
-        variantOptions += `<option value="{{ $variant->name }}" 
-                                data-id="{{ $variant->id }}"
-                                data-cost-price="{{ $variant->cost_price }}">
-                            </option>`;
-    @endforeach
-    
-    const newItemHtml = `
-        <div class="row g-4 mb-4 purchase-order-item" id="item_${purchaseOrderItemCount}">
-            <div class="col-md-4">
-                <label class="form-label required">{{ __('passwords.product') }}</label>
-                <div class="position-relative">
-                    <input type="text" 
-                           id="product_search_${purchaseOrderItemCount}"
-                           class="form-control product-typable-input"
-                           list="product_list_${purchaseOrderItemCount}"
-                           placeholder="Type or select product..."
-                           autocomplete="off"
-                           data-item-index="${purchaseOrderItemCount}">
-                    <input type="hidden" 
-                           name="items[${purchaseOrderItemCount}][product_variant_id]" 
-                           id="product_id_${purchaseOrderItemCount}">
-                    <datalist id="product_list_${purchaseOrderItemCount}">
-                        <option value="">Select product</option>
-                        ${variantOptions}
-                    </datalist>
+
+    // Initialize event listeners for existing inputs
+    function initializeExistingInputs() {
+        console.log('Initializing existing inputs...');
+        
+        // Add input event listeners to quantity and unit cost fields
+        document.querySelectorAll('input[name^="items["][name$="[quantity]"]').forEach(input => {
+            console.log('Found quantity input:', input.name);
+            
+            input.removeEventListener('input', input._quantityHandler);
+            input._quantityHandler = function() {
+                try {
+                    const matches = this.name.match(/\[(\d+)\]/);
+                    if (matches && matches[1]) {
+                        const itemIndex = parseInt(matches[1]);
+                        calculateItemTotal(itemIndex);
+                    }
+                } catch (error) {
+                    console.error('Error in quantity input listener:', error);
+                }
+            };
+            input.addEventListener('input', input._quantityHandler);
+        });
+        
+        document.querySelectorAll('input[name^="items["][name$="[unit_cost]"]').forEach(input => {
+            console.log('Found unit cost input:', input.name);
+            
+            input.removeEventListener('input', input._costHandler);
+            input._costHandler = function() {
+                try {
+                    const matches = this.name.match(/\[(\d+)\]/);
+                    if (matches && matches[1]) {
+                        const itemIndex = parseInt(matches[1]);
+                        calculateItemTotal(itemIndex);
+                    }
+                } catch (error) {
+                    console.error('Error in unit cost input listener:', error);
+                }
+            };
+            input.addEventListener('input', input._costHandler);
+        });
+    }
+
+    // Function to add new purchase order item row
+    function addPurchaseOrderItem() {
+        purchaseOrderItemCount++;
+        
+        const container = document.getElementById('purchase_order_items_container');
+        if (!container) {
+            console.error('Purchase order items container not found');
+            return;
+        }
+        
+        // Build variant options for datalist
+        let variantOptions = '';
+        @foreach($variants as $variant)
+            variantOptions += `<option value="{{ $variant->name }}" 
+                                    data-id="{{ $variant->id }}"
+                                    data-cost-price="{{ $variant->net_cost_price }}">
+                                </option>`;
+        @endforeach
+        
+        const newItemHtml = `
+            <div class="row g-4 mb-4 purchase-order-item" id="item_${purchaseOrderItemCount}">
+                <div class="col-md-4">
+                    <label class="form-label required">{{ __('passwords.product') }}</label>
+                    <div class="position-relative">
+                        <input type="text" 
+                            id="product_search_${purchaseOrderItemCount}"
+                            class="form-control product-typable-input"
+                            list="product_list_${purchaseOrderItemCount}"
+                            placeholder="Type or select product..."
+                            autocomplete="off"
+                            data-item-index="${purchaseOrderItemCount}">
+                        <input type="hidden" 
+                            name="items[${purchaseOrderItemCount}][product_variant_id]" 
+                            id="product_id_${purchaseOrderItemCount}">
+                        <datalist id="product_list_${purchaseOrderItemCount}">
+                            <option value="">Select product</option>
+                            ${variantOptions}
+                        </datalist>
+                    </div>
+                    <div id="items.${purchaseOrderItemCount}.product_variant_id"></div>
                 </div>
-                <div id="items.${purchaseOrderItemCount}.product_variant_id"></div>
+                <div class="col-md-2">
+                    <label class="form-label required">{{ __('passwords.quantity') }}</label>
+                    <input type="number" name="items[${purchaseOrderItemCount}][quantity]" class="form-control item-quantity" min="1" value="1">
+                    <div id="items.${purchaseOrderItemCount}.quantity"></div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label required">{{ __('passwords.unit_cost') }}</label>
+                    <input type="number" name="items[${purchaseOrderItemCount}][unit_cost]" class="form-control item-unit-cost" min="0.01" step="0.01" value="0.00">
+                    <div id="items.${purchaseOrderItemCount}.unit_cost"></div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">{{ __('passwords.total') }}</label>
+                    <input type="text" class="form-control bg-light item-total" value="0.00" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePurchaseOrderItem(this)">
+                        <i class="bi bi-trash fs-5"></i>
+                    </button>
+                </div>
             </div>
-            <div class="col-md-2">
-                <label class="form-label required">{{ __('passwords.quantity') }}</label>
-                <input type="number" name="items[${purchaseOrderItemCount}][quantity]" class="form-control item-quantity" min="1" value="1">
-                <div id="items.${purchaseOrderItemCount}.quantity"></div>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label required">{{ __('passwords.unit_cost') }}</label>
-                <input type="number" name="items[${purchaseOrderItemCount}][unit_cost]" class="form-control item-unit-cost" min="0.01" step="0.01" value="0.00">
-                <div id="items.${purchaseOrderItemCount}.unit_cost"></div>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">{{ __('passwords.total') }}</label>
-                <input type="text" class="form-control bg-light item-total" value="0.00" readonly>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">&nbsp;</label>
-                <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePurchaseOrderItem(this)">
-                    <i class="bi bi-trash fs-5"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    
-    container.insertAdjacentHTML('beforeend', newItemHtml);
-    
-    // Initialize product search for the new row
-    initProductSearch();
-    
-    // Add event listeners to the new inputs
-    const newQuantityInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][quantity]"]`);
-    const newUnitCostInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][unit_cost]"]`);
-    
-    if (newQuantityInput) {
-        newQuantityInput.removeEventListener('input', newQuantityInput._handler);
-        newQuantityInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
-        newQuantityInput.addEventListener('input', newQuantityInput._handler);
-    }
-    
-    if (newUnitCostInput) {
-        newUnitCostInput.removeEventListener('input', newUnitCostInput._handler);
-        newUnitCostInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
-        newUnitCostInput.addEventListener('input', newUnitCostInput._handler);
-    }
-    
-    // Enable remove buttons if there's more than one item
-    updateRemoveButtons();
-    
-    console.log('Added new item row:', purchaseOrderItemCount);
-}
-
-// Function to remove purchase order item
-function removePurchaseOrderItem(button) {
-    if (!button) return;
-    
-    const item = button.closest('.purchase-order-item');
-    const items = document.querySelectorAll('.purchase-order-item');
-    
-    if (items.length > 1 && item) {
-        item.remove();
-        updateRemoveButtons();
-        updateOrderSummary();
-        console.log('Removed item row');
-    }
-}
-
-// Function to update remove buttons state
-function updateRemoveButtons() {
-    const items = document.querySelectorAll('.purchase-order-item');
-    const removeButtons = document.querySelectorAll('.purchase-order-item .btn-danger');
-    
-    removeButtons.forEach((button, index) => {
-        if (button) {
-            button.disabled = items.length <= 1;
-        }
-    });
-}
-
-// Function to calculate item total
-function calculateItemTotal(itemIndex) {
-    const itemContainer = document.getElementById(`item_${itemIndex}`);
-    if (!itemContainer) {
-        console.error('Item container not found:', itemIndex);
-        return;
-    }
-    
-    const quantityInput = itemContainer.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
-    const unitCostInput = itemContainer.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
-    const totalInput = itemContainer.querySelector('.item-total');
-    
-    if (!quantityInput || !unitCostInput || !totalInput) {
-        console.error('Required inputs not found for item:', itemIndex);
-        return;
-    }
-    
-    const quantity = parseFloat(quantityInput.value) || 0;
-    const unitCost = parseFloat(unitCostInput.value) || 0;
-    const total = quantity * unitCost;
-    
-    totalInput.value = total.toFixed(2);
-    
-    // Update order summary
-    updateOrderSummary();
-}
-
-// Function to update the order summary
-function updateOrderSummary() {
-    const subtotalElement = document.getElementById('order_subtotal');
-    const taxTotalElement = document.getElementById('order_tax_total');
-    const grandTotalElement = document.getElementById('order_grand_total');
-    
-    if (!subtotalElement || !taxTotalElement || !grandTotalElement) {
-        console.warn('Order summary elements not found');
-        return;
-    }
-    
-    let subtotal = 0;
-    
-    // Calculate subtotal from all items
-    document.querySelectorAll('.purchase-order-item').forEach((item) => {
-        const totalInput = item.querySelector('.item-total');
-        if (totalInput && totalInput.value) {
-            subtotal += parseFloat(totalInput.value) || 0;
-        }
-    });
-    
-    const taxTotal = 0;
-    const grandTotal = subtotal + taxTotal;
-    
-    subtotalElement.textContent = subtotal.toFixed(2);
-    taxTotalElement.textContent = taxTotal.toFixed(2);
-    grandTotalElement.textContent = grandTotal.toFixed(2);
-}
-
-// Function to validate purchase order form
-function validatePurchaseOrderForm() {
-    let isValid = true;
-    
-    // Clear previous errors
-    document.querySelectorAll('.is-invalid').forEach(element => {
-        element.classList.remove('is-invalid');
-    });
-    document.querySelectorAll('.invalid-feedback').forEach(element => {
-        element.remove();
-    });
-    
-    // Validate supplier
-    const supplierSelect = document.querySelector('select[name="supplier_id"]');
-    if (!supplierSelect || !supplierSelect.value) {
-        showFieldError(supplierSelect, "Supplier is required");
-        isValid = false;
-    }
-    
-    // Validate location
-    const locationSelect = document.querySelector('select[name="location_id"]');
-    if (!locationSelect || !locationSelect.value) {
-        showFieldError(locationSelect, "Location is required");
-        isValid = false;
-    }
-    
-    // Validate expected delivery date
-    const deliveryDateInput = document.querySelector('input[name="expected_delivery_date"]');
-    if (!deliveryDateInput || !deliveryDateInput.value) {
-        showFieldError(deliveryDateInput, "Expected delivery date is required");
-        isValid = false;
-    }
-    
-    // Validate items
-    const items = document.querySelectorAll('.purchase-order-item');
-    let hasValidItems = false;
-    
-    items.forEach((item) => {
-        const itemId = item.id.replace('item_', '');
-        const productHidden = document.getElementById(`product_id_${itemId}`);
-        const quantityInput = item.querySelector(`input[name="items[${itemId}][quantity]"]`);
-        const unitCostInput = item.querySelector(`input[name="items[${itemId}][unit_cost]"]`);
+        `;
         
-        if (productHidden && productHidden.value) {
-            hasValidItems = true;
-            
-            if (!quantityInput || !quantityInput.value || parseFloat(quantityInput.value) <= 0) {
-                showFieldError(quantityInput, "Valid quantity is required");
-                isValid = false;
-            }
-            
-            if (!unitCostInput || !unitCostInput.value || parseFloat(unitCostInput.value) <= 0) {
-                showFieldError(unitCostInput, "Valid unit cost is required");
-                isValid = false;
-            }
+        container.insertAdjacentHTML('beforeend', newItemHtml);
+        
+        // Initialize product search for the new row
+        initProductSearch();
+        
+        // Add event listeners to the new inputs
+        const newQuantityInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][quantity]"]`);
+        const newUnitCostInput = document.querySelector(`input[name="items[${purchaseOrderItemCount}][unit_cost]"]`);
+        
+        if (newQuantityInput) {
+            newQuantityInput.removeEventListener('input', newQuantityInput._handler);
+            newQuantityInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
+            newQuantityInput.addEventListener('input', newQuantityInput._handler);
         }
-    });
-    
-    if (!hasValidItems) {
-        alert("At least one valid item is required");
-        isValid = false;
+        
+        if (newUnitCostInput) {
+            newUnitCostInput.removeEventListener('input', newUnitCostInput._handler);
+            newUnitCostInput._handler = function() { calculateItemTotal(purchaseOrderItemCount); };
+            newUnitCostInput.addEventListener('input', newUnitCostInput._handler);
+        }
+        
+        // Enable remove buttons if there's more than one item
+        updateRemoveButtons();
+        
+        console.log('Added new item row:', purchaseOrderItemCount);
     }
-    
-    return isValid;
-}
 
-// Function to show field error
-function showFieldError(field, message) {
-    if (!field) return;
-    
-    field.classList.add('is-invalid');
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'invalid-feedback';
-    errorDiv.textContent = message;
-    field.parentNode.appendChild(errorDiv);
-}
+    // Function to remove purchase order item
+    function removePurchaseOrderItem(button) {
+        if (!button) return;
+        
+        const item = button.closest('.purchase-order-item');
+        const items = document.querySelectorAll('.purchase-order-item');
+        
+        if (items.length > 1 && item) {
+            item.remove();
+            updateRemoveButtons();
+            updateOrderSummary();
+            console.log('Removed item row');
+        }
+    }
+
+    // Function to update remove buttons state
+    function updateRemoveButtons() {
+        const items = document.querySelectorAll('.purchase-order-item');
+        const removeButtons = document.querySelectorAll('.purchase-order-item .btn-danger');
+        
+        removeButtons.forEach((button, index) => {
+            if (button) {
+                button.disabled = items.length <= 1;
+            }
+        });
+    }
+
+    // Function to calculate item total
+    function calculateItemTotal(itemIndex) {
+        const itemContainer = document.getElementById(`item_${itemIndex}`);
+        if (!itemContainer) {
+            console.error('Item container not found:', itemIndex);
+            return;
+        }
+        
+        const quantityInput = itemContainer.querySelector(`input[name="items[${itemIndex}][quantity]"]`);
+        const unitCostInput = itemContainer.querySelector(`input[name="items[${itemIndex}][unit_cost]"]`);
+        const totalInput = itemContainer.querySelector('.item-total');
+        
+        if (!quantityInput || !unitCostInput || !totalInput) {
+            console.error('Required inputs not found for item:', itemIndex);
+            return;
+        }
+        
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const unitCost = parseFloat(unitCostInput.value) || 0;
+        const total = quantity * unitCost;
+        
+        totalInput.value = total.toFixed(2);
+        
+        // Update order summary
+        updateOrderSummary();
+    }
+
+    // Function to update the order summary
+    function updateOrderSummary() {
+        const subtotalElement = document.getElementById('order_subtotal');
+        const taxTotalElement = document.getElementById('order_tax_total');
+        const grandTotalElement = document.getElementById('order_grand_total');
+        
+        if (!subtotalElement || !taxTotalElement || !grandTotalElement) {
+            console.warn('Order summary elements not found');
+            return;
+        }
+        
+        let subtotal = 0;
+        
+        // Calculate subtotal from all items
+        document.querySelectorAll('.purchase-order-item').forEach((item) => {
+            const totalInput = item.querySelector('.item-total');
+            if (totalInput && totalInput.value) {
+                subtotal += parseFloat(totalInput.value) || 0;
+            }
+        });
+        
+        const taxTotal = 0;
+        const grandTotal = subtotal + taxTotal;
+        
+        subtotalElement.textContent = subtotal.toFixed(2);
+        taxTotalElement.textContent = taxTotal.toFixed(2);
+        grandTotalElement.textContent = grandTotal.toFixed(2);
+    }
+
+    // Function to validate purchase order form
+    function validatePurchaseOrderForm() {
+        let isValid = true;
+        
+        // Clear previous errors
+        document.querySelectorAll('.is-invalid').forEach(element => {
+            element.classList.remove('is-invalid');
+        });
+        document.querySelectorAll('.invalid-feedback').forEach(element => {
+            element.remove();
+        });
+        
+        // Validate supplier
+        const supplierSelect = document.querySelector('select[name="supplier_id"]');
+        if (!supplierSelect || !supplierSelect.value) {
+            showFieldError(supplierSelect, "Supplier is required");
+            isValid = false;
+        }
+        
+        // Validate location
+        const locationSelect = document.querySelector('select[name="location_id"]');
+        if (!locationSelect || !locationSelect.value) {
+            showFieldError(locationSelect, "Location is required");
+            isValid = false;
+        }
+        
+        // Validate expected delivery date
+        const deliveryDateInput = document.querySelector('input[name="expected_delivery_date"]');
+        if (!deliveryDateInput || !deliveryDateInput.value) {
+            showFieldError(deliveryDateInput, "Expected delivery date is required");
+            isValid = false;
+        }
+        
+        // Validate items
+        const items = document.querySelectorAll('.purchase-order-item');
+        let hasValidItems = false;
+        
+        items.forEach((item) => {
+            const itemId = item.id.replace('item_', '');
+            const productHidden = document.getElementById(`product_id_${itemId}`);
+            const quantityInput = item.querySelector(`input[name="items[${itemId}][quantity]"]`);
+            const unitCostInput = item.querySelector(`input[name="items[${itemId}][unit_cost]"]`);
+            
+            if (productHidden && productHidden.value) {
+                hasValidItems = true;
+                
+                if (!quantityInput || !quantityInput.value || parseFloat(quantityInput.value) <= 0) {
+                    showFieldError(quantityInput, "Valid quantity is required");
+                    isValid = false;
+                }
+                
+                if (!unitCostInput || !unitCostInput.value || parseFloat(unitCostInput.value) <= 0) {
+                    showFieldError(unitCostInput, "Valid unit cost is required");
+                    isValid = false;
+                }
+            }
+        });
+        
+        if (!hasValidItems) {
+            alert("At least one valid item is required");
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+
+    // Function to show field error
+    function showFieldError(field, message) {
+        if (!field) return;
+        
+        field.classList.add('is-invalid');
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'invalid-feedback';
+        errorDiv.textContent = message;
+        field.parentNode.appendChild(errorDiv);
+    }
+
+
 </script>
 
 
@@ -1042,32 +1005,135 @@ function showFieldError(field, message) {
         })
     }
 
-    function sendToSupplier(orderId) {
-        const selectedStatus = 'sent';
-        const updateRoute = '/purchase-send/' + orderId;
+    // Update payment summary when amount changes
+    function updatePaymentSummary(orderId) {
+        const amountInput = document.getElementById(`payment_amount_${orderId}`);
+        const maxAmount = parseFloat(amountInput?.getAttribute('max')) || 0;
+        const paymentAmount = parseFloat(amountInput?.value) || 0;
         
-        Swal.fire({
-            title: '{{ __("passwords.send_supplier_title") }}',
-            text: '{{ __("passwords.send_supplier_confirmation") }}',
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonColor: '#0dcaf0',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '{{ __("passwords.send_supplier") }}',
-            cancelButtonText: '{{ __("passwords.cancel") }}',
-            reverseButtons: true,
-            showLoaderOnConfirm: true,
-            preConfirm: () => {
-                return new Promise((resolve) => {
-                    // Use LiveBlade to update status         
-                    LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-                    resolve();
-                });
-            }
-        })
+        const totalAmount = parseFloat(document.getElementById(`total_amount_${orderId}`)?.value) || 0;
+        const totalPaid = parseFloat(document.getElementById(`total_paid_${orderId}`)?.value) || 0;
+        
+        // Calculate new balance
+        const newBalance = maxAmount - paymentAmount;
+        const isFullyPaid = newBalance <= 0;
+        const status = isFullyPaid ? 'Fully Paid' : 'Partial Payment';
+        const statusClass = isFullyPaid ? 'text-success' : 'text-warning';
+        
+        document.getElementById(`amount_paying_display_${orderId}`).textContent = paymentAmount.toFixed(2) + ' {{ currency_symbol() }}';
+        document.getElementById(`new_balance_display_${orderId}`).textContent = newBalance.toFixed(2) + ' {{ currency_symbol() }}';
+        document.getElementById(`payment_status_display_${orderId}`).textContent = status;
+        document.getElementById(`payment_status_display_${orderId}`).className = `fw-bold ${statusClass}`;
+        
+        // Update the payment status select
+        const statusSelect = document.getElementById(`payment_status_${orderId}`);
+        if (statusSelect) {
+            statusSelect.value = isFullyPaid ? 'paid' : 'partial';
+        }
     }
 
+    // Send to Supplier with Payment
+    function sendToSupplierWithPayment(orderId) {
+        const form = document.getElementById(`sendToSupplierForm${orderId}`);
+        const submitButton = form.querySelector('button[type="button"]:last-child');
+        
+        if (!form) {
+            toastr.error('Form not found');
+            return;
+        }
 
+        // Collect form data
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Validate payment amount
+        const paymentAmount = parseFloat(data.payment_amount) || 0;
+        const totalAmount = parseFloat(document.getElementById(`payment_amount_${orderId}`)?.getAttribute('max')) || 0;
+        
+        if (paymentAmount <= 0) {
+            toastr.error('Please enter a valid payment amount');
+            return;
+        }
+        
+        if (paymentAmount > totalAmount) {
+            toastr.error('Payment amount cannot exceed the total amount');
+            return;
+        }
+
+        // Show loading
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        fetch(`/purchase-send/${orderId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            
+            if (data.success) {
+                toastr.success(data.message);
+                const modal = bootstrap.Modal.getInstance(document.getElementById(`sendToSupplierModal${orderId}`));
+                if (modal) modal.hide();
+                
+                // Refresh the page
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.error('Error:', error);
+            toastr.error('An error occurred while sending the order');
+        });
+    }
+
+    function showPaymentRequired(orderId, balanceRemaining) {
+        Swal.fire({
+            title: '{{ __("passwords.payment_required") }}',
+            html: `
+                <div class="text-start">
+                    <p>{{ __("passwords.cannot_receive_items_until_paid") }}</p>
+                    <div class="alert alert-warning mt-3">
+                        <strong>{{ __("passwords.balance_remaining") }}:</strong>
+                        ${balanceRemaining.toFixed(2)} {{ currency_symbol() }}
+                    </div>
+                    <p class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        {{ __("passwords.pay_balance_to_receive") }}
+                    </p>
+                </div>
+            `,
+            icon: 'warning',
+            confirmButtonColor: '#ffc107',
+            confirmButtonText: '{{ __("passwords.pay_now") }}',
+            showCancelButton: true,
+            cancelButtonText: '{{ __("passwords.cancel") }}',
+            cancelButtonColor: '#6c757d'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Open the send to supplier modal with balance amount
+                const modal = new bootstrap.Modal(document.getElementById(`sendToSupplierModal${orderId}`));
+                if (modal) {
+                    // Pre-fill the payment amount with the balance
+                    const paymentInput = document.getElementById(`payment_amount_${orderId}`);
+                    if (paymentInput) {
+                        paymentInput.value = balanceRemaining.toFixed(2);
+                        updatePaymentSummary(orderId);
+                    }
+                    modal.show();
+                }
+            }
+        });
+    }
 
     // Submit receiving form
     function submitReceiving(orderId, status) {

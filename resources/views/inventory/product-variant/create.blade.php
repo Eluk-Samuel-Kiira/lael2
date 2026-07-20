@@ -87,12 +87,30 @@
                                     </div>
                                 </div>
 
-                                {{-- Barcode + Price --}}
+                                {{-- Barcode + Weight --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">{{ __('pagination._barcode') }}</label>
                                         <input type="text" name="variants[{{ $index }}][barcode]" class="form-control" value="{{ $variant['barcode'] ?? '' }}">
                                         @error("variants.$index.barcode")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                                        <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" step="0.01" value="{{ $variant['weight'] ?? '' }}" required>
+                                        @error("variants.$index.weight")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                {{-- Cost Price + Selling price --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination.cost_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[{{ $index }}][cost_price]" class="form-control" step="0.01" value="{{ $variant['cost_price'] ?? '' }}" required>
+                                        @error("variants.$index.cost_price")
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
@@ -105,19 +123,41 @@
                                     </div>
                                 </div>
 
-                                {{-- Cost Price + Weight --}}
+                                {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination.cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[{{ $index }}][cost_price]" class="form-control" step="0.01" value="{{ $variant['cost_price'] ?? '' }}" required>
-                                        @error("variants.$index.cost_price")
+                                        <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[{{ $index }}][net_cost_price]" class="form-control" step="0.01" value="{{ $variant['net_cost_price'] ?? '' }}" placeholder="Supplier cost">
+                                        <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
+                                        @error("variants.$index.net_cost_price")
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                                        <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" step="0.01" value="{{ $variant['weight'] ?? '' }}" required>
-                                        @error("variants.$index.weight")
+                                        <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[{{ $index }}][net_selling_price]" class="form-control" step="0.01" value="{{ $variant['net_selling_price'] ?? '' }}" placeholder="Price after discount">
+                                        <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
+                                        @error("variants.$index.net_selling_price")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
+                                        <input type="number" name="variants[{{ $index }}][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="{{ $variant['discount_percentage'] ?? '' }}" placeholder="0">
+                                        <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
+                                        @error("variants.$index.discount_percentage")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
+                                        <input type="number" name="variants[{{ $index }}][markup_percentage]" class="form-control" step="0.01" min="0" value="{{ $variant['markup_percentage'] ?? '' }}" placeholder="0">
+                                        <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
+                                        @error("variants.$index.markup_percentage")
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
@@ -197,20 +237,48 @@
                                         <input type="text" name="variants[0][barcode]" class="form-control">
                                     </div>
                                     <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                                        <input type="number" name="variants[0][weight]" class="form-control" min="0" step="0.01" required>
+                                    </div>
+                                </div>
+
+                                {{-- Cost Price + selling price --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination.gross_cost_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[0][cost_price]" class="form-control" step="0.01" required>
+                                    </div>
+                                    <div class="col-md-6">
                                         <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
                                         <input type="number" name="variants[0][price]" class="form-control" step="0.01" required>
                                     </div>
                                 </div>
 
-                                {{-- Cost Price + Weight --}}
+                                {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination.cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[0][cost_price]" class="form-control" step="0.01" required>
+                                        <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[0][net_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost">
+                                        <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                                        <input type="number" name="variants[0][weight]" class="form-control" min="0" step="0.01" required>
+                                        <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[0][net_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
+                                        <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
+                                    </div>
+                                </div>
+
+                                {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
+                                        <input type="number" name="variants[0][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="0" placeholder="0">
+                                        <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
+                                        <input type="number" name="variants[0][markup_percentage]" class="form-control" step="0.01" min="0" value="0" placeholder="0">
+                                        <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
                                     </div>
                                 </div>
 
@@ -355,8 +423,8 @@
                             <input type="text" name="variants[${newIndex}][barcode]" class="form-control">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
-                            <input type="number" name="variants[${newIndex}][price]" class="form-control" step="0.01" required>
+                            <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                            <input type="number" name="variants[${newIndex}][weight]" class="form-control" min="0" step="0.01" required>
                         </div>
                     </div>
 
@@ -366,8 +434,36 @@
                             <input type="number" name="variants[${newIndex}][cost_price]" class="form-control" step="0.01" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                            <input type="number" name="variants[${newIndex}][weight]" class="form-control" min="0" step="0.01" required>
+                            <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
+                            <input type="number" name="variants[${newIndex}][price]" class="form-control" step="0.01" required>
+                        </div>
+                    </div>
+
+                    {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
+                            <input type="number" name="variants[${newIndex}][net_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost">
+                            <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
+                            <input type="number" name="variants[${newIndex}][net_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
+                            <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
+                        </div>
+                    </div>
+
+                    {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
+                            <input type="number" name="variants[${newIndex}][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="0" placeholder="0">
+                            <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
+                            <input type="number" name="variants[${newIndex}][markup_percentage]" class="form-control" step="0.01" min="0" value="0" placeholder="0">
+                            <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
                         </div>
                     </div>
 

@@ -61,9 +61,6 @@ class ProductVariantController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            // ── SKU is now OPTIONAL — nullable means the unique rule below is
-            // skipped entirely when left blank, so it won't false-fail. We
-            // auto-generate one below if the field comes back empty. ──────────
             'variants.*.sku' => [
                 'nullable',
                 'string',
@@ -72,7 +69,6 @@ class ProductVariantController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            // ── Barcode was already nullable; same auto-generation applies. ────
             'variants.*.barcode' => [
                 'nullable',
                 'string',
@@ -83,6 +79,13 @@ class ProductVariantController extends Controller
             ],
             'variants.*.price' => 'required|numeric|min:0',
             'variants.*.cost_price' => 'required|numeric|min:0',
+            
+            // ✅ NEW FIELDS - Optional
+            'variants.*.net_cost_price' => 'nullable|numeric|min:0',
+            'variants.*.net_selling_price' => 'nullable|numeric|min:0',
+            'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'variants.*.markup_percentage' => 'nullable|numeric|min:0',
+            
             'variants.*.overal_quantity_at_hand' => 'nullable|integer',
             'variants.*.weight' => 'required|numeric|min:0',
             'variants.*.weight_unit' => [
@@ -118,11 +121,17 @@ class ProductVariantController extends Controller
                     $variantData['barcode'] = $this->generateUniqueBarcode($tenantId);
                 }
 
+                // ── Set default values for new fields if not provided ────────
+                $variantData['net_cost_price'] = $variantData['net_cost_price'] ?? $variantData['cost_price'];
+                $variantData['net_selling_price'] = $variantData['net_selling_price'] ?? $variantData['price'];
+                $variantData['discount_percentage'] = $variantData['discount_percentage'] ?? 0;
+                $variantData['markup_percentage'] = $variantData['markup_percentage'] ?? 0;
+
                 // Handle image upload
                 if (isset($variantData['image'])) {
                     $path = $variantData['image']->store('variants', 'public');
                     $variantData['image_url'] = $path;
-                    unset($variantData['image']); // Remove the image object from array
+                    unset($variantData['image']);
                 }
 
                 ProductVariant::create($variantData);
@@ -152,6 +161,7 @@ class ProductVariantController extends Controller
 
         return redirect()->route('products.show', $request['product_id']);
     }
+
 
     /**
      * Generate a unique 7-character alphanumeric SKU, scoped per tenant.
@@ -323,6 +333,13 @@ class ProductVariantController extends Controller
             ],
             'price' => 'required|numeric|min:0',
             'cost_price' => 'required|numeric|min:0',
+            
+            // ✅ NEW VALIDATION RULES
+            'net_cost_price' => 'nullable|numeric|min:0',
+            'net_selling_price' => 'nullable|numeric|min:0',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'markup_percentage' => 'nullable|numeric|min:0',
+            
             'overal_quantity_at_hand' => 'required|integer|min:0',
             'weight' => 'required|numeric|min:0',
             'weight_unit' => [
@@ -340,7 +357,12 @@ class ProductVariantController extends Controller
         ]);
 
         $data['created_by'] = $user->id;
-        // Don't update tenant_id
+
+        // ✅ Set default values for new fields if not provided
+        $data['net_cost_price'] = $data['net_cost_price'] ?? $data['cost_price'];
+        $data['net_selling_price'] = $data['net_selling_price'] ?? $data['price'];
+        $data['discount_percentage'] = $data['discount_percentage'] ?? 0;
+        $data['markup_percentage'] = $data['markup_percentage'] ?? 0;
 
         $productVariant->update($data);
 
@@ -359,7 +381,6 @@ class ProductVariantController extends Controller
      */
     public function destroy(string $id)
     {
-        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -370,26 +391,163 @@ class ProductVariantController extends Controller
             ]);
         }
 
-        $product = ProductVariant::where('id', $id)
-                        ->where('tenant_id', $tenantId)
-                        ->first();
+        $variant = ProductVariant::where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
 
-        if ($product->is_active === 1) {
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ]);
+        }
+
+        if ($variant->is_active == 1) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.still_active'),
             ]);
         }
 
-        $product->delete();
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'refresh' => false,
-            'componentId' => 'reloadVariantComponent',
-            'message' => __('auth._deleted'),
-            'redirect' => route('products.show', $product['product_id']),
-        ]);
+        // ✅ Check if variant is referenced in order_items
+        $hasOrders = DB::table('order_items')
+            ->where('variant_id', $id)
+            ->exists();
+
+        if ($hasOrders) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.variant_has_orders'),
+                'has_orders' => true,
+            ]);
+        }
+
+        // ✅ Check if variant is used in recipes
+        $hasRecipes = DB::table('recipe_ingredients')
+            ->where('ingredient_variant_id', $id)
+            ->exists();
+
+        if ($hasRecipes) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.variant_used_in_recipes'),
+                'has_recipes' => true,
+            ]);
+        }
+
+        // ✅ Get inventory data before deletion (for logging)
+        $inventoryItems = DB::table('inventory_items')
+            ->where('variant_id', $id)
+            ->get();
+
+        $hasInventory = false;
+        $totalInventoryQty = 0;
+
+        // ✅ Check if variant has inventory (single shop)
+        if ($variant->overal_quantity_at_hand > 0) {
+            $hasInventory = true;
+            $totalInventoryQty += $variant->overal_quantity_at_hand;
+        }
+
+        // ✅ Check if variant has inventory in multi-shop (inventory_items table)
+        if (!$hasInventory) {
+            $inventoryCount = DB::table('inventory_items')
+                ->where('variant_id', $id)
+                ->where('tenant_id', $tenantId)
+                ->where('quantity_allocated', '>', 0)
+                ->exists();
+            
+            if ($inventoryCount) {
+                $hasInventory = true;
+                $totalInventoryQty = DB::table('inventory_items')
+                    ->where('variant_id', $id)
+                    ->where('tenant_id', $tenantId)
+                    ->sum('quantity_allocated');
+            }
+        }
+
+        // ✅ Begin transaction to delete variant and related records
+        DB::beginTransaction();
+        
+        try {
+            // ✅ Delete inventory records for this variant (multi-shop) - ALWAYS DELETE
+            DB::table('inventory_items')
+                ->where('variant_id', $id)
+                ->where('tenant_id', $tenantId)
+                ->delete();
+
+            // ✅ Delete inventory adjustments
+            DB::table('inventory_adjustments')
+                ->whereIn('inventory_id', function($query) use ($id, $tenantId) {
+                    $query->select('id')
+                        ->from('inventory_items')
+                        ->where('variant_id', $id)
+                        ->where('tenant_id', $tenantId);
+                })
+                ->delete();
+
+            // ✅ Delete inventory transactions
+            DB::table('inventory_transactions')
+                ->whereIn('inventory_id', function($query) use ($id, $tenantId) {
+                    $query->select('id')
+                        ->from('inventory_items')
+                        ->where('variant_id', $id)
+                        ->where('tenant_id', $tenantId);
+                })
+                ->delete();
+
+            // ✅ Delete variant taxes
+            DB::table('variant_taxes')
+                ->where('variant_id', $id)
+                ->delete();
+
+            // ✅ Delete variant promotions
+            DB::table('promotion_products')
+                ->where('variant_id', $id)
+                ->delete();
+
+            // ✅ Delete single shop inventory logs
+            DB::table('single_shop_inventory_logs')
+                ->where('variant_id', $id)
+                ->where('tenant_id', $tenantId)
+                ->delete();
+
+            // ✅ Delete the variant
+            $variant->delete();
+
+            DB::commit();
+
+            // ✅ Prepare success message
+            $message = __('auth._deleted');
+            if ($hasInventory) {
+                $message = __('auth.variant_deleted_with_inventory') . ' (' . $totalInventoryQty . ' ' . __('pagination._units') . ')';
+            }
+
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'refresh' => false,
+                'componentId' => 'reloadVariantComponent',
+                'message' => $message,
+                'redirect' => route('products.show', $variant->product_id),
+                // 'inventory_deleted' => $hasInventory,
+                // 'inventory_quantity' => $totalInventoryQty,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('Variant deletion failed', [
+                'variant_id' => $id,
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.delete_failed') . ': ' . $e->getMessage(),
+            ]);
+        }
     }
 
     public function changeVariantStatus(Request $request, $id) 
