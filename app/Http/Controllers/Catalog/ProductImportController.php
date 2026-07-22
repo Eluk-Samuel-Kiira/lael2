@@ -429,49 +429,28 @@ class ProductImportController extends Controller
 
     // ───────────────────────────────────────────────────────────────────────────
     // 4. VARIANTS
-    //    Columns: product_sku | variant_sku | name | barcode | net_cost_price
-    //             | cost_price | price | net_selling_price | discount_percentage
-    //             | overal_quantity_at_hand | weight | weight_unit_id
-    //             | is_taxable | is_active
+    //    Columns: product_sku | variant_sku | name | barcode | supplier_cost_price
+    //             | total_shipping_cost | ura_taxes_applied | additional_expenses
+    //             | grand_total_cost_price | selling_price | discount_selling_price
+    //             | discount_percentage | markup_percentage | overal_quantity_at_hand
+    //             | weight | weight_unit_id | is_taxable | is_active
     //
-    //    FIELD MEANINGS (business definitions, per spec):
-    //      net_cost_price       = what you pay the supplier (before extras)
-    //      cost_price           = net_cost_price + shipping/tax/transport
-    //                              (both are separate direct inputs on the
-    //                              sheet — no auto-calculation between them,
-    //                              since shipping/tax isn't itself a column)
-    //      price                = the normal selling price
-    //      net_selling_price    = the lowest price you're willing to offer
-    //                              after discount. If left blank, it's
-    //                              computed automatically from price and
-    //                              discount_percentage.
-    //      discount_percentage  = % discount applied to reach net_selling_price.
-    //                              Optional, defaults to 0 (no discount).
-    //      markup_percentage    = NOT an input column — computed automatically
-    //                              from cost_price and price and stored for
-    //                              reference/reporting.
-    //
-    //    weight_unit_id accepts EITHER:
-    //      - a numeric UnitOfMeasure id (as before), OR
-    //      - the exact Unit of Measure NAME as configured for this tenant
-    //        (e.g. "Pieces", "Kilograms" — whatever the tenant actually named
-    //        it in Settings > Units of Measure). This is resolved dynamically
-    //        against THIS tenant's own unit_of_measures rows — there is no
-    //        fixed/shared mapping, since different tenants can name and id
-    //        their units completely differently.
-    //
-    //    variant_sku is REQUIRED — the sheet must supply one for every row.
-    //    barcode is OPTIONAL — leave the cell blank and a standard EAN-13
-    //    barcode will be auto-generated for you.
+    //    FIELD MEANINGS (business definitions):
+    //      supplier_cost_price    = what you pay the supplier
+    //      total_shipping_cost    = shipping cost incurred
+    //      ura_taxes_applied      = URA taxes applied (import duties, VAT, etc.)
+    //      additional_expenses    = handling, insurance, etc.
+    //      grand_total_cost_price = supplier + shipping + taxes + expenses
+    //                              (AUTO-CALCULATED if left blank)
+    //      selling_price          = selling price to customer
+    //      discount_selling_price = price after discounts (AUTO-CALCULATED if blank)
+    //      discount_percentage    = % discount applied (default 0)
+    //      markup_percentage      = % markup from cost to selling price
+    //                              (AUTO-CALCULATED if left blank)
     //
     //    RE-IMPORT BEHAVIOUR: if a variant with this SKU already exists for
-    //    this tenant, its name and ALL price-related fields (cost_price,
-    //    net_cost_price, price, net_selling_price, discount_percentage,
-    //    markup_percentage, weight_unit) are UPDATED from the sheet.
-    //    overal_quantity_at_hand is NEVER touched on an update — stock levels
-    //    are managed by actual stock operations (purchases, sales, counts),
-    //    not by re-uploading a catalog sheet. barcode is also left untouched
-    //    on update (it's an identity field, not a price field).
+    //    this tenant, all price-related fields are UPDATED from the sheet.
+    //    overal_quantity_at_hand is NEVER touched on update.
     // ───────────────────────────────────────────────────────────────────────────
     private function importVariants($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -479,25 +458,36 @@ class ProductImportController extends Controller
         $rows  = $this->getRows($sheet);
 
         $productCache  = [];
-        $uomCache      = [];   // keyed by resolved numeric id
-        $uomNameCache  = [];   // keyed by lowercased name, to avoid repeat lookups
+        $uomCache      = [];
+        $uomNameCache  = [];
 
         foreach ($rows as $idx => $row) {
-            $rowNum         = $idx + 3;
-            $prodSku        = $row[0]  ?? '';
-            $varSku         = $row[1]  ?? '';
-            $name           = $row[2]  ?? '';
-            $barcode        = isset($row[3]) && $row[3] !== '' ? $row[3] : null;
-            $netCostPrice   = $row[4]  ?? '';
-            $costPrice      = $row[5]  ?? '';
-            $price          = $row[6]  ?? '';
-            $netSellingRaw  = $row[7]  ?? '';
-            $discountRaw    = $row[8]  ?? '';
-            $qty            = isset($row[9])  && $row[9]  !== '' ? (int) $row[9]  : 0;
-            $weight         = isset($row[10]) && $row[10] !== '' ? (float) $row[10] : 0.00;
-            $weightUnitRaw  = $row[11] ?? '';
-            $isTaxable      = isset($row[12]) && $row[12] !== '' ? (int) $row[12] : 1;
-            $isActive       = isset($row[13]) && $row[13] !== '' ? (int) $row[13] : 1;
+            $rowNum = $idx + 3;
+            
+            // ── Read columns ──────────────────────────────────────────────────────
+            $prodSku              = $row[0]  ?? '';
+            $varSku               = $row[1]  ?? '';
+            $name                 = $row[2]  ?? '';
+            $barcode              = isset($row[3]) && $row[3] !== '' ? $row[3] : null;
+            
+            // ✅ NEW COST BREAKDOWN
+            $supplierCostPrice    = $row[4]  ?? '';
+            $totalShippingCost    = $row[5]  ?? '';
+            $uraTaxesApplied      = $row[6]  ?? '';
+            $additionalExpenses   = $row[7]  ?? '';
+            $grandTotalCostPrice  = $row[8]  ?? '';
+            
+            // ✅ PRICING
+            $sellingPrice         = $row[9]  ?? '';
+            $discountSellingPrice = $row[10] ?? '';
+            $discountPercentage   = $row[11] ?? '';
+            $markupPercentage     = $row[12] ?? '';
+            
+            $qty                  = isset($row[13]) && $row[13] !== '' ? (int) $row[13] : 0;
+            $weight               = isset($row[14]) && $row[14] !== '' ? (float) $row[14] : 0.00;
+            $weightUnitRaw        = $row[15] ?? '';
+            $isTaxable            = isset($row[16]) && $row[16] !== '' ? (int) $row[16] : 1;
+            $isActive             = isset($row[17]) && $row[17] !== '' ? (int) $row[17] : 1;
 
             // ── Required field validation ──────────────────────────────────────
             if ($prodSku === '') {
@@ -512,24 +502,42 @@ class ProductImportController extends Controller
                 $stat['errors'][] = "Row {$rowNum}: name is required.";
                 continue;
             }
-            if ($price === '' || !is_numeric($price) || (float)$price < 0) {
-                $stat['errors'][] = "Row {$rowNum}: price must be a non-negative number.";
+            
+            // ✅ Validate new cost fields
+            if ($supplierCostPrice !== '' && (!is_numeric($supplierCostPrice) || (float)$supplierCostPrice < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: supplier_cost_price must be a non-negative number.";
                 continue;
             }
-            if ($costPrice === '' || !is_numeric($costPrice) || (float)$costPrice < 0) {
-                $stat['errors'][] = "Row {$rowNum}: cost_price must be a non-negative number.";
+            if ($totalShippingCost !== '' && (!is_numeric($totalShippingCost) || (float)$totalShippingCost < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: total_shipping_cost must be a non-negative number.";
                 continue;
             }
-            if ($netCostPrice !== '' && (!is_numeric($netCostPrice) || (float)$netCostPrice < 0)) {
-                $stat['errors'][] = "Row {$rowNum}: net_cost_price must be a non-negative number.";
+            if ($uraTaxesApplied !== '' && (!is_numeric($uraTaxesApplied) || (float)$uraTaxesApplied < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: ura_taxes_applied must be a non-negative number.";
                 continue;
             }
-            if ($discountRaw !== '' && (!is_numeric($discountRaw) || (float)$discountRaw < 0 || (float)$discountRaw > 100)) {
+            if ($additionalExpenses !== '' && (!is_numeric($additionalExpenses) || (float)$additionalExpenses < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: additional_expenses must be a non-negative number.";
+                continue;
+            }
+            if ($grandTotalCostPrice !== '' && (!is_numeric($grandTotalCostPrice) || (float)$grandTotalCostPrice < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: grand_total_cost_price must be a non-negative number.";
+                continue;
+            }
+            if ($sellingPrice === '' || !is_numeric($sellingPrice) || (float)$sellingPrice < 0) {
+                $stat['errors'][] = "Row {$rowNum}: selling_price must be a non-negative number.";
+                continue;
+            }
+            if ($discountSellingPrice !== '' && (!is_numeric($discountSellingPrice) || (float)$discountSellingPrice < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: discount_selling_price must be a non-negative number.";
+                continue;
+            }
+            if ($discountPercentage !== '' && (!is_numeric($discountPercentage) || (float)$discountPercentage < 0 || (float)$discountPercentage > 100)) {
                 $stat['errors'][] = "Row {$rowNum}: discount_percentage must be between 0 and 100.";
                 continue;
             }
-            if ($netSellingRaw !== '' && (!is_numeric($netSellingRaw) || (float)$netSellingRaw < 0)) {
-                $stat['errors'][] = "Row {$rowNum}: net_selling_price must be a non-negative number.";
+            if ($markupPercentage !== '' && (!is_numeric($markupPercentage) || (float)$markupPercentage < 0)) {
+                $stat['errors'][] = "Row {$rowNum}: markup_percentage must be a non-negative number.";
                 continue;
             }
             if ($weightUnitRaw === '') {
@@ -550,10 +558,10 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            // ── Resolve weight unit (numeric id OR this tenant's UOM name) ──────
+            // ── Resolve weight unit ─────────────────────────────────────────────
             $uomKey = $this->resolveWeightUnitId($weightUnitRaw, $tenantId, $rowNum, $stat, $uomNameCache);
             if ($uomKey === null) {
-                continue; // error already recorded by resolveWeightUnitId()
+                continue;
             }
 
             if (!isset($uomCache[$uomKey])) {
@@ -567,48 +575,56 @@ class ProductImportController extends Controller
             }
 
             // ── Normalize pricing fields ─────────────────────────────────────────
-            $priceVal        = (float) $price;
-            $costPriceVal    = (float) $costPrice;
-            $netCostPriceVal = $netCostPrice !== '' ? (float) $netCostPrice : null;
-            $discountPct     = $discountRaw !== '' ? (float) $discountRaw : 0.00;
-
-            // net_selling_price: use sheet value if given, otherwise derive it
-            // from price + discount_percentage.
-            $netSellingVal = $netSellingRaw !== ''
-                ? (float) $netSellingRaw
-                : round($priceVal * (1 - ($discountPct / 100)), 2);
-
-            // ✅ FIX: markup_percentage is NEVER an input — always computed.
-            // ✅ Only calculate when cost_price > 0 AND price > 0 AND cost_price < price
-            // ✅ Cap at 999.99 to avoid database overflow
-            $markupPct = 0.00;
-            if ($costPriceVal > 0 && $priceVal > 0 && $priceVal > $costPriceVal) {
-                $markupPct = round((($priceVal - $costPriceVal) / $costPriceVal) * 100, 2);
-                // Cap at 999.99 to fit decimal(5,2)
+            $supplierCostVal     = $supplierCostPrice !== '' ? (float) $supplierCostPrice : 0;
+            $shippingCostVal     = $totalShippingCost !== '' ? (float) $totalShippingCost : 0;
+            $taxesVal            = $uraTaxesApplied !== '' ? (float) $uraTaxesApplied : 0;
+            $expensesVal         = $additionalExpenses !== '' ? (float) $additionalExpenses : 0;
+            
+            // ✅ Calculate Grand Total Cost Price if not provided or zero
+            $grandTotalVal = $grandTotalCostPrice !== '' ? (float) $grandTotalCostPrice : 0;
+            if ($grandTotalVal <= 0) {
+                $grandTotalVal = $supplierCostVal + $shippingCostVal + $taxesVal + $expensesVal;
+            }
+            
+            $sellingPriceVal     = (float) $sellingPrice;
+            $discountPct         = $discountPercentage !== '' ? (float) $discountPercentage : 0;
+            
+            // ✅ Calculate discount selling price if not provided
+            $discountSellingVal = $discountSellingPrice !== '' 
+                ? (float) $discountSellingPrice 
+                : round($sellingPriceVal * (1 - ($discountPct / 100)), 2);
+            
+            // ✅ Calculate markup percentage if not provided
+            $markupPct = $markupPercentage !== '' ? (float) $markupPercentage : 0;
+            if ($markupPct <= 0 && $grandTotalVal > 0 && $sellingPriceVal > 0 && $sellingPriceVal > $grandTotalVal) {
+                $markupPct = round((($sellingPriceVal - $grandTotalVal) / $grandTotalVal) * 100, 2);
                 if ($markupPct > 999.99) {
                     $markupPct = 999.99;
                 }
             }
 
-            // ── Check for an existing variant with this SKU (this tenant) ───────
-            // If found: this is a RE-IMPORT — update name + all price fields,
-            // but NEVER touch overal_quantity_at_hand or barcode.
+            // ── Check for an existing variant ─────────────────────────────────────
             $existingVariant = ProductVariant::where('tenant_id', $tenantId)
                                             ->where('sku', $varSku)
                                             ->first();
 
             if ($existingVariant) {
                 $existingVariant->update([
-                    'name'                 => $name,
-                    'cost_price'           => (int) round($costPriceVal),
-                    'net_cost_price'       => $netCostPriceVal !== null ? (int) round($netCostPriceVal) : null,
-                    'price'                => (int) round($priceVal),
-                    'net_selling_price'    => (int) round($netSellingVal),
-                    'discount_percentage'  => $discountPct,
-                    'markup_percentage'    => $markupPct,
-                    'weight_unit'          => $uomKey,
-                    // overal_quantity_at_hand intentionally NOT included —
-                    // stock is managed elsewhere, never overwritten by import.
+                    'name'                     => $name,
+                    'supplier_cost_price'      => (int) round($supplierCostVal),
+                    'total_shipping_cost'      => (int) round($shippingCostVal),
+                    'ura_taxes_applied'        => (int) round($taxesVal),
+                    'additional_expenses'      => (int) round($expensesVal),
+                    'grand_total_cost_price'   => (int) round($grandTotalVal),
+                    'selling_price'            => (int) round($sellingPriceVal),
+                    'discount_selling_price'   => (int) round($discountSellingVal),
+                    'discount_percentage'      => $discountPct,
+                    'markup_percentage'        => $markupPct,
+                    'weight_unit'              => $uomKey,
+                    'weight'                   => $weight,
+                    'is_taxable'               => in_array($isTaxable, [0, 1]) ? $isTaxable : 1,
+                    'is_active'                => in_array($isActive,  [0, 1]) ? $isActive  : 1,
+                    // overal_quantity_at_hand intentionally NOT included
                 ]);
 
                 $stat['updated'] = ($stat['updated'] ?? 0) + 1;
@@ -630,28 +646,32 @@ class ProductImportController extends Controller
             }
 
             ProductVariant::create([
-                'product_id'              => $product->id,
-                'sku'                     => $varSku,
-                'name'                    => $name,
-                'barcode'                 => $barcode,
-                'price'                   => (int) round($priceVal),
-                'cost_price'              => (int) round($costPriceVal),
-                'net_cost_price'          => $netCostPriceVal !== null ? (int) round($netCostPriceVal) : null,
-                'net_selling_price'       => (int) round($netSellingVal),
-                'discount_percentage'     => $discountPct,
-                'markup_percentage'       => $markupPct,
-                'overal_quantity_at_hand' => $qty,
-                'weight'                  => $weight,
-                'weight_unit'             => $uomKey,
-                'is_taxable'              => in_array($isTaxable, [0, 1]) ? $isTaxable : 1,
-                'is_active'               => in_array($isActive,  [0, 1]) ? $isActive  : 1,
-                'created_by'              => $userId,
-                'tenant_id'               => $tenantId,
+                'product_id'               => $product->id,
+                'sku'                      => $varSku,
+                'name'                     => $name,
+                'barcode'                  => $barcode,
+                'supplier_cost_price'      => (int) round($supplierCostVal),
+                'total_shipping_cost'      => (int) round($shippingCostVal),
+                'ura_taxes_applied'        => (int) round($taxesVal),
+                'additional_expenses'      => (int) round($expensesVal),
+                'grand_total_cost_price'   => (int) round($grandTotalVal),
+                'selling_price'            => (int) round($sellingPriceVal),
+                'discount_selling_price'   => (int) round($discountSellingVal),
+                'discount_percentage'      => $discountPct,
+                'markup_percentage'        => $markupPct,
+                'overal_quantity_at_hand'  => $qty,
+                'weight'                   => $weight,
+                'weight_unit'              => $uomKey,
+                'is_taxable'               => in_array($isTaxable, [0, 1]) ? $isTaxable : 1,
+                'is_active'                => in_array($isActive,  [0, 1]) ? $isActive  : 1,
+                'created_by'               => $userId,
+                'tenant_id'                => $tenantId,
             ]);
 
             $stat['created']++;
         }
     }
+
 
     /**
      * Resolve a weight_unit_id cell value to a numeric UnitOfMeasure id.

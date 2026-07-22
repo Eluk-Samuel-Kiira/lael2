@@ -163,31 +163,41 @@
                 enctype="multipart/form-data">
                 @csrf
                 <div class="modal-body px-5 my-7">
+                    {{-- ✅ Error Alert Container --}}
+                    <div id="admin_form_error_{{ $tenant->id }}" class="alert alert-danger d-none" role="alert">
+                        <i class="bi bi-exclamation-circle fs-2 me-2"></i>
+                        <span id="admin_form_error_message_{{ $tenant->id }}"></span>
+                    </div>
+
+                    {{-- ✅ Success Alert Container --}}
+                    <div id="admin_form_success_{{ $tenant->id }}" class="alert alert-success d-none" role="alert">
+                        <i class="bi bi-check-circle fs-2 me-2"></i>
+                        <span id="admin_form_success_message_{{ $tenant->id }}"></span>
+                    </div>
+
                     <div class="row">
                         <!-- First Name -->
                         <div class="col-md-6 fv-row mb-8">
                             <label class="required fs-6 fw-semibold mb-2">{{ __('payments.first_name') }}</label>
                             <input type="text" 
-                                class="form-control form-control-solid @error('first_name') is-invalid @enderror" 
+                                class="form-control form-control-solid" 
+                                id="first_name_{{ $tenant->id }}"
                                 name="first_name" 
                                 value="{{ old('first_name') }}"
                                 placeholder="Enter first name" />
-                            @error('first_name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="invalid-feedback" id="first_name_error_{{ $tenant->id }}"></div>
                         </div>
 
                         <!-- Last Name -->
                         <div class="col-md-6 fv-row mb-8">
                             <label class="required fs-6 fw-semibold mb-2">{{ __('payments.last_name') }}</label>
                             <input type="text" 
-                                class="form-control form-solid @error('last_name') is-invalid @enderror" 
+                                class="form-control form-control-solid" 
+                                id="last_name_{{ $tenant->id }}"
                                 name="last_name" 
                                 value="{{ old('last_name') }}"
                                 placeholder="Enter last name" />
-                            @error('last_name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="invalid-feedback" id="last_name_error_{{ $tenant->id }}"></div>
                         </div>
                     </div>
 
@@ -196,26 +206,24 @@
                         <div class="col-md-6 fv-row mb-8">
                             <label class="required fs-6 fw-semibold mb-2">{{ __('payments.email') }}</label>
                             <input type="email" 
-                                class="form-control form-solid @error('email') is-invalid @enderror" 
+                                class="form-control form-control-solid" 
+                                id="email_{{ $tenant->id }}"
                                 name="email" 
                                 value="{{ old('email') }}"
                                 placeholder="Enter email address" />
-                            @error('email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="invalid-feedback" id="email_error_{{ $tenant->id }}"></div>
                         </div>
 
                         <!-- Telephone -->
                         <div class="col-md-6 fv-row mb-8">
                             <label class="required fs-6 fw-semibold mb-2">{{ __('payments.telephone') }}</label>
                             <input type="text" 
-                                class="form-control form-solid @error('telephone_number') is-invalid @enderror" 
+                                class="form-control form-control-solid" 
+                                id="telephone_number_{{ $tenant->id }}"
                                 name="telephone_number" 
                                 value="{{ old('telephone_number') }}"
                                 placeholder="Enter telephone number" />
-                            @error('telephone_number')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                            <div class="invalid-feedback" id="telephone_number_error_{{ $tenant->id }}"></div>
                         </div>
                     </div>
 
@@ -223,33 +231,30 @@
                     <div class="fv-row mb-8">
                         <label class="required fs-6 fw-semibold mb-2">{{ __('payments.job_title') }}</label>
                         <input type="text" 
-                            class="form-control form-solid @error('job_title') is-invalid @enderror" 
+                            class="form-control form-control-solid" 
+                            id="job_title_{{ $tenant->id }}"
                             name="job_title" 
                             value="{{ old('job_title') }}"
                             placeholder="Enter job title" />
-                        @error('job_title')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
+                        <div class="invalid-feedback" id="job_title_error_{{ $tenant->id }}"></div>
                     </div>
 
                     <!-- Status -->
                     <div class="fv-row mb-8">
                         <label class="required fs-6 fw-semibold mb-2">{{ __('payments.status') }}</label>
-                        <select class="form-select form-select-solid @error('status') is-invalid @enderror" name="status">
+                        <select class="form-select form-select-solid" id="status_{{ $tenant->id }}" name="status">
                             <option value="active" {{ old('status') == 'active' ? 'selected' : '' }}>{{ __('payments.active') }}</option>
                             <option value="inactive" {{ old('status') == 'inactive' ? 'selected' : '' }}>{{ __('payments.inactive') }}</option>
                         </select>
-                        @error('status')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
+                        <div class="invalid-feedback" id="status_error_{{ $tenant->id }}"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('payments.close') }}</button>
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" id="submit_admin_btn_{{ $tenant->id }}" class="btn btn-primary">
                         <span class="indicator-label">{{ __('payments.create_admin') }}</span>
                         <span class="indicator-progress" style="display: none;">
-                            {{ __('common.please_wait') }} 
+                            {{ __('auth.please_wait') }} 
                             <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                         </span>
                     </button>
@@ -258,3 +263,105 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle admin form submission with AJAX to display errors in modal
+    document.querySelectorAll('[id^="kt_modal_add_admin_form_"]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const tenantId = this.id.replace('kt_modal_add_admin_form_', '');
+            const submitBtn = document.getElementById('submit_admin_btn_' + tenantId);
+            const errorAlert = document.getElementById('admin_form_error_' + tenantId);
+            const successAlert = document.getElementById('admin_form_success_' + tenantId);
+            const errorMessage = document.getElementById('admin_form_error_message_' + tenantId);
+            const successMessage = document.getElementById('admin_form_success_message_' + tenantId);
+            
+            // Clear previous errors
+            errorAlert.classList.add('d-none');
+            successAlert.classList.add('d-none');
+            
+            // Clear field errors
+            const fields = ['first_name', 'last_name', 'email', 'telephone_number', 'job_title', 'status'];
+            fields.forEach(field => {
+                const errorEl = document.getElementById(field + '_error_' + tenantId);
+                const inputEl = document.getElementById(field + '_' + tenantId);
+                if (errorEl) errorEl.textContent = '';
+                if (inputEl) inputEl.classList.remove('is-invalid');
+            });
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.querySelector('.indicator-label').style.display = 'none';
+            submitBtn.querySelector('.indicator-progress').style.display = 'inline-flex';
+            
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading state
+                submitBtn.disabled = false;
+                submitBtn.querySelector('.indicator-label').style.display = 'inline-flex';
+                submitBtn.querySelector('.indicator-progress').style.display = 'none';
+                
+                if (data.success) {
+                    // Show success message
+                    successAlert.classList.remove('d-none');
+                    successMessage.textContent = data.message || 'Admin user created successfully.';
+                    
+                    // Reset form
+                    this.reset();
+                    
+                    // Close modal after delay and reload
+                    setTimeout(function() {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('kt_modal_add_admin_' + tenantId));
+                        if (modal) modal.hide();
+                        
+                        // Reload the page to show updated admin list
+                        location.reload();
+                    }, 2000);
+                    
+                } else {
+                    // Show general error
+                    if (data.message) {
+                        errorAlert.classList.remove('d-none');
+                        errorMessage.textContent = data.message;
+                    }
+                    
+                    // Show field-specific errors
+                    if (data.errors) {
+                        Object.keys(data.errors).forEach(function(field) {
+                            const errorEl = document.getElementById(field + '_error_' + tenantId);
+                            const inputEl = document.getElementById(field + '_' + tenantId);
+                            if (errorEl && data.errors[field].length > 0) {
+                                errorEl.textContent = data.errors[field][0];
+                                if (inputEl) inputEl.classList.add('is-invalid');
+                            }
+                        });
+                    }
+                }
+            })
+            .catch(function(error) {
+                // Hide loading state
+                submitBtn.disabled = false;
+                submitBtn.querySelector('.indicator-label').style.display = 'inline-flex';
+                submitBtn.querySelector('.indicator-progress').style.display = 'none';
+                
+                // Show error message
+                errorAlert.classList.remove('d-none');
+                errorMessage.textContent = 'An error occurred. Please try again.';
+                console.error('Error:', error);
+            });
+        });
+    });
+});
+</script>

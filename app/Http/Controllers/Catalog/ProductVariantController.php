@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ProductVariant;
 use App\Models\{ Product, UnitOfMeasure, Tax, Promotion };
-use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 
 class ProductVariantController extends Controller
@@ -77,12 +77,19 @@ class ProductVariantController extends Controller
                     return $query->where('tenant_id', $tenantId);
                 })
             ],
-            'variants.*.price' => 'required|numeric|min:0',
-            'variants.*.cost_price' => 'required|numeric|min:0',
             
-            // ✅ NEW FIELDS - Optional
-            'variants.*.net_cost_price' => 'nullable|numeric|min:0',
-            'variants.*.net_selling_price' => 'nullable|numeric|min:0',
+            // ✅ NEW COST FIELDS
+            'variants.*.supplier_cost_price' => 'nullable|numeric|min:0',
+            'variants.*.total_shipping_cost' => 'nullable|numeric|min:0',
+            'variants.*.ura_taxes_applied' => 'nullable|numeric|min:0',
+            'variants.*.additional_expenses' => 'nullable|numeric|min:0',
+            'variants.*.grand_total_cost_price' => 'nullable|numeric|min:0',
+            
+            // ✅ PRICING FIELDS
+            'variants.*.selling_price' => 'required|numeric|min:0',
+            'variants.*.discount_selling_price' => 'nullable|numeric|min:0',
+            
+            // ✅ DISCOUNT & MARKUP
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'variants.*.markup_percentage' => 'nullable|numeric|min:0',
             
@@ -121,9 +128,17 @@ class ProductVariantController extends Controller
                     $variantData['barcode'] = $this->generateUniqueBarcode($tenantId);
                 }
 
+                // ── Calculate Grand Total Cost Price if not provided ────────
+                if (empty($variantData['grand_total_cost_price'])) {
+                    $variantData['grand_total_cost_price'] = 
+                        ($variantData['supplier_cost_price'] ?? 0) + 
+                        ($variantData['total_shipping_cost'] ?? 0) + 
+                        ($variantData['ura_taxes_applied'] ?? 0) + 
+                        ($variantData['additional_expenses'] ?? 0);
+                }
+
                 // ── Set default values for new fields if not provided ────────
-                $variantData['net_cost_price'] = $variantData['net_cost_price'] ?? $variantData['cost_price'];
-                $variantData['net_selling_price'] = $variantData['net_selling_price'] ?? $variantData['price'];
+                $variantData['discount_selling_price'] = $variantData['discount_selling_price'] ?? $variantData['selling_price'];
                 $variantData['discount_percentage'] = $variantData['discount_percentage'] ?? 0;
                 $variantData['markup_percentage'] = $variantData['markup_percentage'] ?? 0;
 
@@ -147,7 +162,7 @@ class ProductVariantController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            \Log::error('Product variant creation failed', [
+            Log::error('Product variant creation failed', [
                 'product_id' => $request->product_id,
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage()
@@ -155,32 +170,27 @@ class ProductVariantController extends Controller
 
             session()->flash('toast', [
                 'type' => 'error',
-                'message' => __('auth.variant_creation_failed'),
+                'message' => __('auth.variant_creation_failed') . ': ' . $e->getMessage(),
             ]);
         }
 
         return redirect()->route('products.show', $request['product_id']);
     }
 
-
     /**
      * Generate a unique 7-character alphanumeric SKU, scoped per tenant.
-     *
-     * Format: 2 letters (tenant-agnostic prefix) + 5 uppercase alphanumeric
-     * characters, e.g. "VR7K2QD". Excludes ambiguous characters (0/O, 1/I/L)
-     * to keep SKUs easy to read off a shelf label or receipt.
      */
     private function generateUniqueSku(int $tenantId): string
     {
-        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0,O,1,I,L
-        $prefix   = 'VR'; // short, constant — feel free to swap for a category code
+        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        $prefix   = 'VR';
 
         do {
             $random = '';
             for ($i = 0; $i < 5; $i++) {
                 $random .= $alphabet[random_int(0, strlen($alphabet) - 1)];
             }
-            $sku = $prefix . $random; // 7 characters total
+            $sku = $prefix . $random;
 
             $exists = ProductVariant::where('tenant_id', $tenantId)
                 ->where('sku', $sku)
@@ -191,18 +201,11 @@ class ProductVariantController extends Controller
     }
 
     /**
-     * Generate a unique, standard-format EAN-13 barcode, scoped per tenant.
-     *
-     * EAN-13 is the common retail barcode standard (what you see on shelf
-     * products worldwide) — 12 random digits plus a computed check digit,
-     * making it scannable by any standard barcode reader/POS scanner.
+     * Generate a unique EAN-13 barcode, scoped per tenant.
      */
     private function generateUniqueBarcode(int $tenantId): string
     {
         do {
-            // 12 random digits (first digit avoided as 0 to keep it looking
-            // like a normal retail prefix, purely cosmetic — not a real GS1
-            // registered prefix since these are internally generated codes)
             $digits = (string) random_int(1, 9);
             for ($i = 0; $i < 11; $i++) {
                 $digits .= (string) random_int(0, 9);
@@ -219,8 +222,7 @@ class ProductVariantController extends Controller
     }
 
     /**
-     * Standard EAN-13 check digit algorithm (odd positions x1, even x3,
-     * mod 10). Given the first 12 digits, returns the 13th check digit.
+     * Standard EAN-13 check digit algorithm.
      */
     private function calculateEan13CheckDigit(string $twelveDigits): int
     {
@@ -231,11 +233,8 @@ class ProductVariantController extends Controller
             $sum   += $digit * $weight;
         }
 
-        $checkDigit = (10 - ($sum % 10)) % 10;
-
-        return $checkDigit;
+        return (10 - ($sum % 10)) % 10;
     }
-
 
     /**
      * Display the specified resource.
@@ -249,7 +248,6 @@ class ProductVariantController extends Controller
             abort(403, __('payments.not_authorized'));
         }
 
-        // Find product and ensure it belongs to tenant
         $product = Product::where('id', $id)
                         ->where('tenant_id', $tenantId)
                         ->firstOrFail();
@@ -270,6 +268,8 @@ class ProductVariantController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        // Log::info($request->all());
+        // Log::info($id);
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -277,10 +277,9 @@ class ProductVariantController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
-            ]);
+            ], 403);
         }
 
-        // Find product variant and ensure it belongs to tenant
         $productVariant = ProductVariant::where('id', $id)
                                     ->where('tenant_id', $tenantId)
                                     ->first();
@@ -289,91 +288,121 @@ class ProductVariantController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
-            ]);
+            ], 404);
         }
 
-        $data = $request->validate([
-            'name' => [
-                'required',
-                'max:100',
-                Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
-                    return $query->where('tenant_id', $tenantId)
-                            ->where('id', '!=', $id);
-                })->ignore($productVariant->id),
-            ],
-            'product_id' => [
-                'required',
-                'exists:products,id',
-                function ($attribute, $value, $fail) use ($tenantId) {
-                    $product = Product::where('id', $value)
-                                    ->where('tenant_id', $tenantId)
-                                    ->first();
-                    if (!$product) {
-                        $fail('The selected product is invalid.');
+        try {
+            $data = $request->validate([
+                'name' => [
+                    'required',
+                    'max:100',
+                    Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
+                        return $query->where('tenant_id', $tenantId)
+                                ->where('id', '!=', $id);
+                    }),
+                ],
+                'product_id' => [
+                    'required',
+                    'exists:products,id',
+                    function ($attribute, $value, $fail) use ($tenantId) {
+                        $product = Product::where('id', $value)
+                                        ->where('tenant_id', $tenantId)
+                                        ->first();
+                        if (!$product) {
+                            $fail('The selected product is invalid.');
+                        }
                     }
-                }
-            ],
-            'sku' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
-                    return $query->where('tenant_id', $tenantId)
-                            ->where('id', '!=', $id);
-                })->ignore($productVariant->id),
-            ],
-            'barcode' => [
-                'nullable',
-                'string',
-                'max:255',
-                Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
-                    return $query->where('tenant_id', $tenantId)
-                            ->where('id', '!=', $id);
-                })->ignore($productVariant->id),
-            ],
-            'price' => 'required|numeric|min:0',
-            'cost_price' => 'required|numeric|min:0',
-            
-            // ✅ NEW VALIDATION RULES
-            'net_cost_price' => 'nullable|numeric|min:0',
-            'net_selling_price' => 'nullable|numeric|min:0',
-            'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'markup_percentage' => 'nullable|numeric|min:0',
-            
-            'overal_quantity_at_hand' => 'required|integer|min:0',
-            'weight' => 'required|numeric|min:0',
-            'weight_unit' => [
-                'required',
-                'integer',
-                function ($attribute, $value, $fail) use ($tenantId) {
-                    $uom = UnitOfMeasure::where('id', $value)
-                                    ->where('tenant_id', $tenantId)
-                                    ->first();
-                    if (!$uom) {
-                        $fail(__('payments.uom_invalid'));
+                ],
+                'sku' => [
+                    'required',
+                    'string',
+                    'max:50',
+                    Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
+                        return $query->where('tenant_id', $tenantId)
+                                ->where('id', '!=', $id);
+                    }),
+                ],
+                'barcode' => [
+                    'nullable',
+                    'string',
+                    'max:255',
+                    Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
+                        return $query->where('tenant_id', $tenantId)
+                                ->where('id', '!=', $id);
+                    }),
+                ],
+                
+                // ✅ NEW COST FIELDS
+                'supplier_cost_price' => 'nullable|numeric|min:0',
+                'total_shipping_cost' => 'nullable|numeric|min:0',
+                'ura_taxes_applied' => 'nullable|numeric|min:0',
+                'additional_expenses' => 'nullable|numeric|min:0',
+                'grand_total_cost_price' => 'nullable|numeric|min:0',
+                
+                // ✅ PRICING FIELDS
+                'selling_price' => 'required|numeric|min:0',
+                'discount_selling_price' => 'nullable|numeric|min:0',
+                
+                // ✅ DISCOUNT & MARKUP
+                'discount_percentage' => 'nullable|numeric|min:0|max:100',
+                'markup_percentage' => 'nullable|numeric|min:0',
+                
+                'overal_quantity_at_hand' => 'required|integer|min:0',
+                'weight' => 'required|numeric|min:0',
+                'weight_unit' => [
+                    'required',
+                    'integer',
+                    function ($attribute, $value, $fail) use ($tenantId) {
+                        $uom = UnitOfMeasure::where('id', $value)
+                                        ->where('tenant_id', $tenantId)
+                                        ->first();
+                        if (!$uom) {
+                            $fail(__('payments.uom_invalid'));
+                        }
                     }
-                }
-            ],
-        ]);
+                ],
+            ]);
 
-        $data['created_by'] = $user->id;
+            $data['created_by'] = $user->id;
 
-        // ✅ Set default values for new fields if not provided
-        $data['net_cost_price'] = $data['net_cost_price'] ?? $data['cost_price'];
-        $data['net_selling_price'] = $data['net_selling_price'] ?? $data['price'];
-        $data['discount_percentage'] = $data['discount_percentage'] ?? 0;
-        $data['markup_percentage'] = $data['markup_percentage'] ?? 0;
+            // ✅ Calculate Grand Total Cost Price if not provided
+            if (empty($data['grand_total_cost_price']) || $data['grand_total_cost_price'] == 0) {
+                $data['grand_total_cost_price'] = 
+                    ($data['supplier_cost_price'] ?? 0) + 
+                    ($data['total_shipping_cost'] ?? 0) + 
+                    ($data['ura_taxes_applied'] ?? 0) + 
+                    ($data['additional_expenses'] ?? 0);
+            }
 
-        $productVariant->update($data);
+            // ✅ Set default values for new fields if not provided
+            $data['discount_selling_price'] = $data['discount_selling_price'] ?? $data['selling_price'];
+            $data['discount_percentage'] = $data['discount_percentage'] ?? 0;
+            $data['markup_percentage'] = $data['markup_percentage'] ?? 0;
 
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'refresh' => false,
-            'componentId' => 'reloadVariantComponent',
-            'message' => __('auth._updated'),
-            'redirect' => route('products.show', $data['product_id']),
-        ]);
+            $productVariant->update($data);
+
+            return response()->json([
+                'success' => true,
+                'reload' => true,
+                'refresh' => false,
+                'componentId' => 'reloadVariantComponent',
+                'message' => __('auth._updated'),
+                'redirect' => route('products.show', $data['product_id']),
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Variant update error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -435,42 +464,11 @@ class ProductVariantController extends Controller
             ]);
         }
 
-        // ✅ Get inventory data before deletion (for logging)
-        $inventoryItems = DB::table('inventory_items')
-            ->where('variant_id', $id)
-            ->get();
-
-        $hasInventory = false;
-        $totalInventoryQty = 0;
-
-        // ✅ Check if variant has inventory (single shop)
-        if ($variant->overal_quantity_at_hand > 0) {
-            $hasInventory = true;
-            $totalInventoryQty += $variant->overal_quantity_at_hand;
-        }
-
-        // ✅ Check if variant has inventory in multi-shop (inventory_items table)
-        if (!$hasInventory) {
-            $inventoryCount = DB::table('inventory_items')
-                ->where('variant_id', $id)
-                ->where('tenant_id', $tenantId)
-                ->where('quantity_allocated', '>', 0)
-                ->exists();
-            
-            if ($inventoryCount) {
-                $hasInventory = true;
-                $totalInventoryQty = DB::table('inventory_items')
-                    ->where('variant_id', $id)
-                    ->where('tenant_id', $tenantId)
-                    ->sum('quantity_allocated');
-            }
-        }
-
         // ✅ Begin transaction to delete variant and related records
         DB::beginTransaction();
         
         try {
-            // ✅ Delete inventory records for this variant (multi-shop) - ALWAYS DELETE
+            // ✅ Delete inventory records for this variant (multi-shop)
             DB::table('inventory_items')
                 ->where('variant_id', $id)
                 ->where('tenant_id', $tenantId)
@@ -517,27 +515,19 @@ class ProductVariantController extends Controller
 
             DB::commit();
 
-            // ✅ Prepare success message
-            $message = __('auth._deleted');
-            if ($hasInventory) {
-                $message = __('auth.variant_deleted_with_inventory') . ' (' . $totalInventoryQty . ' ' . __('pagination._units') . ')';
-            }
-
             return response()->json([
                 'success' => true,
                 'reload' => true,
                 'refresh' => false,
                 'componentId' => 'reloadVariantComponent',
-                'message' => $message,
+                'message' => __('auth._deleted'),
                 'redirect' => route('products.show', $variant->product_id),
-                // 'inventory_deleted' => $hasInventory,
-                // 'inventory_quantity' => $totalInventoryQty,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             
-            \Log::error('Variant deletion failed', [
+            Log::error('Variant deletion failed', [
                 'variant_id' => $id,
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage()
@@ -550,6 +540,9 @@ class ProductVariantController extends Controller
         }
     }
 
+    /**
+     * Change variant status (active/inactive).
+     */
     public function changeVariantStatus(Request $request, $id) 
     {
         $user = Auth::user();
@@ -562,44 +555,39 @@ class ProductVariantController extends Controller
             ]);
         }
 
-        // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',
         ]);
         
-        // Find product variant and ensure it belongs to tenant
-        $product = ProductVariant::where('id', $id)
+        $variant = ProductVariant::where('id', $id)
                                 ->where('tenant_id', $tenantId)
                                 ->first();
 
-        if (!$product) {
+        if (!$variant) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
             ]);
         }
 
-        $product->is_active = $validated['status']; 
-        if ($product->save()) {
-            return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
-                'componentId' => 'reloadVariantComponent',
-                'message' => __('auth._updated'),
-                'redirect' => route('products.show', $product->product_id),
-            ]);
-        }
-
+        $variant->is_active = $validated['status']; 
+        $variant->save();
+        
         return response()->json([
-            'success' => false,
-            'message' => __('auth.update_failed'),
+            'success' => true,
+            'reload' => true,
+            'refresh' => false,
+            'componentId' => 'reloadVariantComponent',
+            'message' => __('auth._updated'),
+            'redirect' => route('products.show', $variant->product_id),
         ]);
     }
 
+    /**
+     * Upload variant image.
+     */
     public function uploadVariantImage(Request $request)
     {
-        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -610,7 +598,6 @@ class ProductVariantController extends Controller
             ]);
         }
 
-        // Validate the request to ensure the file exists
         $request->validate([
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', 
             'variant_id' => [
@@ -627,12 +614,11 @@ class ProductVariantController extends Controller
             ],
         ]);
 
-        // Find product variant and ensure it belongs to tenant
-        $product = ProductVariant::where('id', $request->variant_id)
+        $variant = ProductVariant::where('id', $request->variant_id)
                                 ->where('tenant_id', $tenantId)
                                 ->first();
 
-        if (!$product) {
+        if (!$variant) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
@@ -641,7 +627,7 @@ class ProductVariantController extends Controller
 
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('variants', 'public');
-            $product->update(['image_url' => $path]);
+            $variant->update(['image_url' => $path]);
 
             return response()->json([
                 'success' => true,
@@ -655,9 +641,11 @@ class ProductVariantController extends Controller
         ]);
     }
 
+    /**
+     * Change variant tax status.
+     */
     public function changeProductVariantTaxStatus(Request $request, $id) 
     {
-        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -668,33 +656,29 @@ class ProductVariantController extends Controller
             ]);
         }
 
-        // Validate the request data for status
         $validated = $request->validate([
             'status' => 'required|in:1,0',
         ]);
         
-        // Find product variant and ensure it belongs to tenant
-        $product = ProductVariant::where('id', $id)
+        $variant = ProductVariant::where('id', $id)
                                 ->where('tenant_id', $tenantId)
                                 ->first();
 
-        if (!$product) {
+        if (!$variant) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
             ]);
         }
 
-        $product->is_taxable = $validated['status']; 
-        $product->save();
+        $variant->is_taxable = $validated['status']; 
+        $variant->save();
         
         if ($validated['status'] == 1) {  
             $message = __('pagination.variant_taxable_now');
         } else {
             $message = __('pagination.variant_not_taxable');
-            
-            // Remove all taxes when variant becomes non-taxable
-            $product->variantTaxes()->sync([]);
+            $variant->variantTaxes()->sync([]);
         }
         
         return response()->json([
@@ -703,13 +687,15 @@ class ProductVariantController extends Controller
             'refresh' => false,
             'componentId' => 'reloadVariantComponent',
             'message' => $message,
-            'redirect' => route('products.show', $product->product_id),
+            'redirect' => route('products.show', $variant->product_id),
         ]);
     }
 
+    /**
+     * Update variant assignments (taxes and promotions).
+     */
     public function updateVariantAssignments(Request $request, $id)
     {
-        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -718,12 +704,11 @@ class ProductVariantController extends Controller
         }
 
         try {
-            // Find product variant and ensure it belongs to tenant
-            $product = ProductVariant::where('id', $id)
+            $variant = ProductVariant::where('id', $id)
                                     ->where('tenant_id', $tenantId)
                                     ->first();
 
-            if (!$product) {
+            if (!$variant) {
                 session()->flash('toast', [
                     'type' => 'error',
                     'message' => __('auth._not_found'),
@@ -760,14 +745,13 @@ class ProductVariantController extends Controller
                 ],
             ]);
 
-            // Start database transaction
             DB::beginTransaction();
 
             // Sync promotions
-            $product->Variantpromotions()->sync($validated['promotions'] ?? []);
+            $variant->Variantpromotions()->sync($validated['promotions'] ?? []);
 
             // Handle taxes based on taxable status
-            if ($product->is_taxable == 1) {
+            if ($variant->is_taxable == 1) {
                 $pivotData = [];
                 if (!empty($validated['taxes'])) {
                     foreach ($validated['taxes'] as $taxId) {
@@ -777,10 +761,9 @@ class ProductVariantController extends Controller
                         ];
                     }
                 }
-                $product->variantTaxes()->sync($pivotData);
+                $variant->variantTaxes()->sync($pivotData);
             } else {
-                // Remove all taxes if variant is not taxable
-                $product->variantTaxes()->sync([]);
+                $variant->variantTaxes()->sync([]);
                 
                 session()->flash('toast', [
                     'type' => 'warning',
@@ -797,7 +780,7 @@ class ProductVariantController extends Controller
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
-            \Log::error('Validation failed for variant assignments', [
+            Log::error('Validation failed for variant assignments', [
                 'variant_id' => $id,
                 'tenant_id' => $tenantId,
                 'errors' => $e->errors()
@@ -805,20 +788,18 @@ class ProductVariantController extends Controller
             return redirect()->back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Failed to update variant assignments', [
+            Log::error('Failed to update variant assignments', [
                 'variant_id' => $id,
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage()
             ]);
             session()->flash('toast', [
                 'type' => 'error',
-                'message' => __('auth.update_failed'),
+                'message' => __('auth.update_failed') . ': ' . $e->getMessage(),
             ]);
             return redirect()->back()->withInput();
         }
 
         return redirect()->back();
     }
-
-
 }

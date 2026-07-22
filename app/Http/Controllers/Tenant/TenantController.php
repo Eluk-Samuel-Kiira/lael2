@@ -10,6 +10,7 @@ use App\Models\User;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Str;
 use App\Mail\NewUserMail;
+use Illuminate\Support\Facades\Validator;
 
 
 class TenantController extends Controller
@@ -414,10 +415,13 @@ class TenantController extends Controller
     {
         $user = Auth::user();
         if (!$user->hasRole('super_admin')) {
-            abort(403, __('payments.not_authorized'));
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
         }
 
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
@@ -425,6 +429,14 @@ class TenantController extends Controller
             'job_title' => 'required|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation errors occurred.',
+                'errors' => $validator->errors()->toArray(),
+            ], 422);
+        }
 
         try {
             DB::beginTransaction();
@@ -456,34 +468,64 @@ class TenantController extends Controller
             // Assign role using Spatie
             if ($adminUser) {
                 $adminUser->assignRole('admin');
-
-                Mail::to($adminUser->email)->send(new NewUserMail(
-                    $adminUser->first_name . ' ' . $adminUser->last_name,
-                    $adminUser->userRole->name ?? 'No Role Assigned',  
-                    $adminUser->departmentName->name ?? 'Sales', 
-                    $adminUser->email,
-                    $randomPassword
-                ));
+                
+                // ✅ Try to send email but don't fail if it doesn't work
+                try {
+                    Mail::to($adminUser->email)->send(new NewUserMail(
+                        $adminUser->first_name . ' ' . $adminUser->last_name,
+                        $adminUser->userRole->name ?? 'No Role Assigned',  
+                        $adminUser->departmentName->name ?? 'Sales', 
+                        $adminUser->email,
+                        $randomPassword
+                    ));
+                } catch (\Exception $mailException) {
+                    // ✅ Log the email error but don't rollback the transaction
+                    \Log::error('Failed to send admin user email: ' . $mailException->getMessage(), [
+                        'user_id' => $adminUser->id,
+                        'email' => $adminUser->email,
+                        'tenant_id' => $tenantId,
+                    ]);
+                    
+                    // ✅ Store the error in a variable to include in response
+                    $emailError = $mailException->getMessage();
+                }
             }
 
             DB::commit();
 
-            // SUCCESS REDIRECT - with success message
-            return redirect()
-                ->route('tenant.index') // Use 'tenant.index' not 'tenant.tenant-index'
-                ->with('success', 'Admin user created successfully. Password has been sent to their email.');
+            // ✅ Build response with warning if email failed
+            $response = [
+                'success' => true,
+                'message' => 'Admin user created successfully.',
+                'user' => [
+                    'id' => $adminUser->id,
+                    'name' => $adminUser->name,
+                    'email' => $adminUser->email,
+                ]
+            ];
+
+            // ✅ If email failed, add warning to response
+            if (isset($emailError)) {
+                $response['message'] = 'Admin user created successfully but email could not be sent.';
+                $response['warning'] = 'Password could not be emailed to user. Please reset password manually.';
+                $response['email_error'] = $emailError;
+            } else {
+                $response['message'] = 'Admin user created successfully. Password has been sent to their email.';
+            }
+
+            return response()->json($response);
 
         } catch (\Exception $e) {
             DB::rollBack();
             
-            // ERROR REDIRECT - back to previous page with error message
-            return redirect()
-                ->back()
-                ->withInput()
-                ->with('error', 'Error creating admin user: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error creating admin user: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
+    
     /**
      * Refresh billing plans by updating existing or creating new ones
      */

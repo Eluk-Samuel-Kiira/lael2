@@ -636,6 +636,7 @@ return [
     'performance_summary' => 'Performance Summary',
     'per_order' => 'per order',
     'permissions' => 'Permissions',
+    '_transfer' => 'Transfer',
     'permissions_direct' => 'Direct Permissions -',
     'permissions_direct_count' => 'Direct Permissions Count: ',
     'permissions_index' => 'Permissions Index',
