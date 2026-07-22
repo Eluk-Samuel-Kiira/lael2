@@ -132,8 +132,8 @@ class ProductsController extends Controller
             'total_products' => $products->count(),
             'total_variants' => $totalVariants,
             'total_stock' => $totalStock,
-            'average_price' => $products->avg('price') ?? 0,
-            'average_cost' => $products->avg('cost') ?? 0,
+            'average_price' => $products->avg('selling_price') ?? 0,
+            'average_cost' => $products->avg('grand_total_cost_price') ?? 0,
             'active_products' => $products->where('is_active', true)->count(),
         ];
     }
@@ -251,7 +251,7 @@ class ProductsController extends Controller
             ->where('is_active', true)
             ->with([
                 'category' => fn($q) => $q->select('id', 'name'),
-                'variants' => fn($q) => $q->select('product_id', 'cost_price', 'price', 'overal_quantity_at_hand')
+                'variants' => fn($q) => $q->select('product_id', 'grand_total_cost_price', 'selling_price', 'overal_quantity_at_hand')
             ]);
         
         // Apply filters using Eloquent where clauses
@@ -557,8 +557,8 @@ class ProductsController extends Controller
         $query = ProductVariant::with(['product.category', 'unitMeasure'])
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->whereNotNull('cost_price')
-            ->where('cost_price', '>', 0);
+            ->whereNotNull('grand_total_cost_price')
+            ->where('grand_total_cost_price', '>', 0);
         
         if ($categoryId) {
             $query->whereHas('product', function ($q) use ($categoryId) {
@@ -588,8 +588,8 @@ class ProductsController extends Controller
             // For debugging - remove after fixing
             \Log::info('Margin Calculation:', [
                 'sku' => $variant->sku,
-                'price' => $price,
-                'cost_price' => $costPrice,
+                'selling_price' => $price,
+                'grand_total_cost_price' => $costPrice,
                 'margin_amount' => $marginAmount,
                 'margin_percentage' => $marginPercentage
             ]);

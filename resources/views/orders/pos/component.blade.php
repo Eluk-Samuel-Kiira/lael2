@@ -114,7 +114,7 @@
                                             data-name="{{ strtolower($variant->name ?? $product->name) }}"
                                             data-product="{{ $product->id }}"
                                             data-variant-id="{{ $variant->id }}"
-                                            data-price="{{ $variant->price }}"
+                                            data-price="{{ $variant->selling_price }}"
                                             data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
                                             data-taxes='@json($variant->applicable_taxes ?? [])'
                                             data-promotions='@json($variant->applicable_promotions ?? [])'
@@ -155,7 +155,7 @@
                                                 </div>
 
                                                 <span class="text-success text-end fw-bold fs-1">
-                                                    {{ $variant->price }} {{ currency_symbol() }}
+                                                    {{ $variant->selling_price }} {{ currency_symbol() }}
                                                 </span>
                                             </div>
                                         </div>
@@ -672,7 +672,7 @@
                         card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
                         card.setAttribute('data-product', product.id);
                         card.setAttribute('data-variant-id', variant.id);
-                        card.setAttribute('data-price', variant.price);
+                        card.setAttribute('data-price', variant.selling_price);
                         card.setAttribute('data-image', imageUrl);
                         card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
                         card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
@@ -724,7 +724,7 @@
                                 </div>
 
                                 <span class="text-success text-end fw-bold fs-1">
-                                    ${variant.price} {{ currency_symbol() }}
+                                    ${variant.selling_price} {{ currency_symbol() }}
                                 </span>
                             </div>
                         `;
