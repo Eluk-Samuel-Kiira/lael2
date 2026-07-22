@@ -174,6 +174,16 @@ return [
     'at_the'                       =>  'At the',
     'preferred_stock_level_hint'   =>  'preferred stock level hint',
 
+    'cost_breakdown' => 'Cost Breakdown',
+    'supplier_cost_price' => 'Supplier Cost',
+    'total_shipping_cost' => 'Shipping Cost',
+    'ura_taxes_applied' => 'URA Taxes',
+    'additional_expenses' => 'Additional Expenses',
+    'grand_total_cost_price' => 'Grand Total Cost',
+    'selling_price' => 'Selling Price',
+    'discount_selling_price' => 'Discounted Price',
+    'discount_selling_price_hint' => 'Selling price after discounts and promotions',
+
     'overall_stock_cannot_be_negative' => 'Overall stock cannot be negative',
 
     'low_stock_threshold' => 'Low Stock Threshold',
@@ -1253,6 +1263,9 @@ return [
     'top_suppliers_by_spend' => 'Top Suppliers by Spend',
     'spend_percentage' => 'Spend %',
     'trend' => 'Trend',
+    'transfer_amount_required' => 'The transfer amount is required.',
+    'transfer_amount_integer' => 'The transfer amount must be a whole number.',
+    'transfer_amount_min' => 'The transfer amount must be at least 1.',
     'top_spender' => 'Top Spender',
     'second_highest' => 'Second Highest',
     'third_highest' => 'Third Highest',

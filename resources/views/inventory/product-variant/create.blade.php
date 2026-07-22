@@ -87,7 +87,7 @@
                                     </div>
                                 </div>
 
-                                {{-- Barcode + Weight --}}
+                                {{-- Barcode --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">{{ __('pagination._barcode') }}</label>
@@ -96,66 +96,92 @@
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
+                                </div>
+
+                                {{-- ✅ COST BREAKDOWN SECTION --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-12">
+                                        <div class="card card-dashed bg-light-primary">
+                                            <div class="card-header py-3">
+                                                <h5 class="card-title fw-bold">{{ __('pagination.cost_breakdown') }}</h5>
+                                            </div>
+                                            <div class="card-body py-4">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold required">{{ __('pagination.supplier_cost_price') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[{{ $index }}][supplier_cost_price]" class="form-control" step="0.01" value="{{ $variant['supplier_cost_price'] ?? '' }}" placeholder="Supplier cost" required>
+                                                        @error("variants.$index.supplier_cost_price")
+                                                            <small class="text-danger">{{ $message }}</small>
+                                                        @enderror
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.total_shipping_cost') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[{{ $index }}][total_shipping_cost]" class="form-control" step="0.01" value="{{ $variant['total_shipping_cost'] ?? '' }}" placeholder="Shipping cost">
+                                                        @error("variants.$index.total_shipping_cost")
+                                                            <small class="text-danger">{{ $message }}</small>
+                                                        @enderror
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.ura_taxes_applied') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[{{ $index }}][ura_taxes_applied]" class="form-control" step="0.01" value="{{ $variant['ura_taxes_applied'] ?? '' }}" placeholder="URA taxes">
+                                                        @error("variants.$index.ura_taxes_applied")
+                                                            <small class="text-danger">{{ $message }}</small>
+                                                        @enderror
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.additional_expenses') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[{{ $index }}][additional_expenses]" class="form-control" step="0.01" value="{{ $variant['additional_expenses'] ?? '' }}" placeholder="Additional expenses">
+                                                        @error("variants.$index.additional_expenses")
+                                                            <small class="text-danger">{{ $message }}</small>
+                                                        @enderror
+                                                    </div>
+                                                </div>
+                                                <div class="row mt-2">
+                                                    <div class="col-md-12">
+                                                        <div class="alert alert-info py-2 mb-0">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <span class="fw-bold">{{ __('pagination.grand_total_cost_price') }}:</span>
+                                                                <span class="fw-bold fs-4 text-primary" id="grand_total_display_{{ $index }}">0.00 {{ currency_code() }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {{-- ✅ PRICING SECTION --}}
+                                <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                                        <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" step="0.01" value="{{ $variant['weight'] ?? '' }}" required>
-                                        @error("variants.$index.weight")
+                                        <label class="form-label fw-semibold required">{{ __('pagination.selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[{{ $index }}][selling_price]" class="form-control" step="0.01" value="{{ $variant['selling_price'] ?? '' }}" required>
+                                        @error("variants.$index.selling_price")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[{{ $index }}][discount_selling_price]" class="form-control" step="0.01" value="{{ $variant['discount_selling_price'] ?? '' }}" placeholder="Price after discount">
+                                        @error("variants.$index.discount_selling_price")
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
                                 </div>
 
-                                {{-- Cost Price + Selling price --}}
+                                {{-- ✅ DISCOUNT & MARKUP --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination.cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[{{ $index }}][cost_price]" class="form-control" step="0.01" value="{{ $variant['cost_price'] ?? '' }}" required>
-                                        @error("variants.$index.cost_price")
-                                            <small class="text-danger">{{ $message }}</small>
-                                        @enderror
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[{{ $index }}][price]" class="form-control" step="0.01" value="{{ $variant['price'] ?? '' }}" required>
-                                        @error("variants.$index.price")
-                                            <small class="text-danger">{{ $message }}</small>
-                                        @enderror
-                                    </div>
-                                </div>
-
-                                {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
-                                <div class="row g-4 mb-4">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[{{ $index }}][net_cost_price]" class="form-control" step="0.01" value="{{ $variant['net_cost_price'] ?? '' }}" placeholder="Supplier cost">
-                                        <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
-                                        @error("variants.$index.net_cost_price")
-                                            <small class="text-danger">{{ $message }}</small>
-                                        @enderror
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[{{ $index }}][net_selling_price]" class="form-control" step="0.01" value="{{ $variant['net_selling_price'] ?? '' }}" placeholder="Price after discount">
-                                        <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
-                                        @error("variants.$index.net_selling_price")
-                                            <small class="text-danger">{{ $message }}</small>
-                                        @enderror
-                                    </div>
-                                </div>
-
-                                {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
-                                <div class="row g-4 mb-4">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
-                                        <input type="number" name="variants[{{ $index }}][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="{{ $variant['discount_percentage'] ?? '' }}" placeholder="0">
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }}</label>
+                                        <input type="number" name="variants[{{ $index }}][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="{{ $variant['discount_percentage'] ?? 0 }}" placeholder="0">
                                         <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
                                         @error("variants.$index.discount_percentage")
                                             <small class="text-danger">{{ $message }}</small>
                                         @enderror
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
-                                        <input type="number" name="variants[{{ $index }}][markup_percentage]" class="form-control" step="0.01" min="0" value="{{ $variant['markup_percentage'] ?? '' }}" placeholder="0">
+                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }}</label>
+                                        <input type="number" name="variants[{{ $index }}][markup_percentage]" class="form-control" step="0.01" min="0" value="{{ $variant['markup_percentage'] ?? 0 }}" placeholder="0">
                                         <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
                                         @error("variants.$index.markup_percentage")
                                             <small class="text-danger">{{ $message }}</small>
@@ -163,8 +189,15 @@
                                     </div>
                                 </div>
 
-                                {{-- Weight Unit --}}
-                                <div class="row g-4">
+                                {{-- Weight --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                                        <input type="number" name="variants[{{ $index }}][weight]" class="form-control" min="0" step="0.01" value="{{ $variant['weight'] ?? '' }}" required>
+                                        @error("variants.$index.weight")
+                                            <small class="text-danger">{{ $message }}</small>
+                                        @enderror
+                                    </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">{{ __('pagination.weight_unit') }}</label>
                                         <x-typable-select
@@ -230,60 +263,87 @@
                                     </div>
                                 </div>
 
-                                {{-- Barcode + Price --}}
+                                {{-- Barcode --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">{{ __('pagination._barcode') }}</label>
                                         <input type="text" name="variants[0][barcode]" class="form-control">
                                     </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                                        <input type="number" name="variants[0][weight]" class="form-control" min="0" step="0.01" required>
+                                </div>
+
+                                {{-- ✅ COST BREAKDOWN SECTION --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-12">
+                                        <div class="card card-dashed bg-light-primary">
+                                            <div class="card-header py-3">
+                                                <h5 class="card-title fw-bold">{{ __('pagination.cost_breakdown') }}</h5>
+                                            </div>
+                                            <div class="card-body py-4">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold required">{{ __('pagination.supplier_cost_price') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[0][supplier_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost" required>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.total_shipping_cost') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[0][total_shipping_cost]" class="form-control" step="0.01" placeholder="Shipping cost">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.ura_taxes_applied') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[0][ura_taxes_applied]" class="form-control" step="0.01" placeholder="URA taxes">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label fw-semibold">{{ __('pagination.additional_expenses') }} ({{ currency_code() }})</label>
+                                                        <input type="number" name="variants[0][additional_expenses]" class="form-control" step="0.01" placeholder="Additional expenses">
+                                                    </div>
+                                                </div>
+                                                <div class="row mt-2">
+                                                    <div class="col-md-12">
+                                                        <div class="alert alert-info py-2 mb-0">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <span class="fw-bold">{{ __('pagination.grand_total_cost_price') }}:</span>
+                                                                <span class="fw-bold fs-4 text-primary" id="grand_total_display_0">0.00 {{ currency_code() }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {{-- Cost Price + selling price --}}
+                                {{-- ✅ PRICING SECTION --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination.gross_cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[0][cost_price]" class="form-control" step="0.01" required>
+                                        <label class="form-label fw-semibold required">{{ __('pagination.selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[0][selling_price]" class="form-control" step="0.01" required>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[0][price]" class="form-control" step="0.01" required>
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_selling_price') }} ({{ currency_code() }})</label>
+                                        <input type="number" name="variants[0][discount_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
                                     </div>
                                 </div>
 
-                                {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
+                                {{-- ✅ DISCOUNT & MARKUP --}}
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[0][net_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost">
-                                        <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
-                                        <input type="number" name="variants[0][net_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
-                                        <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
-                                    </div>
-                                </div>
-
-                                {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
-                                <div class="row g-4 mb-4">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
+                                        <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} (%)</label>
                                         <input type="number" name="variants[0][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="0" placeholder="0">
                                         <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
+                                        <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} (%)</label>
                                         <input type="number" name="variants[0][markup_percentage]" class="form-control" step="0.01" min="0" value="0" placeholder="0">
                                         <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
                                     </div>
                                 </div>
 
-                                {{-- Weight Unit --}}
-                                <div class="row g-4">
+                                {{-- Weight --}}
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                                        <input type="number" name="variants[0][weight]" class="form-control" min="0" step="0.01" required>
+                                    </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">{{ __('pagination.weight_unit') }}</label>
                                         <x-typable-select
@@ -324,6 +384,43 @@
         // ── Placeholder used for freshly-added rows / cleared file inputs ──
         const VARIANT_IMAGE_PLACEHOLDER = 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2290%22 height=%2290%22%3E%3Crect width=%2290%22 height=%2290%22 fill=%22%23f1f1f2%22/%3E%3Cline x1=%2220%22 y1=%2220%22 x2=%2270%22 y2=%2270%22 stroke=%22%23c4c4c4%22 stroke-width=%223%22/%3E%3Cline x1=%2270%22 y1=%2220%22 x2=%2220%22 y2=%2270%22 stroke=%22%23c4c4c4%22 stroke-width=%223%22/%3E%3C/svg%3E';
 
+        // ── Calculate Grand Total Cost Price ─────────────────────────────────────
+        function calculateGrandTotal(index) {
+            const supplierCost = parseFloat(document.querySelector(`input[name="variants[${index}][supplier_cost_price]"]`)?.value) || 0;
+            const shipping = parseFloat(document.querySelector(`input[name="variants[${index}][total_shipping_cost]"]`)?.value) || 0;
+            const taxes = parseFloat(document.querySelector(`input[name="variants[${index}][ura_taxes_applied]"]`)?.value) || 0;
+            const expenses = parseFloat(document.querySelector(`input[name="variants[${index}][additional_expenses]"]`)?.value) || 0;
+            
+            const grandTotal = supplierCost + shipping + taxes + expenses;
+            const display = document.getElementById(`grand_total_display_${index}`);
+            if (display) {
+                display.textContent = grandTotal.toFixed(2) + ' {{ currency_code() }}';
+            }
+            
+            // Auto-fill grand total cost price if it's empty
+            const grandTotalInput = document.querySelector(`input[name="variants[${index}][grand_total_cost_price]"]`);
+            if (grandTotalInput) {
+                grandTotalInput.value = grandTotal.toFixed(2);
+            }
+        }
+
+        // ── Event listeners for cost calculation ──────────────────────────────
+        document.addEventListener('input', function(e) {
+            const target = e.target;
+            if (target.name && (
+                target.name.includes('supplier_cost_price') ||
+                target.name.includes('total_shipping_cost') ||
+                target.name.includes('ura_taxes_applied') ||
+                target.name.includes('additional_expenses')
+            )) {
+                const match = target.name.match(/variants\[(\d+)\]/);
+                if (match) {
+                    const index = match[1];
+                    calculateGrandTotal(index);
+                }
+            }
+        });
+
         function updateRowIndices() {
             const cards = document.querySelectorAll('#variantsContainer .variant-card');
             cards.forEach((card, newIndex) => {
@@ -337,6 +434,8 @@
                 if (title) {
                     title.innerHTML = `<i class="ki-duotone ki-abstract-26 fs-3 text-primary me-2"><span class="path1"></span><span class="path2"></span></i>{{ __('pagination._variant') }} #${newIndex + 1}`;
                 }
+                // Recalculate grand total for this index
+                calculateGrandTotal(newIndex);
             });
         }
 
@@ -422,52 +521,81 @@
                             <label class="form-label fw-semibold">{{ __('pagination._barcode') }}</label>
                             <input type="text" name="variants[${newIndex}][barcode]" class="form-control">
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
-                            <input type="number" name="variants[${newIndex}][weight]" class="form-control" min="0" step="0.01" required>
+                    </div>
+
+                    {{-- ✅ COST BREAKDOWN SECTION --}}
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-12">
+                            <div class="card card-dashed bg-light-primary">
+                                <div class="card-header py-3">
+                                    <h5 class="card-title fw-bold">{{ __('pagination.cost_breakdown') }}</h5>
+                                </div>
+                                <div class="card-body py-4">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold required">{{ __('pagination.supplier_cost_price') }} ({{ currency_code() }})</label>
+                                            <input type="number" name="variants[${newIndex}][supplier_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">{{ __('pagination.total_shipping_cost') }} ({{ currency_code() }})</label>
+                                            <input type="number" name="variants[${newIndex}][total_shipping_cost]" class="form-control" step="0.01" placeholder="Shipping cost">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">{{ __('pagination.ura_taxes_applied') }} ({{ currency_code() }})</label>
+                                            <input type="number" name="variants[${newIndex}][ura_taxes_applied]" class="form-control" step="0.01" placeholder="URA taxes">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">{{ __('pagination.additional_expenses') }} ({{ currency_code() }})</label>
+                                            <input type="number" name="variants[${newIndex}][additional_expenses]" class="form-control" step="0.01" placeholder="Additional expenses">
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-12">
+                                            <div class="alert alert-info py-2 mb-0">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="fw-bold">{{ __('pagination.grand_total_cost_price') }}:</span>
+                                                    <span class="fw-bold fs-4 text-primary" id="grand_total_display_${newIndex}">0.00 {{ currency_code() }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="variants[${newIndex}][grand_total_cost_price]" id="grand_total_input_${newIndex}" value="0">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
+                    {{-- ✅ PRICING SECTION --}}
                     <div class="row g-4 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold required">{{ __('pagination.cost_price') }} ({{ currency_code() }})</label>
-                            <input type="number" name="variants[${newIndex}][cost_price]" class="form-control" step="0.01" required>
+                            <label class="form-label fw-semibold required">{{ __('pagination.selling_price') }} ({{ currency_code() }})</label>
+                            <input type="number" name="variants[${newIndex}][selling_price]" class="form-control" step="0.01" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold required">{{ __('pagination._price') }} ({{ currency_code() }})</label>
-                            <input type="number" name="variants[${newIndex}][price]" class="form-control" step="0.01" required>
+                            <label class="form-label fw-semibold">{{ __('pagination.discount_selling_price') }} ({{ currency_code() }})</label>
+                            <input type="number" name="variants[${newIndex}][discount_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
                         </div>
                     </div>
 
-                    {{-- ✅ NEW FIELDS: Net Cost Price + Net Selling Price --}}
+                    {{-- ✅ DISCOUNT & MARKUP --}}
                     <div class="row g-4 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">{{ __('pagination.net_cost_price') }} ({{ currency_code() }})</label>
-                            <input type="number" name="variants[${newIndex}][net_cost_price]" class="form-control" step="0.01" placeholder="Supplier cost">
-                            <div class="form-text text-muted">{{ __('pagination.net_cost_price_hint') ?? 'What you pay the supplier' }}</div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">{{ __('pagination.net_selling_price') }} ({{ currency_code() }})</label>
-                            <input type="number" name="variants[${newIndex}][net_selling_price]" class="form-control" step="0.01" placeholder="Price after discount">
-                            <div class="form-text text-muted">{{ __('pagination.net_selling_price_hint') ?? 'Selling price after discounts' }}</div>
-                        </div>
-                    </div>
-
-                    {{-- ✅ NEW FIELDS: Discount Percentage + Markup Percentage --}}
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} </label>
+                            <label class="form-label fw-semibold">{{ __('pagination.discount_percentage') }} (%)</label>
                             <input type="number" name="variants[${newIndex}][discount_percentage]" class="form-control" step="0.01" min="0" max="100" value="0" placeholder="0">
                             <div class="form-text text-muted">{{ __('pagination.discount_percentage_hint') ?? 'Discount percentage applied' }}</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} </label>
+                            <label class="form-label fw-semibold">{{ __('pagination.markup_percentage') }} (%)</label>
                             <input type="number" name="variants[${newIndex}][markup_percentage]" class="form-control" step="0.01" min="0" value="0" placeholder="0">
                             <div class="form-text text-muted">{{ __('pagination.markup_percentage_hint') ?? 'Markup from cost to selling price' }}</div>
                         </div>
                     </div>
 
-                    <div class="row g-4">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold required">{{ __('pagination._weight') }}</label>
+                            <input type="number" name="variants[${newIndex}][weight]" class="form-control" min="0" step="0.01" required>
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">{{ __('pagination.weight_unit') }}</label>
                             <div class="position-relative">
@@ -503,6 +631,9 @@
             }
 
             document.querySelectorAll('#variantsContainer .removeVariantBtn').forEach(btn => btn.disabled = false);
+            
+            // Recalculate grand total for the new card
+            calculateGrandTotal(newIndex);
         });
 
         function removeRow(btn) {
@@ -526,9 +657,11 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             const cards = document.querySelectorAll('#variantsContainer .variant-card');
-            cards.forEach(c => {
+            cards.forEach((c, index) => {
                 const removeBtn = c.querySelector('.removeVariantBtn');
                 if (removeBtn) removeBtn.disabled = cards.length === 1;
+                // Calculate grand total for each card on load
+                calculateGrandTotal(index);
             });
         });
     </script>

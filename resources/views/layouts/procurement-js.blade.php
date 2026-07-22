@@ -637,7 +637,7 @@
         @foreach($variants as $variant)
             variantOptions += `<option value="{{ $variant->name }}" 
                                     data-id="{{ $variant->id }}"
-                                    data-cost-price="{{ $variant->net_cost_price }}">
+                                    data-cost-price="{{ $variant->supplier_cost_price }}">
                                 </option>`;
         @endforeach
         

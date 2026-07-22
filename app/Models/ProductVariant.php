@@ -16,140 +16,170 @@ class ProductVariant extends Model
         'sku',
         'name',
         'barcode',
-        'price',                    // ✅ Selling price to customer
-        'net_selling_price',        // ✅ Selling price after discounts
-        'net_cost_price',           // ✅ Supplier cost price (what you pay supplier)
-        'cost_price',               // ✅ Gross cost price (net_cost + shipping/expenses)
-        'discount_percentage',      
-        'markup_percentage',         
+        'supplier_cost_price',
+        'total_shipping_cost',
+        'ura_taxes_applied',
+        'additional_expenses',
+        'grand_total_cost_price',
+        'selling_price',
+        'discount_selling_price',
+        'discount_percentage',
+        'markup_percentage',
+        'overal_quantity_at_hand',
         'weight',
         'weight_unit',
         'image_url',
         'is_active',
+        'is_taxable',
         'created_by',
         'tenant_id',
-        'overal_quantity_at_hand',
-        'is_taxable',
     ];
 
     protected $casts = [
-        'price' => 'integer',              
-        'net_selling_price' => 'integer',  
-        'net_cost_price' => 'integer',     // ✅ Supplier cost
-        'cost_price' => 'integer',         // ✅ Gross cost (with expenses)
+        // Money fields - stored as integers in DB
+        'supplier_cost_price' => 'integer',
+        'total_shipping_cost' => 'integer',
+        'ura_taxes_applied' => 'integer',
+        'additional_expenses' => 'integer',
+        'grand_total_cost_price' => 'integer',
+        'selling_price' => 'integer',
+        'discount_selling_price' => 'integer',
         'discount_percentage' => 'decimal:2',
-        'markup_percentage' => 'decimal:2',   
+        'markup_percentage' => 'decimal:2',
         'weight' => 'decimal:2',
+        'is_active' => 'boolean',
+        'is_taxable' => 'boolean',
     ];
 
     // ─── Accessors ────────────────────────────────────────────
 
-    /**
-     * ✅ Selling price to customer (with markup)
-     */
-    public function getPriceAttribute(?int $value): ?float
+    public function getSupplierCostPriceAttribute($value): float
     {
         return from_base_currency($value);
     }
 
-    /**
-     * ✅ Gross cost price (net_cost + shipping + expenses)
-     */
-    public function getCostPriceAttribute(?int $value): ?float
+    public function getTotalShippingCostAttribute($value): float
     {
         return from_base_currency($value);
     }
 
-    /**
-     * ✅ Supplier cost price (what you pay the supplier)
-     */
-    public function getNetCostPriceAttribute(?int $value): ?float
+    public function getUraTaxesAppliedAttribute($value): float
     {
         return from_base_currency($value);
     }
 
-    /**
-     * ✅ Net selling price (after discounts)
-     */
-    public function getNetSellingPriceAttribute(?int $value): ?float
+    public function getAdditionalExpensesAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getGrandTotalCostPriceAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getSellingPriceAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function getDiscountSellingPriceAttribute($value): float
     {
         return from_base_currency($value);
     }
 
     // ─── Mutators ─────────────────────────────────────────────
 
-    public function setPriceAttribute($value): void
+    public function setSupplierCostPriceAttribute($value): void
     {
-        $this->attributes['price'] = to_base_currency($value);
+        $this->attributes['supplier_cost_price'] = to_base_currency($value);
     }
 
-    public function setCostPriceAttribute($value): void
+    public function setTotalShippingCostAttribute($value): void
     {
-        $this->attributes['cost_price'] = to_base_currency($value);
+        $this->attributes['total_shipping_cost'] = to_base_currency($value);
     }
 
-    public function setNetCostPriceAttribute($value): void
+    public function setUraTaxesAppliedAttribute($value): void
     {
-        $this->attributes['net_cost_price'] = to_base_currency($value);
+        $this->attributes['ura_taxes_applied'] = to_base_currency($value);
     }
 
-    public function setNetSellingPriceAttribute($value): void
+    public function setAdditionalExpensesAttribute($value): void
     {
-        $this->attributes['net_selling_price'] = to_base_currency($value);
+        $this->attributes['additional_expenses'] = to_base_currency($value);
+    }
+
+    public function setGrandTotalCostPriceAttribute($value): void
+    {
+        $this->attributes['grand_total_cost_price'] = to_base_currency($value);
+    }
+
+    public function setSellingPriceAttribute($value): void
+    {
+        $this->attributes['selling_price'] = to_base_currency($value);
+    }
+
+    public function setDiscountSellingPriceAttribute($value): void
+    {
+        $this->attributes['discount_selling_price'] = to_base_currency($value);
     }
 
     // ─── Business Logic ──────────────────────────────────────
 
     /**
-     * ✅ Calculate gross cost price (net_cost + expenses)
-     * @param float $expenses - Additional expenses (shipping, taxes, etc.)
+     * ✅ Calculate grand total cost price
      */
-    public function calculateGrossCostPrice(float $expenses = 0): float
+    public function calculateGrandTotalCostPrice(): float
     {
-        return ($this->net_cost_price ?? 0) + $expenses;
+        return ($this->supplier_cost_price ?? 0) 
+            + ($this->total_shipping_cost ?? 0) 
+            + ($this->ura_taxes_applied ?? 0) 
+            + ($this->additional_expenses ?? 0);
     }
 
     /**
-     * ✅ Calculate net selling price after discount
+     * ✅ Calculate discount selling price after discount
      */
-    public function calculateNetSellingPrice(): ?float
+    public function calculateDiscountSellingPrice(): ?float
     {
-        if ($this->price && $this->discount_percentage > 0) {
-            $discountAmount = ($this->price * $this->discount_percentage) / 100;
-            return $this->price - $discountAmount;
+        if ($this->selling_price && $this->discount_percentage > 0) {
+            $discountAmount = ($this->selling_price * $this->discount_percentage) / 100;
+            return $this->selling_price - $discountAmount;
         }
-        return $this->price;
+        return $this->selling_price;
     }
 
     /**
-     * ✅ Calculate markup percentage from gross cost to selling price
+     * ✅ Calculate markup percentage from grand total cost to selling price
      */
     public function calculateMarkupPercentage(): float
     {
-        if ($this->cost_price && $this->cost_price > 0 && $this->price && $this->price > 0) {
-            return (($this->price - $this->cost_price) / $this->cost_price) * 100;
+        if ($this->grand_total_cost_price && $this->grand_total_cost_price > 0 
+            && $this->selling_price && $this->selling_price > 0) {
+            return (($this->selling_price - $this->grand_total_cost_price) / $this->grand_total_cost_price) * 100;
         }
         return 0;
     }
 
     /**
-     * ✅ Calculate profit margin from gross cost
+     * ✅ Calculate profit margin from grand total cost
      */
     public function calculateProfitMargin(): float
     {
-        if ($this->price && $this->price > 0) {
-            return (($this->price - $this->cost_price) / $this->price) * 100;
+        if ($this->selling_price && $this->selling_price > 0) {
+            return (($this->selling_price - $this->grand_total_cost_price) / $this->selling_price) * 100;
         }
         return 0;
     }
 
     /**
-     * ✅ Get profit per unit (net selling - gross cost)
+     * ✅ Get profit per unit (selling price - grand total cost)
      */
     public function getProfitPerUnitAttribute(): float
     {
-        $netPrice = $this->net_selling_price ?? $this->price ?? 0;
-        $grossCost = $this->cost_price ?? 0;
+        $netPrice = $this->discount_selling_price ?? $this->selling_price ?? 0;
+        $grossCost = $this->grand_total_cost_price ?? 0;
         return $netPrice - $grossCost;
     }
 
@@ -158,7 +188,7 @@ class ProductVariant extends Model
      */
     public function getProfitMarginAttribute(): float
     {
-        $netPrice = $this->net_selling_price ?? $this->price ?? 0;
+        $netPrice = $this->discount_selling_price ?? $this->selling_price ?? 0;
         if ($netPrice > 0) {
             return ($this->profit_per_unit / $netPrice) * 100;
         }
@@ -166,27 +196,11 @@ class ProductVariant extends Model
     }
 
     /**
-     * ✅ Get supplier cost (net cost)
+     * ✅ Get total expenses (grand total cost - supplier cost)
      */
-    public function getSupplierCostAttribute(): float
+    public function getTotalExpensesAttribute(): float
     {
-        return $this->net_cost_price ?? 0;
-    }
-
-    /**
-     * ✅ Get gross cost (net cost + expenses)
-     */
-    public function getGrossCostAttribute(): float
-    {
-        return $this->cost_price ?? 0;
-    }
-
-    /**
-     * ✅ Get total expenses (gross cost - net cost)
-     */
-    public function getExpensesAttribute(): float
-    {
-        return ($this->cost_price ?? 0) - ($this->net_cost_price ?? 0);
+        return ($this->grand_total_cost_price ?? 0) - ($this->supplier_cost_price ?? 0);
     }
 
     /**
@@ -194,18 +208,18 @@ class ProductVariant extends Model
      */
     public function getDiscountAmountAttribute(): float
     {
-        if ($this->price && $this->net_selling_price) {
-            return $this->price - $this->net_selling_price;
+        if ($this->selling_price && $this->discount_selling_price) {
+            return $this->selling_price - $this->discount_selling_price;
         }
         return 0;
     }
 
     /**
-     * ✅ Update net selling price from price and discount
+     * ✅ Update discount selling price from selling price and discount
      */
-    public function updateNetSellingPrice(): self
+    public function updateDiscountSellingPrice(): self
     {
-        $this->net_selling_price = $this->calculateNetSellingPrice();
+        $this->discount_selling_price = $this->calculateDiscountSellingPrice();
         $this->save();
         return $this;
     }
@@ -221,11 +235,11 @@ class ProductVariant extends Model
     }
 
     /**
-     * ✅ Update gross cost price from net cost + expenses
+     * ✅ Update grand total cost price
      */
-    public function updateGrossCostPrice(float $expenses = 0): self
+    public function updateGrandTotalCostPrice(): self
     {
-        $this->cost_price = $this->calculateGrossCostPrice($expenses);
+        $this->grand_total_cost_price = $this->calculateGrandTotalCostPrice();
         $this->save();
         return $this;
     }
@@ -236,7 +250,7 @@ class ProductVariant extends Model
     public function applyDiscount(float $percentage): self
     {
         $this->discount_percentage = $percentage;
-        $this->net_selling_price = $this->calculateNetSellingPrice();
+        $this->discount_selling_price = $this->calculateDiscountSellingPrice();
         $this->save();
         return $this;
     }
@@ -247,7 +261,7 @@ class ProductVariant extends Model
     public function removeDiscount(): self
     {
         $this->discount_percentage = 0;
-        $this->net_selling_price = $this->price;
+        $this->discount_selling_price = $this->selling_price;
         $this->save();
         return $this;
     }
@@ -316,8 +330,13 @@ class ProductVariant extends Model
     public function scopeWithProfitMarginAbove($query, float $percentage)
     {
         return $query->whereRaw('
-            ((`price` - `cost_price`) / `price`) * 100 > ?',
+            ((`selling_price` - `grand_total_cost_price`) / `selling_price`) * 100 > ?',
             [$percentage]
         );
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }

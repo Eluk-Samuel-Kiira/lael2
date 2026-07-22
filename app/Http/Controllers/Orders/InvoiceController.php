@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Orders;
 use App\Http\Controllers\Controller;
 use App\Models\{ Invoice, Order, OrderPayment, ProductVariant, InventoryAdjustments,
                     InventoryTransactions, SingleShopInventoryLog, PaymentMethod, Currency, 
-                    InvoicePayment };
+                    InvoicePayment, InventoryItems };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ Auth, DB, Log, Mail };
 use Illuminate\Support\Str;

@@ -179,7 +179,7 @@ class POSController extends Controller
                 })->values();
 
                 $variant->price = $variant->price;
-                $variant->cost_price = $variant->cost_price;
+                $variant->grant_total_cost_price = $variant->grant_total_cost_price;
             }
         }
 
@@ -386,7 +386,7 @@ class POSController extends Controller
                 })->values();
 
                 $variant->price = $variant->price;
-                $variant->cost_price = $variant->cost_price;
+                $variant->grant_total_cost_price = $variant->grant_total_cost_price;
             }
         }
 

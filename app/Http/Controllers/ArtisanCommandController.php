@@ -26,7 +26,7 @@ class ArtisanCommandController extends Controller
         'migrate:status'       => 'Show migration status',
         'db:seed'              => 'Seed the database',
         'permissions:add-new'  => 'Add more permissions to the db',
-        // 'migrate:fresh --seed' => '⚠️ DANGER: Migrate and Seed fresh (force required)',
+        'migrate:fresh --seed' => '⚠️ DANGER: Migrate and Seed fresh (force required)',
     ];
 
     // Commands that automatically get --force in production

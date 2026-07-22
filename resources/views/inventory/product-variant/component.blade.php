@@ -69,7 +69,6 @@
                                     <input class="form-check-input" type="checkbox" data-kt-check="true" data-kt-check-target="#kt_table_users .form-check-input" value="1" />
                                 </div>
                             </th>
-                            <!-- <th class="min-w-125px">{{__('pagination.variant_id')}}</th> -->
                             <th class="min-w-125px">{{__('auth._name')}}</th> 
                             <th class="min-w-125px">{{__('pagination._sku')}}</th> 
                             <th class="min-w-125px">{{__('pagination._barcode')}}</th>
@@ -80,16 +79,19 @@
                                     {{ __('pagination.overall_quantity') }}
                                 @endif
                             </th>
-                            <th class="min-w-125px">{{__('pagination._price')}}</th> 
-                            <th class="min-w-125px">{{__('pagination.net_selling_price')}}</th>
-                            <th class="min-w-125px">{{__('pagination.gross_cost_price')}}</th> 
-                            <th class="min-w-125px">{{__('pagination.net_cost_price')}}</th>
-                            <th class="min-w-125px">{{__('pagination.discount_percentage')}}</th> 
-                            <th class="min-w-125px">{{__('pagination.markup_percentage')}}</th> 
-                            <th class="min-w-125px">{{__('pagination._weight')}}</th> 
+                            <th class="min-w-125px">{{__('pagination.selling_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.discount_selling_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.grand_total_cost_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.supplier_cost_price')}}</th>
+                            <th class="min-w-125px">{{__('pagination.total_shipping_cost')}}</th>
+                            <th class="min-w-125px">{{__('pagination.ura_taxes_applied')}}</th>
+                            <th class="min-w-125px">{{__('pagination.additional_expenses')}}</th>
+                            <th class="min-w-125px">{{__('pagination.discount_percentage')}}</th>
+                            <th class="min-w-125px">{{__('pagination.markup_percentage')}}</th>
+                            <th class="min-w-125px">{{__('pagination._weight')}}</th>
                             <th class="min-w-125px">{{__('pagination.weight_unit')}}</th>
-                            <th class="min-w-125px">{{__('pagination.is_taxable')}}</th>  
-                            <th class="min-w-125px">{{__('auth._creater')}}</th> 
+                            <th class="min-w-125px">{{__('pagination.is_taxable')}}</th>
+                            <th class="min-w-125px">{{__('auth._creater')}}</th>
                             <th class="min-w-125px">{{__('auth.created_at')}}</th>
                             <th class="min-w-125px">{{__('auth._status')}}</th>
                             <th class="min-w-100px text-end">{{__('auth._actions')}}</th>
@@ -104,17 +106,12 @@
                                             <input class="form-check-input" type="checkbox" value="1" />
                                         </div>
                                     </td>
-                                    <!-- <td>
-                                        <div class="badge badge-light fw-bold">{{ $product->id }}</div>
-                                    </td> -->
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <span class="symbol symbol-50px" onclick="triggerFileInput(this, {{ $product->id }})">
                                                 <img src="{{ productVariantImage($product->image_url) }}" alt="" class="symbol-label" id="variantImagePreview_{{ $product->id  }}">
                                             </span>
-                                            <!-- Hidden file input -->
                                             <input type="file" id="variantImageInput_{{ $product->id ?? 0 }}" accept="image/*" style="display: none;" onchange="handleImageChange(event, {{ $product->id }})">
-
                                             <div class="ms-5">
                                                 <span class="text-gray-800 text-hover-primary fw-bold">{{ $product->name }}</span>
                                             </div>
@@ -126,23 +123,42 @@
                                     <td>{{ $product->barcode }}</td>
                                     <td class="fw-bold text-warning ms-3">{{ $product->overal_quantity_at_hand }}</td>
                                     
-                                    <td class="fw-bold text-primary ms-3">{{ $product->price }} {{ currency_code() }}</td>
+                                    {{-- Selling Price --}}
+                                    <td class="fw-bold text-primary ms-3">{{ $product->selling_price }} {{ currency_code() }}</td>
                                     
+                                    {{-- Discount Selling Price --}}
                                     <td>
                                         <span class="badge badge-light-success fw-bold">
-                                            {{ $product->net_selling_price ?? $product->price }} {{ currency_code() }}
+                                            {{ $product->discount_selling_price ?? $product->selling_price }} {{ currency_code() }}
                                         </span>
                                     </td>
                                     
-                                    <td> 
-                                        <div class="badge badge-light fw-bold text-success">{{ $product->cost_price }} {{ currency_code() }}</div>
+                                    {{-- Grand Total Cost Price --}}
+                                    <td>
+                                        <div class="badge badge-light fw-bold text-success">{{ $product->grand_total_cost_price }} {{ currency_code() }}</div>
                                     </td>
 
+                                    {{-- Supplier Cost Price --}}
                                     <td>
-                                        <div class="badge badge-light fw-bold text-info">{{ $product->net_cost_price ?? $product->cost_price }} {{ currency_code() }}</div>
+                                        <div class="badge badge-light fw-bold text-info">{{ $product->supplier_cost_price }} {{ currency_code() }}</div>
+                                    </td>
+
+                                    {{-- Shipping Cost --}}
+                                    <td>
+                                        <div class="badge badge-light fw-bold text-warning">{{ $product->total_shipping_cost }} {{ currency_code() }}</div>
+                                    </td>
+
+                                    {{-- URA Taxes --}}
+                                    <td>
+                                        <div class="badge badge-light fw-bold text-danger">{{ $product->ura_taxes_applied }} {{ currency_code() }}</div>
+                                    </td>
+
+                                    {{-- Additional Expenses --}}
+                                    <td>
+                                        <div class="badge badge-light fw-bold text-dark">{{ $product->additional_expenses }} {{ currency_code() }}</div>
                                     </td>
                                     
-                                    
+                                    {{-- Discount Percentage --}}
                                     <td>
                                         @if($product->discount_percentage > 0)
                                             <span class="badge badge-light-danger fw-bold">{{ $product->discount_percentage }}%</span>
@@ -151,6 +167,7 @@
                                         @endif
                                     </td>
                                     
+                                    {{-- Markup Percentage --}}
                                     <td>
                                         @if($product->markup_percentage > 0)
                                             <span class="badge badge-light-success fw-bold">{{ number_format($product->markup_percentage, 2) }}%</span>
@@ -216,7 +233,7 @@
                                             @endcan 
                                         </div>
 
-                                        <!-- Delete User Modal -->
+                                        <!-- Delete Variant Modal -->
                                         <div class="modal fade" id="deletecategoryModal{{$product->id}}" tabindex="-1" aria-hidden="true">
                                             <div class="modal-dialog modal-dialog-centered">
                                                 <div class="modal-content">
@@ -229,9 +246,7 @@
                                                         <p>{{ __('auth.action_cannot') }}</p>
                                                     </div>
                                                     <div class="modal-footer">
-                                                        <!-- Discard Button -->
                                                         <button type="button" id="closeDeleteModal{{$product->id}}" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
-                                                        <!-- Confirm Button -->
                                                         <button type="button" id="deleteButton{{$product->id}}" class="btn btn-danger" 
                                                             data-item-url="{{ route('variants.destroy', $product->id) }}" 
                                                             data-item-id="{{ $product->id }}"
@@ -257,7 +272,7 @@
                 </table>
             </div>
         </div>
-    </diiv>
+    </div>
     <div class="mt-4">
         <x-liveblade-pagination
             :paginator="$product_variants->variants"
@@ -279,10 +294,7 @@
             btn.addEventListener('click', function() {
                 const thumbnailCol = btn.closest('.thumbnail-col');
                 if (thumbnailCol) {
-                    // Completely remove the column from DOM
                     thumbnailCol.remove();
-                    
-                    // Expand variations column
                     const variationsCol = document.getElementById('variations-col');
                     if (variationsCol) {
                         variationsCol.classList.remove('col-md-8');
@@ -296,29 +308,20 @@
 
 
 <script>
-    // Trigger hidden file input when image is clicked
     function triggerFileInput(el, id) {
         document.getElementById(`variantImageInput_${id}`).click();
     }
 
-    // Handle file selection
     function handleImageChange(event, id) {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Update the image preview
         const imgPreview = document.getElementById(`variantImagePreview_${id}`);
         imgPreview.src = URL.createObjectURL(file);
-
-        // Call custom JS function with file and ID
         onVariantImageSelected(file, id);
     }
 
-    // Your custom JS function
     function onVariantImageSelected(file, id) {
-        // console.log('Selected file:', file.name, 'for variant ID:', id);
-
-        // Create FormData and append file + variant ID
         const formData = new FormData();
         formData.append('image', file);
         formData.append('variant_id', id);
@@ -340,7 +343,6 @@
             const message = '{{ __('auth._uploaded') }}';
             console.log(message, data);
 
-            // Optionally update the image preview (if backend returns the uploaded path)
             const imgPreview = document.getElementById(`variantImagePreview_${id}`);
             if (data.image_url) {
                 imgPreview.src = data.image_url;
@@ -362,19 +364,15 @@
             });
         });
     }
-
 </script>
 
 
 
 <script>
-    
-    // Function to preview and upload the selected profile image with validation
     function productPhoto(event, product_id) {
         const image = document.getElementById('product-img-preview');
         const file = event.target.files[0];
         
-        // Validate file type (accept only images)
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
         const allowedError = '{{__('auth.allowed_files')}}'
         if (!allowedTypes.includes(file.type)) {
@@ -382,28 +380,23 @@
             return;
         }
 
-        // Validate file size (e.g., limit to 2MB)
-        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+        const maxSize = 5 * 1024 * 1024;
         const allowedSize = '{{__('auth.file_large')}}'
         if (file.size > maxSize) {
             alert(allowed_size);
             return;
         }
 
-        // If validation passes, show image preview and upload file
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 image.src = e.target.result;
             }
             reader.readAsDataURL(file);
-
-            // Automatically upload the file
             uploadProductImage(file, product_id);
         }
     }
 
-    // Function to upload the image via AJAX
     function uploadProductImage(file, product_id) {
         const formData = new FormData();
         formData.append('photo', file); 
@@ -425,13 +418,11 @@
         .then(data => {
             const message = '{{__('auth._uploaded')}}'
             console.log(message, data);
-            // Optionally handle success or update image path here
             Swal.fire({
                 icon: 'success',
                 title: 'Success!',
                 text: message,
             }).then(() => {
-                // Refresh the page after success
                 // location.reload();
             });
         })

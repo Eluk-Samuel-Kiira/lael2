@@ -30,10 +30,6 @@ return new class extends Migration
             $table->unique(['tenant_id', 'slug'], 'products_tenant_id_slug_unique');
         });
 
-        Schema::table('product_variants', function (Blueprint $table) {
-            $table->dropUnique('product_variants_sku_unique');
-            $table->unique(['tenant_id', 'sku'], 'product_variants_tenant_id_sku_unique');
-        });
     }
 
     /**
@@ -41,10 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('product_variants', function (Blueprint $table) {
-            $table->dropUnique('product_variants_tenant_id_sku_unique');
-            $table->unique('sku', 'product_variants_sku_unique');
-        });
 
         Schema::table('products', function (Blueprint $table) {
             $table->dropUnique('products_tenant_id_sku_unique');

@@ -493,10 +493,12 @@
     
     // ── Transfer Stock ─────────────────────────────────────────
     function updateInventoryTransfer(uniqueId) {
+        
         const submitButton = document.getElementById('editInvTransferButton' + uniqueId);
         LiveBlade.toggleButtonLoading(submitButton, true);
 
-        var form = document.getElementById('stockItemTransfer' + uniqueId);
+        // FIX: Change 'stockItemTransfer' to 'stockTransferForm'
+        var form = document.getElementById('stockTransferForm' + uniqueId);
         var formData = new FormData(form);
         var data = Object.fromEntries(formData.entries());
 
@@ -520,165 +522,367 @@
         });
     }
 
-// ── Adjustment Stock ────────────────────────────────────────
-function updateInventoryAdjustment(uniqueId) {
-    const submitButton = document.getElementById('editInvAdjustButton' + uniqueId);
-    
-    // ✅ Get the form and values
-    const form = document.getElementById('adjustStockForm' + uniqueId);
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-    
-    // ✅ Get the adjust amount
-    const adjustAmount = parseInt(data.adjust_amount) || 0;
-    const overallStock = parseInt(data.overal_quantity_at_hand) || 0;
-    const currentStock = parseInt(data.current_quantity) || 0;
-    
-    // ✅ Client-side validation before submitting
-    if (adjustAmount > 0 && adjustAmount > overallStock) {
-        const errorEl = document.getElementById(`adjustError${uniqueId}`);
-        if (errorEl) {
-            errorEl.style.display = 'block';
-            errorEl.textContent = 'Cannot allocate more than available. Available: ' + overallStock;
-        }
-        toastr.error('Cannot allocate more than available. Available: ' + overallStock);
-        return;
+    // ── Adjustment Stock ────────────────────────────────────────
+    function updateInventoryAdjustment(uniqueId) {
+        const submitButton = document.getElementById('editInvAdjustButton' + uniqueId);
+        
+        // ✅ Get the form and values
+        const form = document.getElementById('adjustStockForm' + uniqueId);
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        // ✅ Proceed with submission
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        var updateUrl = '{{ route('stocks.update', ['stock' => ':id']) }}'.replace(':id', uniqueId);
+        
+        // Use handleEditResponse which should handle 422 errors
+        handleEditResponse(data, updateUrl, uniqueId, submitButton);
     }
-    
-    if (adjustAmount < 0 && Math.abs(adjustAmount) > currentStock) {
-        const errorEl = document.getElementById(`adjustError${uniqueId}`);
-        if (errorEl) {
-            errorEl.style.display = 'block';
-            errorEl.textContent = 'Cannot remove more than allocated. Available: ' + currentStock;
-        }
-        toastr.error('Cannot remove more than allocated. Available: ' + currentStock);
-        return;
-    }
-    
-    // ✅ Clear any previous errors
-    const errorEl = document.getElementById(`adjustError${uniqueId}`);
-    if (errorEl) {
-        errorEl.style.display = 'none';
-        errorEl.textContent = '';
-    }
-    
-    // ✅ Proceed with submission
-    LiveBlade.toggleButtonLoading(submitButton, true);
 
-    var updateUrl = '{{ route('stocks.update', ['stock' => ':id']) }}'.replace(':id', uniqueId);
-    
-    // Use handleEditResponse which should handle 422 errors
-    handleEditResponse(data, updateUrl, uniqueId, submitButton);
-}
 
-// ── Handle Adjustment Input with Real-time Validation ──────
-function handleAdjustmentInput(e) {
-    const input = e.target;
-    const itemId = input.dataset.itemId;
-    const overallInit = parseInt(input.dataset.overall) || 0;
-    const current = parseInt(input.dataset.current) || 0;
-    let adjust = parseInt(input.value) || 0;
+</script>
 
-    const overallEl = document.getElementById(`overallQty${itemId}`);
-    const newStockEl = document.getElementById(`newStock${itemId}`);
-    const errorEl = document.getElementById(`adjustError${itemId}`);
-    const summaryEl = document.getElementById(`adjustmentSummary${itemId}`);
-    const submitBtn = document.getElementById(`editInvAdjustButton${itemId}`);
 
-    let newStock = current;
-    let newOverall = overallInit;
+<script>
+    // ============================================================
+    // ADJUST STOCK - LIVE PREVIEW ONLY (FIXED)
+    // Uses ORIGINAL values for validation, not preview values
+    // ============================================================
 
-    // Clear previous errors
-    if (errorEl) {
-        errorEl.style.display = 'none';
-        errorEl.textContent = '';
-    }
-    input.classList.remove('is-invalid');
-    
-    // ✅ Enable submit button by default
-    if (submitBtn) submitBtn.disabled = false;
-
-    // Positive adjustment (add to branch from overall)
-    if (adjust > 0) {
-        if (adjust > overallInit) {
-            if (errorEl) {
-                errorEl.style.display = 'block';
-                errorEl.textContent = 'Cannot allocate more than available. Available: ' + overallInit;
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // ── 1. Adjustment Stock Preview ──────────────────────────
+        document.addEventListener('input', function(e) {
+            const input = e.target;
+            if (input.id && input.id.startsWith('adjustAmount')) {
+                updateAdjustmentPreview(input);
             }
-            input.classList.add('is-invalid');
-            input.value = overallInit;
-            adjust = overallInit;
-            if (submitBtn) submitBtn.disabled = true;
-            toastr['warning']('Not enough overall stock');
-        }
-        newStock = current + adjust;
-        newOverall = overallInit - adjust;
-    } 
-    // Negative adjustment (remove from branch back to overall)
-    else if (adjust < 0) {
-        const absAdjust = Math.abs(adjust);
-        if (absAdjust > current) {
-            if (errorEl) {
-                errorEl.style.display = 'block';
-                errorEl.textContent = 'Cannot remove more than allocated. Available: ' + current;
+        });
+        
+        document.addEventListener('change', function(e) {
+            const input = e.target;
+            if (input.id && input.id.startsWith('adjustAmount')) {
+                updateAdjustmentPreview(input);
             }
-            input.classList.add('is-invalid');
-            input.value = -current;
-            adjust = -current;
-            if (submitBtn) submitBtn.disabled = true;
-            toastr['warning']('Cannot remove more than allocated');
+        });
+
+        function updateAdjustmentPreview(input) {
+            const itemId = input.dataset.itemId;
+            if (!itemId) return;
+            
+            // ── IMPORTANT: Always use the ORIGINAL values from data attributes ──
+            const originalOverall = parseInt(input.dataset.overall) || 0;
+            const originalCurrent = parseInt(input.dataset.current) || 0;
+            let adjust = parseInt(input.value) || 0;
+            
+            // Get DOM elements
+            const overallEl = document.getElementById(`overallQty${itemId}`);
+            const newStockEl = document.getElementById(`newStock${itemId}`);
+            const errorEl = document.getElementById(`adjustError${itemId}`);
+            const summaryEl = document.getElementById(`adjustmentSummary${itemId}`);
+            const submitBtn = document.getElementById(`editInvAdjustButton${itemId}`);
+            const adjustErrorEl = document.getElementById(`adjustAmountError${itemId}`);
+            
+            // Reset error states
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
+            }
+            if (adjustErrorEl) {
+                adjustErrorEl.style.display = 'none';
+                adjustErrorEl.textContent = '';
+            }
+            input.classList.remove('is-invalid');
+            if (submitBtn) submitBtn.disabled = false;
+            
+            // ── VALIDATE AGAINST ORIGINAL VALUES ──
+            let isValid = true;
+            
+            if (adjust > 0 && adjust > originalOverall) {
+                // Can't allocate more than available in overall
+                const msg = `Cannot allocate more than available. Available: ${originalOverall}`;
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = msg;
+                }
+                if (adjustErrorEl) {
+                    adjustErrorEl.style.display = 'block';
+                    adjustErrorEl.textContent = msg;
+                }
+                input.classList.add('is-invalid');
+                if (submitBtn) submitBtn.disabled = true;
+                toastr?.warning(`Not enough overall stock. Available: ${originalOverall}`);
+                isValid = false;
+            } 
+            else if (adjust < 0) {
+                const absAdjust = Math.abs(adjust);
+                if (absAdjust > originalCurrent) {
+                    // Can't remove more than currently allocated
+                    const msg = `Cannot remove more than allocated. Available: ${originalCurrent}`;
+                    if (errorEl) {
+                        errorEl.style.display = 'block';
+                        errorEl.textContent = msg;
+                    }
+                    if (adjustErrorEl) {
+                        adjustErrorEl.style.display = 'block';
+                        adjustErrorEl.textContent = msg;
+                    }
+                    input.classList.add('is-invalid');
+                    if (submitBtn) submitBtn.disabled = true;
+                    toastr?.warning(`Cannot remove more than allocated. Available: ${originalCurrent}`);
+                    isValid = false;
+                }
+            }
+            
+            // ── Only calculate preview if valid ──
+            if (isValid) {
+                let newStock = originalCurrent + adjust;
+                let newOverall = originalOverall - adjust;
+                
+                // ── Update preview fields ──
+                if (newStockEl) {
+                    newStockEl.value = newStock;
+                    newStockEl.className = 'form-control text-center fs-3 fw-bold';
+                    newStockEl.classList.add(newStock < 5 ? 'text-danger' : newStock < 10 ? 'text-warning' : 'text-success');
+                }
+                
+                if (overallEl) {
+                    overallEl.value = newOverall;
+                    overallEl.className = 'form-control text-center fs-3 fw-bold';
+                    overallEl.classList.add(newOverall < 5 ? 'text-danger' : newOverall < 10 ? 'text-warning' : 'text-success');
+                }
+                
+                // ── Update summary ──
+                if (summaryEl) {
+                    if (adjust === 0) {
+                        summaryEl.textContent = 'No adjustment has been made yet';
+                        summaryEl.className = 'text-muted';
+                    } else {
+                        const direction = adjust > 0 ? 'Added to department' : 'Returned to overall';
+                        const absAdjust = Math.abs(adjust);
+                        summaryEl.innerHTML = `
+                            <span class="text-${adjust > 0 ? 'success' : 'warning'} fw-bold">
+                                ${direction}: ${absAdjust} units
+                            </span>
+                            <span class="text-muted ms-2">
+                                | Department: ${originalCurrent} → ${newStock}
+                                | Overall: ${originalOverall} → ${newOverall}
+                            </span>
+                        `;
+                        summaryEl.className = '';
+                    }
+                }
+            } else {
+                // ── If invalid, show original values (don't show invalid preview) ──
+                if (overallEl) {
+                    overallEl.value = originalOverall;
+                    overallEl.className = 'form-control text-center fs-3 fw-bold text-success';
+                }
+                if (newStockEl) {
+                    newStockEl.value = originalCurrent;
+                    newStockEl.className = 'form-control text-center fs-3 fw-bold text-warning';
+                }
+                if (summaryEl) {
+                    summaryEl.textContent = 'Please fix the validation errors above';
+                    summaryEl.className = 'text-danger';
+                }
+            }
         }
-        newStock = current + adjust;
-        newOverall = overallInit + Math.abs(adjust);
-    }
 
-    // Update preview fields
-    if (newStockEl) newStockEl.value = newStock;
-    if (overallEl) overallEl.value = newOverall;
+        // ── 2. Transfer Stock Preview ─────────────────────────────
+        document.addEventListener('input', function(e) {
+            const input = e.target;
+            if (input.id && input.id.startsWith('transferAmount')) {
+                updateTransferPreview(input);
+            }
+        });
+        
+        document.addEventListener('change', function(e) {
+            const input = e.target;
+            if (input.id && input.id.startsWith('transferAmount')) {
+                updateTransferPreview(input);
+            }
+        });
 
-    // Color code the new stock level
-    if (newStockEl) {
-        if (newStock < 5) {
-            newStockEl.className = 'form-control text-center fs-3 fw-bold text-danger';
-        } else if (newStock < 10) {
-            newStockEl.className = 'form-control text-center fs-3 fw-bold text-warning';
-        } else {
-            newStockEl.className = 'form-control text-center fs-3 fw-bold text-success';
+        function updateTransferPreview(input) {
+            const itemId = input.dataset.itemId;
+            if (!itemId) return;
+            
+            const originalCurrent = parseInt(input.dataset.current) || 0;
+            let adjust = parseInt(input.value) || 0;
+            
+            const errorEl = document.getElementById(`transferError${itemId}`);
+            const currentStockEl = document.getElementById(`currentStockTransfer${itemId}`);
+            const summaryEl = document.getElementById(`transferSummary${itemId}`);
+            const submitBtn = document.getElementById(`editInvTransferButton${itemId}`);
+            
+            // Reset error states
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
+            }
+            input.classList.remove('is-invalid');
+            if (submitBtn) submitBtn.disabled = false;
+            
+            // ── Validate against ORIGINAL value ──
+            let isValid = true;
+            
+            if (adjust > originalCurrent) {
+                const msg = `Cannot transfer more than available. Available: ${originalCurrent}`;
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = msg;
+                }
+                input.classList.add('is-invalid');
+                if (submitBtn) submitBtn.disabled = true;
+                toastr?.warning(`Cannot transfer more than available. Available: ${originalCurrent}`);
+                isValid = false;
+            }
+            
+            if (adjust < 0) {
+                const msg = 'Quantity cannot be negative';
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = msg;
+                }
+                input.classList.add('is-invalid');
+                if (submitBtn) submitBtn.disabled = true;
+                toastr?.warning('Quantity cannot be negative');
+                isValid = false;
+            }
+            
+            // ── Only calculate if valid ──
+            if (isValid) {
+                const remaining = originalCurrent - adjust;
+                
+                if (currentStockEl) {
+                    currentStockEl.value = remaining;
+                    currentStockEl.className = 'form-control text-center fs-3 fw-bold';
+                    currentStockEl.classList.add(remaining < 5 ? 'text-danger' : remaining < 10 ? 'text-warning' : 'text-success');
+                }
+                
+                if (summaryEl) {
+                    if (adjust === 0) {
+                        summaryEl.textContent = 'No transfer has been configured yet';
+                        summaryEl.className = 'text-muted';
+                    } else {
+                        summaryEl.innerHTML = `
+                            <span class="text-primary fw-bold">
+                                Transferring: ${adjust} units
+                            </span>
+                            <span class="text-muted ms-2">
+                                | Remaining at source: ${remaining} units
+                            </span>
+                        `;
+                        summaryEl.className = '';
+                    }
+                }
+            } else {
+                // ── If invalid, show original values ──
+                if (currentStockEl) {
+                    currentStockEl.value = originalCurrent;
+                    currentStockEl.className = 'form-control text-center fs-3 fw-bold text-success';
+                }
+                if (summaryEl) {
+                    summaryEl.textContent = 'Please fix the validation errors above';
+                    summaryEl.className = 'text-danger';
+                }
+            }
         }
-    }
 
-    // Update overall quantity color
-    if (overallEl) {
-        if (newOverall < 5) {
-            overallEl.className = 'form-control text-center fs-3 fw-bold text-danger';
-        } else if (newOverall < 10) {
-            overallEl.className = 'form-control text-center fs-3 fw-bold text-warning';
-        } else {
-            overallEl.className = 'form-control text-center fs-3 fw-bold text-success';
-        }
-    }
+        // ── 3. Reset modals when closed ──────────────────────────
+        document.addEventListener('hidden.bs.modal', function(e) {
+            const modalId = e.target.id;
+            
+            if (modalId && modalId.startsWith('editItem')) {
+                const itemId = modalId.replace('editItem', '');
+                const adjustInput = document.getElementById(`adjustAmount${itemId}`);
+                if (adjustInput) {
+                    // Reset to original values
+                    const originalOverall = parseInt(adjustInput.dataset.overall) || 0;
+                    const originalCurrent = parseInt(adjustInput.dataset.current) || 0;
+                    
+                    adjustInput.value = 0;
+                    adjustInput.classList.remove('is-invalid');
+                    
+                    const overallEl = document.getElementById(`overallQty${itemId}`);
+                    const newStockEl = document.getElementById(`newStock${itemId}`);
+                    const summaryEl = document.getElementById(`adjustmentSummary${itemId}`);
+                    const errorEl = document.getElementById(`adjustError${itemId}`);
+                    const adjustErrorEl = document.getElementById(`adjustAmountError${itemId}`);
+                    
+                    if (overallEl) {
+                        overallEl.value = originalOverall;
+                        overallEl.className = 'form-control text-center fs-3 fw-bold text-success';
+                    }
+                    if (newStockEl) {
+                        newStockEl.value = originalCurrent;
+                        newStockEl.className = 'form-control text-center fs-3 fw-bold text-warning';
+                    }
+                    if (summaryEl) {
+                        summaryEl.textContent = 'No adjustment has been made yet';
+                        summaryEl.className = 'text-muted';
+                    }
+                    if (errorEl) {
+                        errorEl.style.display = 'none';
+                        errorEl.textContent = '';
+                    }
+                    if (adjustErrorEl) {
+                        adjustErrorEl.style.display = 'none';
+                        adjustErrorEl.textContent = '';
+                    }
+                    
+                    const submitBtn = document.getElementById(`editInvAdjustButton${itemId}`);
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        const label = submitBtn.querySelector('.indicator-label');
+                        const progress = submitBtn.querySelector('.indicator-progress');
+                        if (label) label.style.display = 'inline-block';
+                        if (progress) progress.style.display = 'none';
+                    }
+                }
+            }
+            
+            if (modalId && modalId.startsWith('stockTransfer')) {
+                const itemId = modalId.replace('stockTransfer', '');
+                const transferInput = document.getElementById(`transferAmount${itemId}`);
+                if (transferInput) {
+                    const originalCurrent = parseInt(transferInput.dataset.current) || 0;
+                    
+                    transferInput.value = 0;
+                    transferInput.classList.remove('is-invalid');
+                    
+                    const currentStockEl = document.getElementById(`currentStockTransfer${itemId}`);
+                    const summaryEl = document.getElementById(`transferSummary${itemId}`);
+                    const errorEl = document.getElementById(`transferError${itemId}`);
+                    
+                    if (currentStockEl) {
+                        currentStockEl.value = originalCurrent;
+                        currentStockEl.className = 'form-control text-center fs-3 fw-bold text-success';
+                    }
+                    if (summaryEl) {
+                        summaryEl.textContent = 'No transfer has been configured yet';
+                        summaryEl.className = 'text-muted';
+                    }
+                    if (errorEl) {
+                        errorEl.style.display = 'none';
+                        errorEl.textContent = '';
+                    }
+                    
+                    const submitBtn = document.getElementById(`editInvTransferButton${itemId}`);
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        const label = submitBtn.querySelector('.indicator-label');
+                        const progress = submitBtn.querySelector('.indicator-progress');
+                        if (label) label.style.display = 'inline-block';
+                        if (progress) progress.style.display = 'none';
+                    }
+                }
+            }
+        });
 
-    // Update summary
-    if (summaryEl) {
-        if (adjust === 0) {
-            summaryEl.textContent = 'No adjustment has been made yet';
-            summaryEl.className = 'text-muted';
-        } else {
-            const direction = adjust > 0 ? 'Added to branch' : 'Returned to overall';
-            const absAdjust = Math.abs(adjust);
-            summaryEl.innerHTML = `
-                <span class="text-${adjust > 0 ? 'success' : 'warning'} fw-bold">
-                    ${direction}: ${absAdjust} units
-                </span>
-                <span class="text-muted ms-2">
-                    | Branch: ${current} → ${newStock}
-                    | Overall: ${overallInit} → ${newOverall}
-                </span>
-            `;
-        }
-    }
-}
-
+    });
 </script>
 
 
@@ -1197,6 +1401,8 @@ function handleAdjustmentInput(e) {
                 });
     })();
 </script>
+
+
 <script>
     function submitProductForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
         const form = document.getElementById(formId);
