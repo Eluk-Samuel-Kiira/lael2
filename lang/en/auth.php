@@ -637,6 +637,7 @@ return [
     'per_order' => 'per order',
     'permissions' => 'Permissions',
     '_transfer' => 'Transfer',
+    '_select_department' => 'Select Department',
     'permissions_direct' => 'Direct Permissions -',
     'permissions_direct_count' => 'Direct Permissions Count: ',
     'permissions_index' => 'Permissions Index',

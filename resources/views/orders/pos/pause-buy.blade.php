@@ -174,7 +174,17 @@
         if (dbg) dbg.style.display = 'none';
         g('pb-list').innerHTML = '';
 
-        fetch(PB_ENDPOINT, {
+        // ✅ Get the selected department
+        var deptFilter = document.getElementById('departmentFilter');
+        var departmentId = deptFilter ? deptFilter.value : '';
+        
+        // Build URL with department parameter
+        var url = PB_ENDPOINT;
+        if (departmentId) {
+            url += (url.includes('?') ? '&' : '?') + 'department=' + encodeURIComponent(departmentId);
+        }
+
+        fetch(url, {
             method: 'GET',
             headers: {
                 'Accept':       'application/json',
@@ -353,16 +363,28 @@
 
         var items  = order.items || [];
         var failed = 0;
+        var restored = 0;
 
         items.forEach(function (item) {
-            // ✅ Fix: Get the image URL properly with correct default
-            var imageUrl = '';
+            // ✅ Check if item has quantity available
+            var qtyAvailable = parseInt(item.quantity_available) || 0;
             
-            // Check if item has an image
+            if (qtyAvailable <= 0) {
+                // ✅ Item is out of stock in the selected department
+                failed++;
+                console.warn('[PauseBuy] Item out of stock:', item.name, 'Available:', qtyAvailable);
+                
+                // Show a warning toast for out of stock items
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning(item.name + ' is out of stock in the selected department');
+                }
+                return;
+            }
+
+            var imageUrl = '';
             if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
                 imageUrl = item.image_url;
             } else {
-                // ✅ Use the correct default product image (not user avatar)
                 imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
             }
 
@@ -371,35 +393,47 @@
                 name:               item.name || item.item_name || 'Item',
                 price:              parseFloat(item.unit_price || item.price || 0),
                 image:              imageUrl,
-                quantity_available: (item.quantity_available !== undefined) ? item.quantity_available : 9999,
+                quantity_available: qtyAvailable,
                 taxes:              Array.isArray(item.taxes)      ? item.taxes      : [],
                 promotions:         Array.isArray(item.promotions) ? item.promotions : [],
-                // ✅ Include inventory_id and department_id for multi-shop
                 inventory_id:       item.inventory_id || null,
                 department_id:      item.department_id || null
             };
 
             var targetQty = parseInt(item.quantity) || 1;
-            for (var q = 0; q < targetQty; q++) {
+            
+            // ✅ Only add if we have enough stock
+            var addQty = Math.min(targetQty, qtyAvailable);
+            
+            for (var q = 0; q < addQty; q++) {
                 if (typeof addToCart === 'function') {
                     addToCart(variant);
+                    restored++;
                 } else {
                     failed++;
                     break;
+                }
+            }
+            
+            if (targetQty > qtyAvailable) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('Only ' + qtyAvailable + ' of ' + item.name + ' available, restored ' + addQty);
                 }
             }
         });
 
         pbRestoreCustomer(order);
 
-        // ── KEY: stamp the existing order onto the global cart state ──
-        // processPayment() checks window.resumedOrderId — if set it
-        // skips creating a new order and uses this one instead.
         window.resumedOrderId     = order.id;
         window.resumedOrderNumber = order.order_number;
 
         var custLabel = order.customer_name || '{{ __("pagination.guest") }}';
-        pbShowToast('✓ ' + custLabel + ' — {{ __("pagination.cart_restored") }}');
+        
+        if (restored > 0) {
+            pbShowToast('✓ ' + restored + ' items restored from ' + custLabel + '\'s order');
+        } else if (failed > 0 && restored === 0) {
+            pbShowToast('⚠️ All items are out of stock in the selected department');
+        }
 
         if (failed > 0) console.warn('[PauseBuy] ' + failed + ' items could not be restored.');
     }
@@ -467,7 +501,15 @@
 
     // ── Silent badge update on page load ─────────────────────
     document.addEventListener('DOMContentLoaded', function () {
-        fetch(PB_ENDPOINT, {
+        var deptFilter = document.getElementById('departmentFilter');
+        var departmentId = deptFilter ? deptFilter.value : '';
+        
+        var url = PB_ENDPOINT;
+        if (departmentId) {
+            url += (url.includes('?') ? '&' : '?') + 'department=' + encodeURIComponent(departmentId);
+        }
+        
+        fetch(url, {
             headers: {
                 'Accept':       'application/json',
                 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content || '',

@@ -31,45 +31,35 @@ class POSController extends Controller
 
         $isSingleShop = tenant_is_single_shop($tenantId);
         $now = now();
-        $departmentId = $request->input('department', '');
-
-        // ✅ Get user departments (for multi-shop)
-        $user_departments = $user->departments()->get();
-
-        // ✅ Build the base query with filters
-        $productsQuery = Product::query()
+        
+        // ✅ Get the selected department from request or user's first department
+        $selectedDepartmentId = $request->input('department', '');
+        
+        // ✅ Initialize $products as empty collection
+        $products = collect();
+        
+        if ($isSingleShop) {
+            // Single shop: Get all product variants
+            $products = Product::with([
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) {
+                    $query->where('is_active', 1)->orderBy('name');
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->whereHas('variants', function($q) {
-                $q->where('is_active', 1);
-            });
+            ->whereHas('variants')
+            ->latest()
+            ->get();
 
-        // ✅ Apply department filter for multi-shop
-        if (!$isSingleShop && !empty($departmentId)) {
-            $productsQuery->whereHas('departments', function($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-
-        // ✅ IMPORTANT: Limit to only 20 products for initial load
-        $products = $productsQuery->limit(20)->get();
-
-        // ✅ Eager load relationships based on what we have
-        if ($isSingleShop) {
-            $products->load([
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function($query) {
-                    $query->where('is_active', 1)->orderBy('name');
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-            ]);
-
+            // Single shop: Use overall quantity
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
@@ -77,252 +67,68 @@ class POSController extends Controller
                     $variant->inventory_by_dept = [];
                 }
             }
+            
         } else {
-            $userDepartmentIds = $user->departments()->pluck('departments.id');
+            // ✅ Multi-shop: Get user's departments
+            $userDepartmentIds = $user->departments()->pluck('departments.id')->toArray();
             $userLocationId = $user->location_id;
-
-            $products->load([
+            
+            // ✅ If no department selected, show empty state
+            if (empty($selectedDepartmentId)) {
+                // No department selected - return empty products
+                $products = collect();
+                $user_departments = $user->departments()->get();
+                return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
+            }
+            
+            // ✅ Build base query with department filter
+            $products = Product::with([
                 'departments',
                 'taxes' => fn($q) => $q->where('is_active', 1),
                 'promotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants' => function($query) use ($userDepartmentIds, $userLocationId, $now) {
+                'variants' => function($query) use ($selectedDepartmentId, $userLocationId) {
                     $query->where('is_active', 1)
-                        ->whereHas('inventory', function($q) use ($userDepartmentIds, $userLocationId) {
-                            $q->whereIn('department_id', $userDepartmentIds)
+                        ->whereHas('inventory', function($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
                         })
-                        ->with(['inventory' => function($q) use ($userDepartmentIds, $userLocationId) {
-                            $q->whereIn('department_id', $userDepartmentIds)
+                        ->with(['inventory' => function($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
-                        }])
-                        ->with(['variantTaxes' => fn($q) => $q->where('is_active', 1)])
-                        ->with(['variantPromotions' => fn($q) => $q
-                            ->where('is_active', 1)
-                            ->where('start_date', '<=', $now)
-                            ->where('end_date', '>=', $now)
-                        ]);
+                        }]);
                 },
                 'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
                 'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-            ]);
-
-            // Attach inventory_by_dept to each variant
-            foreach ($products as $product) {
-                foreach ($product->variants as $variant) {
-                    $inventoryByDept = [];
-                    $totalQty = 0;
-                    foreach ($variant->inventory as $inv) {
-                        $inventoryByDept[$inv->department_id] = [
-                            'inventory_id' => $inv->id,
-                            'quantity' => $inv->quantity_allocated,
-                            'location_id' => $inv->location_id,
-                            'department_id' => $inv->department_id,
-                        ];
-                        $totalQty += $inv->quantity_allocated;
-                    }
-                    $variant->inventory_by_dept = $inventoryByDept;
-                    $variant->quantity_available = $totalQty;
-                    $variant->quantity_source = 'inventory_allocated';
-                }
-            }
-        }
-
-        // ✅ Compute taxes and promotions
-        foreach ($products as $product) {
-            foreach ($product->variants as $variant) {
-                /** ---------------- TAXES ---------------- */
-                if ((int)$variant->is_taxable === 0) {
-                    $variant->applicable_taxes = collect();
-                } else {
-                    $applicableTaxes = collect();
-                    
-                    if ($variant->variantTaxes->isNotEmpty()) {
-                        $applicableTaxes = $variant->variantTaxes->keyBy('id');
-                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
-                        $applicableTaxes = $product->taxes->keyBy('id');
-                    }
-
-                    $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
-                        $rate = (float) $t->rate;
-                        return [
-                            'id'   => (int)$t->id,
-                            'name' => $t->name,
-                            'rate' => $rate,
-                            'type' => $t->type,
-                        ];
-                    })->values();
-                }
-
-                /** ---------------- PROMOTIONS ---------------- */
-                $applicablePromos = collect();
-
-                if ($variant->variantPromotions->isNotEmpty()) {
-                    $applicablePromos = $variant->variantPromotions->keyBy('id');
-                } else if ($product->promotions->isNotEmpty()) {
-                    $applicablePromos = $product->promotions->keyBy('id');
-                }
-
-                $variant->applicable_promotions = $applicablePromos->map(function ($p) {
-                    $value = (float) $p->discount_value;
-                    return [
-                        'id'          => (int)$p->id,
-                        'name'        => $p->name,
-                        'type'        => $p->discount_type,
-                        'value'       => $value,
-                        'start_date'  => $p->start_date,
-                        'end_date'    => $p->end_date,
-                    ];
-                })->values();
-
-                $variant->price = $variant->price;
-                $variant->grant_total_cost_price = $variant->grant_total_cost_price;
-            }
-        }
-
-        return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop'));
-    }
-
-    /**
-     * Search products and variants for POS
-     */
-    public function search(Request $request)
-    {
-        $user = Auth::user();
-        $tenantId = $user->tenant_id;
-
-        if (!$user->hasPermissionTo('view order')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
-        }
-
-        $isSingleShop = tenant_is_single_shop($tenantId);
-        $now = now();
-        $searchTerm = $request->input('search', '');
-        $departmentId = $request->input('department', '');
-
-        // If no search term, return empty
-        if (empty($searchTerm)) {
-            return response()->json([
-                'success' => true,
-                'products' => [],
-                'has_more' => false,
-            ]);
-        }
-
-        // Build the query
-        $productsQuery = Product::query()
+            ])
             ->where('tenant_id', $tenantId)
-            ->where('is_active', 1);
-
-        // Search by product name, SKU, or variant name/SKU
-        $productsQuery->where(function($q) use ($searchTerm) {
-            $q->where('name', 'LIKE', "%{$searchTerm}%")
-            ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
-            ->orWhereHas('variants', function($vq) use ($searchTerm) {
-                $vq->where('name', 'LIKE', "%{$searchTerm}%")
-                    ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
-            });
-        });
-
-        // Apply department filter for multi-shop
-        if (!$isSingleShop && !empty($departmentId)) {
-            $productsQuery->whereHas('departments', function($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-
-        // Limit results for performance
-        $products = $productsQuery->limit(20)->get();
-
-        // If no products found via product search, try direct variant search
-        if ($products->isEmpty()) {
-            $variantIds = ProductVariant::where('is_active', 1)
-                ->where('tenant_id', $tenantId)
-                ->where(function($q) use ($searchTerm) {
-                    $q->where('name', 'LIKE', "%{$searchTerm}%")
-                    ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
-                })
-                ->pluck('product_id')
-                ->unique()
-                ->toArray();
-
-            if (!empty($variantIds)) {
-                $products = Product::whereIn('id', $variantIds)
-                    ->where('tenant_id', $tenantId)
-                    ->where('is_active', 1)
-                    ->limit(20)
-                    ->get();
-            }
-        }
-
-        // Load relationships
-        if ($isSingleShop) {
-            $products->load([
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function($query) {
-                    $query->where('is_active', 1)->orderBy('name');
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-            ]);
-
-            foreach ($products as $product) {
-                foreach ($product->variants as $variant) {
-                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
-                    $variant->quantity_source = 'overall';
-                    $variant->inventory_by_dept = [];
-                }
-            }
-        } else {
-            $userDepartmentIds = $user->departments()->pluck('departments.id');
-            $userLocationId = $user->location_id;
-
-            $products->load([
-                'departments',
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function($query) use ($userDepartmentIds, $userLocationId, $now) {
-                    $query->where('is_active', 1)
-                        ->whereHas('inventory', function($q) use ($userDepartmentIds, $userLocationId) {
-                            $q->whereIn('department_id', $userDepartmentIds)
+            ->where('is_active', 1)
+            // ✅ Product must be assigned to the selected department
+            ->whereHas('departments', function($q) use ($selectedDepartmentId) {
+                $q->where('department_id', $selectedDepartmentId);
+            })
+            // ✅ Product must have variants with inventory in the selected department
+            ->whereHas('variants', function($q) use ($selectedDepartmentId, $userLocationId) {
+                $q->where('is_active', 1)
+                    ->whereHas('inventory', function($query) use ($selectedDepartmentId, $userLocationId) {
+                        $query->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
-                        })
-                        ->with(['inventory' => function($q) use ($userDepartmentIds, $userLocationId) {
-                            $q->whereIn('department_id', $userDepartmentIds)
-                            ->where('location_id', $userLocationId);
-                        }])
-                        ->with(['variantTaxes' => fn($q) => $q->where('is_active', 1)])
-                        ->with(['variantPromotions' => fn($q) => $q
-                            ->where('is_active', 1)
-                            ->where('start_date', '<=', $now)
-                            ->where('end_date', '>=', $now)
-                        ]);
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-            ]);
+                    });
+            })
+            ->latest()
+            ->get();
 
-            // Attach inventory_by_dept to each variant
+            // ✅ Calculate quantities per department
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $inventoryByDept = [];
                     $totalQty = 0;
+                    
                     foreach ($variant->inventory as $inv) {
+                        // ✅ Group by department
                         $inventoryByDept[$inv->department_id] = [
                             'inventory_id' => $inv->id,
                             'quantity' => $inv->quantity_allocated,
@@ -331,14 +137,16 @@ class POSController extends Controller
                         ];
                         $totalQty += $inv->quantity_allocated;
                     }
+                    
                     $variant->inventory_by_dept = $inventoryByDept;
-                    $variant->quantity_available = $totalQty;
+                    // ✅ Only show quantity for the selected department
+                    $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
                     $variant->quantity_source = 'inventory_allocated';
                 }
             }
         }
 
-        // Compute taxes and promotions
+        // ✅ Compute taxes and promotions (only if products is not empty)
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
                 // Taxes
@@ -385,12 +193,228 @@ class POSController extends Controller
                     ];
                 })->values();
 
-                $variant->price = $variant->price;
-                $variant->grant_total_cost_price = $variant->grant_total_cost_price;
+                $variant->price = $variant->selling_price;
+                $variant->grant_total_cost_price = $variant->grand_total_cost_price;
             }
         }
 
-        // ✅ Return JSON response
+        $user_departments = $user->departments()->get();
+
+        return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
+    }
+
+    /**
+     * Search products and variants for POS
+     */
+    public function search(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $isSingleShop = tenant_is_single_shop($tenantId);
+        $now = now();
+        $searchTerm = $request->input('search', '');
+        $departmentId = $request->input('department', '');
+
+        // If no search term, return empty
+        if (empty($searchTerm)) {
+            return response()->json([
+                'success' => true,
+                'products' => [],
+                'has_more' => false,
+            ]);
+        }
+
+        if ($isSingleShop) {
+            // ✅ Single shop: Search by exact match or LIKE
+            $products = Product::with([
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) {
+                    $query->where('is_active', 1)->orderBy('name');
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->where(function($q) use ($searchTerm) {
+                // ✅ Exact match first, then LIKE
+                $q->where('name', $searchTerm)
+                ->orWhere('name', 'LIKE', "%{$searchTerm}%")
+                ->orWhere('sku', $searchTerm)
+                ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
+                ->orWhereHas('variants', function($vq) use ($searchTerm) {
+                    $vq->where('name', $searchTerm)
+                        ->orWhere('name', 'LIKE', "%{$searchTerm}%")
+                        ->orWhere('sku', $searchTerm)
+                        ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+                });
+            })
+            ->limit(20)
+            ->get();
+
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
+                    $variant->quantity_source = 'overall';
+                    $variant->inventory_by_dept = [];
+                }
+            }
+            
+        } else {
+            // ✅ Multi-shop: Must have department selected
+            if (empty($departmentId)) {
+                return response()->json([
+                    'success' => true,
+                    'products' => [],
+                    'has_more' => false,
+                    'message' => 'Please select a department first'
+                ]);
+            }
+
+            $userLocationId = $user->location_id;
+
+            // ✅ Search only in the selected department
+            $products = Product::with([
+                'departments',
+                'taxes' => fn($q) => $q->where('is_active', 1),
+                'promotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+                'variants' => function($query) use ($departmentId, $userLocationId) {
+                    $query->where('is_active', 1)
+                        ->whereHas('inventory', function($q) use ($departmentId, $userLocationId) {
+                            $q->where('department_id', $departmentId)
+                            ->where('location_id', $userLocationId);
+                        })
+                        ->with(['inventory' => function($q) use ($departmentId, $userLocationId) {
+                            $q->where('department_id', $departmentId)
+                            ->where('location_id', $userLocationId);
+                        }]);
+                },
+                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+                    ->where('start_date', '<=', $now)
+                    ->where('end_date', '>=', $now),
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            // ✅ Must be assigned to the selected department
+            ->whereHas('departments', function($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            })
+            // ✅ Must have variants with inventory in the department
+            ->whereHas('variants', function($q) use ($departmentId, $userLocationId) {
+                $q->where('is_active', 1)
+                    ->whereHas('inventory', function($query) use ($departmentId, $userLocationId) {
+                        $query->where('department_id', $departmentId)
+                            ->where('location_id', $userLocationId);
+                    });
+            })
+            ->where(function($q) use ($searchTerm) {
+                // ✅ Exact match first, then LIKE
+                $q->where('name', $searchTerm)
+                ->orWhere('name', 'LIKE', "%{$searchTerm}%")
+                ->orWhere('sku', $searchTerm)
+                ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
+                ->orWhereHas('variants', function($vq) use ($searchTerm) {
+                    $vq->where('name', $searchTerm)
+                        ->orWhere('name', 'LIKE', "%{$searchTerm}%")
+                        ->orWhere('sku', $searchTerm)
+                        ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+                });
+            })
+            ->limit(20)
+            ->get();
+
+            // ✅ Calculate quantities per department
+            foreach ($products as $product) {
+                foreach ($product->variants as $variant) {
+                    $inventoryByDept = [];
+                    $totalQty = 0;
+                    
+                    foreach ($variant->inventory as $inv) {
+                        $inventoryByDept[$inv->department_id] = [
+                            'inventory_id' => $inv->id,
+                            'quantity' => $inv->quantity_allocated,
+                            'location_id' => $inv->location_id,
+                            'department_id' => $inv->department_id,
+                        ];
+                        $totalQty += $inv->quantity_allocated;
+                    }
+                    
+                    $variant->inventory_by_dept = $inventoryByDept;
+                    // ✅ Only show quantity for the selected department
+                    $variant->quantity_available = $inventoryByDept[$departmentId]['quantity'] ?? 0;
+                    $variant->quantity_source = 'inventory_allocated';
+                }
+            }
+        }
+
+        // ✅ Compute taxes and promotions
+        foreach ($products as $product) {
+            foreach ($product->variants as $variant) {
+                // Taxes
+                if ((int)$variant->is_taxable === 0) {
+                    $variant->applicable_taxes = collect();
+                } else {
+                    $applicableTaxes = collect();
+                    
+                    if ($variant->variantTaxes->isNotEmpty()) {
+                        $applicableTaxes = $variant->variantTaxes->keyBy('id');
+                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+                        $applicableTaxes = $product->taxes->keyBy('id');
+                    }
+
+                    $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
+                        $rate = (float) $t->rate;
+                        return [
+                            'id'   => (int)$t->id,
+                            'name' => $t->name,
+                            'rate' => $rate,
+                            'type' => $t->type,
+                        ];
+                    })->values();
+                }
+
+                // Promotions
+                $applicablePromos = collect();
+
+                if ($variant->variantPromotions->isNotEmpty()) {
+                    $applicablePromos = $variant->variantPromotions->keyBy('id');
+                } else if ($product->promotions->isNotEmpty()) {
+                    $applicablePromos = $product->promotions->keyBy('id');
+                }
+
+                $variant->applicable_promotions = $applicablePromos->map(function ($p) {
+                    $value = (float) $p->discount_value;
+                    return [
+                        'id'          => (int)$p->id,
+                        'name'        => $p->name,
+                        'type'        => $p->discount_type,
+                        'value'       => $value,
+                        'start_date'  => $p->start_date,
+                        'end_date'    => $p->end_date,
+                    ];
+                })->values();
+
+                $variant->price = $variant->selling_price;
+                $variant->grant_total_cost_price = $variant->grand_total_cost_price;
+            }
+        }
+
         return response()->json([
             'success' => true,
             'products' => $products,

@@ -141,142 +141,154 @@ class OrderController extends Controller
 
 
         
-public function getPausedOrders(Request $request)
-{
-    \Log::info('[PauseBuy] hit');
+    public function getPausedOrders(Request $request)
+    {
+        \Log::info('[PauseBuy] hit');
 
-    try {
-        $user = Auth::user();
-        
-        // ✅ Check if user is authenticated
-        if (!$user) {
-            \Log::warning('[PauseBuy] Unauthenticated request');
-            return response()->json([
-                'orders' => [],
-                'message' => 'Unauthenticated',
-            ], 401);
-        }
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                \Log::warning('[PauseBuy] Unauthenticated request');
+                return response()->json([
+                    'orders' => [],
+                    'message' => 'Unauthenticated',
+                ], 401);
+            }
 
-        $tenantId = $user->tenant_id;
-        $locationId = $user->location_id ?? 1;
+            $tenantId = $user->tenant_id;
+            $locationId = $user->location_id ?? 1;
+            
+            // ✅ Get the selected department from request
+            $selectedDepartmentId = $request->input('department', '');
+            
+            // ✅ If no department selected, return empty (or all orders with 0 stock)
+            if (empty($selectedDepartmentId)) {
+                return response()->json([
+                    'orders' => [],
+                    'message' => 'Please select a department first',
+                ]);
+            }
 
-        $orders = Order::with(['orderItems.variant.product'])
-            ->where('tenant_id', $tenantId)
-            ->where('location_id', $locationId)
-            ->where('source', 'pos')
-            ->where('status', 'confirmed')
-            ->where('paid_amount', 0)
-            ->orderByDesc('created_at')
-            ->limit(20)
-            ->get();
+            $orders = Order::with(['orderItems.variant.product'])
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('source', 'pos')
+                ->where('status', 'confirmed')
+                ->where('paid_amount', 0)
+                ->orderByDesc('created_at')
+                ->limit(20)
+                ->get();
 
-        \Log::info('[PauseBuy] found ' . $orders->count());
+            \Log::info('[PauseBuy] found ' . $orders->count());
 
-        $result = $orders->map(function ($order) {
-            $items = $order->orderItems->map(function ($item) {
-                $variant = $item->variant;
-                $product = $variant?->product;
+            $result = $orders->map(function ($order) use ($selectedDepartmentId, $locationId) {
+                $items = $order->orderItems->map(function ($item) use ($selectedDepartmentId, $locationId) {
+                    $variant = $item->variant;
+                    $product = $variant?->product;
 
-                // Safely decode JSON blobs
-                $taxes = [];
-                if (!empty($item->tax_data)) {
-                    $decoded = is_array($item->tax_data)
-                        ? $item->tax_data
-                        : json_decode($item->tax_data, true);
-                    $taxes = is_array($decoded) ? $decoded : [];
-                }
+                    // ✅ Get inventory for this variant in the selected department
+                    $inventoryId = null;
+                    $departmentId = null;
+                    $quantityAvailable = 0;
 
-                $promotions = [];
-                if (!empty($item->promotion_data)) {
-                    $decoded = is_array($item->promotion_data)
-                        ? $item->promotion_data
-                        : json_decode($item->promotion_data, true);
-                    $promotions = is_array($decoded) ? $decoded : [];
-                }
-
-                // ✅ Extract inventory_id and department_id from inventory_data JSON
-                $inventoryId = null;
-                $departmentId = null;
-                if (!empty($item->inventory_data)) {
-                    $inventoryData = is_array($item->inventory_data)
-                        ? $item->inventory_data
-                        : json_decode($item->inventory_data, true);
-                    if (is_array($inventoryData)) {
-                        $inventoryId = $inventoryData['inventory_id'] ?? null;
-                        $departmentId = $inventoryData['department_id'] ?? null;
-                    }
-                }
-
-                // Live stock
-                $qtyAvailable = 9999;
-                if ($variant) {
-                    $qtyAvailable = (int) (
-                        $variant->quantity_available
-                        ?? $variant->overal_quantity_at_hand
-                        ?? 9999
-                    );
-                }
-
-                // Image - use product default or fallback
-                $imageUrl = asset('assets/media/stock/ecommerce/2.png');
-                if ($variant) {
-                    $raw = $variant->image_url ?? $product?->image_url ?? null;
-                    if ($raw) {
-                        try {
-                            $imageUrl = productVariantImage($raw);
-                        } catch (\Exception $e) {
-                            // Keep default
+                    if ($variant) {
+                        // ✅ Find inventory for the selected department
+                        $inventory = $variant->inventory()
+                            ->where('department_id', $selectedDepartmentId)
+                            ->where('location_id', $locationId)
+                            ->first();
+                        
+                        if ($inventory) {
+                            $inventoryId = $inventory->id;
+                            $departmentId = $inventory->department_id;
+                            $quantityAvailable = (int) $inventory->quantity_allocated;
                         }
                     }
-                }
+
+                    // ✅ If no inventory found, item is out of stock for this department
+                    if ($quantityAvailable <= 0) {
+                        // Still return the item but with quantity_available = 0
+                        // The frontend will show it as out of stock
+                    }
+
+                    // Decode JSON blobs
+                    $taxes = [];
+                    if (!empty($item->tax_data)) {
+                        $decoded = is_array($item->tax_data)
+                            ? $item->tax_data
+                            : json_decode($item->tax_data, true);
+                        $taxes = is_array($decoded) ? $decoded : [];
+                    }
+
+                    $promotions = [];
+                    if (!empty($item->promotion_data)) {
+                        $decoded = is_array($item->promotion_data)
+                            ? $item->promotion_data
+                            : json_decode($item->promotion_data, true);
+                        $promotions = is_array($decoded) ? $decoded : [];
+                    }
+
+                    // Image
+                    $imageUrl = asset('assets/media/stock/ecommerce/2.png');
+                    if ($variant) {
+                        $raw = $variant->image_url ?? $product?->image_url ?? null;
+                        if ($raw) {
+                            try {
+                                $imageUrl = productVariantImage($raw);
+                            } catch (\Exception $e) {
+                                // Keep default
+                            }
+                        }
+                    }
+
+                    return [
+                        'id'                 => $item->id,
+                        'variant_id'         => $item->variant_id,
+                        'name'               => $item->item_name,
+                        'item_name'          => $item->item_name,
+                        'sku'                => $item->sku ?? '',
+                        'unit_price'         => (float) $item->unit_price,
+                        'price'              => (float) $item->unit_price,
+                        'quantity'           => (int)   $item->quantity,
+                        'quantity_available' => $quantityAvailable, // ✅ Now from selected department
+                        'image_url'          => $imageUrl,
+                        'taxes'              => $taxes,
+                        'promotions'         => $promotions,
+                        'tax_amount'         => (float) $item->tax_amount,
+                        'discount'           => (float) $item->discount,
+                        'total'              => (float) $item->total_price,
+                        'inventory_id'       => $inventoryId,
+                        'department_id'      => $departmentId,
+                    ];
+                })->values()->toArray();
 
                 return [
-                    'id'                 => $item->id,
-                    'variant_id'         => $item->variant_id,
-                    'name'               => $item->item_name,
-                    'item_name'          => $item->item_name,
-                    'sku'                => $item->sku ?? '',
-                    'unit_price'         => (float) $item->unit_price,
-                    'price'              => (float) $item->unit_price,
-                    'quantity'           => (int)   $item->quantity,
-                    'quantity_available' => $qtyAvailable,
-                    'image_url'          => $imageUrl,
-                    'taxes'              => $taxes,
-                    'promotions'         => $promotions,
-                    'tax_amount'         => (float) $item->tax_amount,
-                    'discount'           => (float) $item->discount,
-                    'total'              => (float) $item->total_price,
-                    'inventory_id'       => $inventoryId,
-                    'department_id'      => $departmentId,
+                    'id'            => $order->id,
+                    'order_id'      => $order->id,
+                    'order_number'  => $order->order_number,
+                    'customer_id'   => $order->customer_id,
+                    'customer_name' => $order->customer_name ?? __('pagination.guest'),
+                    'subtotal'      => (float) $order->subtotal,
+                    'discount'      => (float) $order->discount_total,
+                    'tax'           => (float) $order->tax_total,
+                    'total'         => (float) $order->total,
+                    'source'        => $order->source,
+                    'created_at'    => $order->created_at?->toISOString(),
+                    'items'         => $items,
                 ];
-            })->values()->toArray();
+            });
 
-            return [
-                'id'            => $order->id,
-                'order_id'      => $order->id,
-                'order_number'  => $order->order_number,
-                'customer_id'   => $order->customer_id,
-                'customer_name' => $order->customer_name ?? __('pagination.guest'),
-                'subtotal'      => (float) $order->subtotal,
-                'discount'      => (float) $order->discount_total,
-                'tax'           => (float) $order->tax_total,
-                'total'         => (float) $order->total,
-                'source'        => $order->source,
-                'created_at'    => $order->created_at?->toISOString(),
-                'items'         => $items,
-            ];
-        });
+            return response()->json(['orders' => $result]);
 
-        return response()->json(['orders' => $result]);
-
-    } catch (\Exception $e) {
-        \Log::error('[PauseBuy] error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-        return response()->json([
-            'orders' => [],
-            'message' => __('pagination.error_loading_orders'),
-            'debug' => config('app.debug') ? $e->getMessage() : null,
-        ], 500);
+        } catch (\Exception $e) {
+            \Log::error('[PauseBuy] error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return response()->json([
+                'orders' => [],
+                'message' => __('pagination.error_loading_orders'),
+                'debug' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
-}
 
 }

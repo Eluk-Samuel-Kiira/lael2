@@ -344,7 +344,7 @@ return [
     '_options' => 'Options',
     '_available' => 'Available',
     'no_variant' => 'This Product Has No Variant',
-    'not_assigned' => 'You\'re Not Assigned Any Department Yet!!',
+    'not_assigned' => 'No product listed here yet or Select a department/store!!',
     'no_products_in_department' => 'No products found in this department',
     '_current_order' => 'Current Order',
     'clear_all' => 'Clear All',
