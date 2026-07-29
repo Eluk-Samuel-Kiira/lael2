@@ -312,6 +312,7 @@ return [
     'send_supplier_instruction' => 'Send Supplier Instructions',
     'department' => 'Department',
     'none' => 'None',
+    'select_department_to_see_products' => 'Select department to see products',
     'payment_recorded_success' => 'Payment recorded successfully:',
     'po_fully_paid' => 'Purchase Order is now fully paid.',
     'balance_remaining' => 'Balance remaining',

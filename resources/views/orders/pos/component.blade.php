@@ -108,19 +108,19 @@
                                 <div class="d-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container">
                                     @foreach ($product->variants as $variant)
                                         @php
-                                            $inventoryJson = !$isSingleShop ? json_encode($variant->inventory_by_dept ?? []) : '{}';
-                                        @endphp
-                                        <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative" 
-                                            data-name="{{ strtolower($variant->name ?? $product->name) }}"
-                                            data-product="{{ $product->id }}"
-                                            data-variant-id="{{ $variant->id }}"
-                                            data-price="{{ $variant->selling_price }}"
-                                            data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
-                                            data-taxes='@json($variant->applicable_taxes ?? [])'
-                                            data-promotions='@json($variant->applicable_promotions ?? [])'
-                                            @if(!$isSingleShop) data-inventory='{{ $inventoryJson }}' @endif
-                                            onclick="handleVariantClick(this)"
-                                            style="cursor: pointer;">
+                                        $inventoryJson = !$isSingleShop ? json_encode($variant->inventory_by_dept ?? []) : '{}';
+                                    @endphp
+                                    <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative" 
+                                        data-name="{{ strtolower($variant->name ?? $product->name) }}"
+                                        data-product="{{ $product->id }}"
+                                        data-variant-id="{{ $variant->id }}"
+                                        data-price="{{ $variant->selling_price }}"
+                                        data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
+                                        data-taxes='@json($variant->applicable_taxes ?? [])'
+                                        data-promotions='@json($variant->applicable_promotions ?? [])'
+                                        @if(!$isSingleShop) data-inventory='{{ $inventoryJson }}' @endif
+                                        onclick="handleVariantClick(this)"
+                                        style="cursor: pointer;">
 
                                             {{-- ✅ Top-left Badge for Taxes --}}
                                             @if(!empty($variant->applicable_taxes) && count($variant->applicable_taxes) > 0)
@@ -167,121 +167,6 @@
                     @endforeach
                 </div>
                 <!--end::Tab Content-->
-
-                <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const departmentFilter = document.getElementById('departmentFilter');
-                        
-                        // ✅ Function to update variant states based on department selection
-                        function updateVariantStates(selectedDept) {
-                            const variantItems = document.querySelectorAll('.variant-item');
-                            
-                            @if(!$isSingleShop)
-                                // ✅ Update variant visibility and quantities
-                                variantItems.forEach(item => {
-                                    const qtySpan = item.querySelector('.variant-qty');
-                                    const inventoryData = JSON.parse(item.dataset.inventory || '{}');
-                                    
-                                    if (selectedDept && inventoryData[selectedDept]) {
-                                        // ✅ Department selected and item has stock in this department
-                                        qtySpan.textContent = inventoryData[selectedDept].quantity + ' {{__('pagination._available')}}';
-                                        item.style.display = '';
-                                        item.style.cursor = 'pointer';
-                                        item.style.opacity = '1';
-                                        item.style.pointerEvents = 'auto';
-                                    } else if (!selectedDept) {
-                                        // ✅ No department selected - show total, but disable clicks
-                                        const total = Object.values(inventoryData).reduce((sum, inv) => sum + inv.quantity, 0);
-                                        qtySpan.textContent = total + ' {{__('pagination._available')}}';
-                                        item.style.display = '';
-                                        item.style.cursor = 'not-allowed';
-                                        item.style.opacity = '0.6';
-                                        item.style.pointerEvents = 'none';
-                                    } else {
-                                        // ✅ Department selected but item not available in this department
-                                        item.style.display = 'none';
-                                        item.style.cursor = 'not-allowed';
-                                        item.style.opacity = '0.6';
-                                        item.style.pointerEvents = 'none';
-                                    }
-                                });
-
-                                // ✅ Show/hide department warning message
-                                let warningMsg = document.querySelector('.dept-warning-message');
-                                if (!selectedDept) {
-                                    if (!warningMsg) {
-                                        const variantContainer = document.querySelector('.variant-container');
-                                        if (variantContainer) {
-                                            const warningDiv = document.createElement('div');
-                                            warningDiv.className = 'dept-warning-message text-center py-4';
-                                            warningDiv.innerHTML = `
-                                                <span class="text-warning fw-bold fs-6">
-                                                    <i class="ki-duotone ki-information fs-3 me-2"></i>
-                                                    Please select a department to start selling
-                                                </span>
-                                            `;
-                                            variantContainer.parentNode.insertBefore(warningDiv, variantContainer);
-                                        }
-                                    }
-                                } else {
-                                    if (warningMsg) warningMsg.remove();
-                                }
-                            @else
-                                // ✅ Single shop: always clickable
-                                variantItems.forEach(item => {
-                                    item.style.cursor = 'pointer';
-                                    item.style.opacity = '1';
-                                    item.style.pointerEvents = 'auto';
-                                });
-                            @endif
-                        }
-
-                        // ✅ Initial state - run on page load
-                        const initialDept = departmentFilter ? departmentFilter.value : '';
-                        updateVariantStates(initialDept);
-
-                        // ✅ Department filter change event
-                        if (departmentFilter) {
-                            departmentFilter.addEventListener('change', function() {
-                                const selectedDept = this.value;
-                                
-                                // ✅ Update variant states
-                                updateVariantStates(selectedDept);
-
-                                // ✅ Filter product pills
-                                const productItems = document.querySelectorAll('.product-item');
-                                const productList = document.getElementById('productList');
-                                let hasVisible = false;
-                                
-                                productItems.forEach(prod => {
-                                    const depts = prod.dataset.department ? prod.dataset.department.split(',') : [];
-                                    const matches = selectedDept === '' || depts.includes(selectedDept);
-                                    prod.style.display = matches ? '' : 'none';
-                                    if (matches) hasVisible = true;
-                                });
-
-                                // ✅ Remove old "no products" message
-                                const oldNoMsg = document.querySelector('.no-products-message');
-                                if (oldNoMsg) oldNoMsg.remove();
-
-                                // ✅ Show "no products" message if needed
-                                if (!hasVisible && selectedDept !== '') {
-                                    const msg = document.createElement('div');
-                                    msg.className = 'card-header pt-5 no-products-message';
-                                    msg.innerHTML = '<h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ __("pagination.no_products_in_department") }}</h3>';
-                                    if (productList) productList.appendChild(msg);
-                                }
-
-                                // ✅ If no department selected, show all products but disable variants
-                                if (selectedDept === '') {
-                                    productItems.forEach(prod => {
-                                        prod.style.display = '';
-                                    });
-                                }
-                            });
-                        }
-                    });
-                </script>
 
                 <script>
                     function filterVariants(searchTerm) {
@@ -445,16 +330,21 @@
 
                     </div>
                 </div>
-
-                {{-- ═══════════════════════════════════════════════
-                    2. SEARCH & DEPARTMENT FILTER
-                ════════════════════════════════════════════════ --}}
+                                
                 <script>
+                    // ============================================================
+                    // SEARCH FUNCTIONALITY
+                    // ============================================================
                     let searchTimeout = null;
                     let isSearching = false;
                     let searchActive = false;
+                    let originalTabContentHTML = null;
 
-                    // ✅ Search function with debounce
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const tabContent = document.getElementById('variantTabContent');
+                        if (tabContent) originalTabContentHTML = tabContent.innerHTML;
+                    });
+
                     function filterProductsAndVariants(searchTerm) {
                         if (searchTimeout) {
                             clearTimeout(searchTimeout);
@@ -470,22 +360,27 @@
                         }, 400);
                     }
 
-                    // ✅ Restore original view without page reload
                     function restoreOriginalView() {
                         searchActive = false;
-                        
-                        // Clear search result message
+
+                        // Remove search result message
                         const existingMsg = document.getElementById('productList')?.querySelector('.search-result-msg');
                         if (existingMsg) {
                             existingMsg.remove();
                         }
 
-                        // Show all original product pills
+                        // ✅ Show all product pills
                         document.querySelectorAll('.product-item').forEach(item => {
                             item.style.display = '';
                         });
 
-                        // Find the first active product pill and click it
+                        // ✅ Restore the original tab content
+                        const tabContent = document.getElementById('variantTabContent');
+                        if (tabContent && originalTabContentHTML !== null) {
+                            tabContent.innerHTML = originalTabContentHTML;
+                        }
+
+                        // ✅ Activate the first product pill
                         const firstPill = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
                         if (firstPill) {
                             if (window.bootstrap?.Tab) {
@@ -495,79 +390,38 @@
                             }
                         }
 
-                        // Restore original variant container content
-                        const variantContainer = document.querySelector('.variant-container');
-                        if (variantContainer) {
-                            // Find the original tab content
-                            const originalTabContent = document.getElementById('variantTabContent');
-                            if (originalTabContent) {
-                                variantContainer.innerHTML = '';
-                                
-                                // Find all original variant items from the DOM
-                                const allVariants = document.querySelectorAll('.variant-item');
-                                if (allVariants.length > 0) {
-                                    // If variants exist in DOM, just show them
-                                    allVariants.forEach(v => v.style.display = '');
-                                } else {
-                                    // Otherwise, re-render from originalProducts
-                                    renderOriginalProducts(@json($products));
-                                }
-                            }
-                        }
+                        // Remove no results message
+                        const noResults = document.querySelector('.no-results-message');
+                        if (noResults) noResults.remove();
 
-                        // Reset search input value
+                        // Clear search input
                         const searchInput = document.getElementById('variantSearchInput');
                         if (searchInput) {
                             searchInput.value = '';
                         }
-
-                        // Remove any no results message
-                        const noResults = document.querySelector('.no-results-message');
-                        if (noResults) noResults.remove();
                     }
 
-                    // ✅ Render original products
-                    function renderOriginalProducts(products) {
-                        const variantContainer = document.querySelector('.variant-container');
-                        if (!variantContainer) return;
-                        variantContainer.innerHTML = '';
-                        
-                        let firstProduct = true;
-                        const isSingleShop = @json($isSingleShop);
-                        
-                        products.forEach(product => {
-                            if (product.variants && product.variants.length > 0) {
-                                const tabPane = document.createElement('div');
-                                tabPane.className = `tab-pane fade ${firstProduct ? 'show active' : ''}`;
-                                tabPane.id = `kt_pos_${product.id}`;
-                                
-                                const grid = document.createElement('div');
-                                grid.className = 'd-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container';
-                                
-                                product.variants.forEach(variant => {
-                                    const card = createVariantCard(variant, product, isSingleShop);
-                                    grid.appendChild(card);
-                                });
-                                
-                                tabPane.appendChild(grid);
-                                variantContainer.appendChild(tabPane);
-                                firstProduct = false;
-                            }
-                        });
-                    }
 
-                    // ✅ Perform the actual search
                     function performSearch(searchTerm) {
                         if (isSearching) return;
                         isSearching = true;
                         searchActive = true;
 
                         const departmentId = document.getElementById('departmentFilter')?.value || '';
-                        const variantContainer = document.querySelector('.variant-container');
 
-                        // Show loading state
-                        if (variantContainer) {
-                            variantContainer.innerHTML = `
+                        @if(!$isSingleShop)
+                        if (!departmentId) {
+                            toastr.warning('Please select a department first');
+                            isSearching = false;
+                            return;
+                        }
+                        @endif
+
+                        const tabContent = document.getElementById('variantTabContent');
+
+                        // ✅ Show loading state inside tab content
+                        if (tabContent) {
+                            tabContent.innerHTML = `
                                 <div class="text-center py-10 w-100">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
@@ -582,20 +436,10 @@
                             headers: {
                                 'X-Requested-With': 'XMLHttpRequest',
                                 'Accept': 'application/json',
-                                'Content-Type': 'application/json',
                             },
                             credentials: 'same-origin'
                         })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            const contentType = response.headers.get('content-type');
-                            if (!contentType || !contentType.includes('application/json')) {
-                                throw new Error('Response is not JSON');
-                            }
-                            return response.json();
-                        })
+                        .then(response => response.json())
                         .then(data => {
                             isSearching = false;
                             if (data.success && data.products && data.products.length > 0) {
@@ -612,63 +456,179 @@
                         });
                     }
 
-                    // ✅ Render search results
                     function renderSearchResults(products, isSingleShop) {
-                        const variantContainer = document.querySelector('.variant-container');
-                        if (!variantContainer) return;
+                        const tabContent = document.getElementById('variantTabContent');
+                        if (!tabContent) return;
 
-                        variantContainer.innerHTML = '';
+                        // ✅ Clear ALL existing content first
+                        tabContent.innerHTML = '';
 
                         let hasProducts = false;
                         let firstProduct = true;
+                        const foundProductIds = new Set();
 
                         products.forEach(product => {
                             if (product.variants && product.variants.length > 0) {
                                 hasProducts = true;
-                                
+                                foundProductIds.add(product.id);
+
+                                // Create the tab pane
                                 const tabPane = document.createElement('div');
                                 tabPane.className = `tab-pane fade ${firstProduct ? 'show active' : ''}`;
                                 tabPane.id = `kt_pos_${product.id}`;
-                                
+
+                                // Create the variant container INSIDE the tab pane
                                 const grid = document.createElement('div');
                                 grid.className = 'd-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container';
-                                
+
                                 product.variants.forEach(variant => {
                                     const card = createVariantCard(variant, product, isSingleShop);
                                     grid.appendChild(card);
                                 });
-                                
+
                                 tabPane.appendChild(grid);
-                                variantContainer.appendChild(tabPane);
+                                tabContent.appendChild(tabPane);
                                 firstProduct = false;
                             }
                         });
 
                         if (!hasProducts) {
                             showNoResults('');
+                        } else {
+                            // ✅ Update product pills - hide all and show only found products
+                            updateProductPills(foundProductIds, products.length);
                         }
-
-                        updateProductPills(products);
                     }
 
-                    // ✅ Create a variant card with proper image handling
+
+                    function updateProductPills(foundProductIds, totalCount) {
+                        const productList = document.getElementById('productList');
+                        if (!productList) return;
+
+                        // Remove existing search result message
+                        const existingMsg = productList.querySelector('.search-result-msg');
+                        if (existingMsg) {
+                            existingMsg.remove();
+                        }
+
+                        // Add search result message
+                        const msg = document.createElement('li');
+                        msg.className = 'search-result-msg nav-item me-3';
+                        msg.innerHTML = `
+                            <span class="fw-bold text-primary fs-6">
+                                <i class="ki-duotone ki-search-list fs-4 me-1"></i>
+                                Search Results (${totalCount} products)
+                            </span>
+                        `;
+                        productList.prepend(msg);
+
+                        // ✅ HIDE ALL product pills first
+                        document.querySelectorAll('.product-item').forEach(item => {
+                            item.style.display = 'none';
+                        });
+
+                        // ✅ SHOW ONLY the found products
+                        if (foundProductIds && foundProductIds.size > 0) {
+                            document.querySelectorAll('.product-item').forEach(item => {
+                                const link = item.querySelector('a');
+                                if (link) {
+                                    const href = link.getAttribute('href');
+                                    const match = href ? href.match(/kt_pos_(\d+)/) : null;
+                                    if (match && foundProductIds.has(parseInt(match[1]))) {
+                                        item.style.display = '';
+                                    }
+                                }
+                            });
+
+                            // ✅ Activate the first found product tab
+                            const firstVisiblePill = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
+                            if (firstVisiblePill) {
+                                if (window.bootstrap?.Tab) {
+                                    bootstrap.Tab.getOrCreateInstance(firstVisiblePill).show();
+                                } else {
+                                    firstVisiblePill.click();
+                                }
+                            }
+                        }
+                    }
+
+                    function showNoResults(searchTerm) {
+                        const tabContent = document.getElementById('variantTabContent');
+                        if (!tabContent) return;
+
+                        // ✅ Clear the tab content and show the no results message
+                        tabContent.innerHTML = `
+                            <div class="text-center py-10 w-100 no-results-message">
+                                <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block"></i>
+                                <span class="text-gray-500 fw-semibold fs-5">
+                                    No products found for "${searchTerm || ''}"
+                                </span>
+                                <div class="mt-3">
+                                    <button class="btn btn-light-primary" onclick="restoreOriginalView()">
+                                        <i class="ki-duotone ki-arrow-left fs-4 me-1"></i>
+                                        {{ __('auth._back') }}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+
+                        const productList = document.getElementById('productList');
+                        if (productList) {
+                            const existingMsg = productList.querySelector('.search-result-msg');
+                            if (existingMsg) existingMsg.remove();
+
+                            const msg = document.createElement('li');
+                            msg.className = 'search-result-msg nav-item me-3';
+                            msg.innerHTML = `<span class="fw-bold text-danger fs-6">No results found</span>`;
+                            productList.prepend(msg);
+
+                            // ✅ Hide all product pills
+                            document.querySelectorAll('.product-item').forEach(item => {
+                                item.style.display = 'none';
+                            });
+                        }
+                    }
+
+                    // Search input handlers
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const searchInput = document.getElementById('variantSearchInput');
+                        if (searchInput) {
+                            searchInput.addEventListener('keypress', function(e) {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const searchTerm = this.value.trim();
+                                    if (searchTerm) {
+                                        performSearch(searchTerm);
+                                    } else {
+                                        restoreOriginalView();
+                                    }
+                                }
+                            });
+                            
+                            searchInput.addEventListener('input', function(e) {
+                                if (!this.value.trim()) {
+                                    restoreOriginalView();
+                                }
+                            });
+                        }
+                    });
+
+                    // ============================================================
+                    // CREATE VARIANT CARD - FULLY ENABLED (NO DISABLING)
+                    // ============================================================
                     function createVariantCard(variant, product, isSingleShop) {
                         const card = document.createElement('div');
                         card.className = 'card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative';
                         
-                        // ✅ FIX: Get the image URL using the same logic as PHP helper
                         let imageUrl = variant.image_url || product.image_url || '';
                         
-                        // If there's an image path, build the full URL
                         if (imageUrl) {
                             imageUrl = imageUrl.replace(/^\/+/, '');
                             imageUrl = '{{ asset("storage") }}/' + imageUrl;
                         } else {
-                            // ✅ Use the correct default image path (not user icon)
                             imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
                         }
                         
-                        // Set data attributes
                         card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
                         card.setAttribute('data-product', product.id);
                         card.setAttribute('data-variant-id', variant.id);
@@ -681,14 +641,13 @@
                             card.setAttribute('data-inventory', JSON.stringify(variant.inventory_by_dept || {}));
                         }
                         
+                        // ✅ ALWAYS ENABLED - No disabling logic
                         card.onclick = function() { handleVariantClick(this); };
                         card.style.cursor = 'pointer';
 
-                        // Check if variant has taxes or promotions
                         const hasTaxes = variant.applicable_taxes && variant.applicable_taxes.length > 0;
                         const hasPromos = variant.applicable_promotions && variant.applicable_promotions.length > 0;
 
-                        // Build card HTML
                         card.innerHTML = `
                             ${hasTaxes ? `
                                 <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm">
@@ -732,97 +691,9 @@
                         return card;
                     }
 
-                    // ✅ Update product pills
-                    function updateProductPills(products) {
-                        const productList = document.getElementById('productList');
-                        if (!productList) return;
-
-                        const existingMsg = productList.querySelector('.search-result-msg');
-                        if (existingMsg) {
-                            existingMsg.remove();
-                        }
-
-                        const msg = document.createElement('li');
-                        msg.className = 'search-result-msg nav-item me-3';
-                        msg.innerHTML = `
-                            <span class="fw-bold text-primary fs-6">
-                                <i class="ki-duotone ki-search-list fs-4 me-1"></i>
-                                Search Results (${products.length} products)
-                            </span>
-                        `;
-                        productList.prepend(msg);
-
-                        document.querySelectorAll('.product-item').forEach(item => {
-                            item.style.display = 'none';
-                        });
-                    }
-
-                    // ✅ Show no results message
-                    function showNoResults(searchTerm) {
-                        const variantContainer = document.querySelector('.variant-container');
-                        if (!variantContainer) return;
-                        
-                        variantContainer.innerHTML = `
-                            <div class="text-center py-10 w-100 no-results-message">
-                                <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block">
-                                    <span class="path1"></span><span class="path2"></span>
-                                </i>
-                                <span class="text-gray-500 fw-semibold fs-5">
-                                    No products found for "${searchTerm || ''}"
-                                </span>
-                                <div class="mt-3">
-                                    <button class="btn btn-light-primary" onclick="restoreOriginalView()">
-                                        <i class="ki-duotone ki-arrow-left fs-4 me-1"></i>
-                                        {{ __('auth._back') }}
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-
-                        const productList = document.getElementById('productList');
-                        if (productList) {
-                            const existingMsg = productList.querySelector('.search-result-msg');
-                            if (existingMsg) existingMsg.remove();
-                            
-                            const msg = document.createElement('li');
-                            msg.className = 'search-result-msg nav-item me-3';
-                            msg.innerHTML = `<span class="fw-bold text-danger fs-6">No results found</span>`;
-                            productList.prepend(msg);
-                            
-                            document.querySelectorAll('.product-item').forEach(item => {
-                                item.style.display = 'none';
-                            });
-                        }
-                    }
-
-                    // ✅ Handle enter key and input clearing in search input
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const searchInput = document.getElementById('variantSearchInput');
-                        if (searchInput) {
-                            searchInput.addEventListener('keypress', function(e) {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    const searchTerm = this.value.trim();
-                                    if (searchTerm) {
-                                        performSearch(searchTerm);
-                                    } else {
-                                        restoreOriginalView();
-                                    }
-                                }
-                            });
-                            
-                            // ✅ When search input is cleared, restore original view
-                            searchInput.addEventListener('input', function(e) {
-                                if (!this.value.trim()) {
-                                    restoreOriginalView();
-                                }
-                            });
-                        }
-                    });
-                </script>
-
-
-                <script>
+                    // ============================================================
+                    // CUSTOMER SELECTION
+                    // ============================================================
                     document.addEventListener('click', function (e) {
                         const btnExisting = document.getElementById('btn-pick-existing');
                         const btnNew      = document.getElementById('btn-pick-new');
@@ -845,7 +716,6 @@
                         [btnExisting, btnNew].forEach(btn => {
                             btn.classList.remove('btn-light-primary', 'border-primary');
                             btn.classList.add('btn-outline-default');
-                            // Reset icon and text color back to default
                             btn.querySelector('i').classList.remove('text-primary');
                             btn.querySelector('i').classList.add('text-muted');
                             btn.querySelector('span').classList.remove('text-primary');
@@ -856,7 +726,7 @@
                         panelExisting.classList.add('d-none');
                         panelNew.classList.add('d-none');
 
-                        // Activate selected button — Metronic pale blue = btn-light-primary + border-primary
+                        // Activate selected button
                         const activeBtn = mode === 'existing' ? btnExisting : btnNew;
                         activeBtn.classList.remove('btn-outline-default');
                         activeBtn.classList.add('btn-light-primary', 'border-primary');
@@ -932,7 +802,20 @@
     <!--end::Sidebar-->
 </div>
 
+<style>
+    /* ✅ Ensure variants are always clickable */
+    .variant-item {
+        cursor: pointer !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
 
+    /* ✅ Only show disabled state for truly out of stock items */
+    .variant-item.out-of-stock {
+        cursor: not-allowed !important;
+        opacity: 0.5 !important;
+    }
+</style>
 
 
 @include('orders.pos.pause-buy')

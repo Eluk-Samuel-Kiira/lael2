@@ -43,56 +43,46 @@
     }
 </script>
 
-{{-- ═══════════════════════════════════════════════
-     0. DEPARTMENT SELECTION CHECK
-════════════════════════════════════════════════ --}}
 <script>
-    // ✅ Check if department is selected (for multi-shop)
-    function isDepartmentSelected() {
-        @if(!$isSingleShop)
-            const deptFilter = document.getElementById('departmentFilter');
-            if (!deptFilter || !deptFilter.value) {
-                return false;
+    // ============================================================
+    // DEPARTMENT FILTER — the ONLY handler for this element. Do not
+    // add a second one anywhere else in the page; two listeners on
+    // the same <select> both calling window.location.href = ... is
+    // what caused the previous "first selection sometimes does
+    // nothing" bug — whichever listener's setup ran last could wipe
+    // out the other's binding via node cloning, mid-race, right as
+    // the user's first click tried to use it.
+    // ============================================================
+    (function() {
+        function init() {
+            const departmentFilter = document.getElementById('departmentFilter');
+            if (!departmentFilter) {
+                setTimeout(init, 100);
+                return;
             }
-            return true;
-        @else
-            return true; // Single shop doesn't need department
-        @endif
-    }
-
-    // ✅ Show department selection warning
-    function showDepartmentWarning() {
-        toastr.warning('Please select a department first');
-        // Highlight the department filter
-        const deptFilter = document.getElementById('departmentFilter');
-        if (deptFilter) {
-            deptFilter.classList.add('border-danger');
-            setTimeout(() => {
-                deptFilter.classList.remove('border-danger');
-            }, 3000);
+ 
+            departmentFilter.addEventListener('change', function() {
+                const selectedDept = this.value;
+                const url = new URL(window.location.href);
+ 
+                if (selectedDept) {
+                    url.searchParams.set('department', selectedDept);
+                } else {
+                    url.searchParams.delete('department');
+                }
+ 
+                window.location.href = url.toString();
+            });
         }
-    }
-
-    // ✅ On page load, if multi-shop, focus on department filter
-    document.addEventListener('DOMContentLoaded', function() {
-        @if(!$isSingleShop)
-            const deptFilter = document.getElementById('departmentFilter');
-            if (deptFilter) {
-                // Show a subtle hint
-                deptFilter.style.borderColor = '#ffc107';
-                setTimeout(() => {
-                    deptFilter.style.borderColor = '';
-                }, 3000);
-                
-                // Disable variant clicks until department is selected
-                document.querySelectorAll('.variant-item').forEach(item => {
-                    item.style.cursor = 'not-allowed';
-                    item.style.opacity = '0.6';
-                });
-            }
-        @endif
-    });
+ 
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
 </script>
+
 
 {{-- ═══════════════════════════════════════════════
      1. CART FUNCTIONS
@@ -119,7 +109,89 @@ function getCartItemKey(variantId, departmentId, inventoryId) {
     }
 }
 
-// ✅ Handle variant click - reads inventory data from the variant card
+
+// ============================================================
+// DEPARTMENT SELECTION HELPERS
+// ============================================================
+
+// ✅ Check if department is selected (for multi-shop)
+function isDepartmentSelected() {
+    @if(!$isSingleShop)
+        const deptFilter = document.getElementById('departmentFilter');
+        if (!deptFilter || !deptFilter.value) {
+            return false;
+        }
+        return true;
+    @else
+        return true; // Single shop doesn't need department
+    @endif
+}
+
+// ✅ Show department selection warning
+function showDepartmentWarning() {
+    if (typeof toastr !== 'undefined') {
+        toastr.warning('Please select a department first');
+    }
+    // Highlight the department filter
+    const deptFilter = document.getElementById('departmentFilter');
+    if (deptFilter) {
+        deptFilter.classList.add('border-danger');
+        setTimeout(() => {
+            deptFilter.classList.remove('border-danger');
+        }, 3000);
+    }
+}
+
+
+function addToCart(variant) {
+    // ✅ Check stock availability
+    if (variant.quantity_available <= 0) {
+        toastr['error']('{{ __("pagination.out_of_stock") }}');
+        return;
+    }
+    
+    // ✅ Generate unique key based on shop mode
+    const itemKey = getCartItemKey(variant.id, variant.department_id, variant.inventory_id);
+    
+    // ✅ Find item by composite key
+    const idx = cart.findIndex(i => i.cartKey === itemKey);
+    
+    if (idx > -1) {
+        // ✅ Check if adding one more would exceed available quantity
+        if (cart[idx].quantity < variant.quantity_available) {
+            cart[idx].quantity += 1;
+            updateCartItem(idx);
+            toastr['success']('{{ __("pagination.item_added") }}');
+        } else {
+            toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
+        }
+    } else {
+        // ✅ Only add if quantity_available > 0
+        if (variant.quantity_available > 0) {
+            const cartItem = {
+                id: variant.id,
+                cartKey: itemKey,
+                name: variant.name,
+                price: variant.price,
+                image: variant.image,
+                quantity: 1,
+                quantity_available: variant.quantity_available,
+                taxes: variant.taxes || [],
+                promotions: variant.promotions || [],
+                inventory_id: variant.inventory_id || null,
+                department_id: variant.department_id || null
+            };
+            cart.push(cartItem);
+            renderCartItem(cartItem);
+            toastr['success']('{{ __("pagination.item_added") }}');
+        } else {
+            toastr['error']('{{ __("pagination.out_of_stock") }}');
+        }
+    }
+}
+
+
+// ✅ KEEP THIS - It properly checks quantity before adding
 function handleVariantClick(el) {
     @if(!$isSingleShop)
         if (!isDepartmentSelected()) {
@@ -142,20 +214,53 @@ function handleVariantClick(el) {
     @if(!$isSingleShop)
         const selectedDept = document.getElementById('departmentFilter').value;
         const inventoryData = JSON.parse(el.dataset.inventory || '{}');
+        
+        // console.log('Selected Department:', selectedDept);
+        // console.log('Inventory Data:', inventoryData);
+        // console.log('Available departments:', Object.keys(inventoryData));
+        
         if (inventoryData[selectedDept]) {
-            quantityAvailable = inventoryData[selectedDept].quantity;
+            quantityAvailable = inventoryData[selectedDept].quantity || 0;
             inventoryId = inventoryData[selectedDept].inventory_id;
             departmentId = parseInt(selectedDept);
+            // console.log('Quantity found:', quantityAvailable);
         } else {
-            toastr.warning('This item is not available in the selected department');
-            return;
+            // ✅ Check if inventoryData has the department as string or number
+            const deptKeys = Object.keys(inventoryData);
+            const foundKey = deptKeys.find(key => parseInt(key) === parseInt(selectedDept));
+            if (foundKey !== undefined) {
+                quantityAvailable = inventoryData[foundKey].quantity || 0;
+                inventoryId = inventoryData[foundKey].inventory_id;
+                departmentId = parseInt(selectedDept);
+                // console.log('Quantity found via string conversion:', quantityAvailable);
+            } else {
+                toastr.warning('This item is not available in the selected department');
+                return;
+            }
         }
     @else
-        quantityAvailable = parseFloat(el.querySelector('.variant-qty')?.textContent || 0);
+        // ✅ For single shop, get quantity from the displayed text
+        const qtySpan = el.querySelector('.variant-qty');
+        if (qtySpan) {
+            const qtyText = qtySpan.textContent.trim();
+            const qtyMatch = qtyText.match(/(\d+)/);
+            quantityAvailable = qtyMatch ? parseInt(qtyMatch[1]) : 0;
+        }
+        // console.log('Single shop quantity:', quantityAvailable);
     @endif
 
+    // ✅ Check if quantity is available BEFORE adding to cart
     if (quantityAvailable <= 0) {
         toastr.error('{{ __("pagination.out_of_stock") }}');
+        // console.log('Out of stock! quantityAvailable:', quantityAvailable);
+        return;
+    }
+
+    // ✅ Check if item is already in cart at max quantity
+    const itemKey = getCartItemKey(variantId, departmentId, inventoryId);
+    const existingItem = cart.find(i => i.cartKey === itemKey);
+    if (existingItem && existingItem.quantity >= quantityAvailable) {
+        toastr.warning('{{ __("pagination.max_quantity_reached") }}');
         return;
     }
 
@@ -170,47 +275,6 @@ function handleVariantClick(el) {
         inventory_id: inventoryId,
         department_id: departmentId
     });
-}
-
-// ✅ Updated addToCart to handle multi-shop with composite key
-function addToCart(variant) {
-    if (variant.quantity_available <= 0) {
-        toastr['error']('{{ __("pagination.out_of_stock") }}');
-        return;
-    }
-    
-    // ✅ Generate unique key based on shop mode
-    const itemKey = getCartItemKey(variant.id, variant.department_id, variant.inventory_id);
-    
-    // ✅ Find item by composite key
-    const idx = cart.findIndex(i => i.cartKey === itemKey);
-    
-    if (idx > -1) {
-        if (cart[idx].quantity < variant.quantity_available) {
-            cart[idx].quantity += 1;
-            updateCartItem(idx);
-            toastr['success']('{{ __("pagination.item_added") }}');
-        } else {
-            toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
-        }
-    } else {
-        const cartItem = {
-            id: variant.id,
-            cartKey: itemKey, // ✅ Store the composite key
-            name: variant.name,
-            price: variant.price,
-            image: variant.image,
-            quantity: 1,
-            quantity_available: variant.quantity_available,
-            taxes: variant.taxes || [],
-            promotions: variant.promotions || [],
-            inventory_id: variant.inventory_id || null,
-            department_id: variant.department_id || null
-        };
-        cart.push(cartItem);
-        renderCartItem(cartItem);
-        toastr['success']('{{ __("pagination.item_added") }}');
-    }
 }
 
 function renderCartItem(item) {
@@ -1025,10 +1089,10 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
             })),
         };
 
-        console.log('[POS] processSplitPayments payload:', JSON.stringify({
-            order_id: payload.order_id, order_total: currentOrder.total,
-            total_applied: totalApplied, cart_updated: payload.cart_updated, payment_count: payload.payments.length,
-        }));
+        // console.log('[POS] processSplitPayments payload:', JSON.stringify({
+        //     order_id: payload.order_id, order_total: currentOrder.total,
+        //     total_applied: totalApplied, cart_updated: payload.cart_updated, payment_count: payload.payments.length,
+        // }));
 
         fetch('/orders/process-split-payment', {
             method:'POST',

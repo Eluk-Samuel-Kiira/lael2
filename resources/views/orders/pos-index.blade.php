@@ -48,7 +48,21 @@
                     <h3 class="fw-bold text-gray-800 fs-6 mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
                 </div>
 
-                {{-- Search --}}
+                {{-- Department Filter --}}
+                @if(!tenant_is_single_shop(auth()->user()->tenant_id))
+                <div class="flex-shrink-0 w-100 w-md-auto">
+                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter" style="height: 42px;">
+                        <option value="">{{ __('auth._select_department') }}</option>
+                        @foreach ($user_departments as $department)
+                            <option value="{{ $department->id }}" {{ $selectedDepartmentId == $department->id ? 'selected' : '' }}>
+                                {{ ucwords($department->name) }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+
+                {{-- Search Input --}}
                 <div class="input-group input-group-solid flex-grow-1 w-100 w-md-auto" style="min-width: 0;">
                     <span class="input-group-text bg-body border-0">
                         <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
@@ -60,18 +74,6 @@
                         onkeyup="filterProductsAndVariants(this.value)"
                         style="height: 42px;">
                 </div>
-
-                {{-- Department Filter --}}
-                @if(!tenant_is_single_shop(auth()->user()->tenant_id))
-                <div class="flex-shrink-0 w-100 w-md-auto">
-                    <select class="form-select form-select-solid fw-bold w-100" id="departmentFilter" style="height: 42px;">
-                        <option value="">{{ __('auth._department') }}</option>
-                        @foreach ($user_departments as $department)
-                            <option value="{{ $department->id }}">{{ ucwords($department->name) }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                @endif
 
             </div>
         </div>
