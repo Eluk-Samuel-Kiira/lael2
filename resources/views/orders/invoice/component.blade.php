@@ -157,19 +157,17 @@
                                             <i class="bi bi-eye fs-5"></i>
                                         </button>
                                     @endcan
-                                    {{--
                                     @can('edit invoice')
-                                        @if($invoice->status === 'draft')
-                                            <button 
-                                                class="btn btn-sm btn-icon btn-light-primary" 
+                                        @if($invoice->isDraft())
+                                            <button type="button" 
+                                                class="btn btn-sm btn-icon btn-light-warning" 
                                                 data-bs-toggle="modal"
-                                                data-bs-target="#editInvoiceModal{{ $invoice->id }}"
-                                                data-bs-toggle="tooltip" title="{{ __('payments.edit_invoice') }}">
-                                                <i class="bi bi-pencil-square fs-5"></i>
+                                                data-bs-target="#discountInvoiceModal{{ $invoice->id }}"
+                                                data-bs-toggle="tooltip" title="{{ __('payments.apply_discount') }}">
+                                                <i class="bi bi-percent fs-5"></i>
                                             </button>
                                         @endif
                                     @endcan
-                                    --}}
                                     @can('send invoice')
                                         @if($invoice->status !== 'void' && $invoice->status !== 'paid')
                                             <button 

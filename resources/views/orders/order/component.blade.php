@@ -391,12 +391,37 @@
 @foreach ($orders as $order)
     @php $payments = $order->orderPayments; @endphp
     <div id="printableOrder{{ $order->id }}" style="display:none;">
-        <div class="invoice-header">
-            <div class="header-content">
-                <div class="invoice-title">{{ __('passwords.order_invoice') }}</div>
-                <div class="invoice-subtitle">Order #{{ $order->order_number }}</div>
+       <div class="invoice-header" style="display: flex; align-items: center; justify-content: space-between; padding: 25px 30px; background: linear-gradient(135deg, #009ef7 0%, #0095e8 100%); color: #fff; position: relative; overflow: hidden;">
+    {{-- Decorative circle --}}
+    <div style="position: absolute; top: -50%; right: -10%; width: 400px; height: 400px; background: rgba(255,255,255,0.08); border-radius: 50%;"></div>
+    
+    <div class="header-content" style="display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; z-index: 1;">
+        
+        {{-- LEFT: Logo + Store Name --}}
+        <div class="header-left" style="display: flex; align-items: center; gap: 16px;">
+            <div style="background: rgba(255,255,255,0.2); border-radius: 10px; padding: 8px 12px; display: flex; align-items: center; justify-content: center;">
+                <img 
+                    alt="Logo" 
+                    src="{{ getLogoImage() }}"
+                    class="logo-img" 
+                    style="max-height: 44px; width: auto; object-fit: contain; filter: brightness(0) invert(1);"
+                />
+            </div>
+            <div>
+                <div class="rcpt-store-name" style="font-size: 20px; font-weight: 700; line-height: 1.2;">{{ getUIOptions('app_name') }}</div>
+                <!-- <div class="store-tagline" style="font-size: 12px; opacity: 0.8;">{{ __('passwords.store') }}</div> -->
             </div>
         </div>
+        
+        {{-- RIGHT: Invoice Title + Order Number --}}
+        <div class="header-right" style="text-align: right;">
+            <div class="invoice-title" style="font-size: 28px; font-weight: 700; line-height: 1.2;">{{ __('passwords.order_invoice') }}</div>
+            <div class="invoice-subtitle" style="font-size: 16px; font-weight: 500; opacity: 0.9; margin-top: 2px;">Order #{{ $order->order_number }}</div>
+            <div class="invoice-date" style="font-size: 12px; opacity: 0.7; margin-top: 4px;">{{ now()->format('d M Y, h:i A') }}</div>
+        </div>
+        
+    </div>
+</div>
         <div class="invoice-body">
             <div class="info-grid">
                 <div class="info-card">

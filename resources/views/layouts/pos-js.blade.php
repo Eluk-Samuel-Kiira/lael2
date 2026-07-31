@@ -1342,4 +1342,143 @@ function formatPaymentType(type) {
         // - Everything!
     }
 
+    // ── Discount Preview ───────────────────────────────────────────
+    function calculateDiscountPreview(invoiceId) {
+        const discountInput = document.getElementById(`discountAmount${invoiceId}`);
+        const previewDiscount = document.getElementById(`previewDiscount${invoiceId}`);
+        const previewTotal = document.getElementById(`previewTotal${invoiceId}`);
+        
+        if (!discountInput) return;
+        
+        const subtotal = parseFloat(document.getElementById(`displaySubtotal${invoiceId}`).textContent.replace(/,/g, '')) || 0;
+        const tax = parseFloat(document.getElementById(`displayTax${invoiceId}`).textContent.replace(/,/g, '')) || 0;
+        const discount = parseFloat(discountInput.value) || 0;
+        
+        // Ensure discount doesn't exceed subtotal
+        const maxDiscount = subtotal;
+        let validDiscount = discount;
+        
+        if (discount > maxDiscount) {
+            validDiscount = maxDiscount;
+            discountInput.value = maxDiscount.toFixed(2);
+            toastr.warning('{{ __("payments.discount_exceeds_subtotal") }}');
+        }
+        
+        const newTotal = subtotal - validDiscount + tax;
+        
+        previewDiscount.textContent = validDiscount.toFixed(2);
+        previewTotal.textContent = newTotal.toFixed(2);
+        
+        // Update max discount display
+        document.getElementById(`maxDiscount${invoiceId}`).textContent = maxDiscount.toFixed(2);
+    }
+
+    // ── Apply Discount ─────────────────────────────────────────────
+    function applyInvoiceDiscount(invoiceId) {
+        const submitButton = document.getElementById(`discountInvoiceButton${invoiceId}`);
+        const form = document.getElementById(`discountInvoiceForm${invoiceId}`);
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Validate
+        const discountAmount = parseFloat(data.discount_amount);
+        const subtotal = parseFloat(document.getElementById(`displaySubtotal${invoiceId}`).textContent.replace(/,/g, '')) || 0;
+        
+        if (isNaN(discountAmount) || discountAmount < 0) {
+            toastr.error('{{ __("payments.enter_valid_discount") }}');
+            return;
+        }
+        
+        if (discountAmount === 0) {
+            toastr.warning('{{ __("payments.discount_cannot_be_zero") }}');
+            return;
+        }
+        
+        if (discountAmount > subtotal) {
+            toastr.error('{{ __("payments.discount_exceeds_subtotal") }}');
+            return;
+        }
+        
+        const label = submitButton.querySelector('.indicator-label');
+        const progress = submitButton.querySelector('.indicator-progress');
+        
+        submitButton.disabled = true;
+        if (label) label.style.display = 'none';
+        if (progress) progress.style.display = 'inline-flex';
+        
+        fetch(`/invoices/${invoiceId}/apply-discount`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({
+                discount_amount: discountAmount,
+                discount_notes: data.discount_notes || null,
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            submitButton.disabled = false;
+            if (label) label.style.display = 'inline-flex';
+            if (progress) progress.style.display = 'none';
+            
+            if (data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById(`discountInvoiceModal${invoiceId}`));
+                if (modal) modal.hide();
+                
+                toastr.success(data.message);
+                
+                // Reload the component
+                if (typeof LiveBlade !== 'undefined') {
+                    LiveBlade.reloadComponent('reloadInvoiceComponent');
+                } else {
+                    location.reload();
+                }
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(() => {
+            submitButton.disabled = false;
+            if (label) label.style.display = 'inline-flex';
+            if (progress) progress.style.display = 'none';
+            toastr.error('{{ __("payments.discount_apply_failed") }}');
+        });
+    }
+
+    // ── Remove Discount ────────────────────────────────────────────
+    function removeDiscount(invoiceId) {
+        if (!confirm('{{ __("payments.confirm_remove_discount") }}')) return;
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById(`discountInvoiceModal${invoiceId}`));
+        
+        fetch(`/invoices/${invoiceId}/remove-discount`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (modal) modal.hide();
+                toastr.success(data.message);
+                if (typeof LiveBlade !== 'undefined') {
+                    LiveBlade.reloadComponent('reloadInvoiceComponent');
+                } else {
+                    location.reload();
+                }
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(() => {
+            toastr.error('{{ __("payments.discount_remove_failed") }}');
+        });
+    }
+
 </script>

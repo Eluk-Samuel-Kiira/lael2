@@ -75,6 +75,8 @@ class Invoice extends Model
         'currency',
         'subtotal',
         'discount_total',
+        'discount_amount',
+        'discount_notes',
         'tax_total',
         'total',
         'amount_paid',
@@ -91,18 +93,19 @@ class Invoice extends Model
     ];
 
     protected $casts = [
+        'subtotal' => 'integer',
+        'discount_total' => 'integer',
+        'discount_amount' => 'integer',
+        'tax_total' => 'integer',
+        'total' => 'integer',
+        'amount_paid' => 'integer',
+        'balance_due' => 'integer',
         'issue_date' => 'date',
         'due_date' => 'date',
         'sent_at' => 'datetime',
         'viewed_at' => 'datetime',
         'paid_at' => 'datetime',
         'voided_at' => 'datetime',
-        'subtotal' => 'integer',
-        'discount_total' => 'integer',
-        'tax_total' => 'integer',
-        'total' => 'integer',
-        'amount_paid' => 'integer',
-        'balance_due' => 'integer',
     ];
 
     // ============================================================
@@ -111,6 +114,11 @@ class Invoice extends Model
     public function getSubtotalAttribute(?int $value): ?float
     {
         return from_base_currency($value);
+    }
+
+    public function getDiscountAmountAttribute($value): ?float
+    {
+        return $value !== null ? from_base_currency($value) : 0;
     }
 
     public function getDiscountTotalAttribute(?int $value): ?float
@@ -166,6 +174,11 @@ class Invoice extends Model
     public function setBalanceDueAttribute($value): void
     {
         $this->attributes['balance_due'] = to_base_currency($value);
+    }
+
+    public function setDiscountAmountAttribute($value): void
+    {
+        $this->attributes['discount_amount'] = $value !== null ? to_base_currency($value) : 0;
     }
 
     // ============================================================
@@ -426,6 +439,46 @@ class Invoice extends Model
     }
 
     /**
+     * Apply flat discount to invoice
+     */
+    public function applyDiscount($amount, $notes = null)
+    {
+        if ($amount <= 0) {
+            return false;
+        }
+
+        // Ensure discount doesn't exceed subtotal
+        $subtotal = $this->subtotal;
+        if ($amount > $subtotal) {
+            $amount = $subtotal;
+        }
+
+        $this->discount_amount = $amount;
+        $this->discount_total = $amount;
+        $this->discount_notes = $notes;
+        
+        // Calculate new total
+        $this->total = $this->subtotal - $amount + $this->tax_total;
+        $this->balance_due = $this->total - $this->amount_paid;
+        
+        return $this->save();
+    }
+
+    /**
+     * Remove discount
+     */
+    public function removeDiscount()
+    {
+        $this->discount_amount = 0;
+        $this->discount_notes = null;
+        $this->discount_total = 0;
+        $this->total = $this->subtotal + $this->tax_total;
+        $this->balance_due = $this->total - $this->amount_paid;
+        
+        return $this->save();
+    }
+
+    /**
      * Get the public view URL
      */
     public function getPublicUrlAttribute(): string
@@ -442,6 +495,7 @@ class Invoice extends Model
     {
         return self::STATUS_COLORS[$this->status] ?? 'secondary';
     }
+
 
     public function getStatusIconAttribute(): string
     {

@@ -830,12 +830,37 @@
             <div id="receipt-print-area" style="background:#ffffff;">
                 <div id="receipt-paper">
 
-                    {{-- Store Header --}}
-                    <div class="rcpt-store-name">{{ getUIOptions('app_name') }}</div>
-                    <div class="rcpt-store-tagline">{{ __('pagination.receipt_tagline') }}</div>
-                    <div class="rcpt-store-address">
-                        {{ getUIOptions('app_email') }}<br>
-                        {{ getUIOptions('app_contact') }}
+                    {{-- ── HEADER: Logo + Store Info (Left/Right Layout) ── --}}
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid #e4e6ef;">
+                        
+                        {{-- LEFT: Logo + Store Name --}}
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img 
+                                alt="Logo" 
+                                src="{{ getLogoImage() }}"
+                                style="max-height: 38px; width: auto; object-fit: contain;"
+                            />
+                            <div>
+                                <div class="rcpt-store-name" style="font-size: 16px; font-weight: 700; color: #181c32; line-height: 1.2; margin: 0;">{{ getUIOptions('app_name') }}</div>
+                            </div>
+                        </div>
+                        
+                    </div>
+
+                    {{-- Store Contact & Tagline --}}
+                    <div style="text-align: center; font-size: 10px; color: #7e8299; margin-bottom: 6px; line-height: 1.3;">
+                    
+                        <div style="text-align: center;">
+                            <div style="font-size: 14px; font-weight: 700; color: #009ef7; text-transform: uppercase; letter-spacing: 1px;">{{ __('pagination.receipt') }}</div>
+                            <div style="font-size: 9px; color: #7e8299;">#<span id="rcpt-order-no">—</span></div>
+                        </div>
+                    </div>
+                    {{-- Store Contact & Tagline --}}
+                    <div style="text-align: center; font-size: 10px; color: #7e8299; margin-bottom: 6px; line-height: 1.3;">
+                        <span class="rcpt-store-tagline" style="font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">{{ __('pagination.receipt_tagline') }}</span>
+                        <span class="rcpt-store-address">
+                            {{ getUIOptions('app_email') }} | {{ getUIOptions('app_contact') }}
+                        </span>
                     </div>
 
                     <div class="rcpt-divider-solid"></div>
@@ -939,7 +964,7 @@
                     <div class="rcpt-thankyou">{{ __('pagination.thank_you') }}</div>
                     <div class="rcpt-survey">
                         {{ __('pagination.receipt_footer_message') }}<br>
-                        <span style="color: var(--bs-primary);">{{ __('stardena.com') }}</span>
+                        <span style="color: var(--bs-primary);">{{ __('By Stardena') }}</span>
                     </div>
 
                     {{-- Barcode --}}
@@ -949,7 +974,6 @@
 
                 </div>{{-- /receipt-paper --}}
             </div>{{-- /receipt-print-area --}}
-
         </div>
     </div>
 </div>

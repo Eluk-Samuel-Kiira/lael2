@@ -591,3 +591,131 @@
         </div>
     </div>
 </div>
+
+{{-- ── DISCOUNT INVOICE MODAL ───────────────────────────────── --}}
+<div class="modal fade" id="discountInvoiceModal{{ $invoice->id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark fw-bold mb-0">
+                    <i class="bi bi-percent me-2"></i>
+                    {{ __('payments.apply_discount') }} — {{ $invoice->invoice_number }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="discountInvoiceForm{{ $invoice->id }}">
+                <div class="modal-body">
+
+                    {{-- Current Invoice Summary --}}
+                    <div class="row g-3 mb-4">
+                        <div class="col-4">
+                            <div class="bg-light-primary rounded-3 p-3 text-center">
+                                <div class="fs-7 text-muted fw-semibold">{{ __('payments.subtotal') }}</div>
+                                <div class="fs-4 fw-bold text-primary">{{ currency_symbol() }} <span id="displaySubtotal{{ $invoice->id }}">{{ number_format($invoice->subtotal, 2) }}</span></div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light-info rounded-3 p-3 text-center">
+                                <div class="fs-7 text-muted fw-semibold">{{ __('payments.tax') }}</div>
+                                <div class="fs-4 fw-bold text-info">{{ currency_symbol() }} <span id="displayTax{{ $invoice->id }}">{{ number_format($invoice->tax_total, 2) }}</span></div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light-success rounded-3 p-3 text-center">
+                                <div class="fs-7 text-muted fw-semibold">{{ __('payments.total') }}</div>
+                                <div class="fs-4 fw-bold text-success">{{ currency_symbol() }} <span id="displayTotal{{ $invoice->id }}">{{ number_format($invoice->total, 2) }}</span></div>
+                            </div>
+                        </div>
+                        @if($invoice->discount_total > 0)
+                        <div class="col-12">
+                            <div class="bg-light-warning rounded-3 p-2 text-center">
+                                <span class="fs-7 fw-semibold text-warning">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    {{ __('payments.current_discount') }}: {{ currency_symbol() }} {{ number_format($invoice->discount_total, 2) }}
+                                    @if($invoice->discount_amount)
+                                        ({{ currency_symbol() }} {{ number_format($invoice->discount_amount, 2) }})
+                                    @endif
+                                </span>
+                            </div>
+                        </div>
+                        @endif
+                    </div>
+
+                    {{-- Discount Input --}}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold required">{{ __('payments.discount_amount') }}</label>
+                        <div class="input-group">
+                            <span class="input-group-text">{{ currency_symbol() }}</span>
+                            <input type="number" step="0.01" min="0"
+                                   name="discount_amount" class="form-control"
+                                   id="discountAmount{{ $invoice->id }}"
+                                   value="{{ $invoice->discount_amount ?? 0 }}"
+                                   oninput="calculateDiscountPreview({{ $invoice->id }})"
+                                   placeholder="0.00"
+                                   required>
+                        </div>
+                        <div class="form-text">
+                            {{ __('payments.discount_amount_hint') }}
+                            <span class="text-muted">({{ __('payments.max_discount') }}: {{ currency_symbol() }} <span id="maxDiscount{{ $invoice->id }}">{{ number_format($invoice->subtotal, 2) }}</span>)</span>
+                        </div>
+                    </div>
+
+                    {{-- Discount Preview --}}
+                    <div class="bg-light p-3 rounded-3 mb-4" id="discountPreview{{ $invoice->id }}">
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <span class="text-muted fs-7">{{ __('payments.subtotal') }}</span>
+                                <div class="fw-bold">{{ currency_symbol() }} <span id="previewSubtotal{{ $invoice->id }}">{{ number_format($invoice->subtotal, 2) }}</span></div>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-muted fs-7">{{ __('payments.discount') }}</span>
+                                <div class="fw-bold text-danger">-{{ currency_symbol() }} <span id="previewDiscount{{ $invoice->id }}">0.00</span></div>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-muted fs-7">{{ __('payments.new_total') }}</span>
+                                <div class="fw-bold text-success fs-5">{{ currency_symbol() }} <span id="previewTotal{{ $invoice->id }}">{{ number_format($invoice->total, 2) }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Discount Notes --}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            {{ __('payments.discount_notes') }}
+                            <span class="text-muted fw-normal">({{ __('payments.optional') }})</span>
+                        </label>
+                        <textarea name="discount_notes" class="form-control" rows="2"
+                                  placeholder="{{ __('payments.enter_discount_reason') }}">{{ $invoice->discount_notes ?? '' }}</textarea>
+                    </div>
+
+                    @if($invoice->discount_total > 0)
+                    <div class="alert alert-warning d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle fs-3 me-3 text-warning"></i>
+                        <div class="fs-7">
+                            <strong>{{ __('payments.discount_already_applied') }}</strong>
+                            <span class="d-block text-muted">{{ __('payments.applying_new_discount_will_replace') }}</span>
+                        </div>
+                    </div>
+                    @endif
+
+                </div>
+                <div class="modal-footer">
+                    @if($invoice->discount_total > 0)
+                    <button type="button" class="btn btn-danger me-auto" 
+                            onclick="removeDiscount({{ $invoice->id }})">
+                        <i class="bi bi-x-circle me-1"></i>{{ __('payments.remove_discount') }}
+                    </button>
+                    @endif
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('payments.cancel') }}</button>
+                    <button type="button" id="discountInvoiceButton{{ $invoice->id }}" class="btn btn-warning"
+                            onclick="applyInvoiceDiscount({{ $invoice->id }})">
+                        <span class="indicator-label"><i class="bi bi-check-circle me-1"></i>{{ __('payments.apply_discount') }}</span>
+                        <span class="indicator-progress">
+                            {{ __('payments.processing') }} <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

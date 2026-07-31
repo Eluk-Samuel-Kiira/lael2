@@ -1621,6 +1621,147 @@
     }
  </script>
 
+ <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('kt_modal_bulk_allocate');
+    if (!modal) return;
+
+    const productSearch     = modal.querySelector('#batch_product_search');
+    const deptSearch        = modal.querySelector('#batch_department_search');
+    const selectAllProducts = modal.querySelector('#select_all_products');
+    const summary           = modal.querySelector('#batch_summary');
+    const submitBtn         = modal.querySelector('#batchSubmitButton');
+    const form              = modal.querySelector('#kt_modal_bulk_allocate_form');
+    const productIdsInput   = modal.querySelector('#bulkProductIds');
+
+    function updateSummary() {
+        const pCount = modal.querySelectorAll('.product-checkbox:checked').length;
+        const dCount = modal.querySelectorAll('.dept-checkbox:checked').length;
+        summary.textContent = `${pCount} {{ __('pagination.products') }} × ${dCount} {{ __('auth._department') }} = ${pCount * dCount} {{ __('pagination.assignments') }}`;
+        submitBtn.disabled = (pCount === 0 || dCount === 0);
+        
+        // Update selected count badge
+        const countBadge = document.getElementById('selectedProductsCount');
+        if (countBadge) {
+            countBadge.textContent = pCount;
+        }
+        
+        // Update hidden input
+        const productIds = Array.from(modal.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
+        if (productIdsInput) {
+            productIdsInput.value = productIds.join(',');
+        }
+    }
+
+    modal.addEventListener('change', function (e) {
+        if (e.target.classList.contains('product-checkbox') || e.target.classList.contains('dept-checkbox')) {
+            updateSummary();
+        }
+
+        if (e.target.classList.contains('select-location')) {
+            const locId = e.target.dataset.location;
+            modal.querySelectorAll(`.dept-row[data-location="${locId}"]`).forEach(row => {
+                if (row.style.display !== 'none') {
+                    row.querySelector('.dept-checkbox').checked = e.target.checked;
+                }
+            });
+            updateSummary();
+        }
+    });
+
+    selectAllProducts.addEventListener('change', function () {
+        modal.querySelectorAll('.product-row').forEach(row => {
+            if (row.style.display !== 'none') {
+                row.querySelector('.product-checkbox').checked = selectAllProducts.checked;
+            }
+        });
+        updateSummary();
+    });
+
+    productSearch.addEventListener('input', function () {
+        const term = this.value.toLowerCase();
+        modal.querySelectorAll('.product-row').forEach(row => {
+            row.style.display = row.dataset.search.includes(term) ? '' : 'none';
+        });
+    });
+
+    deptSearch.addEventListener('input', function () {
+        const term = this.value.toLowerCase();
+        modal.querySelectorAll('.dept-row').forEach(row => {
+            row.style.display = row.dataset.search.includes(term) ? '' : 'none';
+        });
+    });
+
+    // ── Form Submit ────────────────────────────────────────────
+    submitBtn.addEventListener('click', function () {
+        const productIds = Array.from(modal.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
+        const departmentIds = Array.from(modal.querySelectorAll('.dept-checkbox:checked')).map(cb => cb.value);
+
+        if (!productIds.length || !departmentIds.length) return;
+
+        const label    = submitBtn.querySelector('.indicator-label');
+        const progress = submitBtn.querySelector('.indicator-progress');
+
+        submitBtn.disabled = true;
+        if (label) label.style.display = 'none';
+        if (progress) progress.style.display = 'inline-flex';
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: JSON.stringify({ 
+                product_ids: productIds, 
+                departments: departmentIds 
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            submitBtn.disabled = false;
+            if (label) label.style.display = 'inline-flex';
+            if (progress) progress.style.display = 'none';
+
+            if (data.success) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) modalInstance.hide();
+
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(data.message);
+                } else {
+                    alert(data.message);
+                }
+
+                if (data.componentId && typeof LiveBlade !== 'undefined') {
+                    LiveBlade.reloadComponent(data.componentId);
+                } else {
+                    location.reload();
+                }
+            } else {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(data.message);
+                } else {
+                    alert(data.message);
+                }
+            }
+        })
+        .catch(() => {
+            submitBtn.disabled = false;
+            if (label) label.style.display = 'inline-flex';
+            if (progress) progress.style.display = 'none';
+            
+            if (typeof toastr !== 'undefined') {
+                toastr.error('{{ __("pagination.bulk_allocation_failed") }}');
+            } else {
+                alert('{{ __("pagination.bulk_allocation_failed") }}');
+            }
+        });
+    });
+});
+</script>
+
 
 
 <!-- Roles -->

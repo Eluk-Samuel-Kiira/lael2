@@ -13,6 +13,7 @@ use App\Models\Category;
 use App\Models\ProductCategory;
 use App\Models\UnitOfMeasure;
 use App\Models\ProductVariant;
+use App\Models\Product;
 use App\Models\Currency;
 use App\Models\Location;
 use App\Models\Customer;
@@ -82,6 +83,7 @@ class AppServiceProvider extends ServiceProvider
                     'sub_categories' => ProductCategory::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'uoms' => UnitOfMeasure::where('tenant_id', $tenantId)->where('isActive', 1)->get(),
                     'variants' => ProductVariant::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
+                    'products_allocate' => Product::with('variants')->where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'currencies' => Currency::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'locations' => Location::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'customers' => Customer::where('tenant_id', $tenantId)->where('is_active', 1)->get(),

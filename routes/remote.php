@@ -47,6 +47,9 @@ Route::prefix('invoices')->name('invoices.')->group(function () {
     Route::post('/{id}/void', [InvoiceController::class, 'void'])->name('void');
     Route::get('/{id}/pdf', [InvoiceController::class, 'generatePdf'])->name('pdf');
     Route::post('/{id}/record-payment', [InvoiceController::class, 'recordPayment'])->name('record-payment');
+    
+    Route::post('/{id}/apply-discount', [InvoiceController::class, 'applyDiscount'])->name('apply-discount');
+    Route::post('/{id}/remove-discount', [InvoiceController::class, 'removeDiscount'])->name('remove-discount');
 });
 
 
