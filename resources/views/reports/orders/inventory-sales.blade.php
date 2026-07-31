@@ -8,7 +8,10 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                
+                {{-- ============================================================ --}}
+                {{-- TOOLBAR SECTION --}}
+                {{-- ============================================================ --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -21,733 +24,579 @@
                                         {{ __('accounting.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.inventory_sales_report') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($soldProducts->count() > 0 || $unsoldProducts->count() > 0)
-                            <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'soldProductsTable', filename: 'inventory_sales_{{ date('Y_m_d') }}', sheetName: 'Sold Products'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'soldProductsTable', filename: 'inventory_sales_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
+                        @if(isset($soldProducts) && ($soldProducts->count() > 0 || (isset($unsoldProducts) && $unsoldProducts->count() > 0)))
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" onclick="exportTableToExcel('soldProductsTable', 'inventory_sales')">
+                                <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.print()">
+                                <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
+                            </button>
                         </div>
+                        @endif
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
+                {{-- ============================================================ --}}
+                {{-- FILTER SECTION --}}
+                {{-- ============================================================ --}}
+                <div class="card mb-6">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"></i>
+                            <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0">
+                        <form method="GET" action="{{ route('reports.orders.inventory-sales') }}" id="filterForm">
+                            <div class="row g-3 mb-3">
+                                {{-- Date Range --}}
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">{{ __('accounting.start_date') }}</label>
+                                    <input type="date" class="form-control" name="start_date" value="{{ $startDate ?? now()->startOfMonth()->format('Y-m-d') }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">{{ __('accounting.end_date') }}</label>
+                                    <input type="date" class="form-control" name="end_date" value="{{ $endDate ?? now()->endOfMonth()->format('Y-m-d') }}">
+                                </div>
+                                
+                                {{-- Location --}}
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">{{ __('auth.location') }}</label>
+                                    <select class="form-select" name="location_id" data-control="select2">
+                                        <option value="">{{ __('auth.all_locations') }}</option>
+                                        @foreach($locations ?? [] as $location)
+                                            <option value="{{ $location->id }}" {{ ($locationId ?? '') == $location->id ? 'selected' : '' }}>
+                                                {{ $location->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                {{-- Department --}}
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">{{ __('auth.department') }}</label>
+                                    <select class="form-select" name="department_id" data-control="select2">
+                                        <option value="">{{ __('auth.all_departments') }}</option>
+                                        @foreach($departments ?? [] as $department)
+                                            <option value="{{ $department->id }}" {{ ($departmentId ?? '') == $department->id ? 'selected' : '' }}>
+                                                {{ $department->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ request()->url() }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('auth.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('auth.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                                </button>
-                                                <a href="{{ request()->url() }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </form>
+
+                            <div class="row">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="ki-duotone ki-filter fs-2 me-1"></i> {{ __('accounting.apply_filters') }}
+                                    </button>
+                                    <a href="{{ route('reports.orders.inventory-sales') }}" class="btn btn-light">
+                                        <i class="ki-duotone ki-cross fs-2 me-1"></i> {{ __('accounting.clear_filters') }}
+                                    </a>
+                                    @if(isset($isSingleShop))
+                                    <span class="text-muted ms-3 small">
+                                        <i class="ki-duotone ki-information-4 fs-2"></i>
+                                        {{ $isSingleShop ? '🏪 Single Shop Mode' : '🏢 Multi-Shop Mode' }}
+                                    </span>
+                                    @endif
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {{-- ============================================================ --}}
+                {{-- NO DATA --}}
+                {{-- ============================================================ --}}
+                @if((!isset($soldProducts) || $soldProducts->count() == 0) && (!isset($unsoldProducts) || $unsoldProducts->count() == 0))
+                <div class="card">
+                    <div class="card-body text-center py-10">
+                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
+                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                        <p class="text-muted fs-6">{{ __('auth.no_inventory_data_found_for_period') }}</p>
+                    </div>
+                </div>
+                @else
+
+                {{-- ============================================================ --}}
+                {{-- SUMMARY CARDS --}}
+                {{-- ============================================================ --}}
+                @php
+                    $totalProducts = ($soldProducts->count() ?? 0) + ($unsoldProducts->count() ?? 0);
+                    $sellThroughRate = $totalProducts > 0 ? (($soldProducts->count() ?? 0) / $totalProducts) * 100 : 0;
+                    $avgDailySales = isset($soldProducts) && $soldProducts->count() > 0 && isset($daysInPeriod) && $daysInPeriod > 0 
+                        ? $soldProducts->sum('quantity_sold') / $daysInPeriod 
+                        : 0;
+                    $totalUnitsSold = $soldProducts->sum('quantity_sold') ?? 0;
+                @endphp
+                
+                <div class="row g-6 mb-6">
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card bg-light-primary border border-primary border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-primary">{{ number_format($totalProducts) }}</div>
+                                <div class="text-muted">{{ __('auth.total_products') }}</div>
+                                <span class="badge badge-light-primary mt-2">
+                                    {{ $soldProducts->count() ?? 0 }} {{ __('auth.sold') }} / {{ $unsoldProducts->count() ?? 0 }} {{ __('auth.unsold') }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card bg-light-success border border-success border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-success">{{ number_format($sellThroughRate, 1) }}%</div>
+                                <div class="text-muted">{{ __('auth.sell_through_rate') }}</div>
+                                <span class="badge badge-light-success mt-2">{{ number_format($turnoverRate ?? 0, 2) }}% {{ __('auth.turnover') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card bg-light-info border border-info border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-info">{{ currency_symbol() }}{{ number_format($soldInventoryValue ?? 0, 2) }}</div>
+                                <div class="text-muted">{{ __('auth.sold_inventory_value') }}</div>
+                                <span class="badge badge-light-info mt-2">{{ currency_symbol() }}{{ number_format($totalInventoryValue ?? 0, 2) }} {{ __('auth.total_value') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card bg-light-warning border border-warning border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-warning">{{ number_format($avgDailySales, 1) }}</div>
+                                <div class="text-muted">{{ __('auth.avg_daily_sales') }}</div>
+                                <span class="badge badge-light-warning mt-2">{{ number_format($totalUnitsSold) }} {{ __('auth.total_units') }}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Summary Cards --}}
-                <div class="row mb-6">
+                {{-- ============================================================ --}}
+                {{-- PRODUCT MOVEMENT ANALYSIS --}}
+                {{-- ============================================================ --}}
+                @if(isset($productMovement) && $productMovement->count() > 0)
+                <div class="row g-6 mb-6">
                     @php
-                        $totalProducts = $soldProducts->count() + $unsoldProducts->count();
-                        $sellThroughRate = $totalProducts > 0 ? ($soldProducts->count() / $totalProducts) * 100 : 0;
-                        $avgDailySales = $soldProducts->sum('quantity_sold') / max(Carbon\Carbon::parse($startDate)->diffInDays(Carbon\Carbon::parse($endDate)) + 1, 1);
+                        $fastMovers = $productMovement->where('movement_category', 'Fast Mover')->count();
+                        $mediumMovers = $productMovement->where('movement_category', 'Medium Mover')->count();
+                        $slowMovers = $productMovement->where('movement_category', 'Slow Mover')->count();
+                        $totalMovers = $productMovement->count();
                     @endphp
                     
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-box fs-2tx text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ $totalProducts }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.total_products') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-primary">
-                                        {{ $soldProducts->count() }} {{ __('auth.sold') }} / {{ $unsoldProducts->count() }} {{ __('auth.unsold') }}
-                                    </span>
-                                </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light-success border border-success border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-success">{{ number_format($fastMovers) }}</div>
+                                <div class="text-muted">🚀 {{ __('auth.fast_movers') }} <small class="text-muted">(≥1/day)</small></div>
+                                <span class="badge badge-light-success mt-2">{{ $totalMovers > 0 ? number_format(($fastMovers / $totalMovers) * 100, 1) : 0 }}%</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-chart-line fs-2tx text-success">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ number_format($sellThroughRate, 1) }}%
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.sell_through_rate') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-success">
-                                        ${{ number_format($turnoverRate, 2) }}% {{ __('auth.turnover') }}
-                                    </span>
-                                </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light-warning border border-warning border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-warning">{{ number_format($mediumMovers) }}</div>
+                                <div class="text-muted">🚚 {{ __('auth.medium_movers') }} <small class="text-muted">(0.1-1/day)</small></div>
+                                <span class="badge badge-light-warning mt-2">{{ $totalMovers > 0 ? number_format(($mediumMovers / $totalMovers) * 100, 1) : 0 }}%</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-dollar-circle fs-2tx text-info">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        ${{ number_format($soldInventoryValue, 2) }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.sold_inventory_value') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-info">
-                                        ${{ number_format($totalInventoryValue, 2) }} {{ __('auth.total_value') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-speedometer fs-2tx text-warning">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ number_format($avgDailySales, 1) }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.avg_daily_sales') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-warning">
-                                        {{ $soldProducts->sum('quantity_sold') }} {{ __('auth.total_units') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Product Movement Analysis --}}
-                @if($productMovement->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.product_movement_analysis') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    @php
-                                        $fastMovers = $productMovement->where('movement_category', 'Fast Mover')->count();
-                                        $mediumMovers = $productMovement->where('movement_category', 'Medium Mover')->count();
-                                        $slowMovers = $productMovement->where('movement_category', 'Slow Mover')->count();
-                                    @endphp
-                                    
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-rocket fs-2tx text-success">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $fastMovers }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('auth.fast_movers') }}</div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-success">
-                                                        {{ $soldProducts->count() > 0 ? number_format(($fastMovers / $soldProducts->count()) * 100, 1) : 0 }}%
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-truck fs-2tx text-warning">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $mediumMovers }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('auth.medium_movers') }}</div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-warning">
-                                                        {{ $soldProducts->count() > 0 ? number_format(($mediumMovers / $soldProducts->count()) * 100, 1) : 0 }}%
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-clock fs-2tx text-danger">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $slowMovers }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('auth.slow_movers') }}</div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-danger">
-                                                        {{ $soldProducts->count() > 0 ? number_format(($slowMovers / $soldProducts->count()) * 100, 1) : 0 }}%
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light-danger border border-danger border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-danger">{{ number_format($slowMovers) }}</div>
+                                <div class="text-muted">⏰ {{ __('auth.slow_movers') }} <small class="text-muted">(&lt;0.1/day)</small></div>
+                                <span class="badge badge-light-danger mt-2">{{ $totalMovers > 0 ? number_format(($slowMovers / $totalMovers) * 100, 1) : 0 }}%</span>
                             </div>
                         </div>
                     </div>
                 </div>
                 @endif
 
-                {{-- Dead Stock Analysis --}}
-                @if($deadStock->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-warning-2 fs-2 me-2 text-danger">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.dead_stock_alert') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light-danger">
-                                                <th class="ps-4">{{ __('auth.product') }}</th>
-                                                <th>{{ __('auth.sku') }}</th>
-                                                <th>{{ __('auth.current_stock') }}</th>
-                                                <th>{{ __('auth.price') }}</th>
-                                                <th>{{ __('auth.stock_value') }}</th>
-                                                <th>{{ __('auth.days_unsold') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($deadStock->take(10) as $product)
-                                            @php
-                                                $stockValue = $product->current_stock * $product->price;
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-40px symbol-circle me-3">
-                                                            <div class="symbol-label bg-light-danger">
-                                                                <i class="ki-duotone ki-box fs-2 text-danger"></i>
-                                                            </div>
-                                                        </div>
-                                                        <div class="d-flex justify-content-start flex-column">
-                                                            <span class="text-gray-800 fw-bold">{{ $product->name }}</span>
-                                                        </div>
+                {{-- ============================================================ --}}
+                {{-- DEAD STOCK ALERT --}}
+                {{-- ============================================================ --}}
+                @if(isset($deadStock) && $deadStock->count() > 0)
+                <div class="card mb-6 border border-danger">
+                    <div class="card-header bg-light-danger">
+                        <h3 class="card-title">
+                            <i class="ki-duotone ki-warning-2 fs-2 me-2 text-danger"></i>
+                            {{ __('auth.dead_stock_alert') }}
+                        </h3>
+                        <div class="card-toolbar">
+                            <span class="badge badge-light-danger fs-7">{{ $deadStock->count() }} {{ __('auth.items') }}</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead>
+                                    <tr class="fw-bold fs-6 text-gray-800 bg-light-danger">
+                                        <th class="ps-4">{{ __('auth.product') }}</th>
+                                        <th>{{ __('auth.sku') }}</th>
+                                        <th class="text-center">{{ __('auth.current_stock') }}</th>
+                                        <th class="text-end">{{ __('auth.price') }}</th>
+                                        <th class="text-end">{{ __('auth.stock_value') }}</th>
+                                        <th>{{ __('auth.days_unsold') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($deadStock as $product)
+                                    @php $stockValue = $product->current_stock * $product->price; @endphp
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-35px symbol-circle me-2">
+                                                    <div class="symbol-label bg-light-danger">
+                                                        <i class="ki-duotone ki-box fs-2 text-danger"></i>
                                                     </div>
-                                                </td>
-                                                <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
-                                                <td><span class="fw-bold text-danger">{{ $product->current_stock }}</span></td>
-                                                <td><span class="text-info">${{ number_format($product->price, 2) }}</span></td>
-                                                <td><span class="fw-bold text-warning">${{ number_format($stockValue, 2) }}</span></td>
-                                                <td><span class="badge badge-light-danger">>30 days</span></td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table> {{-- ✅ FIXED: Was missing closing tag --}}
-                                </div>
-                                
-                                {{-- Show "View All" link if more than 10 items --}}
-                                @if($deadStock->count() > 10)
-                                <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-3">
-                                    <span class="text-muted fs-7">
-                                        {{ __('auth.showing_top_10_of') }} 
-                                        <strong class="text-gray-800">{{ $deadStock->count() }}</strong> 
-                                        {{ __('auth.dead_stock_items') }}
-                                    </span>
-                                    <a href="{{ route('reports.inventory.dead-stock', request()->query()) }}" 
-                                    class="btn btn-sm btn-light-primary">
-                                        <i class="ki-duotone ki-eye fs-2 me-1"></i>
-                                        {{ __('auth.view_all_dead_stock') }}
-                                    </a>
-                                </div>
-                                @endif
-                            </div>
+                                                </div>
+                                                <span class="fw-bold">{{ Str::limit($product->name, 25) }}</span>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
+                                        <td class="text-center"><span class="badge badge-light-danger">{{ number_format($product->current_stock) }}</span></td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($product->price, 2) }}</td>
+                                        <td class="text-end text-warning fw-bold">{{ currency_symbol() }}{{ number_format($stockValue, 2) }}</td>
+                                        <td><span class="badge badge-light-danger">>30 days</span></td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
                 @endif
 
-                {{-- Sold Products Table --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-cart-tick fs-2 me-2 text-success"></i>
-                                        <h3 class="fw-bold m-0">{{ __('auth.sold_products') }}</h3>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-3">
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown">
-                                                <i class="ki-duotone ki-file-down fs-2 me-1"></i>
-                                                {{ __('accounting.export') }}
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportSoldData(false)">{{ __('accounting.export_current_page') }}</a></li>
-                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportSoldData(true)">{{ __('accounting.export_all_data') }}</a></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            @if($soldProducts->count() > 0)
-                                <div class="card-body p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="soldProductsTable">
-                                            <thead>
-                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                    <th class="min-w-50px ps-4">{{ __('accounting.rank') }}</th>
-                                                    <th class="min-w-200px">{{ __('auth.product') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.sku') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.quantity_sold') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.revenue_generated') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.current_stock') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.stock_value') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.times_ordered') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.daily_sales_rate') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.movement_category') }}</th>
-                                                    <th class="min-w-150px">{{ __('auth.last_sold_date') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($soldProducts as $index => $product)
-                                                @php
-                                                    $globalIndex = ($soldProducts->currentPage() - 1) * $soldProducts->perPage() + $index + 1;
-                                                    $stockValue = $product->current_stock * $product->price;
-                                                    $movementColors = [
-                                                        'Fast Mover' => 'success',
-                                                        'Medium Mover' => 'warning',
-                                                        'Slow Mover' => 'danger'
-                                                    ];
-                                                    $stockClass = $product->current_stock <= 5 ? 'danger' : ($product->current_stock <= 10 ? 'warning' : 'success');
-                                                @endphp
-                                                <tr>
-                                                    <td class="ps-4">
-                                                        <span class="fw-bold text-gray-800">{{ $globalIndex }}</span>
-                                                        @if($globalIndex <= 3)
-                                                        <div class="mt-1">
-                                                            <span class="badge badge-light-{{ $globalIndex == 1 ? 'danger' : ($globalIndex == 2 ? 'warning' : 'info') }}">
-                                                                <i class="ki-duotone ki-{{ $globalIndex == 1 ? 'medal' : ($globalIndex == 2 ? 'ranking' : 'ranking-2') }} fs-4 me-1"></i>
-                                                                {{ __('accounting.top') }} {{ $globalIndex }}
-                                                            </span>
-                                                        </div>
-                                                        @endif
-                                                    </td>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-40px symbol-circle me-3">
-                                                                <div class="symbol-label bg-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }}">
-                                                                    <i class="ki-duotone ki-box fs-2"></i>
-                                                                </div>
-                                                            </div>
-                                                            <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $product->name }}</span>
-                                                                <span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }} badge-sm mt-1">
-                                                                    {{ $product->movement_category }}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
-                                                    <td><span class="fw-bold text-primary">{{ number_format($product->quantity_sold) }}</span></td>
-                                                    <td><span class="fw-bold text-success">${{ number_format($product->revenue_generated, 2) }}</span></td>
-                                                    <td><span class="badge badge-light-{{ $stockClass }}">{{ $product->current_stock }}</span></td>
-                                                    <td><span class="text-info">${{ number_format($stockValue, 2) }}</span></td>
-                                                    <td><span class="badge badge-light-info">{{ $product->times_ordered }}</span></td>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }} me-2">
-                                                                {{ number_format($product->daily_sales_rate, 2) }}/day
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td><span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }}">{{ $product->movement_category }}</span></td>
-                                                    <td>
-                                                        @if($product->last_sold_date)
-                                                        <span class="text-gray-700">{{ \Carbon\Carbon::parse($product->last_sold_date)->format('M d, Y') }}</span>
-                                                        @else
-                                                        <span class="text-muted">-</span>
-                                                        @endif
-                                                    </td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table> {{-- ✅ FIXED: Was <table> --}}
-                                    </div>
-                                </div>
-                                
-                                {{-- ✅ Clean Pagination --}}
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator' => $soldProducts,
-                                        'pageName' => 'sold_page',
-                                        'perPageName' => 'sold_per_page',
-                                        'showPerPage' => true
-                                    ])
-                                </div>
-                                
-                            @else
-                                @include('partials.empty-state', [
-                                    'icon' => 'ki-duotone ki-cart-tick',
-                                    'title' => __('accounting.no_data_available'),
-                                    'message' => __('auth.no_sold_products_found_for_period'),
-                                    'action' => [
-                                        'text' => __('accounting.clear_filters'),
-                                        'url' => request()->url(),
-                                        'icon' => 'ki-duotone ki-filter'
-                                    ]
-                                ])
-                            @endif
+                {{-- ============================================================ --}}
+                {{-- SOLD PRODUCTS TABLE --}}
+                {{-- ============================================================ --}}
+                <div class="card mb-6">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-cart-tick fs-2 me-2 text-success"></i>
+                            <h3 class="fw-bold m-0">{{ __('auth.sold_products') }}</h3>
                         </div>
-                    </div>
-                </div>
-
-                {{-- Unsold Products Table --}}
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-cart-cross fs-2 me-2 text-danger"></i>
-                                        <h3 class="fw-bold m-0">{{ __('auth.unsold_products') }}</h3>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-3">
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-sm btn-light-primary dropdown-toggle" data-bs-toggle="dropdown">
-                                                <i class="ki-duotone ki-file-down fs-2 me-1"></i>
-                                                {{ __('accounting.export') }}
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportUnsoldData(false)">{{ __('accounting.export_current_page') }}</a></li>
-                                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportUnsoldData(true)">{{ __('accounting.export_all_data') }}</a></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            @if($unsoldProducts->count() > 0)
-                                <div class="card-body p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                            <thead>
-                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                    <th class="min-w-200px">{{ __('auth.product') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.sku') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.current_stock') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.price') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.stock_value') }}</th>
-                                                    <th class="min-w-150px">{{ __('auth.stock_aging') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($unsoldProducts as $product)
-                                                @php
-                                                    $stockValue = $product->current_stock * $product->price;
-                                                    $stockClass = $product->current_stock <= 5 ? 'danger' : ($product->current_stock <= 10 ? 'warning' : 'info');
-                                                    $isDeadStock = $product->current_stock > 10;
-                                                @endphp
-                                                <tr>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-40px symbol-circle me-3">
-                                                                <div class="symbol-label bg-light-{{ $isDeadStock ? 'danger' : $stockClass }}">
-                                                                    <i class="ki-duotone ki-box fs-2 text-{{ $isDeadStock ? 'danger' : $stockClass }}"></i>
-                                                                </div>
-                                                            </div>
-                                                            <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $product->name }}</span>
-                                                                @if($isDeadStock)
-                                                                <span class="badge badge-light-danger badge-sm mt-1">{{ __('auth.dead_stock') }}</span>
-                                                                @endif
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
-                                                    <td><span class="badge badge-light-{{ $stockClass }}">{{ $product->current_stock }}</span></td>
-                                                    <td><span class="text-info">${{ number_format($product->price, 2) }}</span></td>
-                                                    <td><span class="fw-bold text-warning">${{ number_format($stockValue, 2) }}</span></td>
-                                                    <td><span class="badge badge-light-secondary">>30 days</span></td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                
-                                {{-- ✅ Clean Pagination --}}
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator' => $unsoldProducts,
-                                        'pageName' => 'unsold_page',
-                                        'perPageName' => 'unsold_per_page',
-                                        'showPerPage' => true
-                                    ])
-                                </div>
-                                
-                            @else
-                                @include('partials.empty-state', [
-                                    'icon' => 'ki-duotone ki-cart-cross',
-                                    'title' => __('accounting.no_data_available'),
-                                    'message' => __('auth.all_products_were_sold_in_period'),
-                                    'action' => [
-                                        'text' => __('accounting.clear_filters'),
-                                        'url' => request()->url(),
-                                        'icon' => 'ki-duotone ki-filter'
-                                    ]
-                                ])
-                            @endif
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Top vs Bottom Performers --}}
-                @if($soldProducts->count() > 5)
-                <div class="row mt-6">
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-crown fs-2 me-2 text-success">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.top_sellers') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light-success">
-                                                <th class="ps-4">{{ __('accounting.rank') }}</th>
-                                                <th>{{ __('auth.product') }}</th>
-                                                <th>{{ __('auth.quantity_sold') }}</th>
-                                                <th>{{ __('auth.revenue') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($soldProducts->take(5) as $index => $product)
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <span class="fw-bold text-gray-800">{{ $index + 1 }}</span>
-                                                </td>
-                                                <td>{{ substr($product->name, 0, 20) }}{{ strlen($product->name) > 20 ? '...' : '' }}</td>
-                                                <td><span class="fw-bold text-success">{{ number_format($product->quantity_sold) }}</span></td>
-                                                <td><span class="badge badge-light-success">${{ number_format($product->revenue_generated, 2) }}</span></td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                        <div class="card-toolbar">
+                            <span class="badge badge-light-success fs-7">{{ $soldProducts->count() ?? 0 }} {{ __('auth.products') }}</span>
                         </div>
                     </div>
                     
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-clock fs-2 me-2 text-danger">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.slow_sellers') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light-danger">
-                                                <th class="ps-4">{{ __('accounting.rank') }}</th>
-                                                <th>{{ __('auth.product') }}</th>
-                                                <th>{{ __('auth.quantity_sold') }}</th>
-                                                <th>{{ __('auth.revenue') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($soldProducts->slice(-5)->reverse() as $index => $product)
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <span class="fw-bold text-gray-800">{{ $soldProducts->count() - $index }}</span>
-                                                </td>
-                                                <td>{{ substr($product->name, 0, 20) }}{{ strlen($product->name) > 20 ? '...' : '' }}</td>
-                                                <td><span class="fw-bold text-danger">{{ number_format($product->quantity_sold) }}</span></td>
-                                                <td><span class="badge badge-light-danger">${{ number_format($product->revenue_generated, 2) }}</span></td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    @if(isset($soldProducts) && $soldProducts->count() > 0)
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="soldProductsTable">
+                                <thead>
+                                    <tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th class="ps-4" style="width: 5%;">{{ __('accounting.rank') }}</th>
+                                        <th style="width: 18%;">{{ __('auth.product') }}</th>
+                                        <th style="width: 10%;">{{ __('auth.sku') }}</th>
+                                        <th style="width: 8%;" class="text-center">{{ __('auth.quantity_sold') }}</th>
+                                        <th style="width: 12%;" class="text-end">{{ __('auth.revenue_generated') }}</th>
+                                        <th style="width: 8%;" class="text-center">{{ __('auth.current_stock') }}</th>
+                                        <th style="width: 10%;" class="text-end">{{ __('auth.stock_value') }}</th>
+                                        <th style="width: 8%;" class="text-center">{{ __('auth.times_ordered') }}</th>
+                                        <th style="width: 10%;" class="text-center">{{ __('auth.daily_sales_rate') }}</th>
+                                        <th style="width: 10%;" class="text-center">{{ __('auth.movement_category') }}</th>
+                                        <th style="width: 10%;">{{ __('auth.last_sold_date') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($soldProducts as $index => $product)
+                                    @php
+                                        $globalIndex = ($soldProducts->currentPage() - 1) * $soldProducts->perPage() + $index + 1;
+                                        $stockValue = $product->current_stock * $product->price;
+                                        $movementColors = ['Fast Mover' => 'success', 'Medium Mover' => 'warning', 'Slow Mover' => 'danger'];
+                                        $stockClass = $product->current_stock <= 5 ? 'danger' : ($product->current_stock <= 10 ? 'warning' : 'success');
+                                    @endphp
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="fw-bold">{{ $globalIndex }}</span>
+                                            @if($globalIndex <= 3)
+                                            <span class="badge badge-light-{{ $globalIndex == 1 ? 'danger' : ($globalIndex == 2 ? 'warning' : 'info') }}">
+                                                {{ $globalIndex == 1 ? '🥇' : ($globalIndex == 2 ? '🥈' : '🥉') }}
+                                            </span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-35px symbol-circle me-2">
+                                                    <div class="symbol-label bg-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }}">
+                                                        <i class="ki-duotone ki-box fs-2"></i>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">{{ Str::limit($product->name, 25) }}</div>
+                                                    <span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }} badge-sm">
+                                                        {{ $product->movement_category }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
+                                        <td class="text-center fw-bold text-primary">{{ number_format($product->quantity_sold) }}</td>
+                                        <td class="text-end fw-bold text-success">{{ currency_symbol() }}{{ number_format($product->revenue_generated, 2) }}</td>
+                                        <td class="text-center"><span class="badge badge-light-{{ $stockClass }}">{{ number_format($product->current_stock) }}</span></td>
+                                        <td class="text-end text-info">{{ currency_symbol() }}{{ number_format($stockValue, 2) }}</td>
+                                        <td class="text-center"><span class="badge badge-light-info">{{ number_format($product->times_ordered) }}</span></td>
+                                        <td class="text-center">
+                                            <span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }}">
+                                                {{ number_format($product->daily_sales_rate, 2) }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-light-{{ $movementColors[$product->movement_category] ?? 'secondary' }}">
+                                                {{ $product->movement_category }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if($product->last_sold_date)
+                                                {{ optional($product->last_sold_date)->format('M d, Y') ?? '-' }}
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+                    
+                    {{-- Pagination --}}
+                    @if(isset($soldProducts) && $soldProducts->hasPages())
+                    <div class="card-footer">
+                        @include('partials.pagination', [
+                            'paginator' => $soldProducts,
+                            'pageName' => 'sold_page',
+                            'perPageName' => 'sold_per_page',
+                            'showPerPage' => true
+                        ])
+                    </div>
+                    @endif
+                    @else
+                    <div class="card-body text-center py-6">
+                        <p class="text-muted">{{ __('auth.no_sold_products_found_for_period') }}</p>
+                    </div>
+                    @endif
                 </div>
+
+                {{-- ============================================================ --}}
+                {{-- UNSOLD PRODUCTS TABLE --}}
+                {{-- ============================================================ --}}
+                <div class="card">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-cart-cross fs-2 me-2 text-danger"></i>
+                            <h3 class="fw-bold m-0">{{ __('auth.unsold_products') }}</h3>
+                        </div>
+                        <div class="card-toolbar">
+                            <span class="badge badge-light-danger fs-7">{{ $unsoldProducts->count() ?? 0 }} {{ __('auth.products') }}</span>
+                        </div>
+                    </div>
+                    
+                    @if(isset($unsoldProducts) && $unsoldProducts->count() > 0)
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead>
+                                    <tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th style="width: 25%;">{{ __('auth.product') }}</th>
+                                        <th style="width: 15%;">{{ __('auth.sku') }}</th>
+                                        <th style="width: 12%;" class="text-center">{{ __('auth.current_stock') }}</th>
+                                        <th style="width: 15%;" class="text-end">{{ __('auth.price') }}</th>
+                                        <th style="width: 18%;" class="text-end">{{ __('auth.stock_value') }}</th>
+                                        <th style="width: 15%;">{{ __('auth.stock_aging') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($unsoldProducts as $product)
+                                    @php
+                                        $stockValue = $product->current_stock * $product->price;
+                                        $stockClass = $product->current_stock <= 5 ? 'danger' : ($product->current_stock <= 10 ? 'warning' : 'info');
+                                        $isDeadStock = $product->current_stock > 10;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-35px symbol-circle me-2">
+                                                    <div class="symbol-label bg-light-{{ $isDeadStock ? 'danger' : $stockClass }}">
+                                                        <i class="ki-duotone ki-box fs-2 text-{{ $isDeadStock ? 'danger' : $stockClass }}"></i>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <span class="fw-bold">{{ Str::limit($product->name, 30) }}</span>
+                                                    @if($isDeadStock)
+                                                    <span class="badge badge-light-danger badge-sm d-block">{{ __('auth.dead_stock') }}</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge badge-light-primary">{{ $product->sku }}</span></td>
+                                        <td class="text-center"><span class="badge badge-light-{{ $stockClass }}">{{ number_format($product->current_stock) }}</span></td>
+                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($product->price, 2) }}</td>
+                                        <td class="text-end text-warning fw-bold">{{ currency_symbol() }}{{ number_format($stockValue, 2) }}</td>
+                                        <td><span class="badge badge-light-secondary">>30 days</span></td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {{-- Pagination --}}
+                    @if(isset($unsoldProducts) && $unsoldProducts->hasPages())
+                    <div class="card-footer">
+                        @include('partials.pagination', [
+                            'paginator' => $unsoldProducts,
+                            'pageName' => 'unsold_page',
+                            'perPageName' => 'unsold_per_page',
+                            'showPerPage' => true
+                        ])
+                    </div>
+                    @endif
+                    @else
+                    <div class="card-body text-center py-6">
+                        <p class="text-muted">{{ __('auth.all_products_were_sold_in_period') }}</p>
+                    </div>
+                    @endif
+                </div>
+
+                {{-- ============================================================ --}}
+                {{-- METADATA FOOTER --}}
+                {{-- ============================================================ --}}
+                <div class="mt-6 text-muted text-center fs-7">
+                    <hr>
+                    <p>
+                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                        {{ __('auth.report_generated_on') }} {{ now()->format('F d, Y H:i:s') }} 
+                        | {{ __('accounting.period') }}: {{ $startDate ?? 'N/A' }} {{ __('accounting.to') }} {{ $endDate ?? 'N/A' }}
+                        @if(isset($locationId) && $locationId)
+                            | {{ __('auth.location') }}: {{ $locations->where('id', $locationId)->first()->name ?? 'N/A' }}
+                        @endif
+                        @if(isset($departmentId) && $departmentId)
+                            | {{ __('auth.department') }}: {{ $departments->where('id', $departmentId)->first()->name ?? 'N/A' }}
+                        @endif
+                        | {{ ($soldProducts->count() ?? 0) + ($unsoldProducts->count() ?? 0) }} {{ __('auth.products') }}
+                        | {{ __('auth.sold') }}: {{ $soldProducts->count() ?? 0 }} | {{ __('auth.unsold') }}: {{ $unsoldProducts->count() ?? 0 }}
+                        @if(isset($isSingleShop))
+                            | {{ $isSingleShop ? '🏪 Single Shop' : '🏢 Multi-Shop' }}
+                        @endif
+                    </p>
+                </div>
+                
                 @endif
+                
             </div>
         </div>
     </div>
 </div>
 
+{{-- ============================================================ --}}
+{{-- SCRIPTS --}}
+{{-- ============================================================ --}}
 @push('scripts')
 <script>
-    // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
-            return false;
+document.addEventListener('DOMContentLoaded', function() {
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            const start = document.querySelector('[name="start_date"]');
+            const end = document.querySelector('[name="end_date"]');
+            if (start && end && start.value && end.value) {
+                const startDate = new Date(start.value);
+                const endDate = new Date(end.value);
+                if (startDate > endDate) {
+                    e.preventDefault();
+                    alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
+                }
+            }
+        });
+    }
+});
+
+function exportTableToExcel(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) {
+        alert('{{ __("accounting.table_not_found") }}');
+        return;
+    }
+    try {
+        if (typeof XLSX === 'undefined') {
+            alert('{{ __("accounting.export_library_missing") }}');
+            return;
         }
-    });
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.table_to_sheet(table);
+        XLSX.utils.book_append_sheet(wb, ws, 'Inventory Sales');
+        XLSX.writeFile(wb, filename + '.xlsx');
+    } catch(e) {
+        alert('{{ __("accounting.export_error") }}: ' + e.message);
+    }
+}
 </script>
+@endpush
+
+{{-- ============================================================ --}}
+{{-- PRINT STYLES --}}
+{{-- ============================================================ --}}
+@push('styles')
+<style>
+@media print {
+    .app-toolbar, 
+    #filterForm, 
+    .dropdown, 
+    .no-print,
+    .card-header .btn {
+        display: none !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .card-body {
+        padding: 0 !important;
+    }
+    .table-responsive {
+        overflow: visible !important;
+    }
+    .badge {
+        border: 1px solid #E5E7EB !important;
+    }
+    .symbol {
+        display: none !important;
+    }
+    .progress {
+        display: none !important;
+    }
+}
+.card-flush {
+    transition: transform 0.2s ease-in-out;
+}
+.card-flush:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    .card-body {
+        padding: 0.5rem !important;
+    }
+}
+</style>
 @endpush
 
 @endsection

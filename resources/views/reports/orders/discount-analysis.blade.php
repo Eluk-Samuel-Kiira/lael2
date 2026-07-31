@@ -8,7 +8,10 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                
+                {{-- ============================================================ --}}
+                {{-- TOOLBAR SECTION --}}
+                {{-- ============================================================ --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -21,755 +24,294 @@
                                         {{ __('accounting.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.discount_analysis_report') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($discountedOrders->count() > 0)
-                            <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'discountedOrdersTable', filename: 'discount_analysis_{{ date('Y_m_d') }}', sheetName: 'Discount Analysis'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'discountedOrdersTable', filename: 'discount_analysis_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
+                        @if($discountedOrders->count() > 0)
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" onclick="exportTableToExcel('discountedOrdersTable', 'discount_analysis')">
+                                <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.print()">
+                                <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
+                            </button>
                         </div>
+                        @endif
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
+                {{-- ============================================================ --}}
+                {{-- FILTER SECTION --}}
+                {{-- ============================================================ --}}
+                <div class="card mb-6">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"></i>
+                            <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0">
+                        <form method="GET" action="{{ route('reports.orders.discount-analysis') }}" id="filterForm">
+                            <div class="row g-3">
+                                {{-- Date Range --}}
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">{{ __('accounting.start_date') }}</label>
+                                    <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">{{ __('accounting.end_date') }}</label>
+                                    <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
+                                </div>
+                                
+                                {{-- Location --}}
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
+                                    <select class="form-select" name="location_id"  data-control="select2">
+                                        <option value="">{{ __('auth.all_locations') }}</option>
+                                        @foreach($locations ?? [] as $location)
+                                            <option value="{{ $location->id }}" {{ ($locationId ?? '') == $location->id ? 'selected' : '' }}>
+                                                {{ $location->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                {{-- Department --}}
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">{{ __('auth.department') }}</label>
+                                    <select class="form-select" name="department_id"  data-control="select2">
+                                        <option value="">{{ __('auth.all_departments') }}</option>
+                                        @foreach($departments ?? [] as $department)
+                                            <option value="{{ $department->id }}" {{ ($departmentId ?? '') == $department->id ? 'selected' : '' }}>
+                                                {{ $department->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                {{-- Employee --}}
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">{{ __('accounting.employee') }}</label>
+                                    <select class="form-select" name="employee_id">
+                                        <option value="">{{ __('auth.all_employees') }}</option>
+                                        @foreach($employeesList ?? [] as $emp)
+                                            <option value="{{ $emp->id }}" {{ ($employeeId ?? '') == $emp->id ? 'selected' : '' }}>
+                                                {{ $emp->first_name }} {{ $emp->last_name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ request()->url() }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('auth.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('auth.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                                </button>
-                                                <a href="{{ request()->url() }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </form>
+
+                            <div class="row g-3 mt-3">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="ki-duotone ki-filter fs-2 me-1"></i> {{ __('accounting.apply_filters') }}
+                                    </button>
+                                    <a href="{{ route('reports.orders.discount-analysis') }}" class="btn btn-light">
+                                        <i class="ki-duotone ki-cross fs-2 me-1"></i> {{ __('accounting.clear_filters') }}
+                                    </a>
+                                    <span class="text-muted ms-3 small">
+                                        <i class="ki-duotone ki-information-4 fs-2"></i>
+                                        {{ __('accounting.showing') }} {{ $discountedOrders->count() }} {{ __('auth.discounted_orders') }}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
 
-                {{-- Summary Cards --}}
-                <div class="row mb-6">
-                    @php
-                        $discountEffectiveness = $ordersWithoutDiscount && $ordersWithoutDiscount->order_count > 0 ? 
-                            (($ordersWithDiscount->order_count ?? 0) / $ordersWithoutDiscount->order_count) * 100 : 0;
-                    @endphp
-                    
+                {{-- ============================================================ --}}
+                {{-- NO DATA --}}
+                {{-- ============================================================ --}}
+                @if($discountedOrders->count() == 0)
+                <div class="card">
+                    <div class="card-body text-center py-10">
+                        <i class="ki-duotone ki-percentage fs-4tx text-gray-400 mb-4"></i>
+                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                        <p class="text-muted fs-6">{{ __('auth.no_discounted_orders_found_for_period') }}</p>
+                    </div>
+                </div>
+                @else
+
+                {{-- ============================================================ --}}
+                {{-- SUMMARY CARDS --}}
+                {{-- ============================================================ --}}
+                <div class="row g-6 mb-6">
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-percentage fs-2tx text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ $discountSummary['total_discounted_orders'] }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.discounted_orders') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-primary">
-                                        {{ number_format($discountSummary['discount_rate'], 2) }}% {{ __('auth.discount_rate') }}
-                                    </span>
-                                </div>
+                        <div class="card bg-light-primary border border-primary border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-primary">{{ number_format($discountSummary['total_discounted_orders']) }}</div>
+                                <div class="text-muted">{{ __('auth.discounted_orders') }}</div>
+                                <span class="badge badge-light-primary mt-2">{{ number_format($discountSummary['discount_rate'], 2) }}% {{ __('auth.discount_rate') }}</span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-dollar-circle fs-2tx text-success">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        ${{ number_format($discountSummary['total_discount_amount'], 2) }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.total_discount_given') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-success">
-                                        ${{ number_format($discountSummary['average_discount_per_order'], 2) }} {{ __('auth.average') }}
-                                    </span>
-                                </div>
+                        <div class="card bg-light-success border border-success border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-success">{{ currency_symbol() }}{{ number_format($discountSummary['total_discount_amount'], 2) }}</div>
+                                <div class="text-muted">{{ __('auth.total_discount_given') }}</div>
+                                <span class="badge badge-light-success mt-2">{{ currency_symbol() }}{{ number_format($discountSummary['average_discount_per_order'], 2) }} {{ __('auth.average') }}</span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-chart-line fs-2tx text-info">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ number_format($discountEffectiveness, 1) }}%
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.discount_effectiveness') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-info">
-                                        {{ $ordersWithDiscount->order_count ?? 0 }} / {{ $ordersWithoutDiscount->order_count ?? 0 }}
-                                    </span>
-                                </div>
+                        <div class="card bg-light-info border border-info border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-info">{{ number_format($discountEffectiveness->percentage_difference ?? 0, 1) }}%</div>
+                                <div class="text-muted">{{ __('auth.discount_effectiveness') }}</div>
+                                <span class="badge badge-light-info mt-2">{{ $discountEffectiveness->with_discount_count ?? 0 }} / {{ $discountEffectiveness->without_discount_count ?? 0 }}</span>
                             </div>
                         </div>
                     </div>
                     
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-4">
-                                    <i class="ki-duotone ki-user-tick fs-2tx text-warning">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <div class="mb-1">
-                                    <span class="fs-1 fw-bold text-gray-800">
-                                        {{ $discountByEmployee->count() }}
-                                    </span>
-                                </div>
-                                <div class="text-gray-600 fw-semibold">
-                                    {{ __('auth.employees_giving_discounts') }}
-                                </div>
-                                <div class="mt-2">
-                                    <span class="badge badge-light-warning">
-                                        @if($discountByEmployee->count() > 0)
-                                            {{ $discountByEmployee->first()->first_name }}: ${{ number_format($discountByEmployee->first()->total_discount_given, 2) }}
-                                        @else
-                                            {{ __('auth.none') }}
-                                        @endif
-                                    </span>
-                                </div>
+                        <div class="card bg-light-warning border border-warning border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-warning">{{ $discountByEmployee->count() }}</div>
+                                <div class="text-muted">{{ __('auth.employees_giving_discounts') }}</div>
+                                <span class="badge badge-light-warning mt-2">
+                                    @if($discountByEmployee->count() > 0)
+                                        {{ $discountByEmployee->first()->first_name }}: {{ currency_symbol() }}{{ number_format($discountByEmployee->first()->total_discount_given, 2) }}
+                                    @else
+                                        {{ __('auth.none') }}
+                                    @endif
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Discount Effectiveness Comparison --}}
-                @if($ordersWithDiscount && $ordersWithoutDiscount)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.discount_effectiveness_comparison') }}</h3>
-                                </div>
+                {{-- ============================================================ --}}
+                {{-- DISCOUNT EFFECTIVENESS COMPARISON --}}
+                {{-- ============================================================ --}}
+                @if(isset($ordersWithDiscount) && isset($ordersWithoutDiscount))
+                <div class="row g-6 mb-6">
+                    <div class="col-md-4">
+                        <div class="card bg-light-success border border-success border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-success">{{ number_format($ordersWithDiscount->order_count ?? 0) }}</div>
+                                <div class="text-muted">{{ __('auth.orders_with_discount') }}</div>
+                                <span class="badge badge-light-success mt-2">{{ currency_symbol() }}{{ number_format($ordersWithDiscount->average_order_value ?? 0, 2) }} {{ __('auth.avg_order_value') }}</span>
                             </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-cart-tick fs-2tx text-success">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $ordersWithDiscount->order_count ?? 0 }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('auth.orders_with_discount') }}
-                                                </div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-success">
-                                                        ${{ number_format($ordersWithDiscount->average_order_value ?? 0, 2) }} {{ __('auth.avg_order_value') }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-cart fs-2tx text-primary">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $ordersWithoutDiscount->order_count ?? 0 }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('auth.orders_without_discount') }}
-                                                </div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-primary">
-                                                        ${{ number_format($ordersWithoutDiscount->average_order_value ?? 0, 2) }} {{ __('auth.avg_order_value') }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-arrow-up-right fs-2tx text-info">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    @php
-                                                        $avgDiff = ($ordersWithDiscount->average_order_value ?? 0) - ($ordersWithoutDiscount->average_order_value ?? 0);
-                                                        $percentageDiff = $ordersWithoutDiscount->average_order_value > 0 ? 
-                                                            (($ordersWithDiscount->average_order_value - $ordersWithoutDiscount->average_order_value) / $ordersWithoutDiscount->average_order_value) * 100 : 0;
-                                                    @endphp
-                                                    <span class="fs-1 fw-bold text-gray-800 {{ $percentageDiff >= 0 ? 'text-success' : 'text-danger' }}">
-                                                        {{ number_format($percentageDiff, 1) }}%
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('auth.value_difference') }}
-                                                </div>
-                                                <div class="mt-2">
-                                                    <span class="badge badge-light-info">
-                                                        ${{ number_format($avgDiff, 2) }} {{ __('auth.per_order') }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card bg-light-primary border border-primary border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-primary">{{ number_format($ordersWithoutDiscount->order_count ?? 0) }}</div>
+                                <div class="text-muted">{{ __('auth.orders_without_discount') }}</div>
+                                <span class="badge badge-light-primary mt-2">{{ currency_symbol() }}{{ number_format($ordersWithoutDiscount->average_order_value ?? 0, 2) }} {{ __('auth.avg_order_value') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card bg-light-{{ ($discountEffectiveness->percentage_difference ?? 0) >= 0 ? 'success' : 'danger' }} border border-{{ ($discountEffectiveness->percentage_difference ?? 0) >= 0 ? 'success' : 'danger' }} border-dashed h-100">
+                            <div class="card-body text-center">
+                                <div class="fs-1 fw-bold text-{{ ($discountEffectiveness->percentage_difference ?? 0) >= 0 ? 'success' : 'danger' }}">
+                                    {{ number_format($discountEffectiveness->percentage_difference ?? 0, 1) }}%
                                 </div>
+                                <div class="text-muted">{{ __('auth.value_difference') }}</div>
+                                <span class="badge badge-light-{{ ($discountEffectiveness->percentage_difference ?? 0) >= 0 ? 'success' : 'danger' }} mt-2">
+                                    {{ currency_symbol() }}{{ number_format($discountEffectiveness->difference ?? 0, 2) }} {{ __('auth.per_order') }}
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
                 @endif
 
-                {{-- Discount Patterns by Time --}}
-                @if($discountPatterns->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
+                {{-- ============================================================ --}}
+                {{-- DISCOUNT CHARTS (2 columns) --}}
+                {{-- ============================================================ --}}
+                <div class="row g-6 mb-6">
+                    {{-- Discount by Day --}}
+                    <div class="col-lg-6">
+                        <div class="card h-100">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.discount_patterns_by_time') }}</h3>
+                                <div class="card-title">
+                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.discount_by_day_of_week') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="discountPatternsChart" style="height: 400px;"></div>
+                                <div id="discountByDayChart" style="height: 300px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {{-- Discount by Hour --}}
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header border-0">
+                                <div class="card-title">
+                                    <i class="ki-duotone ki-clock fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.discount_by_hour') }}</h3>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div id="discountByHourChart" style="height: 300px;"></div>
                             </div>
                         </div>
                     </div>
                 </div>
-                @endif
 
-                {{-- Discount Range Distribution --}}
-                @if($discountedOrders->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
+                {{-- ============================================================ --}}
+                {{-- DISCOUNT RANGE DISTRIBUTION --}}
+                {{-- ============================================================ --}}
+                <div class="row g-6 mb-6">
+                    <div class="col-lg-8">
+                        <div class="card h-100">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
+                                <div class="card-title">
                                     <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.discount_range_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div class="row">
-                                    <div class="col-md-8">
-                                        <div id="discountRangeChart" style="height: 350px;"></div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="table-responsive">
-                                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                                <thead>
-                                                    <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                        <th>{{ __('auth.discount_range') }}</th>
-                                                        <th>{{ __('auth.orders_count') }}</th>
-                                                        <th>{{ __('accounting.percentage') }}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach($discountRanges as $range => $count)
-                                                    @php
-                                                        $percentage = $discountedOrders->count() > 0 ? ($count / $discountedOrders->count()) * 100 : 0;
-                                                    @endphp
-                                                    <tr>
-                                                        <td>
-                                                            <span class="badge badge-light-primary">{{ $range }}</span>
-                                                        </td>
-                                                        <td>
-                                                            <span class="fw-bold text-gray-800">{{ number_format($count) }}</span>
-                                                        </td>
-                                                        <td>
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="progress w-100 me-3" style="height: 6px;">
-                                                                    <div class="progress-bar bg-primary" style="width: {{ $percentage }}%;"></div>
-                                                                </div>
-                                                                <span class="fw-bold text-gray-700">{{ number_format($percentage, 1) }}%</span>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- Discount by Employee --}}
-                @if($discountByEmployee->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-user-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.discount_by_employee') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('auth.employee') }}</th>
-                                                <th>{{ __('auth.discounted_orders') }}</th>
-                                                <th>{{ __('auth.total_discount_given') }}</th>
-                                                <th>{{ __('auth.average_discount') }}</th>
-                                                <th>{{ __('auth.max_discount') }}</th>
-                                                <th>{{ __('auth.discount_per_order') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($discountByEmployee as $employee)
-                                            @php
-                                                $discountPerOrder = $employee->order_count > 0 ? $employee->total_discount_given / $employee->order_count : 0;
-                                                $percentage = $discountSummary['total_discount_amount'] > 0 ? 
-                                                    ($employee->total_discount_given / $discountSummary['total_discount_amount']) * 100 : 0;
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-40px symbol-circle me-3">
-                                                            <div class="symbol-label bg-light-primary">
-                                                                <span class="text-primary fw-bold">
-                                                                    {{ substr($employee->first_name, 0, 1) }}{{ substr($employee->last_name, 0, 1) }}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div class="d-flex justify-content-start flex-column">
-                                                            <span class="text-gray-800 fw-bold">{{ $employee->first_name }} {{ $employee->last_name }}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $employee->order_count }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">${{ number_format($employee->total_discount_given, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-info">${{ number_format($employee->average_discount, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-warning">${{ number_format($employee->max_discount_given, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress w-100 me-3" style="height: 8px;">
-                                                            <div class="progress-bar bg-primary" 
-                                                                role="progressbar" 
-                                                                style="width: {{ min($percentage, 100) }}%;" 
-                                                                aria-valuenow="{{ $percentage }}" 
-                                                                aria-valuemin="0" 
-                                                                aria-valuemax="100">
-                                                            </div>
-                                                        </div>
-                                                        <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                            ${{ number_format($discountPerOrder, 2) }}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- Discounted Orders Table --}}
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('auth.discounted_orders_list') }}</h3>
-                                    </div>
-                                    @if($discountedOrders->count() > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ $discountedOrders->count() }} {{ __('auth.orders') }}
-                                    </span>
-                                    @endif
-                                </div>
-                            </div>
-                            
-                            @if($discountedOrders->count() > 0)
-                                <div class="card-body p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="discountedOrdersTable">
-                                            <thead>
-                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                    <th class="min-w-100px">{{ __('auth.order_number') }}</th>
-                                                    <th class="min-w-150px">{{ __('auth.customer') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.order_total') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.discount_amount') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.discount_percentage') }}</th>
-                                                    <th class="min-w-120px">{{ __('auth.final_amount') }}</th>
-                                                    <th class="min-w-150px">{{ __('auth.processed_by') }}</th>
-                                                    <th class="min-w-100px">{{ __('auth.order_date') }}</th>
-                                                    <th class="min-w-100px">{{ __('accounting.status') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($discountedOrders as $order)
-                                                @php
-                                                    $discountPercentage = $order->total > 0 ? ($order->discount_total / $order->total) * 100 : 0;
-                                                    $statusColors = [
-                                                        'completed' => 'success',
-                                                        'pending' => 'warning',
-                                                        'processing' => 'info',
-                                                        'cancelled' => 'danger',
-                                                        'refunded' => 'secondary'
-                                                    ];
-                                                @endphp
-                                                <tr>
-                                                    <td>
-                                                        <a href="{{ route('orders.show', $order->id) }}" class="text-primary fw-bold">
-                                                            {{ $order->order_number }}
-                                                        </a>
-                                                    </td>
-                                                    <td>
-                                                        @if($order->is_registered_customer)
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="symbol symbol-40px symbol-circle me-3">
-                                                                    <div class="symbol-label bg-light-primary">
-                                                                        <span class="text-primary fw-bold">{{ substr($order->customer_display_name, 0, 1) }}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="d-flex justify-content-start flex-column">
-                                                                    <span class="text-gray-800 fw-bold">{{ $order->customer_display_name }}</span>
-                                                                    @if($order->customer_email)
-                                                                    <span class="text-muted">{{ $order->customer_email }}</span>
-                                                                    @endif
-                                                                    <span class="badge badge-light-success badge-sm mt-1">{{ __('auth.registered') }}</span>
-                                                                </div>
-                                                            </div>
-                                                        @elseif($order->is_guest_customer)
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="symbol symbol-40px symbol-circle me-3">
-                                                                    <div class="symbol-label bg-light-secondary">
-                                                                        <i class="ki-duotone ki-user fs-2 text-secondary"></i>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="d-flex justify-content-start flex-column">
-                                                                    <span class="text-gray-800 fw-bold">{{ $order->customer_display_name }}</span>
-                                                                    <span class="badge badge-light-secondary badge-sm mt-1">{{ __('auth.guest') }}</span>
-                                                                </div>
-                                                            </div>
-                                                        @else
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="symbol symbol-40px symbol-circle me-3">
-                                                                    <div class="symbol-label bg-light-danger">
-                                                                        <i class="ki-duotone ki-user fs-2 text-danger"></i>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="d-flex justify-content-start flex-column">
-                                                                    <span class="text-gray-800 fw-bold">{{ __('auth.unknown_customer') }}</span>
-                                                                </div>
-                                                            </div>
-                                                        @endif
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600">${{ number_format($order->total, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-danger">${{ number_format($order->discount_total, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="progress w-100 me-3" style="height: 6px;">
-                                                                <div class="progress-bar bg-danger" 
-                                                                    role="progressbar" 
-                                                                    style="width: {{ min($discountPercentage, 100) }}%;" 
-                                                                    aria-valuenow="{{ $discountPercentage }}" 
-                                                                    aria-valuemin="0" 
-                                                                    aria-valuemax="100">
-                                                                </div>
-                                                            </div>
-                                                            <span class="fw-bold text-gray-700 min-w-50px text-end">
-                                                                {{ number_format($discountPercentage, 1) }}%
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-success">${{ number_format($order->total - $order->discount_total, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        @if($order->orderCreater)
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-40px symbol-circle me-3">
-                                                                <div class="symbol-label bg-light-success">
-                                                                    <span class="text-success fw-bold">{{ substr($order->orderCreater->name ?? $order->orderCreater->first_name, 0, 1) }}</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $order->orderCreater->name ?? ($order->orderCreater->first_name . ' ' . $order->orderCreater->last_name) }}</span>
-                                                            </div>
-                                                        </div>
-                                                        @else
-                                                        <span class="text-muted">-</span>
-                                                        @endif
-                                                    </td>
-                                                    <td>{{ \Carbon\Carbon::parse($order->created_at)->format('M d, Y H:i') }}</td>
-                                                    <td>
-                                                        <span class="badge badge-light-{{ $statusColors[$order->status] ?? 'secondary' }}">
-                                                            {{ ucfirst($order->status) }}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            @else
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-percentage fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('auth.no_discounted_orders_found_for_period') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date']))
-                                        <a href="{{ request()->url() }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters_view_all') }}
-                                        </a>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Discount Range Analysis --}}
-                @if($discountedOrders->count() > 0)
-                <div class="row mt-6">
-                    <div class="col-lg-6">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-arrow-up-right fs-2 me-2 text-success">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.highest_discounts') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light-success">
-                                                <th class="ps-4">{{ __('auth.order') }}</th>
-                                                <th>{{ __('auth.customer') }}</th>
-                                                <th>{{ __('auth.discount_amount') }}</th>
-                                                <th>{{ __('auth.discount_percentage') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($discountedOrders->take(5) as $order)
-                                            @php
-                                                $discountPercentage = $order->total > 0 ? ($order->discount_total / $order->total) * 100 : 0;
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <a href="{{ route('orders.show', $order->id) }}" class="text-primary fw-bold">
-                                                        {{ $order->order_number }}
-                                                    </a>
-                                                </td>
-                                                <td>{{ $order->customer ? substr($order->customer->name, 0, 20) : 'Guest' }}{{ $order->customer && strlen($order->customer->name) > 20 ? '...' : '' }}</td>
-                                                <td><span class="fw-bold text-success">${{ number_format($order->discount_total, 2) }}</span></td>
-                                                <td><span class="badge badge-light-danger">{{ number_format($discountPercentage, 1) }}%</span></td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <div id="discountRangeChart" style="height: 300px;"></div>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-lg-6">
-                        <div class="card">
+                    <div class="col-lg-4">
+                        <div class="card h-100">
                             <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-arrow-down-left fs-2 me-2 text-danger">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('auth.lowest_discounts') }}</h3>
+                                <div class="card-title">
+                                    <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.breakdown') }}</h3>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
+                            <div class="card-body pt-0 p-0">
                                 <div class="table-responsive">
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
                                         <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light-danger">
-                                                <th class="ps-4">{{ __('auth.order') }}</th>
-                                                <th>{{ __('auth.customer') }}</th>
-                                                <th>{{ __('auth.discount_amount') }}</th>
-                                                <th>{{ __('auth.discount_percentage') }}</th>
+                                            <tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                                <th class="ps-4">{{ __('auth.discount_range') }}</th>
+                                                <th>{{ __('auth.orders_count') }}</th>
+                                                <th>{{ __('accounting.percentage') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($discountedOrders->sortBy('discount_total')->take(5) as $order)
-                                            @php
-                                                $discountPercentage = $order->total > 0 ? ($order->discount_total / $order->total) * 100 : 0;
-                                            @endphp
+                                            @foreach($discountRanges as $range => $count)
+                                            @php $percentage = $discountedOrders->count() > 0 ? ($count / $discountedOrders->count()) * 100 : 0; @endphp
                                             <tr>
-                                                <td class="ps-4">
-                                                    <a href="{{ route('orders.show', $order->id) }}" class="text-primary fw-bold">
-                                                        {{ $order->order_number }}
-                                                    </a>
+                                                <td class="ps-4"><span class="badge badge-light-primary">{{ $range }}</span></td>
+                                                <td>{{ number_format($count) }}</td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress w-100 me-3" style="height: 6px;">
+                                                            <div class="progress-bar bg-primary" style="width: {{ $percentage }}%;"></div>
+                                                        </div>
+                                                        <span class="fw-bold min-w-45px text-end">{{ number_format($percentage, 1) }}%</span>
+                                                    </div>
                                                 </td>
-                                                <td>{{ $order->customer ? substr($order->customer->name, 0, 20) : 'Guest' }}{{ $order->customer && strlen($order->customer->name) > 20 ? '...' : '' }}</td>
-                                                <td><span class="fw-bold text-danger">${{ number_format($order->discount_total, 2) }}</span></td>
-                                                <td><span class="badge badge-light-warning">{{ number_format($discountPercentage, 1) }}%</span></td>
                                             </tr>
                                             @endforeach
                                         </tbody>
@@ -779,298 +321,317 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- ============================================================ --}}
+                {{-- DISCOUNT BY EMPLOYEE --}}
+                {{-- ============================================================ --}}
+                @if($discountByEmployee->count() > 0)
+                <div class="card mb-6">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-user-square fs-2 me-2 text-primary"></i>
+                            <h3 class="fw-bold m-0">{{ __('auth.discount_by_employee') }}</h3>
+                        </div>
+                        <div class="card-toolbar">
+                            <span class="badge badge-light-primary fs-7">{{ $discountByEmployee->count() }} {{ __('accounting.employees') }}</span>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0 p-0">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead>
+                                    <tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th class="ps-4">{{ __('accounting.employee') }}</th>
+                                        <th>{{ __('auth.discounted_orders') }}</th>
+                                        <th>{{ __('auth.total_discount_given') }}</th>
+                                        <th>{{ __('auth.average_discount') }}</th>
+                                        <th>{{ __('auth.discount_per_order') }}</th>
+                                        <th>{{ __('auth.discount_sales_percentage') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($discountByEmployee as $employee)
+                                    @php
+                                        $percentage = $discountSummary['total_discount_amount'] > 0 ? 
+                                            ($employee->total_discount_given / $discountSummary['total_discount_amount']) * 100 : 0;
+                                    @endphp
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-35px symbol-circle me-3">
+                                                    <div class="symbol-label bg-light-primary">
+                                                        <span class="text-primary fw-bold">{{ substr($employee->first_name, 0, 1) }}{{ substr($employee->last_name, 0, 1) }}</span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">{{ $employee->first_name }} {{ $employee->last_name }}</div>
+                                                    <small class="text-muted">{{ $employee->email }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge badge-light-primary">{{ number_format($employee->order_count) }}</span></td>
+                                        <td class="fw-bold text-success">{{ currency_symbol() }}{{ number_format($employee->total_discount_given, 2) }}</td>
+                                        <td class="text-info">{{ currency_symbol() }}{{ number_format($employee->average_discount, 2) }}</td>
+                                        <td class="text-warning">{{ currency_symbol() }}{{ number_format($employee->discount_per_order, 2) }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress w-100 me-3" style="height: 6px;">
+                                                    <div class="progress-bar bg-primary" style="width: {{ min($percentage, 100) }}%;"></div>
+                                                </div>
+                                                <span class="fw-bold min-w-45px text-end">{{ number_format($percentage, 1) }}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
                 @endif
+
+                {{-- ============================================================ --}}
+                {{-- DISCOUNTED ORDERS TABLE --}}
+                {{-- ============================================================ --}}
+                <div class="card">
+                    <div class="card-header border-0">
+                        <div class="card-title">
+                            <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
+                            <h3 class="fw-bold m-0">{{ __('auth.discounted_orders_list') }}</h3>
+                        </div>
+                        <div class="card-toolbar">
+                            <span class="badge badge-light-primary fs-7">{{ $discountedOrders->count() }} {{ __('auth.orders') }}</span>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0 p-0">
+                        <div class="table-responsive">
+                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="discountedOrdersTable">
+                                <thead>
+                                    <tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th class="ps-4">{{ __('auth.order_number') }}</th>
+                                        <th>{{ __('auth.customer') }}</th>
+                                        <th class="text-end">{{ __('auth.order_total') }}</th>
+                                        <th class="text-end">{{ __('auth.discount_amount') }}</th>
+                                        <th>{{ __('auth.discount_percentage') }}</th>
+                                        <th class="text-end">{{ __('auth.final_amount') }}</th>
+                                        <th>{{ __('auth.processed_by') }}</th>
+                                        <th>{{ __('auth.order_date') }}</th>
+                                        <th>{{ __('accounting.status') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($discountedOrdersPaginated ?? $discountedOrders as $order)
+                                    @php
+                                        $discountPercentage = $order->total > 0 ? ($order->discount_total / ($order->total + $order->discount_total)) * 100 : 0;
+                                        $statusColors = ['completed' => 'success', 'pending' => 'warning', 'processing' => 'info', 'cancelled' => 'danger', 'refunded' => 'secondary'];
+                                    @endphp
+                                    <tr>
+                                        <td class="ps-4">
+                                            <a href="{{ route('orders.show', $order->id) }}" class="text-primary fw-bold">
+                                                #{{ $order->order_number }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold">{{ $order->customer->name ?? 'Guest' }}</div>
+                                            @if($order->customer)
+                                                <small class="text-muted">{{ $order->customer->email ?? '' }}</small>
+                                            @endif
+                                        </td>
+                                        <td class="text-end text-gray-600">{{ currency_symbol() }}{{ number_format($order->total, 2) }}</td>
+                                        <td class="text-end text-danger fw-bold">{{ currency_symbol() }}{{ number_format($order->discount_total, 2) }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress w-100 me-3" style="height: 6px;">
+                                                    <div class="progress-bar bg-danger" style="width: {{ min($discountPercentage, 100) }}%;"></div>
+                                                </div>
+                                                <span class="fw-bold min-w-45px text-end">{{ number_format($discountPercentage, 1) }}%</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-end text-success fw-bold">{{ currency_symbol() }}{{ number_format($order->total - $order->discount_total, 2) }}</td>
+                                        <td>
+                                            @if($order->orderCreater)
+                                                {{ $order->orderCreater->name ?? ($order->orderCreater->first_name . ' ' . $order->orderCreater->last_name) }}
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+                                        <td>{{ optional($order->created_at)->format('M d, Y H:i') ?? '-' }}</td>
+                                        <td><span class="badge badge-light-{{ $statusColors[$order->status] ?? 'secondary' }}">{{ ucfirst($order->status) }}</span></td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {{-- Pagination --}}
+                    @if(isset($discountedOrdersPaginated) && $discountedOrdersPaginated->hasPages())
+                    <div class="card-footer">
+                        @include('partials.pagination', [
+                            'paginator' => $discountedOrdersPaginated,
+                            'pageName' => 'page',
+                            'perPageName' => 'per_page',
+                            'showPerPage' => true
+                        ])
+                    </div>
+                    @endif
+                </div>
+
+                {{-- ============================================================ --}}
+                {{-- METADATA FOOTER --}}
+                {{-- ============================================================ --}}
+                <div class="mt-6 text-muted text-center fs-7">
+                    <hr>
+                    <p>
+                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                        {{ __('auth.report_generated_on') }} {{ now()->format('F d, Y H:i:s') }} 
+                        | {{ __('accounting.period') }}: {{ $startDate ?? 'N/A' }} {{ __('accounting.to') }} {{ $endDate ?? 'N/A' }}
+                        @if(isset($locationId) && $locationId)
+                            | {{ __('auth.location') }}: {{ $locations->where('id', $locationId)->first()->name ?? 'N/A' }}
+                        @endif
+                        @if(isset($departmentId) && $departmentId)
+                            | {{ __('auth.department') }}: {{ $departments->where('id', $departmentId)->first()->name ?? 'N/A' }}
+                        @endif
+                        | {{ $discountedOrders->count() ?? 0 }} {{ __('auth.discounted_orders') }}
+                        | {{ __('auth.total_discount_given') }}: {{ currency_symbol() }}{{ number_format($discountSummary['total_discount_amount'] ?? 0, 2) }}
+                    </p>
+                </div>
+                
+                @endif
+                
             </div>
         </div>
     </div>
 </div>
 
+{{-- ============================================================ --}}
+{{-- SCRIPTS --}}
+{{-- ============================================================ --}}
 @push('scripts')
-@if($discountPatterns->count() > 0 || $discountByDay->count() > 0)
+@if($discountedOrders->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Discount Patterns Chart (By Day of Week)
-        const discountByDayData = @json($discountByDay);
-        const dayLabels = discountByDayData.map(item => item.day);
-        const discountCounts = discountByDayData.map(item => item.discount_count);
-        const discountAmounts = discountByDayData.map(item => parseFloat(item.total_amount));
-        
-        const discountPatternsChart = new ApexCharts(document.querySelector("#discountPatternsChart"), {
-            series: [{
-                name: 'Discount Count',
-                data: discountCounts,
-                type: 'bar'
-            }, {
-                name: 'Total Amount ($)',
-                data: discountAmounts,
-                type: 'line'
-            }],
-            chart: {
-                type: 'bar',
-                height: 400,
-                toolbar: {
-                    show: true
+document.addEventListener('DOMContentLoaded', function() {
+    // ─── Discount by Day Chart ──────────────────────────────────
+    const dayData = @json($discountByDay);
+    const dayLabels = dayData.map(item => item.day);
+    const dayCounts = dayData.map(item => item.discount_count);
+    const dayAmounts = dayData.map(item => parseFloat(item.total_amount));
+    
+    new ApexCharts(document.querySelector("#discountByDayChart"), {
+        series: [
+            { name: 'Discount Count', data: dayCounts, type: 'bar' },
+            { name: 'Amount ($)', data: dayAmounts, type: 'line' }
+        ],
+        chart: { type: 'bar', height: 300, toolbar: { show: false } },
+        plotOptions: { bar: { horizontal: false, columnWidth: '60%' } },
+        stroke: { width: [0, 3], curve: 'smooth' },
+        xaxis: { categories: dayLabels, labels: { rotate: -45 } },
+        yaxis: [
+            { title: { text: 'Count' } },
+            { opposite: true, title: { text: 'Amount ($)' }, labels: { formatter: v => '$' + v.toFixed(2) } }
+        ],
+        colors: ['#3E97FF', '#50CD89'],
+        tooltip: {
+            shared: true,
+            intersect: false,
+            y: {
+                formatter: function(val, { seriesIndex }) {
+                    return seriesIndex === 0 ? val + ' orders' : '$' + val.toFixed(2);
                 }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: '60%'
-                }
-            },
-            stroke: {
-                width: [0, 3],
-                curve: 'smooth'
-            },
-            xaxis: {
-                categories: dayLabels,
-                labels: {
-                    rotate: -45,
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            yaxis: [{
-                title: {
-                    text: 'Number of Discounts'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return Math.round(val);
-                    }
-                }
-            }, {
-                opposite: true,
-                title: {
-                    text: 'Amount ($)'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 0});
-                    }
-                }
-            }],
-            colors: ['#3E97FF', '#50CD89'],
-            tooltip: {
-                shared: true,
-                intersect: false,
-                y: {
-                    formatter: function(val, { seriesIndex }) {
-                        if (seriesIndex === 0) {
-                            return val + ' discounts';
-                        }
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                    }
-                }
-            },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center'
             }
-        });
-        discountPatternsChart.render();
-        
-        // Discount Range Distribution Chart
-        const discountRangesData = @json($discountRanges);
-        const rangeLabels = Object.keys(discountRangesData);
-        const rangeCounts = Object.values(discountRangesData);
-        
-        const discountRangeChart = new ApexCharts(document.querySelector("#discountRangeChart"), {
-            series: rangeCounts,
-            chart: {
-                type: 'donut',
-                height: 350
-            },
-            labels: rangeLabels,
-            colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C', '#A1A5B7'],
-            plotOptions: {
-                pie: {
-                    donut: {
-                        size: '65%',
-                        labels: {
+        },
+        legend: { position: 'top', horizontalAlign: 'center' }
+    }).render();
+    
+    // ─── Discount by Hour Chart ──────────────────────────────────
+    const hourData = @json($discountByHour);
+    const hourLabels = hourData.map(item => item.hour_formatted);
+    const hourCounts = hourData.map(item => item.discount_count);
+    const hourAmounts = hourData.map(item => parseFloat(item.total_amount));
+    
+    new ApexCharts(document.querySelector("#discountByHourChart"), {
+        series: [
+            { name: 'Discount Count', data: hourCounts, type: 'bar' },
+            { name: 'Amount ($)', data: hourAmounts, type: 'line' }
+        ],
+        chart: { type: 'bar', height: 300, toolbar: { show: false } },
+        plotOptions: { bar: { horizontal: false, columnWidth: '60%' } },
+        stroke: { width: [0, 3], curve: 'smooth' },
+        xaxis: { categories: hourLabels, labels: { rotate: -45 } },
+        yaxis: [
+            { title: { text: 'Count' } },
+            { opposite: true, title: { text: 'Amount ($)' }, labels: { formatter: v => '$' + v.toFixed(2) } }
+        ],
+        colors: ['#7239EA', '#FFC700'],
+        tooltip: {
+            shared: true,
+            intersect: false,
+            y: {
+                formatter: function(val, { seriesIndex }) {
+                    return seriesIndex === 0 ? val + ' orders' : '$' + val.toFixed(2);
+                }
+            }
+        },
+        legend: { position: 'top', horizontalAlign: 'center' }
+    }).render();
+    
+    // ─── Discount Range Chart ────────────────────────────────────
+    const rangeData = @json($discountRanges);
+    const rangeLabels = Object.keys(rangeData);
+    const rangeCounts = Object.values(rangeData);
+    
+    new ApexCharts(document.querySelector("#discountRangeChart"), {
+        series: rangeCounts,
+        chart: { type: 'donut', height: 300, toolbar: { show: false } },
+        labels: rangeLabels,
+        colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C', '#A1A5B7'],
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '65%',
+                    labels: {
+                        show: true,
+                        total: {
                             show: true,
-                            total: {
-                                show: true,
-                                label: 'Total Orders',
-                                formatter: function(w) {
-                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                }
+                            label: 'Total Orders',
+                            formatter: function(w) {
+                                return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
                             }
                         }
-                    }
-                }
-            },
-            legend: {
-                position: 'bottom',
-                horizontalAlign: 'center'
-            },
-            dataLabels: {
-                enabled: true,
-                formatter: function(val, { seriesIndex, w }) {
-                    const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                    const percentage = (w.globals.series[seriesIndex] / total) * 100;
-                    return percentage.toFixed(1) + '%';
-                }
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val + ' orders';
                     }
                 }
             }
-        });
-        discountRangeChart.render();
-        
-        // Discount by Employee Chart
-        const discountByEmployeeData = @json($discountByEmployee);
-        if (discountByEmployeeData.length > 0) {
-            const employeeNames = discountByEmployeeData.map(emp => `${emp.first_name} ${emp.last_name.charAt(0)}.`);
-            const employeeDiscounts = discountByEmployeeData.map(emp => parseFloat(emp.total_discount_given));
-            
-            // You can add an additional chart here if needed
-            const hasEmployeeChart = document.querySelector("#discountByEmployeeChart");
-            if (hasEmployeeChart) {
-                const employeeChartOptions = {
-                    series: [{
-                        name: 'Total Discount Given',
-                        data: employeeDiscounts
-                    }],
-                    chart: {
-                        type: 'bar',
-                        height: 350,
-                        toolbar: {
-                            show: true
-                        }
-                    },
-                    plotOptions: {
-                        bar: {
-                            horizontal: true,
-                            barHeight: '70%'
-                        }
-                    },
-                    xaxis: {
-                        categories: employeeNames,
-                        labels: {
-                            style: {
-                                fontSize: '12px'
-                            }
-                        }
-                    },
-                    yaxis: {
-                        title: {
-                            text: 'Discount Amount ($)'
-                        },
-                        labels: {
-                            formatter: function(val) {
-                                return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                            }
-                        }
-                    },
-                    colors: ['#F1416C'],
-                    tooltip: {
-                        y: {
-                            formatter: function(val) {
-                                return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
-                            }
-                        }
-                    }
-                };
-                
-                const employeeChart = new ApexCharts(hasEmployeeChart, employeeChartOptions);
-                employeeChart.render();
-            }
-        }
-    });
+        },
+        legend: { position: 'bottom', horizontalAlign: 'center' },
+        dataLabels: { enabled: true, formatter: function(val, { seriesIndex, w }) {
+            const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+            return ((w.globals.series[seriesIndex] / total) * 100).toFixed(1) + '%';
+        }},
+        tooltip: { y: { formatter: function(val) { return val + ' orders'; } } }
+    }).render();
+});
+
+function exportTableToExcel(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return alert('{{ __("accounting.table_not_found") }}');
+    try {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(table), 'Discount Analysis');
+        XLSX.writeFile(wb, filename + '.xlsx');
+    } catch(e) { alert('{{ __("accounting.export_error") }}: ' + e.message); }
+}
+
+document.getElementById('filterForm')?.addEventListener('submit', function(e) {
+    const start = new Date(document.querySelector('[name="start_date"]').value);
+    const end = new Date(document.querySelector('[name="end_date"]').value);
+    if (start > end) {
+        e.preventDefault();
+        alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
+    }
+});
 </script>
 @endif
-
-<script>
-    // Form validation
-    const filterForm = document.getElementById('filterForm');
-    if (filterForm) {
-        filterForm.addEventListener('submit', function(e) {
-            const startDate = new Date(document.querySelector('[name="start_date"]').value);
-            const endDate = new Date(document.querySelector('[name="end_date"]').value);
-            
-            if (startDate > endDate) {
-                e.preventDefault();
-                alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
-                return false;
-            }
-        });
-    }
-    
-    // Export function
-    function exportCurrentPage(options = {}) {
-        const {
-            tableId = 'discountedOrdersTable',
-            filename = 'discount_analysis_' + new Date().toISOString().split('T')[0],
-            format = 'xlsx',
-            sheetName = 'Discount Analysis'
-        } = options;
-        
-        const table = document.getElementById(tableId);
-        if (!table) {
-            console.warn('Table not found:', tableId);
-            return;
-        }
-        
-        // Get table data
-        const data = [];
-        const headers = [];
-        
-        // Get headers
-        table.querySelectorAll('thead th').forEach(th => {
-            headers.push(th.textContent.trim());
-        });
-        
-        // Get rows
-        table.querySelectorAll('tbody tr').forEach(row => {
-            const rowData = [];
-            row.querySelectorAll('td').forEach((td, index) => {
-                const tdClone = td.cloneNode(true);
-                tdClone.querySelectorAll('.ki-duotone, .badge, i, .progress, .symbol, .progress-bar').forEach(el => el.remove());
-                rowData.push(tdClone.textContent.trim());
-            });
-            data.push(rowData);
-        });
-        
-        // Create CSV content
-        let csvContent = headers.join(',') + '\n';
-        data.forEach(row => {
-            const escapedRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
-            csvContent += escapedRow.join(',') + '\n';
-        });
-        
-        // Download file
-        const blob = new Blob([csvContent], { type: format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/vnd.ms-excel' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.setAttribute('download', `${filename}.${format === 'csv' ? 'csv' : 'xls'}`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-</script>
 @endpush
-
-<script>
-    // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("auth.start_date_cannot_be_after_end_date") }}');
-            return false;
-        }
-    });
-</script>
 
 @endsection
