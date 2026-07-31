@@ -97,11 +97,17 @@ class ProductController extends Controller
         // Get product types for filter
         $productTypes = ['simple' => 'Simple', 'variable' => 'Variable', 'digital' => 'Digital', 'service' => 'Service'];
         
+        $locations = Location::where('tenant_id', $tenantId)->get();
+        $departments = Department::where('tenant_id', $tenantId)->get();
+
         // Regular page load
         return view('inventory.product-index', [
             'all_products' => $products,
             'categories' => $categories,
             'productTypes' => $productTypes,
+            'locations' => $locations,
+            'departments' => $departments,
+            
         ]);
     }
 
@@ -720,5 +726,98 @@ class ProductController extends Controller
         return redirect()->back();
     }
 
+    public function bulkAllocate(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('update product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        // ✅ Fix: Accept both string and array for product_ids
+        $validated = $request->validate([
+            'product_ids' => ['required'],
+            'departments' => ['nullable', 'array'],
+            'departments.*' => ['exists:departments,id'],
+        ]);
+
+        // ✅ Parse product IDs - handles both string and array
+        $productIds = [];
+        if (is_string($validated['product_ids'])) {
+            $productIds = array_filter(explode(',', $validated['product_ids']));
+        } elseif (is_array($validated['product_ids'])) {
+            $productIds = $validated['product_ids'];
+        }
+        
+        if (empty($productIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.no_products_selected'),
+            ], 422);
+        }
+
+        // Get products that belong to this tenant
+        $products = Product::whereIn('id', $productIds)
+            ->where('tenant_id', $tenantId)
+            ->get();
+
+        if ($products->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.no_valid_products'),
+            ], 422);
+        }
+
+        $departmentIds = $validated['departments'] ?? [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($products as $product) {
+                // ✅ Sync departments
+                $product->departments()->sync($departmentIds);
+
+                // ✅ Auto-calculate locations based on selected departments
+                $autoLocations = [];
+                if (!empty($departmentIds)) {
+                    $autoLocations = Department::whereIn('id', $departmentIds)
+                        ->where('tenant_id', $tenantId)
+                        ->distinct()
+                        ->pluck('location_id')
+                        ->filter()
+                        ->toArray();
+                }
+                
+                // ✅ Sync locations
+                $product->locations()->sync($autoLocations);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => __('pagination.products_allocated_success', ['count' => $products->count()]),
+                'componentId' => 'reloadProductComponent',
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // \Log::error('Bulk allocation failed', [
+            //     'product_ids' => $productIds,
+            //     'department_ids' => $departmentIds,
+            //     'error' => $e->getMessage()
+            // ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.bulk_allocation_failed') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 
 }

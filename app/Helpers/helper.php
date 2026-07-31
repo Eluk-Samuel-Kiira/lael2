@@ -187,8 +187,24 @@ if (!function_exists('employeeProfileImage')) {
     }
 }
 
-
-
+if (!function_exists('getLogoBase64')) {
+    function getLogoBase64($tenantId = null)
+    {
+        $logoPath = getLogoImage($tenantId, true); // Get filesystem path
+        
+        if ($logoPath && file_exists($logoPath)) {
+            try {
+                $imageData = file_get_contents($logoPath);
+                $mimeType = mime_content_type($logoPath);
+                return 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        
+        return null;
+    }
+}
 
 if (!function_exists('getLogoImage')) {
     function getLogoImage($tenantId = null)

@@ -47,6 +47,13 @@
                     <span class="d-none d-sm-inline">{{__('pagination.new_products')}}</span>
                     <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
                 </button>
+                <button type="button" class="btn btn-success flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_bulk_allocate">
+                    <i class="ki-duotone ki-building fs-2 me-2">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
+                    <span class="d-none d-sm-inline">{{ __('pagination.bulk_allocate') }}</span>
+                    <span class="d-inline d-sm-none">{{ __('pagination.allocate') }}</span>
+                </button>
                 <button type="button"
                         class="btn btn-light-success flex-shrink-0"
                         data-bs-toggle="modal"
@@ -58,6 +65,7 @@
                 @endcan
 
                 @include('inventory.product.create')
+                @include('inventory.product.bulk-allocate')
                 @include('inventory.product.excel-import')
             </div>
         </div>

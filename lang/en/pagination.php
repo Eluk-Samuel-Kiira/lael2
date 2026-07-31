@@ -337,8 +337,21 @@ return [
     // Additional
     'walk_in_customer' => 'Walk-in Customer',
     'order_number' => 'Order Number',
+    'bulk_allocate' => 'Bulk Allocate',
+    'bulk_allocate_products' => 'Bulk Allocate Products',
+    'bulk_allocate_info' => 'Select products from the table below and assign them to departments.',
+    'select_products_and_assign_departments' => 'Check the products you want to allocate, then select departments.',
+    'selected_products' => 'Selected Products',
+    'no_products_selected' => 'No products selected. Please select products from the table.',
+    'allocate_selected' => 'Allocate Selected',
+    'products_allocated_success' => ':count product(s) have been successfully allocated.',
+    'bulk_allocation_failed' => 'Bulk allocation failed. Please try again.',
+    'no_valid_products' => 'No valid products found to allocate.',
+    'select_products_first' => 'Please select at least one product to allocate.',
 
     'pos_index' => 'POS Index',
+    'assignments' => 'Assignments',
+    
     '_pos' => 'Point Of Sale',
     '_orders' => 'Sale Orders',
     '_options' => 'Options',

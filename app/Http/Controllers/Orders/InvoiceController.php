@@ -893,4 +893,110 @@ class InvoiceController extends Controller
         ]);
     }
 
+    /**
+     * Apply flat discount to invoice
+     */
+    public function applyDiscount(Request $request, $id)
+    {
+        $user = Auth::user();
+        $invoice = Invoice::where('tenant_id', $user->tenant_id)->findOrFail($id);
+        
+        if ($invoice->isPaid() || $invoice->isVoid() || $invoice->isSent()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.cannot_discount_sent_invoice'),
+            ], 422);
+        }
+        
+        $validated = $request->validate([
+            'discount_amount' => 'required|numeric|min:0',
+            'discount_notes' => 'nullable|string|max:500',
+        ]);
+        
+        $discountAmount = (float) $validated['discount_amount'];
+        
+        if ($discountAmount <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.discount_must_be_positive'),
+            ], 422);
+        }
+        
+        // Ensure discount doesn't exceed subtotal
+        if ($discountAmount > $invoice->subtotal) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.discount_exceeds_subtotal'),
+            ], 422);
+        }
+        
+        DB::beginTransaction();
+        try {
+            $invoice->applyDiscount($discountAmount, $validated['discount_notes'] ?? null);
+            
+            DB::commit();
+            
+            // ✅ Convert back to display format for response
+            return response()->json([
+                'success' => true,
+                'message' => __('payments.discount_applied', ['amount' => number_format($discountAmount, 2)]),
+                'invoice' => $invoice->fresh(),
+                'discount_amount' => $discountAmount,
+                'new_total' => $invoice->total,
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Discount apply failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.discount_apply_failed'),
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove discount from invoice
+     */
+    public function removeDiscount($id)
+    {
+        $user = Auth::user();
+        $invoice = Invoice::where('tenant_id', $user->tenant_id)->findOrFail($id);
+        
+        if ($invoice->isPaid() || $invoice->isVoid() || $invoice->isSent()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.cannot_modify_sent_invoice'),
+            ], 422);
+        }
+        
+        if ($invoice->discount_total <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.no_discount_to_remove'),
+            ], 422);
+        }
+        
+        DB::beginTransaction();
+        try {
+            $invoice->removeDiscount();
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => __('payments.discount_removed'),
+                'invoice' => $invoice->fresh(),
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Discount remove failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.discount_remove_failed'),
+            ], 500);
+        }
+    }
+
 }

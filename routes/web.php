@@ -268,7 +268,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             
         Route::get('/catalog/import/template', [ProductImportController::class, 'downloadTemplate'])->name('catalog.import.template');
         Route::post('/catalog/import',          [ProductImportController::class, 'store'])->name('catalog.import.store');
-
+        Route::post('/products/bulk-allocate', [ProductController::class, 'bulkAllocate'])
+            ->name('products.bulk-allocate');
         
         // Stores and Inventory
         Route::resource('items', InventoryItemController::class);
