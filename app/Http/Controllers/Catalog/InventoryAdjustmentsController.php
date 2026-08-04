@@ -141,13 +141,12 @@ class InventoryAdjustmentsController extends Controller
         //
     }
 
+
     /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id)
     {     
-        // Log::info('Stock adjustment request:', $request->all());
-        
         $user = Auth::user();
         $tenantId = $user->tenant_id;
                 
@@ -159,7 +158,7 @@ class InventoryAdjustmentsController extends Controller
         }
 
         // Get the item first to check variant stock
-        $item = InventoryItems::with('variant')
+        $item = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
                         ->where('id', $id)
                         ->where('tenant_id', $tenantId)
                         ->first();
@@ -273,19 +272,34 @@ class InventoryAdjustmentsController extends Controller
             $item->variant->overal_quantity_at_hand = max(0, $newOverallQuantity);
             $item->variant->save();
 
-            // Determine the direction for notes
-            $direction = $validated['adjust_amount'] > 0 
-                ? 'from overall stock to branch' 
-                : 'from branch back to overall stock';
+            // ─── Get Location and Department Names ────────────────────
+            $locationName = $item->itemLocation ? $item->itemLocation->name : 'Unknown Location';
+            $departmentName = $item->departmentItem ? $item->departmentItem->name : 'Unknown Department';
+            $variantName = $item->variant->name ?? 'Unknown Variant';
             
-            $action = $validated['adjust_amount'] > 0 ? 'Added' : 'Returned';
+            // ─── Determine Direction and Build Readable Note ──────────
+            $adjustAmount = abs($validated['adjust_amount']);
+            $direction = $validated['adjust_amount'] > 0 ? 'inbound' : 'outbound';
+            
+            // ✅ Build readable sentence
+            if ($validated['adjust_amount'] > 0) {
+                // Moving FROM overall stock TO branch
+                $action = 'Moved';
+                $directionText = 'from Overall Stock to ' . $locationName . ' (' . $departmentName . ')';
+            } else {
+                // Moving FROM branch back TO overall stock
+                $action = 'Returned';
+                $directionText = 'from ' . $locationName . ' (' . $departmentName . ') back to Overall Stock';
+            }
+            
+            $readableNote = $action . ' ' . $adjustAmount . ' unit(s) of "' . $variantName . '" ' . $directionText;
 
             // ✅ Record adjustment (audit trail)
             InventoryAdjustments::create([
                 'quantity_before' => (int) $validated['current_quantity'],
                 'quantity_after'  => (int) $validated['new_quantity'],
                 'reason'          => 'stock_adjustment',
-                'notes'           => $action . ' ' . abs($validated['adjust_amount']) . ' units ' . $direction . ' for ' . $item->variant->name,
+                'notes'           => $readableNote,
                 'inventory_id'    => $item->id,
                 'created_by'      => auth()->id() ?? null,
                 'tenant_id'       => $item->tenant_id,
@@ -297,7 +311,7 @@ class InventoryAdjustmentsController extends Controller
                 'reference_id'   => $item->id,
                 'reference_type' => 'adjustment',
                 'type'           => 'adjustment',
-                'notes'          => $action . ' ' . abs($validated['adjust_amount']) . ' units ' . $direction,
+                'notes'          => $readableNote,
                 'inventory_id'   => $item->id,
                 'created_by'     => auth()->id() ?? null,
                 'tenant_id'      => $item->tenant_id,
@@ -310,7 +324,7 @@ class InventoryAdjustmentsController extends Controller
                 'reload' => true,
                 'refresh' => false,
                 'componentId' => 'reloadStockComponent',
-                'message' => __('passwords._stock_adjusted') . ' (' . abs($validated['adjust_amount']) . ' units ' . $direction . ')',
+                'message' => __('passwords._stock_adjusted') . ' (' . $adjustAmount . ' units ' . strtolower($directionText) . ')',
                 'redirect' => route('stocks.index'),
             ]);
 
@@ -340,7 +354,6 @@ class InventoryAdjustmentsController extends Controller
         //
     }
 
-
     public function transferStock(Request $request, string $id)
     {
         // Log::info('=== TRANSFER STOCK START ===');
@@ -358,7 +371,7 @@ class InventoryAdjustmentsController extends Controller
         }
         
         try {
-            // ✅ FIX: Validate only the essential fields
+            // ✅ Validate the essential fields
             $validated = $request->validate([
                 'department_id'    => [
                     'required',
@@ -392,7 +405,6 @@ class InventoryAdjustmentsController extends Controller
                         }
                     }
                 ],
-                // ✅ FIX: Remove current_quantity from validation
                 'transfer_amount'  => 'required|integer|min:1',
             ], [
                 'department_id.required' => __('pagination.department_required'),
@@ -404,8 +416,9 @@ class InventoryAdjustmentsController extends Controller
 
             $adjustAmount = (int) $validated['transfer_amount'];
 
-            // ✅ FIX: Get the ACTUAL current quantity from the database
-            $sourceItem = InventoryItems::where('id', $id)
+            // ✅ Get source inventory item with eager loaded relationships
+            $sourceItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+                            ->where('id', $id)
                             ->where('tenant_id', $tenantId)
                             ->first();
 
@@ -416,12 +429,28 @@ class InventoryAdjustmentsController extends Controller
                 ]);
             }
 
+            // ✅ Get target location and department names
+            $targetLocation = Location::where('id', $validated['location_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->first();
+            
+            $targetDepartment = Department::where('id', $validated['department_id'])
+                                ->where('tenant_id', $tenantId)
+                                ->first();
+
+            if (!$targetLocation || !$targetDepartment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.invalid_target_location_or_department'),
+                ]);
+            }
+
             // ✅ Get the REAL current quantity from the database
             $current = (int) $sourceItem->quantity_allocated;
             
             Log::info("Source item found. Real current quantity: $current");
 
-            // 2️⃣ Check if adjust amount exceeds current quantity (using REAL database value)
+            // ✅ Check if adjust amount exceeds current quantity
             if ($adjustAmount > $current) {
                 Log::warning("Adjust amount ($adjustAmount) exceeds current ($current)");
                 return response()->json([
@@ -430,7 +459,7 @@ class InventoryAdjustmentsController extends Controller
                 ]);
             }
 
-            // 4️⃣ If source and target are same location & department, do nothing
+            // ✅ If source and target are same location & department, do nothing
             if ($sourceItem->location_id == $validated['location_id'] &&
                 $sourceItem->department_id == $validated['department_id']) {
                 
@@ -441,8 +470,9 @@ class InventoryAdjustmentsController extends Controller
                 ]);
             }
 
-            // 5️⃣ Find target inventory item
-            $targetItem = InventoryItems::where('variant_id', $sourceItem->variant_id)
+            // ✅ Find target inventory item
+            $targetItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+                ->where('variant_id', $sourceItem->variant_id)
                 ->where('location_id', $validated['location_id'])
                 ->where('department_id', $validated['department_id'])
                 ->where('tenant_id', $tenantId)
@@ -456,13 +486,28 @@ class InventoryAdjustmentsController extends Controller
                 ]);
             }
 
-            // 6️⃣ Update target stock
+            // ─── Get Names for Readable Notes ──────────────────────────
+            $sourceLocationName = $sourceItem->itemLocation ? $sourceItem->itemLocation->name : 'Unknown Location';
+            $sourceDepartmentName = $sourceItem->departmentItem ? $sourceItem->departmentItem->name : 'Unknown Department';
+            $targetLocationName = $targetLocation->name;
+            $targetDepartmentName = $targetDepartment->name;
+            $variantName = $sourceItem->variant ? $sourceItem->variant->name : 'Unknown Variant';
+
+            // ─── Build Readable Transfer Notes ─────────────────────────
+            $transferNote = 'Transferred ' . $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
+                            . $sourceLocationName . ' (' . $sourceDepartmentName . ') to ' 
+                            . $targetLocationName . ' (' . $targetDepartmentName . ')';
+
+            $receivedNote = 'Received ' . $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
+                            . $sourceLocationName . ' (' . $sourceDepartmentName . ')';
+
+            // ✅ Update target stock
             $targetBefore = $targetItem->quantity_allocated;
             $targetItem->quantity_allocated += $adjustAmount;
             $targetItem->save();
             $targetAfter = $targetItem->quantity_allocated;
 
-            // 7️⃣ Update source stock
+            // ✅ Update source stock
             $sourceBefore = $sourceItem->quantity_allocated;
             $sourceItem->quantity_allocated -= $adjustAmount;
             $sourceItem->save();
@@ -470,13 +515,13 @@ class InventoryAdjustmentsController extends Controller
 
             Log::info("Source: $sourceBefore → $sourceAfter, Target: $targetBefore → $targetAfter");
 
-            // 8️⃣ Log adjustments
+            // ✅ Log adjustments
             InventoryAdjustments::create([
                 'inventory_id'    => $sourceItem->id,
                 'quantity_before' => $sourceBefore,
                 'quantity_after'  => $sourceAfter,
                 'reason'          => 'stock_transfer',
-                'notes'           => 'Transferred ' . $adjustAmount . ' units to location #' . $validated['location_id'] . ', department #' . $validated['department_id'],
+                'notes'           => $transferNote,
                 'created_by'      => auth()->id() ?? null,
                 'tenant_id'       => $sourceItem->tenant_id,
             ]);
@@ -486,19 +531,19 @@ class InventoryAdjustmentsController extends Controller
                 'quantity_before' => $targetBefore,
                 'quantity_after'  => $targetAfter,
                 'reason'          => 'stock_transfer',
-                'notes'           => 'Received ' . $adjustAmount . ' units from inventory #' . $sourceItem->id,
+                'notes'           => $receivedNote,
                 'created_by'      => auth()->id() ?? null,
                 'tenant_id'       => $targetItem->tenant_id,
             ]);
 
-            // 9️⃣ Log transactions
+            // ✅ Log transactions
             InventoryTransactions::create([
                 'inventory_id'   => $sourceItem->id,
                 'quantity'       => -$adjustAmount,
                 'reference_id'   => $targetItem->id,
                 'reference_type' => 'transfer',
                 'type'           => 'transfer_out',
-                'notes'          => 'Transferred ' . $adjustAmount . ' units to inventory #' . $targetItem->id,
+                'notes'          => $transferNote,
                 'created_by'     => auth()->id() ?? null,
                 'tenant_id'      => $sourceItem->tenant_id,
             ]);
@@ -509,7 +554,7 @@ class InventoryAdjustmentsController extends Controller
                 'reference_id'   => $sourceItem->id,
                 'reference_type' => 'transfer',
                 'type'           => 'transfer_in',
-                'notes'          => 'Received ' . $adjustAmount . ' units from inventory #' . $sourceItem->id,
+                'notes'          => $receivedNote,
                 'created_by'     => auth()->id() ?? null,
                 'tenant_id'      => $targetItem->tenant_id,
             ]);
@@ -538,6 +583,5 @@ class InventoryAdjustmentsController extends Controller
             ], 500);
         }
     }
-
-
+    
 }

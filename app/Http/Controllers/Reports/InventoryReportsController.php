@@ -24,11 +24,12 @@ class InventoryReportsController extends Controller
     private function getTenantId()
     {
         $user = auth()->user();
-        $tenantId = $user->tenant_id;
-
         if (!$user->hasPermissionTo('inventory reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        
+        $tenantId = $user->tenant_id;
+
         return $tenantId;
     }
 
@@ -73,8 +74,12 @@ class InventoryReportsController extends Controller
         
         // Query for inventory items
         $query = InventoryItems::with(['variant', 'departmentItem', 'itemLocation'])
-            ->where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            ->where('tenant_id', $tenantId);
+        
+        // Apply date filter
+        if ($startDate && $endDate) {
+            $query->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+        }
         
         // Apply filters
         if ($departmentId) {
@@ -101,13 +106,19 @@ class InventoryReportsController extends Controller
         // Summary statistics from ALL items
         $summary = [
             'total_items' => $allItems->count(),
-            'total_quantity' => $allItems->sum('quantity_on_hand'),
+            'total_quantity_on_hand' => $allItems->sum('quantity_on_hand'),
+            'total_quantity_allocated' => $allItems->sum('quantity_allocated'),
             'total_value' => $this->calculateInventoryValueFromCollection($allItems),
             'average_stock_level' => $allItems->avg('quantity_on_hand'),
             'items_below_reorder' => $allItems->filter(function($item) {
-                return $item->quantity_on_hand < $item->reorder_point;
+                return $item->quantity_on_hand < ($item->reorder_point ?? 0);
+            })->count(),
+            'items_above_preferred' => $allItems->filter(function($item) {
+                return $item->preferred_stock_level > 0 && $item->quantity_on_hand > $item->preferred_stock_level;
             })->count(),
             'out_of_stock' => $allItems->where('quantity_on_hand', 0)->count(),
+            'total_reorder_point' => $allItems->sum('reorder_point'),
+            'total_preferred_stock' => $allItems->sum('preferred_stock_level'),
         ];
         
         // ✅ Apply pagination to the collection
@@ -165,7 +176,7 @@ class InventoryReportsController extends Controller
 
 
     /**
-     * Inventory Transactions Report with Debug
+     * Inventory Transactions Report with Variant Filtering
      */
     public function transactions(Request $request)
     {
@@ -176,6 +187,7 @@ class InventoryReportsController extends Controller
         $type = $request->get('type', 'all');
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $perPage = (int)$request->get('per_page', 15);
         
         // ✅ Build query with relationships
@@ -203,16 +215,23 @@ class InventoryReportsController extends Controller
             });
         }
         
-        // ✅ DEBUG: Check first transaction to see what's happening
+        // ✅ Add variant filter
+        if ($variantId) {
+            $query->whereHas('InventoryItems', function($q) use ($variantId) {
+                $q->where('variant_id', $variantId);
+            });
+        }
+        
+        // ✅ DEBUG: Check first transaction
         $firstTransaction = $query->first();
         if ($firstTransaction) {
-            \Log::info('Transaction Debug:', [
-                'transaction_id' => $firstTransaction->id,
-                'inventory_id' => $firstTransaction->inventory_id,
-                'has_inventory_item' => $firstTransaction->InventoryItems ? 'Yes' : 'No',
-                'inventory_item_exists' => $firstTransaction->InventoryItems ? $firstTransaction->InventoryItems->id : 'N/A',
-                'variant_id_from_inventory' => $firstTransaction->InventoryItems ? $firstTransaction->InventoryItems->variant_id : 'N/A',
-            ]);
+            // \Log::info('Transaction Debug:', [
+            //     'transaction_id' => $firstTransaction->id,
+            //     'inventory_id' => $firstTransaction->inventory_id,
+            //     'has_inventory_item' => $firstTransaction->InventoryItems ? 'Yes' : 'No',
+            //     'inventory_item_exists' => $firstTransaction->InventoryItems ? $firstTransaction->InventoryItems->id : 'N/A',
+            //     'variant_id_from_inventory' => $firstTransaction->InventoryItems ? $firstTransaction->InventoryItems->variant_id : 'N/A',
+            // ]);
         }
         
         // Get paginated transactions
@@ -251,6 +270,13 @@ class InventoryReportsController extends Controller
             ];
         })->sortKeys()->values();
         
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         
@@ -260,11 +286,13 @@ class InventoryReportsController extends Controller
             'dailyTrend',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants to view
             'startDate',
             'endDate',
             'type',
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'perPage',
             'totalTransactions',
             'totalQuantity',
@@ -273,19 +301,21 @@ class InventoryReportsController extends Controller
             'netChange',
             'avgDailyTransactions'
         ));
-    }                
+    }              
         
-
     /**
-     * Inventory Turnover Report with Pure Eloquent
+     * Inventory Turnover Report with Pure Eloquent - Supports Both Single & Multi-Shop
      */
     public function turnover(Request $request)
     {
         $tenantId = $this->getTenantId();
+        $isSingleShop = tenant_is_single_shop($tenantId);
         
         $startDate = $request->get('start_date', now()->subMonths(6)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $variantId = $request->get('variant_id');
+        $departmentId = $request->get('department_id');
+        $locationId = $request->get('location_id');
         $perPage = (int)$request->get('per_page', 15);
         
         // Calculate days in period
@@ -302,36 +332,125 @@ class InventoryReportsController extends Controller
         
         $allVariants = $variantsQuery->get();
         
-        // Get inventory logs for the date range
-        $logs = SingleShopInventoryLog::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->get();
+        // ─── Get Movement Data Based on Shop Type ──────────────────────
+        $movementData = collect();
         
-        // Group logs by variant_id
-        $logsByVariant = $logs->groupBy('variant_id');
-        
-        // Calculate turnover data for each variant using pure collections
-        $turnoverCollection = $allVariants->map(function ($variant) use ($logsByVariant, $daysInPeriod) {
-            $variantLogs = $logsByVariant->get($variant->id, collect());
+        if ($isSingleShop) {
+            // ─── Single Shop: Use SingleShopInventoryLog ────────────────
+            $logs = SingleShopInventoryLog::where('tenant_id', $tenantId)
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->get();
             
-            if ($variantLogs->isEmpty()) {
-                return null;
+            // Group logs by variant_id
+            $logsByVariant = $logs->groupBy('variant_id');
+            
+            foreach ($allVariants as $variant) {
+                $variantLogs = $logsByVariant->get($variant->id, collect());
+                
+                if ($variantLogs->isEmpty()) {
+                    continue;
+                }
+                
+                $totalMovement = $variantLogs->sum(function ($log) {
+                    return abs($log->quantity_change);
+                });
+                
+                $avgStockLevel = $variantLogs->avg('quantity_before') ?: 1;
+                $transactionCount = $variantLogs->count();
+                $firstMovement = $variantLogs->min('created_at');
+                $lastMovement = $variantLogs->max('created_at');
+                
+                $movementData->push([
+                    'variant' => $variant,
+                    'total_movement' => $totalMovement,
+                    'avg_stock_level' => $avgStockLevel,
+                    'transaction_count' => $transactionCount,
+                    'first_movement' => $firstMovement,
+                    'last_movement' => $lastMovement,
+                ]);
             }
             
-            // Calculate total movement (sum of absolute quantity changes)
-            $totalMovement = $variantLogs->sum(function ($log) {
-                return abs($log->quantity_change);
+        } else {
+            // ─── Multi-Shop: Use InventoryTransactions ──────────────────
+            $transactionsQuery = InventoryTransactions::with(['InventoryItems' => function($q) use ($departmentId, $locationId) {
+                if ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                }
+                if ($locationId) {
+                    $q->where('location_id', $locationId);
+                }
+            }])
+            ->where('tenant_id', $tenantId)
+            ->where('type', 'sale') // Only sales
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            
+            // Apply department filter if provided
+            if ($departmentId) {
+                $transactionsQuery->whereHas('InventoryItems', function($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                });
+            }
+            
+            // Apply location filter if provided
+            if ($locationId) {
+                $transactionsQuery->whereHas('InventoryItems', function($q) use ($locationId) {
+                    $q->where('location_id', $locationId);
+                });
+            }
+            
+            $transactions = $transactionsQuery->get();
+            
+            // Group by variant_id through inventory_items
+            $transactionsByVariant = $transactions->groupBy(function($transaction) {
+                return $transaction->InventoryItems->variant_id ?? null;
             });
             
-            // Calculate average stock level
-            $avgStockLevel = $variantLogs->avg('quantity_before') ?: 1;
-            
-            // Calculate transaction count
-            $transactionCount = $variantLogs->count();
-            
-            // Get first and last movement dates
-            $firstMovement = $variantLogs->min('created_at');
-            $lastMovement = $variantLogs->max('created_at');
+            foreach ($allVariants as $variant) {
+                $variantTransactions = $transactionsByVariant->get($variant->id, collect());
+                
+                if ($variantTransactions->isEmpty()) {
+                    continue;
+                }
+                
+                $totalMovement = $variantTransactions->sum(function ($transaction) {
+                    return abs($transaction->quantity);
+                });
+                
+                // Get average stock level from InventoryItems
+                $inventoryItem = InventoryItems::where('variant_id', $variant->id)
+                    ->where('tenant_id', $tenantId);
+                
+                if ($departmentId) {
+                    $inventoryItem->where('department_id', $departmentId);
+                }
+                if ($locationId) {
+                    $inventoryItem->where('location_id', $locationId);
+                }
+                
+                $avgStockLevel = $inventoryItem->avg('quantity_on_hand') ?: 1;
+                $transactionCount = $variantTransactions->count();
+                $firstMovement = $variantTransactions->min('created_at');
+                $lastMovement = $variantTransactions->max('created_at');
+                
+                $movementData->push([
+                    'variant' => $variant,
+                    'total_movement' => $totalMovement,
+                    'avg_stock_level' => $avgStockLevel,
+                    'transaction_count' => $transactionCount,
+                    'first_movement' => $firstMovement,
+                    'last_movement' => $lastMovement,
+                ]);
+            }
+        }
+        
+        // ─── Calculate Turnover Metrics ─────────────────────────────────
+        $turnoverCollection = $movementData->map(function ($data) use ($daysInPeriod) {
+            $variant = $data['variant'];
+            $totalMovement = $data['total_movement'];
+            $avgStockLevel = $data['avg_stock_level'] ?: 1;
+            $transactionCount = $data['transaction_count'];
+            $firstMovement = $data['first_movement'];
+            $lastMovement = $data['last_movement'];
             
             // Calculate turnover rate
             $turnoverRate = $avgStockLevel > 0 ? $totalMovement / $avgStockLevel : 0;
@@ -367,12 +486,12 @@ class InventoryReportsController extends Controller
                 'movement_label' => $movementLabel,
                 'movement_color' => $movementColor,
             ];
-        })->filter(); // Remove null entries (variants with no movement)
+        });
         
         // Sort by turnover rate (descending)
         $sortedTurnover = $turnoverCollection->sortByDesc('turnover_rate')->values();
         
-        // ✅ Apply pagination using your helper method
+        // ✅ Apply pagination
         $turnoverData = $this->paginateCollection($sortedTurnover, $perPage, 'page');
         
         // Calculate summary statistics from ALL data (not paginated)
@@ -394,188 +513,40 @@ class InventoryReportsController extends Controller
             ->orderBy('name')
             ->get();
         
+        // Get departments and locations for filters
+        $departments = Department::where('tenant_id', $tenantId)->get();
+        $locations = Location::where('tenant_id', $tenantId)->get();
+        
         return view('reports.inventory.turnover', compact(
             'turnoverData',
-            'sortedTurnover',  // Pass for charts and summary
+            'sortedTurnover',
             'summary',
             'variants',
+            'departments',
+            'locations',
             'startDate',
             'endDate',
             'variantId',
+            'departmentId',
+            'locationId',
             'perPage',
-            'daysInPeriod'
+            'daysInPeriod',
+            'isSingleShop'
         ));
     }
-        
+
     /**
-     * Stock Aging Report with Pure Eloquent
+     * Stock Aging Report with Pure Eloquent - Fixed for all inventory items
      */
     public function stockAging(Request $request)
     {
         $tenantId = $this->getTenantId();
+        $isSingleShop = tenant_is_single_shop($tenantId);
         
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id');
         $category = $request->get('category');
-        $perPage = (int)$request->get('per_page', 15);
-        
-        // Get all inventory items with batch and expiry info
-        $allItems = InventoryItems::with([
-            'variant.product',
-            'departmentItem',
-            'itemLocation'
-        ])
-        ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0)
-        ->whereNotNull('batch_number')
-        ->whereNotNull('expiry_date')
-        ->when($departmentId, function($q, $departmentId) {
-            return $q->where('department_id', $departmentId);
-        })
-        ->when($locationId, function($q, $locationId) {
-            return $q->where('location_id', $locationId);
-        })
-        ->get();
-        
-        // Calculate aging metrics for each item
-        $agingCollection = collect();
-        $agingCategories = [
-            'expired' => 0,
-            '1_week' => 0,
-            '1_month' => 0,
-            '3_months' => 0,
-            '6_months' => 0,
-            'over_6_months' => 0,
-        ];
-        
-        $today = now();
-        
-        foreach ($allItems as $item) {
-            $expiryDate = Carbon::parse($item->expiry_date);
-            $daysToExpiry = $today->diffInDays($expiryDate, false);
-            
-            // Determine aging category
-            if ($daysToExpiry < 0) {
-                $categoryKey = 'expired';
-                $statusColor = 'danger';
-                $statusText = __('pagination.expired');
-                $progressColor = 'danger';
-                $urgency = 'immediate';
-            } elseif ($daysToExpiry <= 7) {
-                $categoryKey = '1_week';
-                $statusColor = 'warning';
-                $statusText = __('pagination.critical');
-                $progressColor = 'warning';
-                $urgency = 'critical';
-            } elseif ($daysToExpiry <= 30) {
-                $categoryKey = '1_month';
-                $statusColor = 'warning';
-                $statusText = __('pagination.warning');
-                $progressColor = 'warning';
-                $urgency = 'high';
-            } elseif ($daysToExpiry <= 90) {
-                $categoryKey = '3_months';
-                $statusColor = 'info';
-                $statusText = __('pagination.monitor');
-                $progressColor = 'info';
-                $urgency = 'medium';
-            } elseif ($daysToExpiry <= 180) {
-                $categoryKey = '6_months';
-                $statusColor = 'success';
-                $statusText = __('pagination.good');
-                $progressColor = 'success';
-                $urgency = 'low';
-            } else {
-                $categoryKey = 'over_6_months';
-                $statusColor = 'primary';
-                $statusText = __('pagination.excellent');
-                $progressColor = 'primary';
-                $urgency = 'none';
-            }
-            
-            // Add to category totals
-            $agingCategories[$categoryKey] += $item->quantity_on_hand;
-            
-            // Filter by category if specified
-            if ($category && $category !== $categoryKey) {
-                continue;
-            }
-            
-            $inventoryValue = $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
-            $valueAtRisk = $daysToExpiry < 90 ? $inventoryValue : 0;
-            
-            $agingCollection->push((object)[
-                'id' => $item->id,
-                'variant' => $item->variant,
-                'departmentItem' => $item->departmentItem,
-                'itemLocation' => $item->itemLocation,
-                'quantity_on_hand' => $item->quantity_on_hand,
-                'batch_number' => $item->batch_number,
-                'expiry_date' => $item->expiry_date,
-                'days_to_expiry' => $daysToExpiry,
-                'inventory_value' => $inventoryValue,
-                'value_at_risk' => $valueAtRisk,
-                'category_key' => $categoryKey,
-                'status_color' => $statusColor,
-                'status_text' => $statusText,
-                'progress_color' => $progressColor,
-                'urgency' => $urgency,
-                'cost_price' => $item->variant->cost_price ?? 0,
-                'sku' => $item->variant->sku ?? '-',
-                'barcode' => $item->variant->barcode ?? '-',
-                'variant_name' => $item->variant->name ?? '-',
-                'product_name' => $item->variant->product->name ?? '',
-                'image_url' => $item->variant->image_url ?? null,
-                'department_name' => $item->departmentItem->name ?? '-',
-                'location_name' => $item->itemLocation->name ?? '-',
-            ]);
-        }
-        
-        // Sort by days to expiry (most urgent first)
-        $sortedAging = $agingCollection->sortBy('days_to_expiry')->values();
-        
-        // Calculate summary
-        $summary = [
-            'expired' => $agingCategories['expired'],
-            '1_week' => $agingCategories['1_week'],
-            '1_month' => $agingCategories['1_month'],
-            '3_months' => $agingCategories['3_months'],
-            '6_months' => $agingCategories['6_months'],
-            'over_6_months' => $agingCategories['over_6_months'],
-            'total_items' => $sortedAging->count(),
-            'total_value_at_risk' => $sortedAging->sum('value_at_risk'),
-            'total_inventory_value' => $sortedAging->sum('inventory_value'),
-        ];
-        
-        // Apply pagination
-        $agingItems = $this->paginateCollection($sortedAging, $perPage, 'page');
-        
-        $departments = Department::where('tenant_id', $tenantId)->get();
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
-        return view('reports.inventory.stock-aging', compact(
-            'agingItems',
-            'summary',
-            'agingCategories',
-            'departments',
-            'locations',
-            'departmentId',
-            'locationId',
-            'category',
-            'perPage'
-        ));
-    }
-    
-    /**
-     * Low Stock Alerts Report with Pure Eloquent
-     */
-    public function lowStockAlerts(Request $request)
-    {
-        $tenantId = $this->getTenantId();
-        
-        $departmentId = $request->get('department_id');
-        $locationId = $request->get('location_id');
-        $severity = $request->get('severity', 'all');
         $perPage = (int)$request->get('per_page', 15);
         
         // Get all inventory items with relationships
@@ -592,61 +563,329 @@ class InventoryReportsController extends Controller
         ->when($locationId, function($q, $locationId) {
             return $q->where('location_id', $locationId);
         })
+        ->when($variantId, function($q, $variantId) {
+            return $q->where('variant_id', $variantId);
+        })
         ->get();
         
-        // Calculate low stock metrics using collections
-        $lowStockCollection = collect();
+        // Calculate aging metrics for each item
+        $agingCollection = collect();
+        $agingCategories = [
+            'expired' => 0,
+            '1_week' => 0,
+            '1_month' => 0,
+            '3_months' => 0,
+            '6_months' => 0,
+            'over_6_months' => 0,
+        ];
+        
+        $today = now();
+        $totalValueAtRisk = 0;
         
         foreach ($allItems as $item) {
-            $currentStock = $item->quantity_on_hand;
-            $reorderPoint = $item->reorder_point ?? 0;
-            $preferredStock = $item->preferred_stock_level ?? 0;
+            // ─── Get Days Since Last Movement ────────────────────────────
+            $daysSinceLastMovement = $this->getDaysSinceLastMovement($item, $isSingleShop);
             
-            // Skip if no reorder point or preferred stock is set
-            if ($reorderPoint == 0 && $preferredStock == 0) {
+            // ─── Get Expiry Date (if available) ──────────────────────────
+            $expiryDate = $item->expiry_date ? Carbon::parse($item->expiry_date) : null;
+            $daysToExpiry = $expiryDate ? $today->diffInDays($expiryDate, false) : null;
+            
+            // ─── Determine Aging Category ────────────────────────────────
+            if ($expiryDate && $daysToExpiry !== null) {
+                if ($daysToExpiry < 0) {
+                    $categoryKey = 'expired';
+                    $statusColor = 'danger';
+                    $statusText = __('pagination.expired');
+                    $progressColor = 'danger';
+                    $urgency = 'immediate';
+                } elseif ($daysToExpiry <= 7) {
+                    $categoryKey = '1_week';
+                    $statusColor = 'warning';
+                    $statusText = __('pagination.critical');
+                    $progressColor = 'warning';
+                    $urgency = 'critical';
+                } elseif ($daysToExpiry <= 30) {
+                    $categoryKey = '1_month';
+                    $statusColor = 'warning';
+                    $statusText = __('pagination.warning');
+                    $progressColor = 'warning';
+                    $urgency = 'high';
+                } elseif ($daysToExpiry <= 90) {
+                    $categoryKey = '3_months';
+                    $statusColor = 'info';
+                    $statusText = __('pagination.monitor');
+                    $progressColor = 'info';
+                    $urgency = 'medium';
+                } elseif ($daysToExpiry <= 180) {
+                    $categoryKey = '6_months';
+                    $statusColor = 'success';
+                    $statusText = __('pagination.good');
+                    $progressColor = 'success';
+                    $urgency = 'low';
+                } else {
+                    $categoryKey = 'over_6_months';
+                    $statusColor = 'primary';
+                    $statusText = __('pagination.excellent');
+                    $progressColor = 'primary';
+                    $urgency = 'none';
+                }
+            } else {
+                // No expiry date - use last movement
+                if ($daysSinceLastMovement > 180) {
+                    $categoryKey = 'over_6_months';
+                    $statusColor = 'warning';
+                    $statusText = __('pagination.no_movement_6_months');
+                    $progressColor = 'warning';
+                    $urgency = 'medium';
+                } elseif ($daysSinceLastMovement > 90) {
+                    $categoryKey = '3_months';
+                    $statusColor = 'info';
+                    $statusText = __('pagination.no_movement_3_months');
+                    $progressColor = 'info';
+                    $urgency = 'low';
+                } else {
+                    $categoryKey = '6_months';
+                    $statusColor = 'success';
+                    $statusText = __('pagination.active');
+                    $progressColor = 'success';
+                    $urgency = 'none';
+                }
+            }
+            
+            // Add to category totals
+            $agingCategories[$categoryKey] += $item->quantity_on_hand;
+            
+            // Filter by category if specified
+            if ($category && $category !== $categoryKey) {
                 continue;
             }
             
+            $costPrice = $item->variant->cost_price ?? 0;
+            $inventoryValue = $item->quantity_on_hand * $costPrice;
+            $valueAtRisk = ($categoryKey === 'expired' || $categoryKey === '1_week' || $categoryKey === '1_month') 
+                ? $inventoryValue 
+                : 0;
+            
+            if ($valueAtRisk > 0) {
+                $totalValueAtRisk += $valueAtRisk;
+            }
+            
+            $agingCollection->push((object)[
+                'id' => $item->id,
+                'variant' => $item->variant,
+                'departmentItem' => $item->departmentItem,
+                'itemLocation' => $item->itemLocation,
+                'quantity_on_hand' => $item->quantity_on_hand,
+                'batch_number' => $item->batch_number ?? '-',
+                'expiry_date' => $item->expiry_date,
+                'days_to_expiry' => $daysToExpiry ?? $daysSinceLastMovement,
+                'days_since_last_movement' => $daysSinceLastMovement,
+                'inventory_value' => $inventoryValue,
+                'value_at_risk' => $valueAtRisk,
+                'category_key' => $categoryKey,
+                'status_color' => $statusColor,
+                'status_text' => $statusText,
+                'progress_color' => $progressColor,
+                'urgency' => $urgency,
+                'cost_price' => $costPrice,
+                'sku' => $item->variant->sku ?? '-',
+                'barcode' => $item->variant->barcode ?? '-',
+                'variant_name' => $item->variant->name ?? '-',
+                'product_name' => $item->variant->product->name ?? '',
+                'image_url' => $item->variant->image_url ?? null,
+                'department_name' => $item->departmentItem->name ?? '-',
+                'location_name' => $item->itemLocation->name ?? '-',
+            ]);
+        }
+        
+        // Sort by urgency (most urgent first)
+        $urgencyOrder = ['immediate' => 1, 'critical' => 2, 'high' => 3, 'medium' => 4, 'low' => 5, 'none' => 6];
+        $sortedAging = $agingCollection->sortBy(function($item) use ($urgencyOrder) {
+            return $urgencyOrder[$item->urgency] ?? 99;
+        })->values();
+        
+        // Calculate summary
+        $summary = [
+            'expired' => $agingCategories['expired'],
+            '1_week' => $agingCategories['1_week'],
+            '1_month' => $agingCategories['1_month'],
+            '3_months' => $agingCategories['3_months'],
+            '6_months' => $agingCategories['6_months'],
+            'over_6_months' => $agingCategories['over_6_months'],
+            'total_items' => $sortedAging->count(),
+            'total_value_at_risk' => $totalValueAtRisk,
+            'total_inventory_value' => $sortedAging->sum('inventory_value'),
+        ];
+        
+        // Apply pagination
+        $agingItems = $this->paginateCollection($sortedAging, $perPage, 'page');
+        
+        // Get filter options
+        $departments = Department::where('tenant_id', $tenantId)->get();
+        $locations = Location::where('tenant_id', $tenantId)->get();
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
+        return view('reports.inventory.stock-aging', compact(
+            'agingItems',
+            'summary',
+            'agingCategories',
+            'departments',
+            'locations',
+            'variants',
+            'departmentId',
+            'locationId',
+            'variantId',
+            'category',
+            'perPage'
+        ));
+    }
+
+    /**
+     * Get days since last movement for a variant
+     */
+    private function getDaysSinceLastMovement($item, $isSingleShop)
+    {
+        if ($isSingleShop) {
+            $lastLog = SingleShopInventoryLog::where('variant_id', $item->variant_id)
+                ->where('tenant_id', $item->tenant_id)
+                ->latest('created_at')
+                ->first();
+            
+            if ($lastLog) {
+                return Carbon::parse($lastLog->created_at)->diffInDays(now());
+            }
+        } else {
+            $lastTransaction = InventoryTransactions::whereHas('InventoryItems', function($q) use ($item) {
+                    $q->where('variant_id', $item->variant_id);
+                })
+                ->where('tenant_id', $item->tenant_id)
+                ->latest('created_at')
+                ->first();
+            
+            if ($lastTransaction) {
+                return Carbon::parse($lastTransaction->created_at)->diffInDays(now());
+            }
+        }
+        
+        // No movement found - assume product is old
+        return 999;
+    }
+    
+    /**
+     * Low Stock Alerts Report with Pure Eloquent - Supports Single & Multi-Shop
+     */
+    public function lowStockAlerts(Request $request)
+    {
+        $tenantId = $this->getTenantId();
+        $isSingleShop = tenant_is_single_shop($tenantId);
+        
+        $departmentId = $request->get('department_id');
+        $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id');
+        $severity = $request->get('severity', 'all');
+        $perPage = (int)$request->get('per_page', 15);
+        
+        // ─── Get Inventory Items ──────────────────────────────────────────
+        $allItems = InventoryItems::with([
+            'variant.product',
+            'departmentItem',
+            'itemLocation'
+        ])
+        ->where('tenant_id', $tenantId)
+        ->when($departmentId, function($q, $departmentId) {
+            return $q->where('department_id', $departmentId);
+        })
+        ->when($locationId, function($q, $locationId) {
+            return $q->where('location_id', $locationId);
+        })
+        ->when($variantId, function($q, $variantId) {
+            return $q->where('variant_id', $variantId);
+        })
+        ->get();
+        
+        // ✅ Log the data for debugging
+        \Log::info('Low Stock Alerts - Total items found: ' . $allItems->count());
+        \Log::info('Low Stock Alerts - Sample item:', [
+            'quantity_allocated' => $allItems->first()->quantity_allocated ?? 'N/A',
+            'preferred_stock_level' => $allItems->first()->preferred_stock_level ?? 'N/A',
+            'reorder_point' => $allItems->first()->reorder_point ?? 'N/A',
+        ]);
+        
+        // ─── Calculate Low Stock Metrics ──────────────────────────────────
+        $lowStockItems = collect();
+        
+        foreach ($allItems as $item) {
+            // ✅ Use quantity_allocated (this is the actual stock)
+            $currentStock = $item->quantity_allocated ?? 0;
+            $reorderPoint = $item->reorder_point ?? 0;
+            $preferredStock = $item->preferred_stock_level ?? 0;
+            
+            // ✅ Determine if we should check this item
+            $hasThreshold = false;
+            $lowStockThreshold = 0;
             $isLowStock = false;
             $severityLevel = 'normal';
             $severityColor = 'success';
             $severityIcon = 'ki-check-circle';
+            $deficit = 0;
+            $deficitValue = 0;
             
-            // Check against reorder point (critical threshold)
-            if ($reorderPoint > 0) {
-                if ($currentStock <= $reorderPoint * 0.5) {
-                    $isLowStock = true;
+            if ($isSingleShop) {
+                // ─── Single Shop: Use variant.low_stock_level ────────────────
+                $variant = $item->variant;
+                if ($variant && isset($variant->low_stock_level) && $variant->low_stock_level > 0) {
+                    $lowStockThreshold = $variant->low_stock_level;
+                    $hasThreshold = true;
+                }
+            } else {
+                // ─── Multi-Shop: Use preferred_stock_level or reorder_point ──
+                if ($preferredStock > 0) {
+                    $lowStockThreshold = $preferredStock;
+                    $hasThreshold = true;
+                } elseif ($reorderPoint > 0) {
+                    $lowStockThreshold = $reorderPoint;
+                    $hasThreshold = true;
+                }
+            }
+            
+            // ✅ If there's no threshold set, skip this item
+            if (!$hasThreshold) {
+                continue;
+            }
+            
+            // ✅ Check if stock is below threshold
+            if ($currentStock <= $lowStockThreshold) {
+                $isLowStock = true;
+                $deficit = $lowStockThreshold - $currentStock;
+                $deficitValue = $deficit * ($item->variant->cost_price ?? 0);
+                
+                // Determine severity based on how low the stock is
+                if ($currentStock <= $lowStockThreshold * 0.3) {
                     $severityLevel = 'critical';
                     $severityColor = 'danger';
                     $severityIcon = 'ki-shield-cross';
-                } elseif ($currentStock <= $reorderPoint) {
-                    $isLowStock = true;
+                } elseif ($currentStock <= $lowStockThreshold * 0.7) {
                     $severityLevel = 'warning';
                     $severityColor = 'warning';
                     $severityIcon = 'ki-shield-tick';
+                } else {
+                    $severityLevel = 'low';
+                    $severityColor = 'info';
+                    $severityIcon = 'ki-information';
                 }
             }
             
-            // Also check against preferred stock (warning threshold)
-            if (!$isLowStock && $preferredStock > 0) {
-                if ($currentStock <= $preferredStock * 0.5) {
-                    $isLowStock = true;
-                    $severityLevel = 'warning';
-                    $severityColor = 'warning';
-                    $severityIcon = 'ki-shield-tick';
-                }
-            }
-            
-            // Filter by severity if specified
+            // ─── Filter by severity if specified ────────────────────────────
             if ($severity !== 'all' && $severityLevel !== $severity) {
                 continue;
             }
             
             if ($isLowStock) {
-                $deficit = max(0, $reorderPoint - $currentStock);
-                $deficitValue = $deficit * ($item->variant->cost_price ?? 0);
-                $reorderPercentage = $reorderPoint > 0 ? ($currentStock / $reorderPoint) * 100 : 0;
-                $preferredPercentage = $preferredStock > 0 ? ($currentStock / $preferredStock) * 100 : 0;
+                $reorderPercentage = $lowStockThreshold > 0 ? ($currentStock / $lowStockThreshold) * 100 : 0;
                 
                 // Determine urgency
                 if ($severityLevel === 'critical') {
@@ -660,7 +899,12 @@ class InventoryReportsController extends Controller
                     $urgencyColor = 'info';
                 }
                 
-                $lowStockCollection->push((object)[
+                // Determine stock source label
+                $stockSource = $isSingleShop 
+                    ? __('pagination.global_stock') 
+                    : __('pagination.department_stock');
+                
+                $lowStockItems->push((object)[
                     'id' => $item->id,
                     'variant' => $item->variant,
                     'departmentItem' => $item->departmentItem,
@@ -668,14 +912,14 @@ class InventoryReportsController extends Controller
                     'quantity_on_hand' => $currentStock,
                     'reorder_point' => $reorderPoint,
                     'preferred_stock_level' => $preferredStock,
+                    'low_stock_threshold' => $lowStockThreshold,
                     'deficit' => $deficit,
                     'deficit_value' => $deficitValue,
                     'reorder_percentage' => $reorderPercentage,
-                    'preferred_percentage' => $preferredPercentage,
                     'severity' => $severityLevel,
                     'severity_color' => $severityColor,
                     'severity_icon' => $severityIcon,
-                    'severity_text' => $severityLevel === 'critical' ? __('pagination.critical') : ($severityLevel === 'warning' ? __('pagination.warning') : __('pagination.normal')),
+                    'severity_text' => $severityLevel === 'critical' ? __('pagination.critical') : ($severityLevel === 'warning' ? __('pagination.warning') : __('pagination.low')),
                     'urgency_text' => $urgencyText,
                     'urgency_color' => $urgencyColor,
                     'cost_price' => $item->variant->cost_price ?? 0,
@@ -686,42 +930,75 @@ class InventoryReportsController extends Controller
                     'image_url' => $item->variant->image_url ?? null,
                     'department_name' => $item->departmentItem->name ?? '-',
                     'location_name' => $item->itemLocation->name ?? '-',
+                    'is_single_shop' => $isSingleShop,
+                    'stock_source' => $stockSource,
                 ]);
             }
         }
         
+        // ✅ Log how many low stock items were found
+        \Log::info('Low Stock Alerts - Low stock items found: ' . $lowStockItems->count());
+        
         // Sort by severity (critical first, then warning)
-        $sortedLowStock = $lowStockCollection->sortBy(function($item) {
-            $order = ['critical' => 1, 'warning' => 2, 'normal' => 3];
-            return $order[$item->severity] ?? 4;
+        $severityOrder = ['critical' => 1, 'warning' => 2, 'low' => 3, 'normal' => 4];
+        $sortedLowStock = $lowStockItems->sortBy(function($item) use ($severityOrder) {
+            return $severityOrder[$item->severity] ?? 99;
         })->values();
+        
+        // ✅ Create paginator for the collection
+        $currentPage = $request->input('page', 1);
+        $perPage = (int)$request->input('per_page', 15);
+        $total = $sortedLowStock->count();
+        
+        // Slice the collection for the current page
+        $itemsForPage = $sortedLowStock->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        
+        // Create a custom paginator
+        $lowStockItems = new \Illuminate\Pagination\LengthAwarePaginator(
+            $itemsForPage,
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path' => \Illuminate\Pagination\Paginator::resolveCurrentPath(),
+                'pageName' => 'page',
+                'query' => $request->query(),
+            ]
+        );
         
         // Calculate summary
         $summary = [
             'critical' => $sortedLowStock->where('severity', 'critical')->count(),
             'warning' => $sortedLowStock->where('severity', 'warning')->count(),
+            'low' => $sortedLowStock->where('severity', 'low')->count(),
             'total_items' => $sortedLowStock->count(),
             'total_value_at_risk' => $sortedLowStock->sum('deficit_value'),
+            'is_single_shop' => $isSingleShop,
         ];
         
-        // Apply pagination
-        $lowStockItems = $this->paginateCollection($sortedLowStock, $perPage, 'page');
-        
+        // Get filter options
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
         
         return view('reports.inventory.low-stock-alerts', compact(
             'lowStockItems',
             'summary',
             'departments',
             'locations',
+            'variants',
             'departmentId',
             'locationId',
+            'variantId',
             'severity',
-            'perPage'
+            'perPage',
+            'isSingleShop'
         ));
-    }
-        
+    }               
     
     /**
      * Inventory Adjustments Report with Pure Eloquent
@@ -734,6 +1011,7 @@ class InventoryReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added
         $perPage = (int)$request->get('per_page', 15);
         
         // Build query with relationships
@@ -758,10 +1036,17 @@ class InventoryReportsController extends Controller
             });
         }
         
-        // Get ALL adjustments for summary calculations (unpaginated)
+        // ✅ Add variant filter
+        if ($variantId) {
+            $query->whereHas('inventoryItems', function($q) use ($variantId) {
+                $q->where('variant_id', $variantId);
+            });
+        }
+        
+        // Get ALL adjustments for summary calculations
         $allAdjustments = $query->get();
         
-        // Calculate summary statistics using collections (no DB::raw)
+        // Calculate summary statistics
         $summary = [
             'total_adjustments' => $allAdjustments->count(),
             'total_quantity_changed' => $allAdjustments->sum(function($item) {
@@ -776,32 +1061,22 @@ class InventoryReportsController extends Controller
             'decrease_count' => $allAdjustments->filter(function($item) {
                 return $item->quantity_after < $item->quantity_before;
             })->count(),
+            'total_before' => $allAdjustments->sum('quantity_before'),
+            'total_after' => $allAdjustments->sum('quantity_after'),
         ];
         
         // Get paginated adjustments for display
-        $paginatedQuery = InventoryAdjustments::with([
-            'inventoryItems.variant.product',
-            'inventoryItems.departmentItem',
-            'inventoryItems.itemLocation',
-            'createdBy'
-        ])
-        ->where('tenant_id', $tenantId)
-        ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-        ->orderBy('created_at', 'desc');
+        $paginatedQuery = clone $query;
+        $adjustments = $paginatedQuery->orderBy('created_at', 'desc')
+            ->paginate($perPage)
+            ->withQueryString();
         
-        if ($departmentId) {
-            $paginatedQuery->whereHas('inventoryItems', function($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
-        }
-        
-        if ($locationId) {
-            $paginatedQuery->whereHas('inventoryItems', function($q) use ($locationId) {
-                $q->where('location_id', $locationId);
-            });
-        }
-        
-        $adjustments = $paginatedQuery->paginate($perPage)->withQueryString();
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
         
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
@@ -811,10 +1086,12 @@ class InventoryReportsController extends Controller
             'summary',
             'departments',
             'locations',
+            'variants',
             'startDate',
             'endDate',
             'departmentId',
             'locationId',
+            'variantId',
             'perPage'
         ));
     }
@@ -830,6 +1107,7 @@ class InventoryReportsController extends Controller
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $perPage = (int)$request->get('per_page', 15);
         
         // Get inventory items with relationships
@@ -849,6 +1127,11 @@ class InventoryReportsController extends Controller
         // Apply location filter
         if ($locationId) {
             $query->where('location_id', $locationId);
+        }
+        
+        // ✅ Apply variant filter
+        if ($variantId) {
+            $query->where('variant_id', $variantId);
         }
         
         // Get ALL inventory items for calculations (unpaginated)
@@ -927,6 +1210,13 @@ class InventoryReportsController extends Controller
         // Apply pagination
         $paginatedItems = $this->paginateCollection($sortedItemsList, $perPage, 'page');
         
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         
@@ -935,16 +1225,18 @@ class InventoryReportsController extends Controller
             'totalValue',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants to view
             'paginatedItems',
             'sortedItemsList',
             'startDate',
             'endDate',
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'perPage'
         ));
     }
-            
+                
     /**
      * Movement Analysis Report using Multi-Shop Inventory Data
      */
@@ -957,6 +1249,7 @@ class InventoryReportsController extends Controller
         $movementType = $request->get('movement_type', 'all');
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $perPage = (int)$request->get('per_page', 15);
         
         // Get inventory transactions (sales, purchases, adjustments, transfers)
@@ -980,6 +1273,13 @@ class InventoryReportsController extends Controller
         if ($locationId) {
             $query->whereHas('inventoryItems', function($q) use ($locationId) {
                 $q->where('location_id', $locationId);
+            });
+        }
+        
+        // ✅ Apply variant filter
+        if ($variantId) {
+            $query->whereHas('inventoryItems', function($q) use ($variantId) {
+                $q->where('variant_id', $variantId);
             });
         }
         
@@ -1037,7 +1337,7 @@ class InventoryReportsController extends Controller
             }
             
             // Get current stock from inventory
-            $currentStock = $inventoryItem ? $inventoryItem->quantity_on_hand : 0;
+            $currentStock = $inventoryItem ? $inventoryItem->quantity_allocated : 0;
             
             $movementCollection->push((object)[
                 'variant' => $variant,
@@ -1082,7 +1382,13 @@ class InventoryReportsController extends Controller
         // Apply pagination
         $movementData = $this->paginateCollection($filteredMovement, $perPage, 'page');
         
-        // Get departments and locations for filters
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         
@@ -1092,15 +1398,17 @@ class InventoryReportsController extends Controller
             'sortedMovement',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants to view
             'startDate',
             'endDate',
             'movementType',
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'perPage'
         ));
-    }
-            
+    }     
+   
     
     public function getMovementLogs(Request $request)
     {
@@ -1152,6 +1460,7 @@ class InventoryReportsController extends Controller
         
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $valuationMethod = $request->get('valuation_method', 'cost');
         $perPage = (int)$request->get('per_page', 15);
         
@@ -1162,7 +1471,7 @@ class InventoryReportsController extends Controller
             'itemLocation'
         ])
         ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0);
+        ->where('quantity_allocated', '>', 0); // ✅ Use quantity_allocated
         
         if ($departmentId) {
             $query->where('department_id', $departmentId);
@@ -1172,14 +1481,20 @@ class InventoryReportsController extends Controller
             $query->where('location_id', $locationId);
         }
         
+        // ✅ Apply variant filter
+        if ($variantId) {
+            $query->where('variant_id', $variantId);
+        }
+        
         // Get ALL inventory items for summary calculations (unpaginated)
         $allItems = $query->get();
         
         // Calculate valuation metrics for ALL items using collections
         $allItemsWithValuation = $allItems->map(function ($item) use ($valuationMethod) {
-            $costPrice = $item->variant->cost_price ?? 0;
-            $sellingPrice = $item->variant->price ?? 0;
-            $quantity = $item->quantity_on_hand;
+            // ✅ Use grand_total_cost_price as the actual cost
+            $costPrice = $item->variant->grand_total_cost_price ?? 0;
+            $sellingPrice = $item->variant->selling_price ?? 0;
+            $quantity = $item->quantity_allocated;
             
             // Calculate item value based on valuation method
             $itemValue = $quantity * $costPrice;
@@ -1189,13 +1504,15 @@ class InventoryReportsController extends Controller
             $item->valuation_value = $itemValue;
             $item->potential_profit = $potentialProfit;
             $item->profit_margin = $profitMargin;
+            $item->cost_price = $costPrice;
+            $item->selling_price = $sellingPrice;
             
             return $item;
         });
         
         // Calculate valuation summary from ALL items
         $totalValue = $allItemsWithValuation->sum('valuation_value');
-        $totalQuantity = $allItemsWithValuation->sum('quantity_on_hand');
+        $totalQuantity = $allItemsWithValuation->sum('quantity_allocated');
         $totalProfit = $allItemsWithValuation->sum('potential_profit');
         
         $valuationSummary = [
@@ -1204,7 +1521,7 @@ class InventoryReportsController extends Controller
             'total_value' => $totalValue,
             'avg_unit_cost' => $totalQuantity > 0 ? $totalValue / $totalQuantity : 0,
             'avg_unit_price' => $allItemsWithValuation->avg(function($item) {
-                return $item->variant->price ?? 0;
+                return $item->variant->selling_price ?? 0;
             }),
             'potential_profit' => $totalProfit,
             'avg_profit_margin' => $allItemsWithValuation->avg('profit_margin'),
@@ -1236,6 +1553,13 @@ class InventoryReportsController extends Controller
         $sortedItems = $allItemsWithValuation->sortByDesc('valuation_value')->values();
         $inventoryItems = $this->paginateCollection($sortedItems, $perPage, 'page');
         
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         
@@ -1246,8 +1570,10 @@ class InventoryReportsController extends Controller
             'valueByLocation',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants to view
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'valuationMethod',
             'perPage'
         ));
@@ -1263,6 +1589,7 @@ class InventoryReportsController extends Controller
         
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $daysThreshold = (int)$request->get('days_threshold', 180);
         $includeExpired = $request->get('include_expired', false);
         $perPage = (int)$request->get('per_page', 15);
@@ -1274,19 +1601,22 @@ class InventoryReportsController extends Controller
             'itemLocation'
         ])
         ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0)
+        ->where('quantity_allocated', '>', 0) // ✅ Use quantity_allocated
         ->when($departmentId, function($q, $departmentId) {
             return $q->where('department_id', $departmentId);
         })
         ->when($locationId, function($q, $locationId) {
             return $q->where('location_id', $locationId);
         })
+        ->when($variantId, function($q, $variantId) { // ✅ Apply variant filter
+            return $q->where('variant_id', $variantId);
+        })
         ->get();
         
-        // Get inventory transactions for movement data (sales only for dead stock calculation)
+        // Get inventory transactions for movement data
         $transactions = InventoryTransactions::where('tenant_id', $tenantId)
             ->where('type', 'sale')
-            ->where('quantity', '<', 0) // Negative quantity = outgoing
+            ->where('quantity', '<', 0)
             ->get()
             ->groupBy(function($transaction) {
                 return $transaction->inventoryItems->variant_id ?? null;
@@ -1297,24 +1627,23 @@ class InventoryReportsController extends Controller
         foreach ($allItems as $item) {
             $variantTransactions = $transactions->get($item->variant_id, collect());
             
-            // Calculate last movement date from sales transactions
             $lastMovementDate = $variantTransactions->isNotEmpty() 
                 ? $variantTransactions->max('created_at') 
                 : $item->created_at;
             
-            // Calculate total movement (quantity sold)
             $totalMovement = $variantTransactions->sum(function($transaction) {
                 return abs($transaction->quantity);
             });
             
             $daysIdle = Carbon::parse($lastMovementDate)->diffInDays(now());
             $isExpired = $item->expiry_date && Carbon::parse($item->expiry_date)->lt(now());
-            $inventoryValue = $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
             
-            // Check if item qualifies as dead stock
+            // ✅ Use grand_total_cost_price
+            $costPrice = $item->variant->grand_total_cost_price ?? 0;
+            $inventoryValue = $item->quantity_allocated * $costPrice;
+            
             $isDeadStock = $daysIdle >= $daysThreshold;
             
-            // Include expired items if checkbox is checked
             if ($includeExpired && $isExpired) {
                 $isDeadStock = true;
             }
@@ -1325,14 +1654,14 @@ class InventoryReportsController extends Controller
                     'variant' => $item->variant,
                     'departmentItem' => $item->departmentItem,
                     'itemLocation' => $item->itemLocation,
-                    'quantity_on_hand' => $item->quantity_on_hand,
+                    'quantity_on_hand' => $item->quantity_allocated,
                     'expiry_date' => $item->expiry_date,
                     'last_movement_date' => $lastMovementDate,
                     'total_movement' => $totalMovement,
                     'days_idle' => $daysIdle,
                     'is_expired' => $isExpired,
                     'inventory_value' => $inventoryValue,
-                    'cost_price' => $item->variant->cost_price ?? 0,
+                    'cost_price' => $costPrice,
                     'sku' => $item->variant->sku ?? '-',
                     'barcode' => $item->variant->barcode ?? '-',
                     'variant_name' => $item->variant->name ?? '-',
@@ -1344,10 +1673,8 @@ class InventoryReportsController extends Controller
             }
         }
         
-        // Sort by days idle (most idle first)
         $sortedDeadStock = $deadStockCollection->sortByDesc('days_idle')->values();
         
-        // Calculate summary
         $summary = [
             'total_items' => $sortedDeadStock->count(),
             'total_quantity' => $sortedDeadStock->sum('quantity_on_hand'),
@@ -1356,7 +1683,6 @@ class InventoryReportsController extends Controller
             'expired_items' => $sortedDeadStock->where('is_expired', true)->count(),
         ];
         
-        // Idle categories
         $idleCategories = [
             '180_365' => $sortedDeadStock->filter(function($item) {
                 return $item->days_idle >= 180 && $item->days_idle < 365;
@@ -1369,7 +1695,6 @@ class InventoryReportsController extends Controller
             })->sum('quantity_on_hand'),
         ];
         
-        // Dead stock by department for chart
         $departmentDeadStock = $sortedDeadStock->groupBy(function($item) {
             return $item->department_name;
         })->map(function($items, $name) {
@@ -1380,19 +1705,17 @@ class InventoryReportsController extends Controller
             ];
         })->sortByDesc('quantity')->values();
         
-        // Apply pagination
         $deadStockItems = $this->paginateCollection($sortedDeadStock, $perPage, 'page');
+        
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
         
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
-        
-        // Debug - check if there's any dead stock
-        \Log::info('Dead Stock Report:', [
-            'total_items_checked' => $allItems->count(),
-            'dead_stock_found' => $sortedDeadStock->count(),
-            'days_threshold' => $daysThreshold,
-            'include_expired' => $includeExpired
-        ]);
         
         return view('reports.inventory.dead-stock', compact(
             'deadStockItems',
@@ -1401,14 +1724,16 @@ class InventoryReportsController extends Controller
             'departmentDeadStock',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'daysThreshold',
             'includeExpired',
             'perPage'
         ));
     }
-        
+            
     /**
      * Excess Stock Report with Pure Eloquent
      */
@@ -1418,6 +1743,7 @@ class InventoryReportsController extends Controller
         
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
+        $variantId = $request->get('variant_id'); // ✅ Added variant filter
         $excessThreshold = (float)$request->get('excess_threshold', 1.5);
         $perPage = (int)$request->get('per_page', 15);
         
@@ -1428,7 +1754,7 @@ class InventoryReportsController extends Controller
             'itemLocation'
         ])
         ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0)
+        ->where('quantity_allocated', '>', 0) // ✅ Use quantity_allocated
         ->where('preferred_stock_level', '>', 0)
         ->when($departmentId, function($q, $departmentId) {
             return $q->where('department_id', $departmentId);
@@ -1436,20 +1762,24 @@ class InventoryReportsController extends Controller
         ->when($locationId, function($q, $locationId) {
             return $q->where('location_id', $locationId);
         })
+        ->when($variantId, function($q, $variantId) { // ✅ Apply variant filter
+            return $q->where('variant_id', $variantId);
+        })
         ->get();
         
         // Calculate excess stock metrics using collections
         $excessCollection = collect();
         
         foreach ($allItems as $item) {
-            $currentStock = $item->quantity_on_hand;
+            $currentStock = $item->quantity_allocated;
             $preferredStock = $item->preferred_stock_level;
             $thresholdStock = $preferredStock * $excessThreshold;
             $excessQuantity = max(0, $currentStock - $thresholdStock);
             
             if ($excessQuantity > 0) {
                 $excessPercentage = (($currentStock / $preferredStock) - 1) * 100;
-                $costPrice = $item->variant->cost_price ?? 0;
+                // ✅ Use grand_total_cost_price
+                $costPrice = $item->variant->grand_total_cost_price ?? 0;
                 $excessValue = $excessQuantity * $costPrice;
                 
                 // Determine severity
@@ -1529,6 +1859,13 @@ class InventoryReportsController extends Controller
         // Apply pagination
         $excessStockItems = $this->paginateCollection($sortedExcess, $perPage, 'page');
         
+        // ✅ Get variants for filter dropdown
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('product')
+            ->orderBy('name')
+            ->get();
+        
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         
@@ -1538,33 +1875,13 @@ class InventoryReportsController extends Controller
             'excessCategories',
             'departments',
             'locations',
+            'variants', // ✅ Pass variants
             'departmentId',
             'locationId',
+            'variantId', // ✅ Pass variant ID
             'excessThreshold',
             'perPage'
         ));
-    }
-        
-    /**
-     * Helper method to calculate dead stock value
-     */
-    private function calculateDeadStockValue($items)
-    {
-        return $items->sum(function ($item) {
-            return $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
-        });
-    }
-
-    /**
-     * Helper method to calculate excess stock value
-     */
-    private function calculateExcessStockValue($items, $threshold)
-    {
-        return $items->sum(function ($item) use ($threshold) {
-            $costPrice = $item->variant->cost_price ?? 0;
-            $excessQuantity = max(0, $item->quantity_on_hand - ($item->preferred_stock_level * $threshold));
-            return $excessQuantity * $costPrice;
-        });
     }
     
 }

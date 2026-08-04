@@ -385,9 +385,6 @@ class InvoiceController extends Controller
      * reports. This is also the exact code path a payment gateway webhook
      * should call later (recorded_via='webhook' instead of 'manual').
      */
-    /**
-     * Record payment for invoice
-     */
     public function recordPayment(Request $request, $id)
     {
         $user = Auth::user();
@@ -433,7 +430,16 @@ class InvoiceController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1. Record deposit - this is all we need
+            // ─── Get Location and Department Names ────────────────────────
+            $locationName = $invoice->order?->location?->name ?? 'Unknown Location';
+            $departmentName = $invoice->order?->department?->name ?? 'Unknown Department';
+            $orderNumber = $invoice->order?->order_number ?? $invoice->invoice_number;
+
+            // ─── Build Readable Notes ──────────────────────────────────────
+            $paymentNote = 'Payment of ' . number_format($amount, 2) . ' received for invoice #' . $invoice->invoice_number 
+                            . ' from ' . $locationName . ' (' . $departmentName . ')';
+
+            // 1. Record deposit
             $this->recordDeposit($invoice, $paymentMethod, $amount);
 
             // 2. Create invoice payment record
@@ -446,7 +452,7 @@ class InvoiceController extends Controller
                 'status' => 'completed',
                 'type' => $amount >= $invoice->balance_due ? 'full' : 'partial',
                 'payment_date' => now(),
-                'notes' => $validated['notes'] ?? 'Manual payment',
+                'notes' => $validated['notes'] ?? $paymentNote,
                 'currency_code' => $invoice->currency ?? 'UGX',
             ]);
 
@@ -457,12 +463,13 @@ class InvoiceController extends Controller
             // 4. Update invoice
             $newAmountPaid = $invoice->amount_paid + $amount;
             $newBalance = max(0, $invoice->total - $newAmountPaid);
+            $isFullyPaid = $newBalance <= 0;
             
             $invoice->update([
                 'amount_paid' => $newAmountPaid,
                 'balance_due' => $newBalance,
-                'status' => $newBalance <= 0 ? 'paid' : 'partially_paid',
-                'paid_at' => $newBalance <= 0 ? now() : null,
+                'status' => $isFullyPaid ? 'paid' : 'partially_paid',
+                'paid_at' => $isFullyPaid ? now() : null,
             ]);
 
             // 5. Update order if exists
@@ -470,12 +477,27 @@ class InvoiceController extends Controller
                 $order = $invoice->order;
                 $orderNewPaid = $order->paid_amount + $amount;
                 $orderNewBalance = max(0, $order->total - $orderNewPaid);
+                $orderIsFullyPaid = $orderNewBalance <= 0;
                 
                 $order->update([
                     'paid_amount' => $orderNewPaid,
                     'balance_due' => $orderNewBalance,
-                    'status' => $orderNewBalance <= 0 ? 'completed' : $order->status,
+                    // ✅ If fully paid, mark as completed
+                    'status' => $orderIsFullyPaid ? 'completed' : ($order->status ?: 'confirmed'),
+                    'completed_at' => $orderIsFullyPaid ? now() : $order->completed_at,
                 ]);
+
+                // ✅ If order is now completed, also update any pending inventory
+                if ($orderIsFullyPaid && $order->status !== 'completed') {
+                    Log::info('Order marked as completed after full payment', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'invoice_id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'total_paid' => $orderNewPaid,
+                        'total' => $order->total,
+                    ]);
+                }
             }
 
             DB::commit();
@@ -486,11 +508,17 @@ class InvoiceController extends Controller
                 'status' => $invoice->status,
                 'amount_paid' => $invoice->amount_paid,
                 'balance_due' => $invoice->balance_due,
+                'order_status' => $invoice->order?->status ?? null,
+                'order_completed' => $invoice->order?->status === 'completed',
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Payment failed: ' . $e->getMessage(), ['invoice_id' => $id]);
+            Log::error('Payment failed: ' . $e->getMessage(), [
+                'invoice_id' => $id,
+                'tenant_id' => $user->tenant_id,
+                'user_id' => $user->id,
+            ]);
             
             return response()->json([
                 'success' => false,
@@ -721,27 +749,42 @@ class InvoiceController extends Controller
             return;
         }
 
+        // ─── Get Location and Department Names ────────────────────────
+        $locationName = $inventory->itemLocation ? $inventory->itemLocation->name : 'Unknown Location';
+        $departmentName = $inventory->departmentItem ? $inventory->departmentItem->name : 'Unknown Department';
+        $variantName = $variant->name ?? 'Unknown Variant';
+        $variantSku = $variant->sku ?? 'N/A';
+
+        // ─── Build Readable Notes ──────────────────────────────────────
+        $adjustmentNote = 'Stock reduced — ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') removed from ' 
+                        . $locationName . ' (' . $departmentName . ') due to invoice sent for order #' . $order->order_number;
+
+        $transactionNote = 'Issued ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') from ' 
+                        . $locationName . ' (' . $departmentName . ') via invoice for order #' . $order->order_number;
+
         $beforeQty = $inventory->quantity_allocated;
         $afterQty  = $beforeQty - $item->quantity;
 
         $inventory->update(['quantity_allocated' => $afterQty]);
 
+        // ✅ Record adjustment (audit trail)
         InventoryAdjustments::create([
             'quantity_before' => $beforeQty,
             'quantity_after'  => $afterQty,
-            'reason'          => 'invoice_sent and items left inventory',
-            'notes'           => 'Stock reduced — invoice sent for order #' . $order->order_number,
+            'reason'          => 'invoice_sent_and_items_left_inventory',
+            'notes'           => $adjustmentNote,
             'inventory_id'    => $inventory->id,
             'created_by'      => auth()->id(),
             'tenant_id'       => $order->tenant_id,
         ]);
 
+        // ✅ Record transaction
         InventoryTransactions::create([
             'quantity'       => -$item->quantity,
             'reference_id'   => $order->id,
             'reference_type' => 'order',
             'type'           => 'sale',
-            'notes'          => 'Issued ' . $item->quantity . ' units of ' . $variant->sku . ' via invoice',
+            'notes'          => $transactionNote,
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $order->tenant_id,
@@ -805,27 +848,41 @@ class InvoiceController extends Controller
             return;
         }
 
+        // ─── Get Location and Department Names ────────────────────────
+        $locationName = $inventory->itemLocation ? $inventory->itemLocation->name : 'Unknown Location';
+        $departmentName = $inventory->departmentItem ? $inventory->departmentItem->name : 'Unknown Department';
+        $variantName = $variant->name ?? 'Unknown Variant';
+        $variantSku = $variant->sku ?? 'N/A';
+
+        // ─── Build Readable Notes ──────────────────────────────────────
+        $adjustmentNote = 'Stock restored — ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') returned to ' 
+                        . $locationName . ' (' . $departmentName . ') due to voided order #' . $order->order_number;
+
+        $transactionNote = 'Restocked ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') — invoice voided for order #' . $order->order_number;
+
         $beforeQty = $inventory->quantity_allocated;
         $afterQty  = $beforeQty + $item->quantity;
 
         $inventory->update(['quantity_allocated' => $afterQty]);
 
+        // ✅ Record adjustment (audit trail)
         InventoryAdjustments::create([
             'quantity_before' => $beforeQty,
             'quantity_after'  => $afterQty,
-            'reason'          => 'invoice_voided and items returned',
-            'notes'           => 'Stock restored — invoice voided for order #' . $order->order_number,
+            'reason'          => 'invoice_voided_and_items_returned',
+            'notes'           => $adjustmentNote,
             'inventory_id'    => $inventory->id,
             'created_by'      => auth()->id(),
             'tenant_id'       => $order->tenant_id,
         ]);
 
+        // ✅ Record transaction
         InventoryTransactions::create([
             'quantity'       => $item->quantity,
             'reference_id'   => $order->id,
             'reference_type' => 'order',
             'type'           => 'return',
-            'notes'          => 'Restocked ' . $item->quantity . ' units of ' . $variant->sku . ' — invoice voided',
+            'notes'          => $transactionNote,
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $order->tenant_id,
@@ -899,7 +956,9 @@ class InvoiceController extends Controller
     public function applyDiscount(Request $request, $id)
     {
         $user = Auth::user();
-        $invoice = Invoice::where('tenant_id', $user->tenant_id)->findOrFail($id);
+        $tenantId = $user->tenant_id;
+        
+        $invoice = Invoice::where('tenant_id', $tenantId)->findOrFail($id);
         
         if ($invoice->isPaid() || $invoice->isVoid() || $invoice->isSent()) {
             return response()->json([
@@ -932,7 +991,37 @@ class InvoiceController extends Controller
         
         DB::beginTransaction();
         try {
+            // ─── Apply discount to Invoice ──────────────────────────────
             $invoice->applyDiscount($discountAmount, $validated['discount_notes'] ?? null);
+            
+            // ─── Update associated Order ─────────────────────────────────
+            $order = Order::where('id', $invoice->order_id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+            
+            if ($order) {
+                // ✅ Update order with the same discount
+                $order->discount_total = ($order->discount_total ?? 0) + $discountAmount;
+                $order->total = $order->subtotal + $order->tax_total - $order->discount_total;
+                $order->balance_due = $order->total - $order->paid_amount;
+                $order->save();
+                
+                // ✅ Log the discount application on the order
+                Log::info('Discount applied to order from invoice', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'discount_amount' => $discountAmount,
+                    'new_order_total' => $order->total,
+                    'applied_by' => $user->id,
+                ]);
+            } else {
+                Log::warning('No associated order found for invoice discount', [
+                    'invoice_id' => $invoice->id,
+                    'order_id' => $invoice->order_id,
+                ]);
+            }
             
             DB::commit();
             
@@ -941,19 +1030,26 @@ class InvoiceController extends Controller
                 'success' => true,
                 'message' => __('payments.discount_applied', ['amount' => number_format($discountAmount, 2)]),
                 'invoice' => $invoice->fresh(),
+                'order' => $order ? $order->fresh() : null,
                 'discount_amount' => $discountAmount,
-                'new_total' => $invoice->total,
+                'new_invoice_total' => $invoice->total,
+                'new_order_total' => $order ? $order->total : null,
             ]);
             
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Discount apply failed: ' . $e->getMessage());
+            Log::error('Discount apply failed: ' . $e->getMessage(), [
+                'invoice_id' => $id,
+                'tenant_id' => $tenantId,
+                'user_id' => $user->id,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => __('payments.discount_apply_failed'),
             ], 500);
         }
     }
+
 
     /**
      * Remove discount from invoice

@@ -76,41 +76,9 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.inventory.stock-aging') }}" id="filterForm">
-                                    {{-- First Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Aging Category --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.aging_category') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-time fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="category">
-                                                    <option value="">{{ __('pagination.all_categories') }}</option>
-                                                    <option value="expired" {{ $category == 'expired' ? 'selected' : '' }}>
-                                                        {{ __('pagination.expired') }}
-                                                    </option>
-                                                    <option value="1_week" {{ $category == '1_week' ? 'selected' : '' }}>
-                                                        {{ __('pagination.within_1_week') }}
-                                                    </option>
-                                                    <option value="1_month" {{ $category == '1_month' ? 'selected' : '' }}>
-                                                        {{ __('pagination.within_1_month') }}
-                                                    </option>
-                                                    <option value="3_months" {{ $category == '3_months' ? 'selected' : '' }}>
-                                                        {{ __('pagination.within_3_months') }}
-                                                    </option>
-                                                    <option value="6_months" {{ $category == '6_months' ? 'selected' : '' }}>
-                                                        {{ __('pagination.within_6_months') }}
-                                                    </option>
-                                                    <option value="over_6_months" {{ $category == 'over_6_months' ? 'selected' : '' }}>
-                                                        {{ __('pagination.over_6_months') }}
-                                                    </option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location & Department - Dependent Dropdown --}}
-                                        <div class="flex-grow-1">
+                                    {{-- Row 1: Location & Department (Dependent Dropdown) --}}
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
                                             <x-liveblade-dependent-dropdown 
                                                 id="filter_location_department"
                                                 parentName="location_id"
@@ -125,15 +93,50 @@
                                                 skipAjax="false"
                                             />
                                         </div>
+                                        
+                                        {{-- Product Variant --}}
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
+                                            <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('pagination.search_variant') }}">
+                                                <option value="">{{ __('pagination.all_variants') }}</option>
+                                                @foreach($variants as $variant)
+                                                    <option value="{{ $variant->id }}" {{ $variantId == $variant->id ? 'selected' : '' }}>
+                                                        {{ $variant->name }} ({{ $variant->sku }})
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        
+                                        {{-- Aging Category --}}
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">{{ __('pagination.aging_category') }}</label>
+                                            <select class="form-select" name="category">
+                                                <option value="">{{ __('pagination.all_categories') }}</option>
+                                                <option value="expired" {{ $category == 'expired' ? 'selected' : '' }}>
+                                                    {{ __('pagination.expired') }}
+                                                </option>
+                                                <option value="1_week" {{ $category == '1_week' ? 'selected' : '' }}>
+                                                    {{ __('pagination.within_1_week') }}
+                                                </option>
+                                                <option value="1_month" {{ $category == '1_month' ? 'selected' : '' }}>
+                                                    {{ __('pagination.within_1_month') }}
+                                                </option>
+                                                <option value="3_months" {{ $category == '3_months' ? 'selected' : '' }}>
+                                                    {{ __('pagination.within_3_months') }}
+                                                </option>
+                                                <option value="6_months" {{ $category == '6_months' ? 'selected' : '' }}>
+                                                    {{ __('pagination.within_6_months') }}
+                                                </option>
+                                                <option value="over_6_months" {{ $category == 'over_6_months' ? 'selected' : '' }}>
+                                                    {{ __('pagination.over_6_months') }}
+                                                </option>
+                                            </select>
+                                        </div>
                                     </div>
                                     
-                                    {{-- Second Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Empty spacer --}}
-                                        <div class="flex-grow-1"></div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex gap-2" style="margin-top: auto;">
+                                    {{-- Row 2: Actions --}}
+                                    <div class="row">
+                                        <div class="col-12 d-flex gap-2">
                                             <button type="submit" class="btn btn-primary" id="applyFilters">
                                                 <i class="ki-duotone ki-filter fs-2 me-1"></i>
                                                 {{ __('pagination.apply_filters') }}
@@ -142,6 +145,10 @@
                                                 <i class="ki-duotone ki-cross fs-2 me-1"></i>
                                                 {{ __('pagination.clear_filters') }}
                                             </a>
+                                            <span class="text-muted ms-3 small">
+                                                <i class="ki-duotone ki-information-4 fs-2"></i>
+                                                {{ __('pagination.showing') }} <strong>{{ $agingItems->count() }}</strong> {{ __('pagination.items') }}
+                                            </span>
                                         </div>
                                     </div>
                                 </form>
@@ -234,6 +241,47 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                {{-- Charts Section --}}
+                @if($agingItems->count() > 0)
+                <div class="row mb-6">
+                    {{-- Aging Distribution Chart --}}
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    <h3 class="fw-bold m-0">{{ __('pagination.stock_aging_distribution') }}</h3>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div id="agingDistributionChart" style="height: 350px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {{-- Aging Category Pie Chart --}}
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    <h3 class="fw-bold m-0">{{ __('pagination.aging_category_distribution') }}</h3>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div id="agingCategoryChart" style="height: 350px;"></div>
                             </div>
                         </div>
                     </div>
@@ -399,21 +447,166 @@
 </div>
 
 @push('scripts')
+@if($agingItems->count() > 0)
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    // Simple export function
-    function exportCurrentPage(config) {
-        const { tableId, filename, sheetName = 'Sheet1', format = 'excel' } = config;
-        const table = document.getElementById(tableId);
-        
-        if (!table) {
-            alert('Table not found');
-            return;
-        }
-        
-        // Simple export logic - in real app, use a proper library
-        console.log(`Exporting ${tableId} to ${format} as ${filename}`);
-        alert('Export functionality would be implemented here. Use a library like SheetJS or TableExport.js');
+document.addEventListener('DOMContentLoaded', function() {
+    // ─── Aging Distribution Chart ──────────────────────────────────
+    const agingData = @json($agingItems->take(20));
+    const productNames = agingData.map(item => {
+        const name = item.variant_name || 'Unknown';
+        return name.length > 20 ? name.substring(0, 17) + '...' : name;
+    });
+    const daysToExpiry = agingData.map(item => item.days_to_expiry || 0);
+    const quantities = agingData.map(item => item.quantity_on_hand || 0);
+    
+    const hasData = quantities.some(q => q > 0);
+    
+    if (hasData) {
+        const agingChart = new ApexCharts(document.querySelector("#agingDistributionChart"), {
+            series: [
+                {
+                    name: 'Days to Expiry',
+                    data: daysToExpiry,
+                    type: 'bar'
+                },
+                {
+                    name: 'Quantity',
+                    data: quantities,
+                    type: 'line'
+                }
+            ],
+            chart: {
+                type: 'bar',
+                height: 350,
+                toolbar: { show: true }
+            },
+            plotOptions: {
+                bar: { horizontal: false, columnWidth: '55%' }
+            },
+            stroke: { width: [0, 3], curve: 'smooth' },
+            dataLabels: { enabled: false },
+            xaxis: {
+                categories: productNames,
+                labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
+            },
+            yaxis: [
+                { title: { text: 'Days to Expiry' }, min: 0 },
+                { opposite: true, title: { text: 'Quantity' } }
+            ],
+            colors: ['#3E97FF', '#50CD89'],
+            tooltip: {
+                shared: true,
+                intersect: false,
+                y: {
+                    formatter: function(val, { seriesIndex }) {
+                        return seriesIndex === 0 ? val + ' days' : val + ' units';
+                    }
+                }
+            }
+        });
+        agingChart.render();
+    } else {
+        document.querySelector("#agingDistributionChart").innerHTML = 
+            '<div class="text-center text-muted py-10">No aging data available</div>';
     }
+    
+    // ─── Aging Category Pie Chart ──────────────────────────────────
+    const categories = @json($agingCategories);
+    const labels = [
+        '{{ __("pagination.expired") }}',
+        '{{ __("pagination.within_1_week") }}',
+        '{{ __("pagination.within_1_month") }}',
+        '{{ __("pagination.within_3_months") }}',
+        '{{ __("pagination.within_6_months") }}',
+        '{{ __("pagination.over_6_months") }}'
+    ];
+    const values = [
+        categories.expired || 0,
+        categories['1_week'] || 0,
+        categories['1_month'] || 0,
+        categories['3_months'] || 0,
+        categories['6_months'] || 0,
+        categories['over_6_months'] || 0
+    ];
+    
+    const filteredData = [];
+    const filteredLabels = [];
+    const colors = ['#F1416C', '#FFC700', '#FFA800', '#3E97FF', '#50CD89', '#7239EA'];
+    
+    values.forEach((val, index) => {
+        if (val > 0) {
+            filteredData.push(val);
+            filteredLabels.push(labels[index]);
+        }
+    });
+    
+    if (filteredData.length > 0) {
+        const categoryChart = new ApexCharts(document.querySelector("#agingCategoryChart"), {
+            series: filteredData,
+            chart: { type: 'donut', height: 350 },
+            labels: filteredLabels,
+            colors: colors.slice(0, filteredData.length),
+            legend: { position: 'bottom', fontSize: '12px' },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '65%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Total Items',
+                                formatter: function(w) {
+                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            tooltip: { y: { formatter: function(val) { return val + ' units'; } } }
+        });
+        categoryChart.render();
+    } else {
+        document.querySelector("#agingCategoryChart").innerHTML = 
+            '<div class="text-center text-muted py-10">No category data available</div>';
+    }
+});
+</script>
+@else
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chartElements = ['agingDistributionChart', 'agingCategoryChart'];
+    chartElements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.innerHTML = '<div class="text-center text-muted py-10">No data available for the selected period</div>';
+        }
+    });
+});
+</script>
+@endif
+
+<script>
+// ─── Form Validation ──────────────────────────────────────────────
+document.getElementById('filterForm')?.addEventListener('submit', function(e) {
+    return true;
+});
+
+// ─── Export Function ──────────────────────────────────────────────
+function exportCurrentPage(config) {
+    const { tableId, filename, sheetName = 'Sheet1', format = 'excel' } = config;
+    const table = document.getElementById(tableId);
+    
+    if (!table) {
+        alert('Table not found');
+        return;
+    }
+    
+    console.log(`Exporting ${tableId} to ${format} as ${filename}`);
+    alert('Export functionality would be implemented here. Use a library like SheetJS or TableExport.js');
+}
 </script>
 @endpush
 

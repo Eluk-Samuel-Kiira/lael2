@@ -194,36 +194,113 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'total_items', 'color' => 'primary', 'icon' => 'ki-box', 'label' => 'total_items', 'value' => $summary['total_items']],
-                                        ['key' => 'total_quantity', 'color' => 'success', 'icon' => 'ki-barcode', 'label' => 'total_quantity', 'value' => number_format($summary['total_quantity'])],
-                                        ['key' => 'total_value', 'color' => 'info', 'icon' => 'ki-dollar', 'label' => 'total_value', 'value' => '$' . number_format($summary['total_value'], 2)],
-                                        ['key' => 'average_stock_level', 'color' => 'warning', 'icon' => 'ki-calculator', 'label' => 'average_stock_level', 'value' => number_format($summary['average_stock_level'], 1)],
-                                        ['key' => 'items_below_reorder', 'color' => 'danger', 'icon' => 'ki-warning-2', 'label' => 'items_below_reorder', 'value' => $summary['items_below_reorder']],
-                                        ['key' => 'out_of_stock', 'color' => 'secondary', 'icon' => 'ki-cross', 'label' => 'out_of_stock', 'value' => $summary['out_of_stock']]
-                                    ] as $stat)
+                                    {{-- Total Items --}}
                                     <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
                                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                                 <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
+                                                    <i class="ki-duotone ki-box fs-2tx text-primary">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
                                                     </i>
                                                 </div>
                                                 <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['total_items'] }}</span>
                                                 </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('pagination.' . $stat['label']) }}
-                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.total_items') }}</div>
                                             </div>
                                         </div>
                                     </div>
-                                    @endforeach
+                                    
+                                    {{-- Total Quantity On Hand --}}
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-4">
+                                                    <i class="ki-duotone ki-barcode fs-2tx text-success">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ number_format($summary['total_quantity_allocated']) }}</span>
+                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.quantity_allocated') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Total Value --}}
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-4">
+                                                    <i class="ki-duotone ki-dollar fs-2tx text-info">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($summary['total_value'], 2) }}</span>
+                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.total_value') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Average Stock Level --}}
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-4">
+                                                    <i class="ki-duotone ki-calculator fs-2tx text-warning">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ number_format($summary['average_stock_level'], 1) }}</span>
+                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.average_stock_level') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Items Below Reorder --}}
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-4">
+                                                    <i class="ki-duotone ki-warning-2 fs-2tx text-danger">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['items_below_reorder'] }}</span>
+                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.items_below_reorder') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Out of Stock --}}
+                                    <div class="col-md-6 col-lg-2">
+                                        <div class="card card-flush bg-light-secondary border border-secondary border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-4">
+                                                    <i class="ki-duotone ki-cross fs-2tx text-secondary">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                </div>
+                                                <div class="mb-1">
+                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['out_of_stock'] }}</span>
+                                                </div>
+                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.out_of_stock') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -297,7 +374,9 @@
                                                 <th class="min-w-200px">{{ __('pagination.product') }}</th>
                                                 <th class="min-w-150px">{{ __('accounting.department') }}</th>
                                                 <th class="min-w-150px">{{ __('auth.location') }}</th>
-                                                <th class="min-w-100px text-center">{{ __('pagination.quantity') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.quantity_on_hand') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.quantity_allocated') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.preferred_stock_level') }}</th>
                                                 <th class="min-w-100px text-center">{{ __('pagination.reorder_point') }}</th>
                                                 <th class="min-w-120px text-center">{{ __('auth.stock_status') }}</th>
                                                 <th class="min-w-150px">{{ __('auth.last_updated') }}</th>
@@ -306,16 +385,21 @@
                                         <tbody>
                                             @foreach($inventoryItems as $item)
                                             @php
-                                                $stockRatio = $item->reorder_point > 0 ? ($item->quantity_on_hand / $item->reorder_point) : 0;
+                                                $reorderPoint = $item->reorder_point ?? 0;
+                                                $preferredStock = $item->preferred_stock_level ?? 0;
+                                                $stockRatio = $reorderPoint > 0 ? ($item->quantity_on_hand / $reorderPoint) : 0;
                                                 $statusColor = 'success';
                                                 $statusText = __('pagination.in_stock');
                                                 
                                                 if ($item->quantity_on_hand == 0) {
                                                     $statusColor = 'danger';
                                                     $statusText = __('pagination.out_of_stock');
-                                                } elseif ($item->quantity_on_hand <= $item->reorder_point) {
+                                                } elseif ($reorderPoint > 0 && $item->quantity_on_hand <= $reorderPoint) {
                                                     $statusColor = 'warning';
                                                     $statusText = __('pagination.low_stock');
+                                                } elseif ($preferredStock > 0 && $item->quantity_on_hand > $preferredStock) {
+                                                    $statusColor = 'info';
+                                                    $statusText = __('pagination.over_stock');
                                                 }
                                             @endphp
                                             <tr>
@@ -350,18 +434,19 @@
                                                     <span class="fw-bold {{ $item->quantity_on_hand == 0 ? 'text-danger' : 'text-success' }}">
                                                         {{ number_format($item->quantity_on_hand) }}
                                                     </span>
-                                                    @if(($item->quantity_allocated ?? 0) > 0)
-                                                    <div class="text-muted fs-8">
-                                                        {{ __('pagination.allocated') }}: {{ number_format($item->quantity_allocated) }}
-                                                    </div>
-                                                    @endif
                                                 </td>
                                                 <td class="text-center">
-                                                    {{ number_format($item->reorder_point ?? 0) }}
+                                                    <span class="text-muted">{{ number_format($item->quantity_allocated ?? 0) }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-secondary">{{ number_format($preferredStock) }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-warning">{{ number_format($reorderPoint) }}</span>
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $statusColor }}">{{ $statusText }}</span>
-                                                    @if($stockRatio > 0 && $stockRatio < 2)
+                                                    @if($stockRatio > 0 && $stockRatio < 2 && $item->quantity_on_hand > 0)
                                                     <div class="progress mt-1" style="height: 5px; width: 80px; margin: 0 auto;">
                                                         <div class="progress-bar bg-{{ $statusColor }}" 
                                                             style="width: {{ min(100, $stockRatio * 100) }}%"></div>
@@ -374,27 +459,23 @@
                                             </tr>
                                             @endforeach
                                         </tbody>
-                                        @php
-                                            // Calculate page totals
-                                            $pageTotalQuantity = $inventoryItems->sum('quantity_on_hand');
-                                            $pageTotalValue = 0;
-                                            foreach($inventoryItems as $item) {
-                                                $pageTotalValue += $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
-                                            }
-                                        @endphp
                                         <tfoot class="bg-light">
                                             <tr>
                                                 <td colspan="4" class="text-end fw-bold">{{ __('accounting.current_page') }}: </td>
-                                                <td class="text-center fw-bold">{{ number_format($pageTotalQuantity) }}</td>
-                                                <td colspan="3"></td>
-                                                <td class="fw-bold">${{ number_format($pageTotalValue, 2) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('quantity_on_hand')) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('quantity_allocated')) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('preferred_stock_level')) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('reorder_point')) }}</td>
+                                                <td colspan="2"></td>
                                             </tr>
                                             @if($inventoryItems->total() > $inventoryItems->count())
                                             <tr>
                                                 <td colspan="4" class="text-end fw-bold text-muted">{{ __('auth.grand_total') }}: </td>
-                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity']) }}</td>
-                                                <td colspan="3"></td>
-                                                <td class="fw-bold">${{ number_format($summary['total_value'], 2) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity_on_hand']) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity_allocated']) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_preferred_stock']) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_reorder_point']) }}</td>
+                                                <td colspan="2"></td>
                                             </tr>
                                             @endif
                                         </tfoot>
