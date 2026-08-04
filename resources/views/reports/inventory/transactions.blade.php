@@ -60,110 +60,106 @@
                         </div>
                     </div>
                 </div>
-
+                
                 {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
+                <div class="card mb-6">
+                    <div class="card-header border-0">
+                        <div class="card-title d-flex align-items-center">
+                            <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                            </i>
+                            <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0">
+                        <form method="GET" action="{{ route('reports.inventory.transactions') }}" id="filterForm">
+                            {{-- First Line - Date Range and Type --}}
+                            <div class="row g-3 mb-3">
+                                {{-- Date Range --}}
+                                <div class="col-md-4">
+                                    <label class="form-label required fw-semibold">{{ __('pagination.date_range') }}</label>
+                                    <div class="d-flex gap-2">
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                            </span>
+                                            <input type="date" class="form-control" name="start_date" 
+                                                value="{{ $startDate }}" required>
+                                        </div>
+                                        <div class="input-group w-100">
+                                            <span class="input-group-text">
+                                                <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                            </span>
+                                            <input type="date" class="form-control" name="end_date" 
+                                                value="{{ $endDate }}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {{-- Transaction Type --}}
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">{{ __('pagination.transaction_type') }}</label>
+                                    <select class="form-select" name="type">
+                                        <option value="all">{{ __('pagination.all_types') }}</option>
+                                        <option value="purchase" {{ $type == 'purchase' ? 'selected' : '' }}>{{ __('pagination.purchase') }}</option>
+                                        <option value="sale" {{ $type == 'sale' ? 'selected' : '' }}>{{ __('pagination.sale') }}</option>
+                                        <option value="return" {{ $type == 'return' ? 'selected' : '' }}>{{ __('pagination.return') }}</option>
+                                        <option value="adjustment" {{ $type == 'adjustment' ? 'selected' : '' }}>{{ __('pagination.adjustment') }}</option>
+                                        <option value="transfer_in" {{ $type == 'transfer_in' ? 'selected' : '' }}>{{ __('pagination.transfer_in') }}</option>
+                                        <option value="transfer_out" {{ $type == 'transfer_out' ? 'selected' : '' }}>{{ __('pagination.transfer_out') }}</option>
+                                    </select>
+                                </div>
+                                
+                                {{-- Product Variant --}}
+                                <div class="col-md-2">
+                                    <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
+                                    <select class="form-select" name="variant_id" data-control="select2">
+                                        <option value="">{{ __('pagination.all_variants') }}</option>
+                                        @foreach($variants ?? [] as $variant)
+                                            <option value="{{ $variant->id }}" {{ ($variantId ?? '') == $variant->id ? 'selected' : '' }}>
+                                                {{ Str::limit($variant->name, 30) }} ({{ $variant->sku }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                
+                                {{-- Location & Department --}}
+                                <div class="col-md-3">
+                                    <x-liveblade-dependent-dropdown 
+                                        id="filter_location_department"
+                                        parentName="location_id"
+                                        childName="department_id"
+                                        parentLabel="auth.location"
+                                        childLabel="accounting.department"
+                                        :parentOptions="$locations ?? []"
+                                        :childOptions="$departments ?? []"
+                                        route="{{ route('get.departments') }}"
+                                        selectedParent="{{ $locationId ?? null }}"
+                                        selectedChild="{{ $departmentId ?? null }}"
+                                        skipAjax="false"
+                                    />
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.inventory.transactions') }}" id="filterForm">
-                                    {{-- First Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('pagination.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('pagination.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('pagination.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('pagination.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('pagination.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Transaction Type --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.transaction_type') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-switch fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="type">
-                                                    <option value="all">{{ __('pagination.all_types') }}</option>
-                                                    <option value="purchase" {{ $type == 'purchase' ? 'selected' : '' }}>{{ __('pagination.purchase') }}</option>
-                                                    <option value="sale" {{ $type == 'sale' ? 'selected' : '' }}>{{ __('pagination.sale') }}</option>
-                                                    <option value="return" {{ $type == 'return' ? 'selected' : '' }}>{{ __('pagination.return') }}</option>
-                                                    <option value="adjustment" {{ $type == 'adjustment' ? 'selected' : '' }}>{{ __('pagination.adjustment') }}</option>
-                                                    <option value="transfer_in" {{ $type == 'transfer_in' ? 'selected' : '' }}>{{ __('pagination.transfer_in') }}</option>
-                                                    <option value="transfer_out" {{ $type == 'transfer_out' ? 'selected' : '' }}>{{ __('pagination.transfer_out') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location & Department - Dependent Dropdown --}}
-                                        <div class="flex-grow-1">
-                                            <x-liveblade-dependent-dropdown 
-                                                id="filter_location_department"
-                                                parentName="location_id"
-                                                childName="department_id"
-                                                parentLabel="auth.location"
-                                                childLabel="accounting.department"
-                                                :parentOptions="$locations"
-                                                :childOptions="$departments"
-                                                route="{{ route('get.departments') }}"
-                                                selectedParent="{{ $locationId ?? null }}"
-                                                selectedChild="{{ $departmentId ?? null }}"
-                                                skipAjax="false"
-                                            />
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Second Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Empty spacer to maintain layout --}}
-                                        <div class="flex-grow-1"></div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.transactions') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('pagination.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('pagination.clear') }}</span>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </form>
+
+                            {{-- Second Line - Action Buttons --}}
+                            <div class="row">
+                                <div class="col-12 d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary" id="applyFilters">
+                                        <i class="ki-duotone ki-filter fs-2 me-1"></i> {{ __('pagination.apply_filters') }}
+                                    </button>
+                                    <a href="{{ route('reports.inventory.transactions') }}" class="btn btn-light">
+                                        <i class="ki-duotone ki-cross fs-2 me-1"></i> {{ __('pagination.clear_filters') }}
+                                    </a>
+                                    @if(isset($transactions) && $transactions->count() > 0)
+                                    <span class="text-muted ms-3 small">
+                                        <i class="ki-duotone ki-information-4 fs-2"></i>
+                                        {{ __('pagination.showing') }} <strong>{{ $transactions->count() }}</strong> {{ __('pagination.transactions') }}
+                                    </span>
+                                    @endif
+                                </div>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
 
@@ -249,9 +245,9 @@
                         </div>
                     </div>
                     
-                    {{-- Daily Transaction Trend --}}
+                    {{-- Daily Transaction Trend with Moving Average --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
@@ -262,7 +258,24 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="dailyTrendChart" style="height: 300px;"></div>
+                                <div id="dailyTrendChart" style="height: 320px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {{-- Transaction Volume by Type (Bar Chart) --}}
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    <h3 class="fw-bold m-0">{{ __('pagination.transaction_volume_by_type') }}</h3>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div id="volumeByTypeChart" style="height: 320px;"></div>
                             </div>
                         </div>
                     </div>
@@ -762,10 +775,9 @@
         }
         
         // ============================================
-        // 2. Daily Transaction Trend Chart (Line)
+        // 2. Daily Transaction Trend Chart (with Moving Average)
         // ============================================
         @php
-            // Calculate daily trend from the actual collection
             $dailyTrendData = [];
             if (isset($dailyTrend) && $dailyTrend->count() > 0) {
                 foreach ($dailyTrend as $item) {
@@ -775,41 +787,51 @@
                         'quantity' => $item->quantity
                     ];
                 }
-            } else {
-                // Fallback: generate from date range
-                $currentDate = \Carbon\Carbon::parse($startDate);
-                $endDateObj = \Carbon\Carbon::parse($endDate);
-                while ($currentDate <= $endDateObj) {
-                    $dailyTrendData[] = [
-                        'date' => $currentDate->format('Y-m-d'),
-                        'count' => 0,
-                        'quantity' => 0
-                    ];
-                    $currentDate->addDay();
-                }
             }
         @endphp
-        
+
         const dailyTrendData = @json($dailyTrendData);
         const dailyLabels = dailyTrendData.map(item => {
             const date = new Date(item.date);
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         });
         const dailyCounts = dailyTrendData.map(item => item.count);
-        
+
+        // Calculate 7-day moving average
+        function calculateMovingAverage(data, windowSize = 7) {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                let sum = 0;
+                let count = 0;
+                for (let j = Math.max(0, i - windowSize + 1); j <= i; j++) {
+                    sum += data[j];
+                    count++;
+                }
+                result.push(count > 0 ? sum / count : 0);
+            }
+            return result;
+        }
+
+        const movingAverage = calculateMovingAverage(dailyCounts);
+
         const trendChartElement = document.querySelector("#dailyTrendChart");
         if (trendChartElement && dailyCounts.length > 0) {
-            const hasData = dailyCounts.some(count => count > 0);
-            
-            const dailyTrendChart = new ApexCharts(trendChartElement, {
-                series: [{
-                    name: window.transactionTranslations.transactions,
-                    data: dailyCounts
-                }],
+            new ApexCharts(trendChartElement, {
+                series: [
+                    {
+                        name: '{{ __("pagination.transactions") }}',
+                        data: dailyCounts,
+                        type: 'bar'
+                    },
+                    {
+                        name: '{{ __("pagination.7_day_average") }}',
+                        data: movingAverage,
+                        type: 'line'
+                    }
+                ],
                 chart: {
                     type: 'line',
-                    height: 350,
-                    width: '100%',
+                    height: 320,
                     toolbar: {
                         show: true,
                         tools: {
@@ -827,21 +849,16 @@
                     }
                 },
                 stroke: {
-                    width: 3,
-                    curve: 'smooth',
-                    colors: ['#3E97FF']
+                    width: [0, 3],
+                    curve: 'smooth'
                 },
                 fill: {
-                    type: 'gradient',
-                    gradient: {
-                        shade: 'light',
-                        type: 'vertical',
-                        shadeIntensity: 0.3,
-                        gradientToColors: ['#3E97FF'],
-                        inverseColors: false,
-                        opacityFrom: 0.8,
-                        opacityTo: 0.2,
-                        stops: [0, 100]
+                    opacity: [0.8, 1]
+                },
+                plotOptions: {
+                    bar: {
+                        columnWidth: '60%',
+                        borderRadius: 4
                     }
                 },
                 xaxis: {
@@ -871,59 +888,128 @@
                         }
                     },
                     min: 0,
-                    tickAmount: 5,
-                    labels: {
-                        formatter: function(val) {
-                            return Math.floor(val);
-                        }
-                    }
+                    tickAmount: 5
                 },
-                colors: ['#3E97FF'],
+                colors: ['#3E97FF', '#F1416C'],
                 markers: {
-                    size: hasData ? 5 : 0,
-                    colors: ['#3E97FF'],
-                    strokeColors: '#fff',
-                    strokeWidth: 2,
-                    hover: {
-                        size: 7
-                    }
-                },
-                grid: {
-                    borderColor: '#e7e7e7',
-                    row: {
-                        colors: ['#f3f3f3', 'transparent'],
-                        opacity: 0.3
-                    }
+                    size: [0, 3],
+                    colors: ['#3E97FF', '#F1416C']
                 },
                 tooltip: {
-                    x: {
-                        format: 'dd MMM yyyy'
-                    },
+                    shared: true,
+                    intersect: false,
                     y: {
-                        formatter: function(val, { dataPointIndex }) {
-                            const item = dailyTrendData[dataPointIndex];
-                            let tooltip = `<strong>${val} ${window.transactionTranslations.transactions}</strong>`;
-                            if (item && item.quantity !== 0) {
-                                const quantitySign = item.quantity >= 0 ? '+' : '';
-                                tooltip += `<br>Net Quantity: ${quantitySign}${Math.abs(item.quantity).toLocaleString()}`;
+                        formatter: function(val, { seriesIndex }) {
+                            if (seriesIndex === 1) {
+                                return val.toFixed(1) + ' {{ __("pagination.avg") }}';
                             }
-                            return tooltip;
+                            return val + ' {{ __("pagination.transactions") }}';
                         }
                     }
                 },
-                noData: {
-                    text: '{{ __("pagination.no_data_available") }}',
-                    align: 'center',
-                    verticalAlign: 'middle',
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'center',
+                    fontSize: '12px'
+                }
+            }).render();
+        }
+
+        // ============================================
+        // 3. Transaction Volume by Type (Bar Chart)
+        // ============================================
+        const volumeByType = @json($typeSummary);
+        const volumeLabels = volumeByType.map(item => {
+            const labelMap = {
+                'purchase': '{{ __("pagination.purchase") }}',
+                'sale': '{{ __("pagination.sale") }}',
+                'return': '{{ __("pagination.return") }}',
+                'adjustment': '{{ __("pagination.adjustment") }}',
+                'transfer_in': '{{ __("pagination.transfer_in") }}',
+                'transfer_out': '{{ __("pagination.transfer_out") }}'
+            };
+            return labelMap[item.type] || item.type;
+        });
+        const volumeData = volumeByType.map(item => Math.abs(item.total_quantity));
+
+        const volumeColors = {
+            'purchase': '#50CD89',
+            'sale': '#F1416C',
+            'return': '#3E97FF',
+            'adjustment': '#FFC700',
+            'transfer_in': '#7239EA',
+            'transfer_out': '#7E8299'
+        };
+
+        const volumeChartColors = volumeByType.map(item => volumeColors[item.type] || '#A8A8A8');
+
+        const volumeChartElement = document.querySelector("#volumeByTypeChart");
+        if (volumeChartElement && volumeData.length > 0) {
+            new ApexCharts(volumeChartElement, {
+                series: [{
+                    name: '{{ __("pagination.volume") }}',
+                    data: volumeData
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 320,
+                    toolbar: {
+                        show: true
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 4,
+                        horizontal: true,
+                        barHeight: '60%',
+                        distributed: true,
+                        colors: {
+                            backgroundBarColors: ['#f0f0f0'],
+                            backgroundBarOpacity: 0.5
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    formatter: function(val) {
+                        return Math.abs(val).toLocaleString();
+                    },
                     style: {
-                        fontSize: '14px',
-                        color: '#A8A8A8'
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                    }
+                },
+                xaxis: {
+                    categories: volumeLabels,
+                    labels: {
+                        style: {
+                            fontSize: '11px'
+                        }
+                    },
+                    title: {
+                        text: '{{ __("pagination.quantity_moved") }}',
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        }
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            fontSize: '11px'
+                        }
+                    }
+                },
+                colors: volumeChartColors,
+                tooltip: {
+                    y: {
+                        formatter: function(val) {
+                            return Math.abs(val).toLocaleString() + ' {{ __("pagination.units") }}';
+                        }
                     }
                 }
-            });
-            dailyTrendChart.render();
-        } else if (trendChartElement) {
-            trendChartElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("pagination.no_data_available") }}</div>';
+            }).render();
         }
         
         // ============================================

@@ -1525,11 +1525,13 @@ class POSController extends Controller
         $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
         $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
 
+        // ✅ Load inventory with relationships
         if ($inventoryId) {
-            $inventory = InventoryItems::find($inventoryId);
+            $inventory = InventoryItems::with(['itemLocation', 'departmentItem'])->find($inventoryId);
         } else {
             // Fallback: query inventory
             $inventory = $variant->inventory()
+                ->with(['itemLocation', 'departmentItem'])
                 ->where('location_id', $locationId)
                 ->where('department_id', $departmentId)
                 ->first();
@@ -1545,6 +1547,19 @@ class POSController extends Controller
             return;
         }
 
+        // ─── Get Location and Department Names ────────────────────────
+        $locationName = $inventory->itemLocation ? $inventory->itemLocation->name : 'Unknown Location';
+        $departmentName = $inventory->departmentItem ? $inventory->departmentItem->name : 'Unknown Department';
+        $variantName = $variant->name ?? 'Unknown Variant';
+        $variantSku = $variant->sku ?? 'N/A';
+
+        // ─── Build Readable Notes ──────────────────────────────────────
+        $adjustmentNote = 'Stock reduced — ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') sold from ' 
+                        . $locationName . ' (' . $departmentName . ') via order #' . $order->order_number;
+
+        $transactionNote = 'Sold ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') from ' 
+                        . $locationName . ' (' . $departmentName . ') for order #' . $order->order_number;
+
         $beforeQty = $inventory->quantity_allocated;
         $afterQty = $beforeQty - $item->quantity;
 
@@ -1558,7 +1573,7 @@ class POSController extends Controller
             'quantity_before' => $beforeQty,
             'quantity_after' => $afterQty,
             'reason' => 'order_sale',
-            'notes' => 'Stock reduced due to order #' . $order->order_number,
+            'notes' => $adjustmentNote,
             'inventory_id' => $inventory->id,
             'created_by' => auth()->id(),
             'tenant_id' => $order->tenant_id,
@@ -1570,7 +1585,7 @@ class POSController extends Controller
             'reference_id' => $order->id,
             'reference_type' => 'order',
             'type' => 'sale',
-            'notes' => 'Sold ' . $item->quantity . ' units of ' . $variant->sku,
+            'notes' => $transactionNote,
             'inventory_id' => $inventory->id,
             'created_by' => auth()->id(),
             'tenant_id' => $order->tenant_id,
@@ -1587,7 +1602,7 @@ class POSController extends Controller
         ]);
     }
 
-    
+        
     public function cancel(Request $request, $id)
     {
         $user = Auth::user();

@@ -26,6 +26,7 @@ class ProductVariant extends Model
         'discount_percentage',
         'markup_percentage',
         'overal_quantity_at_hand',
+        'low_stock_level',
         'weight',
         'weight_unit',
         'image_url',

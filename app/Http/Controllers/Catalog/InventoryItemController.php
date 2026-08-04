@@ -454,7 +454,7 @@ class InventoryItemController extends Controller
         }
 
         // Find inventory item and ensure it belongs to tenant
-        $item = InventoryItems::with('variant')
+        $item = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
                 ->where('id', $id)
                 ->where('tenant_id', $tenantId)
                 ->first();
@@ -509,7 +509,6 @@ class InventoryItemController extends Controller
             ],
             'expiry_date' => ['nullable', 'date', 'after_or_equal:today'],
             'preferred_stock_level' => ['nullable', 'integer', 'min:0'],
-            'preferred_stock_level' => ['nullable', 'integer', 'min:0'],
             'quantity_allocated' => [
                 'required',
                 'integer',
@@ -551,19 +550,36 @@ class InventoryItemController extends Controller
                 throw new \Exception("Insufficient stock available");
             }
 
-            // ✅ Determine direction for notes
-            $direction = $allocationDiff > 0 
-                ? 'Allocated ' . $allocationDiff . ' units from overall stock to branch' 
-                : 'Returned ' . abs($allocationDiff) . ' units from branch to overall stock';
+            // ─── Get Location and Department Names ────────────────────
+            $locationName = $item->itemLocation ? $item->itemLocation->name : 'Unknown Location';
+            $departmentName = $item->departmentItem ? $item->departmentItem->name : 'Unknown Department';
+            $variantName = $variant->name ?? 'Unknown Variant';
+            $adjustAmount = abs($allocationDiff);
             
-            $action = $allocationDiff > 0 ? 'Added' : 'Returned';
+            // ─── Build Readable Notes ──────────────────────────────────
+            if ($allocationDiff > 0) {
+                // Allocating MORE to branch (moving from overall to branch)
+                $action = 'Allocated';
+                $directionText = $adjustAmount . ' unit(s) of "' . $variantName . '" from Overall Stock to ' 
+                                . $locationName . ' (' . $departmentName . ')';
+            } elseif ($allocationDiff < 0) {
+                // Returning from branch to overall (reducing branch allocation)
+                $action = 'Returned';
+                $directionText = $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
+                                . $locationName . ' (' . $departmentName . ') back to Overall Stock';
+            } else {
+                // No change
+                $action = 'No change';
+                $directionText = 'No allocation change for "' . $variantName . '" at ' 
+                                . $locationName . ' (' . $departmentName . ')';
+            }
 
             // ✅ Record adjustment BEFORE updating (audit trail)
             InventoryAdjustments::create([
                 'quantity_before' => $oldAllocated,
                 'quantity_after'  => $newAllocated,
                 'reason'          => 'inventory_allocation_update',
-                'notes'           => $action . ' ' . abs($allocationDiff) . ' units ' . ($allocationDiff > 0 ? 'to branch' : 'to overall stock') . ' for ' . $variant->name,
+                'notes'           => $directionText,
                 'inventory_id'    => $item->id,
                 'created_by'      => auth()->id() ?? null,
                 'tenant_id'       => $item->tenant_id,
@@ -582,8 +598,8 @@ class InventoryItemController extends Controller
                     'quantity'       => $allocationDiff,
                     'reference_id'   => $item->id,
                     'reference_type' => 'inventory_item',
-                    'type'           => 'transfer_in',
-                    'notes'          => $direction . ' for ' . $variant->name,
+                    'type'           => $allocationDiff > 0 ? 'transfer_in' : 'transfer_out',
+                    'notes'          => $directionText,
                     'inventory_id'   => $item->id,
                     'created_by'     => auth()->id() ?? null,
                     'tenant_id'      => $item->tenant_id,
