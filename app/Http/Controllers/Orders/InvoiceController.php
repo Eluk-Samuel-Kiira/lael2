@@ -207,12 +207,12 @@ class InvoiceController extends Controller
             $emailToUse = $validated['email'] ?? $invoice->billing_email;
             
             // Log the email being used
-            Log::info('Email channel selected', [
-                'invoice_id' => $invoice->id,
-                'email_from_request' => $validated['email'] ?? null,
-                'email_from_invoice' => $invoice->billing_email,
-                'email_to_use' => $emailToUse
-            ]);
+            // Log::info('Email channel selected', [
+            //     'invoice_id' => $invoice->id,
+            //     'email_from_request' => $validated['email'] ?? null,
+            //     'email_from_invoice' => $invoice->billing_email,
+            //     'email_to_use' => $emailToUse
+            // ]);
             
             if (!$emailToUse) {
                 return response()->json([

@@ -71,6 +71,33 @@
                             </div>
                         </div>
 
+                        <div class="row g-9 mb-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="required form-label">{{__('pagination.department_type')}}</label>
+                                <select name="department_type" class="form-select">
+                                    <option></option>
+                                    <option value="retail">{{__('pagination.retail')}}</option>
+                                    <option value="electronics">{{__('pagination.electronics')}}</option>
+                                    <option value="pharmacy">{{__('pagination.pharmacy')}}</option>
+                                    <option value="restaurant">{{__('pagination.restaurant')}}</option>
+                                    <option value="manufacturing">{{__('pagination.manufacturing')}}</option>
+                                </select>
+                                <div id="department_type"></div>
+                            </div>
+
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="required form-label">{{__('pagination.default_inventory_strategy')}}</label>
+                                <select name="default_inventory_strategy" class="form-select">
+                                    <option></option>
+                                    <option value="quantity">{{__('pagination.quantity')}}</option>
+                                    <option value="batch">{{__('pagination.batch')}}</option>
+                                    <option value="serial">{{__('pagination.serial')}}</option>
+                                    <option value="recipe">{{__('pagination.recipe')}}</option>
+                                </select>
+                                <div id="default_inventory_strategy"></div>
+                            </div>
+                        </div>
+
                         <button type="reset" class="btn btn-light me-3" id="discardButton" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
                         <button 
                             id="submitCurrencyButton" 

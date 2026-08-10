@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\{ Department, Location, Product, ProductCategory, Promotion, Tax };
 use App\Models\ProductVariant;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\{ Auth, DB };
+use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
@@ -167,26 +167,22 @@ class ProductController extends Controller
             ],
             'description' => 'nullable|string',
             'type' => 'required|in:physical,digital,service,composite',
+            'inventory_strategy' => 'required|in:quantity,batch,serial,recipe',
             'is_taxable' => 'boolean',
             'is_active' => 'boolean',
         ]);
-
-        // Check maximum products limit
-        // $currentProductCount = Product::where('tenant_id', $tenantId)->count();
-        // $maxProducts = tenant_setting($tenantId, 'max_products', 100); // Default to 100 if not set
-
-        // if ($currentProductCount >= $maxProducts) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => __('auth.maximum_products_reached', ['max' => $maxProducts]),
-        //     ]);
-        // }
 
         $data['slug'] = Str::slug($data['name']);
         $data['created_by'] = $user->id;
         $data['tenant_id'] = $tenantId;
 
-        Product::create($data);
+        // Create the product
+        $product = Product::create($data);
+
+        // ── Create recipe record if inventory_strategy is 'recipe' ──
+        if ($product->inventory_strategy === 'recipe') {
+            $this->createRecipeIfNotExists($product->id);
+        }
 
         return response()->json([
             'success' => true,
@@ -197,6 +193,7 @@ class ProductController extends Controller
             'redirect' => route('products.index'),
         ]);
     }
+
 
     /**
      * Display the specified resource.
@@ -335,13 +332,25 @@ class ProductController extends Controller
             ],
             'description' => 'nullable|string',
             'type' => 'required|in:physical,digital,service,composite',
+            'inventory_strategy' => 'required|in:quantity,batch,serial,recipe',
         ]);
 
+        // Store old strategy before update
+        $oldStrategy = $product->inventory_strategy;
+
         $data['slug'] = Str::slug($data['name']);
-        $data['created_by'] = $user->id;
-        // Don't update tenant_id
+        // Don't update created_by or tenant_id
 
         $product->update($data);
+
+        // ── Handle Recipe creation/deletion based on strategy change ──
+        if ($product->inventory_strategy === 'recipe' && $oldStrategy !== 'recipe') {
+            // Recipe was just added - create recipe record if it doesn't exist
+            $this->createRecipeIfNotExists($product->id);
+        } elseif ($product->inventory_strategy !== 'recipe' && $oldStrategy === 'recipe') {
+            // Recipe was removed - delete the recipe record
+            $this->deleteRecipeIfExists($product->id);
+        }
 
         return response()->json([
             'success' => true,
@@ -351,6 +360,50 @@ class ProductController extends Controller
             'message' => __('auth._updated'),
             'redirect' => route('products.index'),
         ]);
+    }
+
+    /**
+     * Create a recipe record for a product if it doesn't already exist
+     */
+    private function createRecipeIfNotExists(int $productId): void
+    {
+        try {
+            $exists = DB::table('recipes')->where('product_id', $productId)->exists();
+            
+            if (!$exists) {
+                DB::table('recipes')->insert([
+                    'product_id' => $productId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                
+                Log::info('Recipe created for product', ['product_id' => $productId]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to create recipe for product', [
+                'product_id' => $productId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Delete a recipe record for a product if it exists
+     */
+    private function deleteRecipeIfExists(int $productId): void
+    {
+        try {
+            $deleted = DB::table('recipes')->where('product_id', $productId)->delete();
+            
+            if ($deleted > 0) {
+                // Log::info('Recipe deleted for product', ['product_id' => $productId]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to delete recipe for product', [
+                'product_id' => $productId,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**

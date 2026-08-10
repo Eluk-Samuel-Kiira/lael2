@@ -4,6 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo; 
+use Illuminate\Database\Eloquent\Relations\BelongsToMany; 
 
 class Product extends Model
 {
@@ -12,6 +16,7 @@ class Product extends Model
     protected $fillable = [
         'tenant_id',
         'category_id',
+        'inventory_strategy',
         'sku',
         'name',
         'description',
@@ -32,7 +37,6 @@ class Product extends Model
     {
         return 'slug';
     }
-
 
     public function category()
     {
@@ -69,7 +73,6 @@ class Product extends Model
         return $this->belongsToMany(Promotion::class, 'promotion_products', 'product_id', 'promotion_id');
     }
 
-
     public function locations()
     {
         return $this->belongsToMany(Location::class, 'location_product', 'product_id', 'location_id');
@@ -78,13 +81,40 @@ class Product extends Model
     public function resolvedInventoryStrategy(): string
     {
         return $this->inventory_strategy
-            ?? $this->department?->default_inventory_strategy
-            ?? 'quantity'; // tenant/global fallback
+            ?? 'quantity';
     }
 
+    /**
+     * Get the recipe for this product
+     * 
+     * @return HasOne
+     */
     public function recipe(): HasOne
     {
-        return $this->hasOne(Recipe::class);
+        return $this->hasOne(Recipe::class, 'product_id');
+    }
+
+    /**
+     * Check if product has a recipe
+     */
+    public function hasRecipe(): bool
+    {
+        return $this->inventory_strategy === 'recipe' && $this->recipe()->exists();
+    }
+
+    /**
+     * Get recipe ingredients through the recipe relationship
+     */
+    public function recipeIngredients()
+    {
+        return $this->hasManyThrough(
+            RecipeIngredient::class,
+            Recipe::class,
+            'product_id',
+            'recipe_id',
+            'id',
+            'id'
+        );
     }
 
     public function productionOrders(): HasMany
@@ -92,20 +122,18 @@ class Product extends Model
         return $this->hasManyThrough(
             ProductionOrder::class,
             ProductVariant::class,
-            'product_id', // product_variants.product_id
-            'output_product_variant_id', // production_orders.output_product_variant_id
-            'id', // products.id
-            'id' // product_variants.id
+            'product_id',
+            'output_product_variant_id',
+            'id',
+            'id'
         );
     }
 
-    // This single method is what your POS/inventory code calls everywhere instead of hardcoding logic — handleSingleShopInventory() becomes a dispatcher:
+
     // match ($variant->product->resolvedInventoryStrategy()) {
     //     'quantity' => $this->depleteQuantityOnly($variant, $item, $order),
     //     'batch'    => $this->depleteFIFOBatch($variant, $item, $order),
     //     'serial'   => $this->depleteSerialUnit($variant, $item, $order),
     //     'recipe'   => $this->depleteRecipeIngredients($variant, $item, $order),
     // };
-
-
 }

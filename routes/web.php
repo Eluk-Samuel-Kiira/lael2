@@ -5,7 +5,7 @@ use App\Http\Controllers\Home\{ DashboardController, LocationController, Setting
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
     EmployeePaymentController, TenantController, EmployeeAdvanceController, LeaveController };
-use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, 
+use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, BatchController,
     InventoryAdjustmentsController, ProductController, ProductCategoryController, ProductImportController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
@@ -265,7 +265,21 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('assign.product');
         Route::put('/assignment/{product}', [ProductVariantController::class, 'updateVariantAssignments'])
             ->name('assign.variant');
+        
+        // In routes/web.php
+
+        // Recipe routes
+        Route::prefix('recipe')->name('recipe.')->group(function () {
+            Route::get('/ingredients/{variantId}', [ProductVariantController::class, 'getRecipeIngredients'])
+                ->name('ingredients.get');
+            Route::post('/ingredients/store', [ProductVariantController::class, 'storeRecipeIngredients'])
+                ->name('ingredients.store');
+            Route::delete('/ingredient/{ingredientId}', [ProductVariantController::class, 'deleteRecipeIngredient'])
+                ->name('ingredient.delete');
+        });
             
+
+
         Route::get('/catalog/import/template', [ProductImportController::class, 'downloadTemplate'])->name('catalog.import.template');
         Route::post('/catalog/import',          [ProductImportController::class, 'store'])->name('catalog.import.store');
         Route::post('/products/bulk-allocate', [ProductController::class, 'bulkAllocate'])
@@ -283,6 +297,15 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
 
+
+
+        // Batch routes
+        Route::prefix('batches')->name('batches.')->group(function () {
+            Route::get('/', [BatchController::class, 'index'])->name('index');
+            Route::post('/assign', [BatchController::class, 'assign'])->name('assign');
+            Route::post('/unassign', [BatchController::class, 'unassign'])->name('unassign');
+            Route::post('/details', [BatchController::class, 'details'])->name('details');
+        });
 
         
         // Location
@@ -416,6 +439,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Order Reports Routes
         Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
             Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
+            Route::get('profit-analysis', [OrderReportsController::class, 'profitAnalysis'])->name('profit-analysis');
             Route::get('by-customer', [OrderReportsController::class, 'byCustomer'])->name('by-customer');
             Route::get('by-product', [OrderReportsController::class, 'byProduct'])->name('by-product');
             Route::get('by-payment-method', [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');

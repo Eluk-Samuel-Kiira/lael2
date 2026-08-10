@@ -19,11 +19,27 @@ return [
     'token' => 'This password reset token is invalid.',
     'user' => "We can't find a user with that email address.",
 
+    
 
 
     
     // Basic Information
-    'trading_name' => 'Trading Name',
+    'batch_inventory' => 'Batch Inventory',
+    'select_location' => 'Select Location',
+    'assign_batches' => 'Assign Batches',
+    'unassign' => 'Unassign',
+    'assigned'           => 'Assigned',
+    'search_batches' => 'Search Batches',
+    'no_batches_found' => 'No Batches Found',
+    'available' => 'Available',
+    'selected_batches' => 'Selected Batches',
+    'assignment_warning' => 'Assignment Warning',
+    'assignment_warning_description' => 'Once assigned, these batches will be available only at the selected location and department. Unassign them to make them available everywhere again.',
+    'partial' => 'Partial',
+    'no_batches_selected' => 'No batches selected',
+    'confirm_unassign_batches' => 'Are you sure you want to unassign these batches?',
+    'error_unassigning_batches' => 'Error unassigning batches',
+
     'supplier_type' => 'Supplier Type',
     'supplier_code' => 'Supplier Code',
     'company' => 'Company',

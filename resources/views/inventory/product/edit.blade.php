@@ -35,7 +35,7 @@
 
                         
                         <div class="row g-9 mb-8">
-                            <div class="mb-10 fv-row col-md-6">
+                            <div class="mb-10 fv-row col-md-4">
                                 <x-typable-select 
                                     name="category_id"
                                     label="pagination._category"
@@ -46,7 +46,7 @@
                                 <div id="category_id{{ $product->id }}"></div>
                             </div>
                             
-                            <div class="mb-10 fv-row col-md-6">
+                            <div class="mb-10 fv-row col-md-4">
                                 <label class="required form-label">{{__('pagination._type')}}</span></label>
                                 <select name="type" class="form-select" >
                                     <option></option>
@@ -56,6 +56,18 @@
                                     <option value="composite" {{ $product->type == 'composite' ? 'selected' : '' }}>{{__('pagination._composite')}}</option>
                                 </select>
                                 <div id="type{{ $product->id }}"></div>
+                            </div>
+
+                            <div class="mb-10 fv-row col-md-4">
+                                <label class="required form-label">{{__('pagination.inventory_strategy')}}</label>
+                                <select name="inventory_strategy" class="form-select">
+                                    <option></option>
+                                    <option value="quantity" {{ $product->inventory_strategy == 'quantity' ? 'selected' : '' }}>{{__('pagination.quantity')}}</option>
+                                    <option value="batch" {{ $product->inventory_strategy == 'batch' ? 'selected' : '' }}>{{__('pagination.batch')}}</option>
+                                    <option value="serial" {{ $product->inventory_strategy == 'serial' ? 'selected' : '' }}>{{__('pagination.serial')}}</option>
+                                    <option value="recipe" {{ $product->inventory_strategy == 'recipe' ? 'selected' : '' }}>{{__('pagination.recipe')}}</option>
+                                </select>
+                                <div id="inventory_strategy{{ $product->id }}"></div>
                             </div>
                         </div>
 

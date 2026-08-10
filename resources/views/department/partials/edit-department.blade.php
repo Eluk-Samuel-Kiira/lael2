@@ -74,6 +74,34 @@
                             </div>
                         </div>
 
+                        
+                        <div class="row g-9 mb-8">
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="required form-label">{{__('pagination.department_type')}}</label>
+                                <select name="department_type" class="form-select">
+                                    <option></option>
+                                    <option value="retail" {{ $department->department_type == 'retail' ? 'selected' : '' }}>{{__('pagination.retail')}}</option>
+                                    <option value="electronics" {{ $department->department_type == 'electronics' ? 'selected' : '' }}>{{__('pagination.electronics')}}</option>
+                                    <option value="pharmacy" {{ $department->department_type == 'pharmacy' ? 'selected' : '' }}>{{__('pagination.pharmacy')}}</option>
+                                    <option value="restaurant" {{ $department->department_type == 'restaurant' ? 'selected' : '' }}>{{__('pagination.restaurant')}}</option>
+                                    <option value="manufacturing" {{ $department->department_type == 'manufacturing' ? 'selected' : '' }}>{{__('pagination.manufacturing')}}</option>
+                                </select>
+                                <div id="department_type{{ $department->id }}"></div>
+                            </div>
+
+                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
+                                <label class="required form-label">{{__('pagination.default_inventory_strategy')}}</label>
+                                <select name="default_inventory_strategy" class="form-select">
+                                    <option></option>
+                                    <option value="quantity" {{ $department->default_inventory_strategy == 'quantity' ? 'selected' : '' }}>{{__('pagination.quantity')}}</option>
+                                    <option value="batch" {{ $department->default_inventory_strategy == 'batch' ? 'selected' : '' }}>{{__('pagination.batch')}}</option>
+                                    <option value="serial" {{ $department->default_inventory_strategy == 'serial' ? 'selected' : '' }}>{{__('pagination.serial')}}</option>
+                                    <option value="recipe" {{ $department->default_inventory_strategy == 'recipe' ? 'selected' : '' }}>{{__('pagination.recipe')}}</option>
+                                </select>
+                                <div id="default_inventory_strategy{{ $department->id }}"></div>
+                            </div>
+                        </div>
+
                         <button type="reset" class="btn btn-light me-3" id="closeModalEditButton{{ $department->id }}" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
                         <button onclick="editInstanceLoopDept({{$department->id }})" id="editDepartmentButton{{ $department->id }}" type="button" class="btn btn-primary" id>
                             <span class="indicator-label">{{__('auth._update')}}</span>

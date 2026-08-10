@@ -1375,6 +1375,7 @@ return [
     'contact' => 'Contact',
     'market_share' => 'Market Share',
     'totals' => 'Totals',
+    'total_average' => 'Total Average',
 
     'highest_order' => 'Highest Order',
     'lowest_order' => 'Lowest Order',
