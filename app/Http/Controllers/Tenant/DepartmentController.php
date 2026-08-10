@@ -130,6 +130,8 @@ class DepartmentController extends Controller
             ],
             'manager_id' => 'required|exists:users,id',
             'location_id' => 'required|exists:locations,id',
+            'department_type' => 'required|in:retail,electronics,pharmacy,restaurant,manufacturing',
+            'default_inventory_strategy' => 'nullable|in:quantity,batch,serial,recipe',
         ]);
 
         $department = Department::create([
@@ -137,6 +139,8 @@ class DepartmentController extends Controller
             'created_by' => $user->id,
             'manager_id' => $request->manager_id,
             'location_id' => $request->location_id,
+            'department_type' => $request->department_type,
+            'default_inventory_strategy' => $request->default_inventory_strategy,
             'tenant_id' => $tenantId,
         ]);
 
@@ -210,12 +214,16 @@ class DepartmentController extends Controller
             ],
             'manager_id' => 'required|exists:users,id',
             'location_id' => 'required|exists:locations,id',
+            'department_type' => 'required|in:retail,electronics,pharmacy,restaurant,manufacturing',
+            'default_inventory_strategy' => 'nullable|in:quantity,batch,serial,recipe',
         ]);
 
         $department->update([
             'name' => $request->name,
             'manager_id' => $request->manager_id,
             'location_id' => $request->location_id,
+            'department_type' => $request->department_type,
+            'default_inventory_strategy' => $request->default_inventory_strategy,
             'created_by' => $user->id,
         ]);
 

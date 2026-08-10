@@ -316,10 +316,9 @@ class ProductImportController extends Controller
     //    Columns: sku | name | sub_category_name | type | description | is_taxable | is_active
     //
     //    RE-IMPORT BEHAVIOUR: if a product with this SKU already exists for
-    //    this tenant, only its `name` is UPDATED from the sheet. Everything
-    //    else about the existing product (category, type, description,
-    //    tax/active flags) is left untouched. If the SKU is new, a brand
-    //    new product is inserted as before.
+    //    this tenant, ALL fields are UPDATED from the sheet (including category,
+    //    type, description, tax/active flags). If the SKU is new, a brand
+    //    new product is inserted.
     // ───────────────────────────────────────────────────────────────────────────
     private function importProducts($spreadsheet, int $tenantId, int $userId, array &$stat): void
     {
@@ -327,17 +326,19 @@ class ProductImportController extends Controller
         $rows  = $this->getRows($sheet);
 
         $validTypes   = ['physical', 'digital', 'service', 'composite'];
+        $validStrategy = ['quantity', 'batch', 'serial', 'recipe'];
         $subCatCache  = [];
 
         foreach ($rows as $idx => $row) {
             $rowNum     = $idx + 3;
-            $sku        = $row[0] ?? '';
-            $name       = $row[1] ?? '';
-            $subCatName = $row[2] ?? '';
+            $sku        = trim($row[0] ?? '');
+            $name       = trim($row[1] ?? '');
+            $subCatName = trim($row[2] ?? '');
             $type       = strtolower(trim($row[3] ?? 'physical'));
-            $desc       = $row[4] ?? '';
-            $isTaxable  = isset($row[5]) && $row[5] !== '' ? (int) $row[5] : 1;
-            $isActive   = isset($row[6]) && $row[6] !== '' ? (int) $row[6] : 1;
+            $inventory_strategy = strtolower(trim($row[4] ?? 'quantity'));
+            $desc       = trim($row[5] ?? '');
+            $isTaxable  = isset($row[6]) && $row[6] !== '' ? (int) $row[6] : 1;
+            $isActive   = isset($row[7]) && $row[7] !== '' ? (int) $row[7] : 1;
 
             // ── Validate required fields ───────────────────────────────────────
             if ($sku === '') {
@@ -356,6 +357,10 @@ class ProductImportController extends Controller
                 $stat['errors'][] = "Row {$rowNum}: type \"{$type}\" is invalid. Use: " . implode(', ', $validTypes);
                 continue;
             }
+            if (!in_array($inventory_strategy, $validStrategy)) {
+                $stat['errors'][] = "Row {$rowNum}: inventory_strategy \"{$inventory_strategy}\" is invalid. Use: " . implode(', ', $validStrategy);
+                continue;
+            }
 
             // ── Resolve sub-category ──────────────────────────────────────────
             if (!isset($subCatCache[$subCatName])) {
@@ -371,37 +376,65 @@ class ProductImportController extends Controller
             }
 
             // ── Check for an existing product with this SKU (this tenant) ──────
-            // If found: this is a RE-IMPORT — update the name only, rather
-            // than treating it as a duplicate to skip.
             $existingProduct = Product::where('tenant_id', $tenantId)
-                                       ->where('sku', $sku)
-                                       ->first();
+                                        ->where('sku', $sku)
+                                        ->first();
 
             if ($existingProduct) {
-                if ($existingProduct->name !== $name) {
-                    // Make sure the new name doesn't collide with a
-                    // *different* product before renaming this one.
-                    $nameConflict = Product::where('tenant_id', $tenantId)
-                                            ->where('name', $name)
-                                            ->where('id', '!=', $existingProduct->id)
-                                            ->exists();
+                // ── UPDATE existing product ──────────────────────────────────────
+                // Check for name conflict with another product
+                $nameConflict = Product::where('tenant_id', $tenantId)
+                                        ->where('name', $name)
+                                        ->where('id', '!=', $existingProduct->id)
+                                        ->exists();
 
-                    if ($nameConflict) {
-                        $stat['errors'][] = "Row {$rowNum}: Cannot rename product \"{$sku}\" to \"{$name}\" — that name is already used by another product.";
-                        continue;
-                    }
+                if ($nameConflict) {
+                    $stat['errors'][] = "Row {$rowNum}: Cannot update product \"{$sku}\" to name \"{$name}\" — that name is already used by another product.";
+                    $stat['skipped']++;
+                    continue;
+                }
 
-                    $existingProduct->update([
-                        'name' => $name,
-                    ]);
+                // Store old strategy to check if recipe needs to be created/deleted
+                $oldStrategy = $existingProduct->inventory_strategy;
+
+                // Update all fields
+                $existingProduct->update([
+                    'name'        => $name,
+                    'category_id' => $subCategory->id,
+                    'type'        => $type,
+                    'inventory_strategy' => $inventory_strategy,
+                    'description' => $desc ?: null,
+                    'is_taxable'  => in_array($isTaxable, [0, 1]) ? $isTaxable : 1,
+                    'is_active'   => in_array($isActive,  [0, 1]) ? $isActive  : 1,
+                    // slug is intentionally NOT updated (keep the original slug)
+                ]);
+
+                // ── Handle Recipe creation/deletion based on strategy change ──
+                if ($inventory_strategy === 'recipe' && $oldStrategy !== 'recipe') {
+                    // Recipe was just added - create recipe record if it doesn't exist
+                    $this->createRecipeIfNotExists($existingProduct->id);
+                } elseif ($inventory_strategy !== 'recipe' && $oldStrategy === 'recipe') {
+                    // Recipe was removed - delete the recipe record
+                    $this->deleteRecipeIfExists($existingProduct->id);
                 }
 
                 $stat['updated'] = ($stat['updated'] ?? 0) + 1;
+
+                // Log the update
+                Log::info('Product updated via import', [
+                    'sku' => $sku,
+                    'tenant_id' => $tenantId,
+                    'product_id' => $existingProduct->id,
+                    'inventory_strategy' => $inventory_strategy
+                ]);
+
                 continue;
             }
 
             // ── New product — name must not already be taken ───────────────────
-            $nameExists = Product::where('tenant_id', $tenantId)->where('name', $name)->exists();
+            $nameExists = Product::where('tenant_id', $tenantId)
+                                    ->where('name', $name)
+                                    ->exists();
 
             if ($nameExists) {
                 $stat['errors'][] = "Row {$rowNum}: Product name \"{$name}\" already exists under a different SKU. Row skipped.";
@@ -409,12 +442,14 @@ class ProductImportController extends Controller
                 continue;
             }
 
-            Product::create([
+            // ── Create new product ──────────────────────────────────────────────
+            $product = Product::create([
                 'sku'         => $sku,
                 'name'        => $name,
                 'slug'        => $this->uniqueSlug('products', Str::slug($name), $tenantId),
                 'category_id' => $subCategory->id,
                 'type'        => $type,
+                'inventory_strategy' => $inventory_strategy,
                 'description' => $desc ?: null,
                 'is_taxable'  => in_array($isTaxable, [0, 1]) ? $isTaxable : 1,
                 'is_active'   => in_array($isActive,  [0, 1]) ? $isActive  : 1,
@@ -422,7 +457,61 @@ class ProductImportController extends Controller
                 'tenant_id'   => $tenantId,
             ]);
 
+            // ── Create recipe record if inventory_strategy is 'recipe' ────────
+            if ($inventory_strategy === 'recipe') {
+                $this->createRecipeIfNotExists($product->id);
+            }
+
             $stat['created']++;
+        }
+    }
+
+    /**
+     * Create a recipe record for a product if it doesn't already exist
+     */
+    private function createRecipeIfNotExists(int $productId): void
+    {
+        if (!class_exists('App\Models\Recipe')) {
+            Log::error('Recipe model not found. Please create the Recipe model.');
+            return;
+        }
+
+        try {
+            $exists = DB::table('recipes')->where('product_id', $productId)->exists();
+            
+            if (!$exists) {
+                DB::table('recipes')->insert([
+                    'product_id' => $productId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                
+                Log::info('Recipe created for product', ['product_id' => $productId]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to create recipe for product', [
+                'product_id' => $productId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Delete a recipe record for a product if it exists
+     */
+    private function deleteRecipeIfExists(int $productId): void
+    {
+        try {
+            $deleted = DB::table('recipes')->where('product_id', $productId)->delete();
+            
+            if ($deleted > 0) {
+                Log::info('Recipe deleted for product', ['product_id' => $productId]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to delete recipe for product', [
+                'product_id' => $productId,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

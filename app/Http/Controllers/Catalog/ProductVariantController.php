@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ProductVariant;
-use App\Models\{ Product, UnitOfMeasure, Tax, Promotion };
+use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredient };
 use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 
@@ -802,4 +802,204 @@ class ProductVariantController extends Controller
 
         return redirect()->back();
     }
+
+
+    /**
+     * Get recipe ingredients for a product variant
+     */
+    public function getRecipeIngredients($variantId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        // Get the variant with its product
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $variantId)
+            ->with(['product.recipe.ingredients.ingredientVariant', 'product.recipe.ingredients.unit'])
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found'
+            ], 404);
+        }
+
+        // Get the product
+        $product = $variant->product;
+
+        // Check if the product has a recipe
+        $recipe = $product->recipe ?? null;
+        
+        if (!$recipe && $product->inventory_strategy === 'recipe') {
+            // Create a recipe if it doesn't exist
+            $recipe = Recipe::create([
+                'product_id' => $product->id,
+            ]);
+        }
+
+        if (!$recipe) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This product is not a recipe product',
+                'is_recipe' => false
+            ]);
+        }
+
+        // Get ingredients with proper data
+        $ingredients = $recipe->ingredients->map(function($ingredient) {
+            return [
+                'id' => $ingredient->id,
+                'ingredient_variant_id' => $ingredient->ingredient_variant_id,
+                'ingredient_name' => $ingredient->ingredientVariant->name ?? 'Unknown',
+                'ingredient_sku' => $ingredient->ingredientVariant->sku ?? 'N/A',
+                'quantity_required' => $ingredient->quantity_required,
+                'unit_id' => $ingredient->unit_id,
+                'unit_name' => $ingredient->unit->name ?? 'Unit',
+            ];
+        });
+
+        // Get available ingredient variants (exclude the current variant)
+        $availableVariants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where('id', '!=', $variantId)
+            ->with(['product'])
+            ->get()
+            ->map(function($v) {
+                return [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'sku' => $v->sku,
+                    'product_name' => $v->product->name ?? '',
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'is_recipe' => true,
+            'recipe_id' => $recipe->id,
+            'ingredients' => $ingredients,
+            'available_variants' => $availableVariants,
+            'product_name' => $product->name,
+            'variant_name' => $variant->name,
+        ]);
+    }
+
+    /**
+     * Store recipe ingredients
+     */
+    public function storeRecipeIngredients(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        $request->validate([
+            'recipe_id' => 'required|exists:recipes,id',
+            'ingredients' => 'required|array',
+            'ingredients.*.ingredient_variant_id' => 'required|exists:product_variants,id',
+            'ingredients.*.quantity_required' => 'required|numeric|min:0.0001',
+            'ingredients.*.unit_id' => 'nullable|exists:unit_of_measures,id',
+        ]);
+
+        $recipe = Recipe::where('id', $request->recipe_id)
+            ->whereHas('product', function($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId);
+            })
+            ->first();
+
+        if (!$recipe) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Recipe not found'
+            ], 404);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Delete existing ingredients
+            RecipeIngredient::where('recipe_id', $recipe->id)->delete();
+
+            // Add new ingredients
+            foreach ($request->ingredients as $ingredientData) {
+                RecipeIngredient::create([
+                    'recipe_id' => $recipe->id,
+                    'ingredient_variant_id' => $ingredientData['ingredient_variant_id'],
+                    'quantity_required' => $ingredientData['quantity_required'],
+                    'unit_id' => $ingredientData['unit_id'] ?? null,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Recipe ingredients updated successfully',
+                'reload' => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to save recipe ingredients', [
+                'error' => $e->getMessage(),
+                'recipe_id' => $request->recipe_id
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save recipe ingredients: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete a single recipe ingredient
+     */
+    public function deleteRecipeIngredient($ingredientId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        $ingredient = RecipeIngredient::with(['recipe.product'])
+            ->whereHas('recipe.product', function($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId);
+            })
+            ->where('id', $ingredientId)
+            ->first();
+
+        if (!$ingredient) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ingredient not found'
+            ], 404);
+        }
+
+        $ingredient->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ingredient removed successfully'
+        ]);
+    }
+
+    /**
+     * Get available ingredient variants (excluding the main product itself)
+     */
+    private function getAvailableIngredientVariants($tenantId, $excludeVariantId)
+    {
+        return ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where('id', '!=', $excludeVariantId)
+            ->with(['product'])
+            ->get()
+            ->map(function($variant) {
+                return [
+                    'id' => $variant->id,
+                    'name' => $variant->name,
+                    'sku' => $variant->sku,
+                    'product_name' => $variant->product->name ?? '',
+                ];
+            });
+    }
+
 }

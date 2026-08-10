@@ -17,6 +17,7 @@
                     <th class="min-w-125px">{{__('auth._name')}}</th> 
                     <th class="min-w-125px">{{__('passwords.product_variant')}}</th> 
                     <th class="min-w-125px">{{__('pagination._category')}}</th> 
+                    <th class="min-w-125px">{{__('pagination.inventory_strategy')}}</th>
                     <th class="min-w-125px">{{__('pagination._type')}}</th>
                     <th class="min-w-125px">{{__('pagination.is_taxable')}}</th> 
                     <th class="min-w-125px">{{__('auth._creater')}}</th> 
@@ -62,6 +63,9 @@
                                 @endcan
                             </td>
                             <td>{{ $product->category->name }}</td>
+                            <td>
+                                <div class="badge badge-light fw-bold">{{ $product->inventory_strategy }}</div>
+                            </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $product->type }}</div>
                             </td>

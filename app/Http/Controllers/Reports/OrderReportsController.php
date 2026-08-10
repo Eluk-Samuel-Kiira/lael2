@@ -145,7 +145,276 @@ class OrderReportsController extends Controller
             'orderStatus'
         ));
     }
-    
+
+    /**
+     * Profit Analysis Report - Calculate profits on completed orders
+     */
+    public function profitAnalysis(Request $request)
+    {
+        $user = auth()->user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('order reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+        
+        // ─── Date Range ──────────────────────────────────────────────
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+        
+        // ─── Filter Parameters ──────────────────────────────────────
+        $locationId = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $orderType = $request->get('order_type');
+        $minProfit = $request->get('min_profit');
+        $maxProfit = $request->get('max_profit');
+        $perPage = $request->get('per_page', 25);
+        
+        // ─── Build Orders Query ────────────────────────────────────
+        $ordersQuery = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->where('status', 'completed')
+            ->with(['items.productVariant', 'location', 'department', 'customer']);
+        
+        // Apply location filter
+        if ($locationId) {
+            $ordersQuery->where('location_id', $locationId);
+        }
+        
+        // Apply department filter
+        if ($departmentId) {
+            $ordersQuery->where('department_id', $departmentId);
+        }
+        
+        // Apply order type filter
+        if ($orderType && $orderType !== 'all') {
+            $ordersQuery->where('type', $orderType);
+        }
+        
+        $orders = $ordersQuery->get();
+        
+        // ─── Calculate Profit for Each Order ──────────────────────
+        $profitData = $orders->map(function($order) {
+            $totalRevenue = $order->total;
+            $totalDiscount = $order->discount_total ?? 0;
+            $totalTax = $order->tax_total ?? 0;
+            
+            // Calculate cost of goods sold (COGS) from order items
+            $totalCost = 0;
+            $itemProfits = [];
+            
+            foreach ($order->items as $item) {
+                $variant = $item->productVariant;
+                
+                if ($variant) {
+                    // Cost price from variant
+                    $unitCost = $variant->grand_total_cost_price ?? 0;
+                    $quantity = $item->quantity;
+                    $itemCost = $unitCost * $quantity;
+                    $totalCost += $itemCost;
+                    
+                    // Calculate item profit
+                    $itemRevenue = $item->total_price ?? 0;
+                    $itemProfit = $itemRevenue - $itemCost;
+                    $itemProfitMargin = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
+                    
+                    $itemProfits[] = (object)[
+                        'variant_name' => $variant->name ?? 'Unknown',
+                        'sku' => $variant->sku ?? 'N/A',
+                        'quantity' => $quantity,
+                        'unit_cost' => $unitCost,
+                        'unit_price' => $item->unit_price ?? 0,
+                        'total_cost' => $itemCost,
+                        'total_revenue' => $itemRevenue,
+                        'profit' => $itemProfit,
+                        'profit_margin' => $itemProfitMargin,
+                    ];
+                }
+            }
+            
+            // Calculate net profit (revenue - cost - discount)
+            $grossProfit = $totalRevenue - $totalCost;
+            $netProfit = $grossProfit - $totalDiscount;
+            $profitMargin = $totalRevenue > 0 ? ($netProfit / $totalRevenue) * 100 : 0;
+            
+            return (object)[
+                'order_id' => $order->id,
+                'order_number' => $order->order_number ?? $order->id,
+                'order_type' => $order->type ?? 'sale',
+                'created_at' => $order->created_at,
+                'location' => $order->location->name ?? 'N/A',
+                'department' => $order->department->name ?? 'N/A',
+                'customer' => $order->customer->full_name ?? ($order->customer_name ?? 'Guest'),
+                'total_revenue' => $totalRevenue,
+                'total_cost' => $totalCost,
+                'total_discount' => $totalDiscount,
+                'total_tax' => $totalTax,
+                'gross_profit' => $grossProfit,
+                'net_profit' => $netProfit,
+                'profit_margin' => $profitMargin,
+                'item_count' => $order->items->count(),
+                'item_profits' => $itemProfits,
+            ];
+        })->sortByDesc('net_profit')->values();
+        
+        // ─── Apply Profit Filters ──────────────────────────────────
+        if ($minProfit && is_numeric($minProfit)) {
+            $profitData = $profitData->filter(function($order) use ($minProfit) {
+                return $order->net_profit >= (float)$minProfit;
+            });
+        }
+        
+        if ($maxProfit && is_numeric($maxProfit)) {
+            $profitData = $profitData->filter(function($order) use ($maxProfit) {
+                return $order->net_profit <= (float)$maxProfit;
+            });
+        }
+        
+        $profitData = $profitData->values();
+        
+        // ─── Summary Statistics ────────────────────────────────────
+        $summary = (object)[
+            'total_orders' => $profitData->count(),
+            'total_revenue' => $profitData->sum('total_revenue'),
+            'total_cost' => $profitData->sum('total_cost'),
+            'total_discount' => $profitData->sum('total_discount'),
+            'total_gross_profit' => $profitData->sum('gross_profit'),
+            'total_net_profit' => $profitData->sum('net_profit'),
+            'average_net_profit' => $profitData->count() > 0 ? $profitData->sum('net_profit') / $profitData->count() : 0,
+            'average_profit_margin' => $profitData->count() > 0 ? $profitData->avg('profit_margin') : 0,
+            'max_profit_order' => $profitData->first()->order_number ?? 'N/A',
+            'max_profit_amount' => $profitData->first()->net_profit ?? 0,
+            'profitable_orders' => $profitData->filter(function($order) {
+                return $order->net_profit > 0;
+            })->count(),
+            'loss_making_orders' => $profitData->filter(function($order) {
+                return $order->net_profit < 0;
+            })->count(),
+            'break_even_orders' => $profitData->filter(function($order) {
+                return $order->net_profit == 0;
+            })->count(),
+        ];
+        
+        // ─── Profit by Location ────────────────────────────────────
+        $profitByLocation = $profitData->groupBy('location')
+            ->map(function($orders, $location) {
+                return (object)[
+                    'location' => $location,
+                    'order_count' => $orders->count(),
+                    'total_revenue' => $orders->sum('total_revenue'),
+                    'total_cost' => $orders->sum('total_cost'),
+                    'total_net_profit' => $orders->sum('net_profit'),
+                    'average_margin' => $orders->avg('profit_margin') ?? 0,
+                ];
+            })
+            ->sortByDesc('total_net_profit')
+            ->values();
+        
+        // ─── Profit by Department ──────────────────────────────────
+        $profitByDepartment = $profitData->groupBy('department')
+            ->map(function($orders, $department) {
+                return (object)[
+                    'department' => $department,
+                    'order_count' => $orders->count(),
+                    'total_revenue' => $orders->sum('total_revenue'),
+                    'total_cost' => $orders->sum('total_cost'),
+                    'total_net_profit' => $orders->sum('net_profit'),
+                    'average_margin' => $orders->avg('profit_margin') ?? 0,
+                ];
+            })
+            ->sortByDesc('total_net_profit')
+            ->values();
+        
+        // ─── Top Products by Profit ───────────────────────────────
+        $productProfits = collect();
+        foreach ($profitData as $order) {
+            foreach ($order->item_profits as $item) {
+                $key = $item->sku;
+                if ($productProfits->has($key)) {
+                    $existing = $productProfits->get($key);
+                    $existing->quantity_sold += $item->quantity;
+                    $existing->total_revenue += $item->total_revenue;
+                    $existing->total_cost += $item->total_cost;
+                    $existing->total_profit += $item->profit;
+                } else {
+                    $productProfits->put($key, (object)[
+                        'sku' => $item->sku,
+                        'variant_name' => $item->variant_name,
+                        'quantity_sold' => $item->quantity,
+                        'total_revenue' => $item->total_revenue,
+                        'total_cost' => $item->total_cost,
+                        'total_profit' => $item->profit,
+                        'profit_margin' => $item->profit_margin,
+                    ]);
+                }
+            }
+        }
+        
+        $topProducts = $productProfits->sortByDesc('total_profit')->take(10)->values();
+        $worstProducts = $productProfits->sortBy('total_profit')->take(10)->values();
+        
+        // ─── Daily Profit Trend ────────────────────────────────────
+        $dailyProfitTrend = $profitData->groupBy(function($order) {
+            return $order->created_at->format('Y-m-d');
+        })->map(function($orders, $date) {
+            return (object)[
+                'date' => $date,
+                'order_count' => $orders->count(),
+                'total_revenue' => $orders->sum('total_revenue'),
+                'total_cost' => $orders->sum('total_cost'),
+                'total_net_profit' => $orders->sum('net_profit'),
+                'average_margin' => $orders->avg('profit_margin') ?? 0,
+            ];
+        })->sortKeys()->values();
+        
+        // ─── Pagination ─────────────────────────────────────────────
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $perPage = min($perPage, max($profitData->count(), 1));
+        $paginatedData = $profitData->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        
+        $profitDataPaginated = new LengthAwarePaginator(
+            $paginatedData,
+            $profitData->count(),
+            $perPage,
+            $currentPage,
+            ['path' => LengthAwarePaginator::resolveCurrentPath()]
+        );
+        
+        // ─── Get Filter Options ─────────────────────────────────────
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+            
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        
+        // ─── Return View ────────────────────────────────────────────
+        return view('reports.orders.profit-analysis', compact(
+            'profitData',
+            'profitDataPaginated',
+            'summary',
+            'profitByLocation',
+            'profitByDepartment',
+            'topProducts',
+            'worstProducts',
+            'dailyProfitTrend',
+            'locations',
+            'departments',
+            'startDate',
+            'endDate',
+            'locationId',
+            'departmentId',
+            'orderType',
+            'minProfit',
+            'maxProfit',
+            'perPage'
+        ));
+    }
+        
     // Helper Methods
     private function validateAndFormatDates($startDate, $endDate)
     {

@@ -1,11 +1,10 @@
 <?php
-// app/Models/RecipeIngredient.php
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo; 
 
 class RecipeIngredient extends Model
 {
@@ -27,7 +26,7 @@ class RecipeIngredient extends Model
      */
     public function recipe(): BelongsTo
     {
-        return $this->belongsTo(Recipe::class);
+        return $this->belongsTo(Recipe::class, 'recipe_id');
     }
 
     /**
@@ -36,5 +35,13 @@ class RecipeIngredient extends Model
     public function ingredientVariant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class, 'ingredient_variant_id');
+    }
+
+    /**
+     * Get the unit of measure for this ingredient
+     */
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(UnitOfMeasure::class, 'unit_id');
     }
 }

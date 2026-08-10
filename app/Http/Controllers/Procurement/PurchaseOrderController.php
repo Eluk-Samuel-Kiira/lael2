@@ -931,7 +931,7 @@ class PurchaseOrderController extends Controller
                 
                 if ($quantityReceived > 0) {
                     $purchaseOrderItem = PurchaseOrderItem::find($itemData['purchase_order_item_id']);
-                    $variant = ProductVariant::find($itemData['product_variant_id']);
+                    $variant = ProductVariant::with('product')->find($itemData['product_variant_id']);
                     
                     // Validate quantity doesn't exceed ordered quantity
                     $newReceivedQuantity = $purchaseOrderItem->received_quantity + $quantityReceived;
@@ -943,33 +943,63 @@ class PurchaseOrderController extends Controller
                     $itemCost = $purchaseOrderItem->unit_cost * $quantityReceived;
                     $currentReceiptSubtotal += $itemCost;
 
-                    // Get current inventory quantity before update
-                    $quantityBefore = $variant->overal_quantity_at_hand;
+                    // ── Determine inventory strategy for THIS variant's product ─────
+                    // Only 'quantity' and 'batch' are handled here. Anything else
+                    // ('serial', 'recipe') is out of scope for PO receiving and
+                    // is resolved/consumed elsewhere in the app.
+                    $strategy = $variant->product
+                        ? $variant->product->resolvedInventoryStrategy()
+                        : 'quantity';
 
-                    // Update purchase order item received quantity
+                    $quantityBefore = $variant->overal_quantity_at_hand;
+                    $quantityRemainingForBatch = null;
+
+                    if ($strategy === 'batch') {
+                        // ── BATCH STRATEGY ────────────────────────────────────
+                        // Do NOT touch overal_quantity_at_hand. The batch itself
+                        // (this PurchaseReceiptItem row) is the sellable stock
+                        // ledger — quantity_remaining starts at the full amount
+                        // received and gets depleted at sale time by whatever
+                        // FIFO/allocation logic runs at the POS layer.
+                        //
+                        // location_id / department_id are left null on the
+                        // batch — it isn't assigned to a specific department
+                        // yet. That allocation is a separate step, not part of
+                        // receiving.
+                        $quantityAfter = $quantityBefore; // unchanged, by design
+                        $quantityRemainingForBatch = $quantityReceived;
+                    } else {
+                        // ── QUANTITY STRATEGY (default / unchanged behaviour) ──
+                        $variant->overal_quantity_at_hand += $quantityReceived;
+                        $variant->save();
+                        $quantityAfter = $variant->overal_quantity_at_hand;
+                    }
+
+                    // Update purchase order item received quantity — this
+                    // tracks PO fulfilment regardless of inventory strategy,
+                    // so it's unaffected by the branch above.
                     $purchaseOrderItem->received_quantity = $newReceivedQuantity;
                     $purchaseOrderItem->save();
 
-                    // Update product variant inventory
-                    $variant->overal_quantity_at_hand += $quantityReceived;
-                    $variant->save();
-
-                    // Get quantity after update
-                    $quantityAfter = $variant->overal_quantity_at_hand;
-
                     $totalReceived += $quantityReceived;
                     
-                    // Create receipt item
+                    // Create receipt item — quantity_remaining is only
+                    // meaningful for batch-strategy variants; left null for
+                    // quantity-strategy ones since overal_quantity_at_hand is
+                    // their source of truth instead.
                     $receiptItem = PurchaseReceiptItem::create([
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'purchase_order_item_id' => $purchaseOrderItem->id,
                         'quantity_received' => $quantityReceived,
+                        'quantity_remaining' => $quantityRemainingForBatch,
                         'unit_cost' => $purchaseOrderItem->unit_cost,
                         'batch_number' => $validated['batch_number'] ?? null,
                         'expiry_date' => $validated['expiry_date'] ?? null,
                     ]);
 
-                    // Log received product variant
+                    // Log received product variant — always recorded for audit,
+                    // regardless of strategy. Metadata notes which strategy
+                    // applied so the trail is self-explanatory later.
                     ReceivedProductVariant::create([
                         'purchase_order_id' => $purchaseOrder->id,
                         'purchase_receipt_id' => $purchaseReceipt->id,
@@ -987,8 +1017,11 @@ class PurchaseOrderController extends Controller
                         'tenant_id' => $tenantId,
                     ]);
 
-                    // LOG TO SINGLE SHOP INVENTORY LOG IF SINGLE SHOP
-                    if ($isSingleShop) {
+                    // LOG TO SINGLE SHOP INVENTORY LOG — only for quantity-strategy
+                    // items. This log specifically tracks overal_quantity_at_hand
+                    // movements; batch-strategy items didn't move that field, so
+                    // logging a zero-change entry here would be misleading noise.
+                    if ($isSingleShop && $strategy === 'quantity') {
                         SingleShopInventoryLog::create([
                             'variant_id' => $variant->id,
                             'order_id' => $purchaseOrder->id,
@@ -1009,6 +1042,7 @@ class PurchaseOrderController extends Controller
                                 'expiry_date' => $validated['expiry_date'] ?? null,
                                 'unit_cost' => $purchaseOrderItem->unit_cost,
                                 'total_cost' => $itemCost,
+                                'inventory_strategy' => $strategy,
                             ],
                         ]);
                     }
@@ -1104,19 +1138,19 @@ class PurchaseOrderController extends Controller
             $newCumulativeTotal = $cumulativeTotal + $currentReceiptPayable;
             
             // Log the calculation for debugging
-            \Log::info('Receipt calculation (no payment)', [
-                'receipt_subtotal' => $currentReceiptSubtotal,
-                'receipt_additive_tax' => $currentReceiptAdditiveTax,
-                'receipt_withholding_tax' => $currentReceiptWithholdingTax,
-                'receipt_tax' => $currentReceiptTaxAmount,
-                'receipt_payable' => $currentReceiptPayable,
-                'cumulative_subtotal_before' => $cumulativeSubtotal,
-                'cumulative_subtotal_after' => $newCumulativeSubtotal,
-                'cumulative_tax_before' => $cumulativeTaxTotal,
-                'cumulative_tax_after' => $newCumulativeTaxTotal,
-                'cumulative_total_before' => $cumulativeTotal,
-                'cumulative_total_after' => $newCumulativeTotal,
-            ]);
+            // \Log::info('Receipt calculation (no payment)', [
+            //     'receipt_subtotal' => $currentReceiptSubtotal,
+            //     'receipt_additive_tax' => $currentReceiptAdditiveTax,
+            //     'receipt_withholding_tax' => $currentReceiptWithholdingTax,
+            //     'receipt_tax' => $currentReceiptTaxAmount,
+            //     'receipt_payable' => $currentReceiptPayable,
+            //     'cumulative_subtotal_before' => $cumulativeSubtotal,
+            //     'cumulative_subtotal_after' => $newCumulativeSubtotal,
+            //     'cumulative_tax_before' => $cumulativeTaxTotal,
+            //     'cumulative_tax_after' => $newCumulativeTaxTotal,
+            //     'cumulative_total_before' => $cumulativeTotal,
+            //     'cumulative_total_after' => $newCumulativeTotal,
+            // ]);
 
             // ✅ REMOVED: Payment transaction - payment already happened when sending to supplier
 

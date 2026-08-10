@@ -225,6 +225,15 @@
                             </a>
                         </div>
 
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('batches.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">{{ __('pagination.stock_batches') }}</span>
+                            </a>
+                        </div>
+
                     </div>
                 </div>
                 @endcan
@@ -695,6 +704,16 @@
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.order_summary')}}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- Sales by Customer -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.profit-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.profit_analysis')}}</span>
                                     </a>
                                 </div>
                                 

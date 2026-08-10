@@ -33,7 +33,7 @@
                             </div>
                         </div>
                         <div class="row g-9 mb-8">
-                            <div class="mb-10 fv-row col-md-6">
+                            <div class="mb-10 fv-row col-md-4">
                                 <label class="required form-label">{{__('pagination.is_taxable')}}</span></label>
                                 <select name="is_taxable" class="form-select">
                                     <option></option>
@@ -42,7 +42,7 @@
                                 </select>
                                 <div id="is_taxable"></div>
                             </div>
-                            <div class="mb-10 fv-row col-md-6">
+                            <div class="mb-10 fv-row col-md-4">
                                 <label class="required form-label">{{__('pagination._type')}}</span></label>
                                 <select name="type" class="form-select">
                                     <option></option>
@@ -52,6 +52,17 @@
                                     <option value="composite">{{__('pagination._composite')}}</option>
                                 </select>
                                 <div id="type"></div>
+                            </div>
+                            <div class="mb-10 fv-row col-md-4">
+                                <label class="required form-label">{{__('pagination.inventory_strategy')}}</label>
+                                <select name="inventory_strategy" class="form-select">
+                                    <option></option>
+                                    <option value="quantity">{{__('pagination.quantity')}}</option>
+                                    <option value="batch">{{__('pagination.batch')}}</option>
+                                    <option value="serial">{{__('pagination.serial')}}</option>
+                                    <option value="recipe">{{__('pagination.recipe')}}</option>
+                                </select>
+                                <div id="inventory_strategy"></div>
                             </div>
                         </div>
 

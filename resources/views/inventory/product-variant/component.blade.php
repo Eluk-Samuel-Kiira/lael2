@@ -223,6 +223,18 @@
                                                     <i class="bi bi-pencil-square me-1 fs-5"></i> <span>{{ __('auth._edit') }}</span>
                                                 </button>
                                             @endcan
+                                            @can('edit variant')
+                                                @if($product_variants->inventory_strategy === 'recipe' || ($product->product->recipe ?? false))
+                                                    <button 
+                                                        class="btn btn-sm btn-light btn-active-color-warning d-flex align-items-center px-3 py-2" 
+                                                        onclick="openRecipeIngredientsModal({{ $product->id }}, '{{ $product->name }}')"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#recipeIngredientsModal">
+                                                        <i class="bi bi-journal-bookmark me-1 fs-5"></i> 
+                                                        <span>{{ __('pagination.recipe') }}</span>
+                                                    </button>
+                                                @endif
+                                            @endcan
                                             @can('delete variant')
                                                 <button type="button" 
                                                     class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
@@ -263,6 +275,7 @@
                                         </div>
                                         @include('inventory.product-variant.edit')
                                         @include('inventory.product-variant.variant-assignt')
+                                        @include('inventory.product-variant.recipe-ingredients-modal')
                                         
                                     </td>
                                 </tr>
