@@ -307,7 +307,16 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::post('/details', [BatchController::class, 'details'])->name('details');
         });
 
-        
+
+        Route::prefix('serials')->name('serials.')->group(function () {
+            Route::get('/variant/{variantId}', [ProductVariantController::class, 'getSerials'])->name('get');
+            Route::post('/generate', [ProductVariantController::class, 'generateSerials'])->name('generate');
+            Route::post('/import', [ProductVariantController::class, 'importSerials'])->name('import');
+            Route::post('/assign-selected', [ProductVariantController::class, 'assignSelectedSerials'])->name('assign-selected');
+            Route::put('/{serialId}/status', [ProductVariantController::class, 'updateSerialStatus'])->name('update-status');
+            Route::delete('/{serialId}', [ProductVariantController::class, 'deleteSerial'])->name('delete');
+        });
+
         // Location
         Route::resource('locations', LocationController::class);
         Route::post('/location-primary/{id}', [LocationController::class, 'updatePrimaryStatus']);

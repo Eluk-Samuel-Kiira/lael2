@@ -5,17 +5,17 @@ namespace App\Http\Controllers\Orders;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ Auth, DB, Log };
-use App\Models\{ Product, SingleShopInventoryLog, InventoryItems, ProductVariant, Order, InventoryTransactions, Invoice };
+use App\Models\{ Product, SingleShopInventoryLog, InventoryItems, ProductVariant, Order, InventoryTransactions, 
+    Invoice, BatchLog, SerialNumber };
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str; 
 use App\Models\{ OrderItem, OrderPayment, InventoryLog, Customer, Inventory, OrderTax, InventoryAdjustments,
-                    PaymentMethod, Currency };
+                    PaymentMethod, Currency, PurchaseReceiptItem };
 
 
 class POSController extends Controller
 {
-
     public function index(Request $request)
     {
         Artisan::call('optimize:clear');
@@ -32,14 +32,11 @@ class POSController extends Controller
         $isSingleShop = tenant_is_single_shop($tenantId);
         $now = now();
         
-        // ✅ Get the selected department from request or user's first department
         $selectedDepartmentId = $request->input('department', '');
-        
-        // ✅ Initialize $products as empty collection
         $products = collect();
         
         if ($isSingleShop) {
-            // Single shop: Get all product variants
+            // ─── SINGLE SHOP ────────────────────────────────────────────────
             $products = Product::with([
                 'taxes' => fn($q) => $q->where('is_active', 1),
                 'promotions' => fn($q) => $q->where('is_active', 1)
@@ -52,6 +49,18 @@ class POSController extends Controller
                 'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
+                'variants.batches' => function($q) {
+                    $q->where('quantity_remaining', '>', 0)
+                        ->orWhereNull('quantity_remaining')
+                        ->orderBy('expiry_date', 'asc');
+                },
+                // ✅ Load serial numbers - use the correct relationship path
+                'variants.serialNumbers' => function($q) {
+                    $q->where(function($sub) {
+                        $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+                            ->orWhere('status', SerialNumber::STATUS_RESERVED);
+                    });
+                },
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
@@ -59,29 +68,65 @@ class POSController extends Controller
             ->latest()
             ->get();
 
-            // Single shop: Use overall quantity
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
+                    // Default quantity for non-batch
                     $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
                     $variant->quantity_source = 'overall';
                     $variant->inventory_by_dept = [];
+                    
+                    // ✅ For batch products
+                    if ($product->inventory_strategy === 'batch') {
+                        $batches = $variant->batches;
+                        $totalAvailable = $batches->sum(function($batch) {
+                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                        });
+                        $variant->available_batches = $batches->map(function($batch) {
+                            return [
+                                'id' => $batch->id,
+                                'batch_number' => $batch->batch_number,
+                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id' => $batch->location_id,
+                                'department_id' => $batch->department_id,
+                            ];
+                        });
+                        $variant->quantity_available = $totalAvailable;
+                    } 
+                    // ✅ For serial products
+                    elseif ($product->inventory_strategy === 'serial') {
+                        // ✅ Get serial numbers from the loaded relationship
+                        $serialNumbers = $variant->serialNumbers;
+                        
+                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                            return [
+                                'id' => $serial->id,
+                                'serial_number' => $serial->serial_number,
+                                'status' => $serial->status,
+                                'location_id' => $serial->location_id,
+                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id' => $serial->department_id,
+                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
+                            ];
+                        });
+                        $variant->quantity_available = $variant->available_serials->count();
+                    } else {
+                        $variant->available_batches = [];
+                        $variant->available_serials = [];
+                    }
                 }
             }
             
         } else {
-            // ✅ Multi-shop: Get user's departments
-            $userDepartmentIds = $user->departments()->pluck('departments.id')->toArray();
-            $userLocationId = $user->location_id;
-            
-            // ✅ If no department selected, show empty state
+            // ─── MULTI-SHOP ──────────────────────────────────────────────────
             if (empty($selectedDepartmentId)) {
-                // No department selected - return empty products
                 $products = collect();
                 $user_departments = $user->departments()->get();
                 return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
             }
             
-            // ✅ Build base query with department filter
+            $userLocationId = $user->location_id;
+            
             $products = Product::with([
                 'departments',
                 'taxes' => fn($q) => $q->where('is_active', 1),
@@ -97,6 +142,24 @@ class POSController extends Controller
                         ->with(['inventory' => function($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
+                        }])
+                        ->with(['batches' => function($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where(function($sub) {
+                                $sub->where('quantity_remaining', '>', 0)
+                                    ->orWhereNull('quantity_remaining');
+                            })
+                            ->where('location_id', $userLocationId)
+                            ->where('department_id', $selectedDepartmentId)
+                            ->orderBy('expiry_date', 'asc');
+                        }])
+                        // ✅ Load serial numbers for this location/department
+                        ->with(['serialNumbers' => function($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where(function($sub) {
+                                $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+                                    ->orWhere('status', SerialNumber::STATUS_RESERVED);
+                            })
+                            ->where('location_id', $userLocationId)
+                            ->where('department_id', $selectedDepartmentId);
                         }]);
                 },
                 'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
@@ -106,11 +169,9 @@ class POSController extends Controller
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            // ✅ Product must be assigned to the selected department
             ->whereHas('departments', function($q) use ($selectedDepartmentId) {
                 $q->where('department_id', $selectedDepartmentId);
             })
-            // ✅ Product must have variants with inventory in the selected department
             ->whereHas('variants', function($q) use ($selectedDepartmentId, $userLocationId) {
                 $q->where('is_active', 1)
                     ->whereHas('inventory', function($query) use ($selectedDepartmentId, $userLocationId) {
@@ -121,14 +182,12 @@ class POSController extends Controller
             ->latest()
             ->get();
 
-            // ✅ Calculate quantities per department
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $inventoryByDept = [];
                     $totalQty = 0;
                     
                     foreach ($variant->inventory as $inv) {
-                        // ✅ Group by department
                         $inventoryByDept[$inv->department_id] = [
                             'inventory_id' => $inv->id,
                             'quantity' => $inv->quantity_allocated,
@@ -139,14 +198,56 @@ class POSController extends Controller
                     }
                     
                     $variant->inventory_by_dept = $inventoryByDept;
-                    // ✅ Only show quantity for the selected department
-                    $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
                     $variant->quantity_source = 'inventory_allocated';
+                    
+                    // ✅ For batch products
+                    if ($product->inventory_strategy === 'batch') {
+                        $batches = $variant->batches;
+                        $totalAvailable = $batches->sum(function($batch) {
+                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                        });
+                        $variant->available_batches = $batches->map(function($batch) {
+                            return [
+                                'id' => $batch->id,
+                                'batch_number' => $batch->batch_number,
+                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id' => $batch->location_id,
+                                'department_id' => $batch->department_id,
+                            ];
+                        });
+                        $variant->quantity_available = $totalAvailable;
+                        $inventoryByDept[$selectedDepartmentId]['quantity'] = $totalAvailable;
+                        $variant->inventory_by_dept = $inventoryByDept;
+                    }
+                    // ✅ For serial products
+                    elseif ($product->inventory_strategy === 'serial') {
+                        $serialNumbers = $variant->serialNumbers;
+                        
+                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                            return [
+                                'id' => $serial->id,
+                                'serial_number' => $serial->serial_number,
+                                'status' => $serial->status,
+                                'location_id' => $serial->location_id,
+                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id' => $serial->department_id,
+                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
+                            ];
+                        });
+                        $variant->quantity_available = $variant->available_serials->count();
+                        $inventoryByDept[$selectedDepartmentId]['quantity'] = $variant->quantity_available;
+                        $variant->inventory_by_dept = $inventoryByDept;
+                    } else {
+                        $variant->available_batches = [];
+                        $variant->available_serials = [];
+                        $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
+                    }
                 }
             }
         }
 
-        // ✅ Compute taxes and promotions (only if products is not empty)
+        // Compute taxes and promotions
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
                 // Taxes
@@ -203,9 +304,7 @@ class POSController extends Controller
         return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
     }
 
-    /**
-     * Search products and variants for POS
-     */
+
     public function search(Request $request)
     {
         $user = Auth::user();
@@ -223,7 +322,6 @@ class POSController extends Controller
         $searchTerm = $request->input('search', '');
         $departmentId = $request->input('department', '');
 
-        // If no search term, return empty
         if (empty($searchTerm)) {
             return response()->json([
                 'success' => true,
@@ -233,7 +331,7 @@ class POSController extends Controller
         }
 
         if ($isSingleShop) {
-            // ✅ Single shop: Search by exact match or LIKE
+            // ─── SINGLE SHOP SEARCH ──────────────────────────────────────────
             $products = Product::with([
                 'taxes' => fn($q) => $q->where('is_active', 1),
                 'promotions' => fn($q) => $q->where('is_active', 1)
@@ -246,35 +344,79 @@ class POSController extends Controller
                 'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
+                'variants.batches' => function($q) {
+                    $q->where('quantity_remaining', '>', 0)
+                        ->orWhereNull('quantity_remaining')
+                        ->orderBy('expiry_date', 'asc');
+                },
+                // ✅ Load serial numbers for single shop search
+                'variants.serialNumbers' => function($q) {
+                    $q->where(function($sub) {
+                        $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+                            ->orWhere('status', SerialNumber::STATUS_RESERVED);
+                    });
+                },
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->where(function($q) use ($searchTerm) {
-                // ✅ Exact match first, then LIKE
-                $q->where('name', $searchTerm)
-                ->orWhere('name', 'LIKE', "%{$searchTerm}%")
-                ->orWhere('sku', $searchTerm)
+                $q->where('name', 'LIKE', "%{$searchTerm}%")
                 ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
                 ->orWhereHas('variants', function($vq) use ($searchTerm) {
-                    $vq->where('name', $searchTerm)
-                        ->orWhere('name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhere('sku', $searchTerm)
+                    $vq->where('name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
                 });
             })
-            ->limit(20)
+            ->limit(15)
             ->get();
 
+            // Prepare variant data with batches and serials
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
                     $variant->quantity_source = 'overall';
                     $variant->inventory_by_dept = [];
+                    
+                    if ($product->inventory_strategy === 'batch') {
+                        $batches = $variant->batches;
+                        $totalAvailable = $batches->sum(function($batch) {
+                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                        });
+                        $variant->available_batches = $batches->map(function($batch) {
+                            return [
+                                'id' => $batch->id,
+                                'batch_number' => $batch->batch_number,
+                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id' => $batch->location_id,
+                                'department_id' => $batch->department_id,
+                            ];
+                        });
+                        $variant->quantity_available = $totalAvailable;
+                    } elseif ($product->inventory_strategy === 'serial') {
+                        $serialNumbers = $variant->serialNumbers;
+                        
+                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                            return [
+                                'id' => $serial->id,
+                                'serial_number' => $serial->serial_number,
+                                'status' => $serial->status,
+                                'location_id' => $serial->location_id,
+                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id' => $serial->department_id,
+                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
+                            ];
+                        });
+                        $variant->quantity_available = $variant->available_serials->count();
+                    } else {
+                        $variant->available_batches = [];
+                        $variant->available_serials = [];
+                    }
                 }
             }
             
         } else {
-            // ✅ Multi-shop: Must have department selected
+            // ─── MULTI-SHOP SEARCH ────────────────────────────────────────────
             if (empty($departmentId)) {
                 return response()->json([
                     'success' => true,
@@ -286,7 +428,6 @@ class POSController extends Controller
 
             $userLocationId = $user->location_id;
 
-            // ✅ Search only in the selected department
             $products = Product::with([
                 'departments',
                 'taxes' => fn($q) => $q->where('is_active', 1),
@@ -302,6 +443,24 @@ class POSController extends Controller
                         ->with(['inventory' => function($q) use ($departmentId, $userLocationId) {
                             $q->where('department_id', $departmentId)
                             ->where('location_id', $userLocationId);
+                        }])
+                        ->with(['batches' => function($q) use ($departmentId, $userLocationId) {
+                            $q->where(function($sub) {
+                                $sub->where('quantity_remaining', '>', 0)
+                                    ->orWhereNull('quantity_remaining');
+                            })
+                            ->where('location_id', $userLocationId)
+                            ->where('department_id', $departmentId)
+                            ->orderBy('expiry_date', 'asc');
+                        }])
+                        // ✅ Load serial numbers for multi-shop search
+                        ->with(['serialNumbers' => function($q) use ($departmentId, $userLocationId) {
+                            $q->where(function($sub) {
+                                $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+                                    ->orWhere('status', SerialNumber::STATUS_RESERVED);
+                            })
+                            ->where('location_id', $userLocationId)
+                            ->where('department_id', $departmentId);
                         }]);
                 },
                 'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
@@ -311,11 +470,9 @@ class POSController extends Controller
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            // ✅ Must be assigned to the selected department
             ->whereHas('departments', function($q) use ($departmentId) {
                 $q->where('department_id', $departmentId);
             })
-            // ✅ Must have variants with inventory in the department
             ->whereHas('variants', function($q) use ($departmentId, $userLocationId) {
                 $q->where('is_active', 1)
                     ->whereHas('inventory', function($query) use ($departmentId, $userLocationId) {
@@ -324,22 +481,17 @@ class POSController extends Controller
                     });
             })
             ->where(function($q) use ($searchTerm) {
-                // ✅ Exact match first, then LIKE
-                $q->where('name', $searchTerm)
-                ->orWhere('name', 'LIKE', "%{$searchTerm}%")
-                ->orWhere('sku', $searchTerm)
+                $q->where('name', 'LIKE', "%{$searchTerm}%")
                 ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
                 ->orWhereHas('variants', function($vq) use ($searchTerm) {
-                    $vq->where('name', $searchTerm)
-                        ->orWhere('name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhere('sku', $searchTerm)
+                    $vq->where('name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
                 });
             })
-            ->limit(20)
+            ->limit(15)
             ->get();
 
-            // ✅ Calculate quantities per department
+            // Calculate quantities per department and prepare batch/serial data
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $inventoryByDept = [];
@@ -356,14 +508,52 @@ class POSController extends Controller
                     }
                     
                     $variant->inventory_by_dept = $inventoryByDept;
-                    // ✅ Only show quantity for the selected department
-                    $variant->quantity_available = $inventoryByDept[$departmentId]['quantity'] ?? 0;
-                    $variant->quantity_source = 'inventory_allocated';
+                    
+                    if ($product->inventory_strategy === 'batch') {
+                        $batches = $variant->batches;
+                        $totalAvailable = $batches->sum(function($batch) {
+                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                        });
+                        $variant->available_batches = $batches->map(function($batch) {
+                            return [
+                                'id' => $batch->id,
+                                'batch_number' => $batch->batch_number,
+                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id' => $batch->location_id,
+                                'department_id' => $batch->department_id,
+                            ];
+                        });
+                        $variant->quantity_available = $totalAvailable;
+                        $inventoryByDept[$departmentId]['quantity'] = $totalAvailable;
+                        $variant->inventory_by_dept = $inventoryByDept;
+                    } elseif ($product->inventory_strategy === 'serial') {
+                        $serialNumbers = $variant->serialNumbers;
+                        
+                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                            return [
+                                'id' => $serial->id,
+                                'serial_number' => $serial->serial_number,
+                                'status' => $serial->status,
+                                'location_id' => $serial->location_id,
+                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id' => $serial->department_id,
+                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
+                            ];
+                        });
+                        $variant->quantity_available = $variant->available_serials->count();
+                        $inventoryByDept[$departmentId]['quantity'] = $variant->quantity_available;
+                        $variant->inventory_by_dept = $inventoryByDept;
+                    } else {
+                        $variant->available_batches = [];
+                        $variant->available_serials = [];
+                        $variant->quantity_available = $inventoryByDept[$departmentId]['quantity'] ?? 0;
+                    }
                 }
             }
         }
 
-        // ✅ Compute taxes and promotions
+        // Compute taxes and promotions for each variant
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
                 // Taxes
@@ -422,6 +612,7 @@ class POSController extends Controller
             'is_single_shop' => $isSingleShop,
         ]);
     }
+
 
 
     public function processPayment(Request $request)
@@ -515,6 +706,7 @@ class POSController extends Controller
                 'created_by' => $user->id,
             ]);
 
+
             foreach ($cartData['items'] as $item) {
                 $variant = ProductVariant::find($item['variant_id']);
                 if (!$variant) continue;
@@ -584,6 +776,10 @@ class POSController extends Controller
                     'tax_amount' => $item['tax_total'] ?? 0,
                     'discount' => $item['discount'] ?? 0,
                     'total_price' => $item['total'],
+                    'batch_id' => $item['batch_id'] ?? null,      
+                    'batch_number' => $item['batch_number'] ?? null,
+                    'serial_id' => $item['serial_id'] ?? null,
+                    'serial_number' => $item['serial_number'] ?? null, 
                     'inventory_data' => json_encode($inventoryData),
                     'tax_data' => json_encode($item['taxes'] ?? []),
                     'promotion_data' => json_encode($item['promotions'] ?? []),
@@ -749,6 +945,10 @@ class POSController extends Controller
                     'tax_amount' => $item['tax_total'] ?? 0,
                     'discount' => $item['discount'] ?? 0,
                     'total_price' => $item['total'],
+                    'batch_id' => $item['batch_id'] ?? null,       
+                    'batch_number' => $item['batch_number'] ?? null,
+                    'serial_id' => $item['serial_id'] ?? null,
+                    'serial_number' => $item['serial_number'] ?? null,
                     'inventory_data' => json_encode($inventoryData),
                     'tax_data' => json_encode($item['taxes'] ?? []),
                     'promotion_data' => json_encode($item['promotions'] ?? []),
@@ -802,8 +1002,7 @@ class POSController extends Controller
 
     public function processSplitPayment(Request $request)
     {
-        // \Log::info('processSplitPayment called', $request->all());
-        
+                
         try {
             $user = Auth::user();
             $tenantId = $user->tenant_id;
@@ -918,6 +1117,10 @@ class POSController extends Controller
                         'tax_amount' => $item['tax_total'] ?? 0,
                         'discount' => $item['discount'] ?? 0,
                         'total_price' => $item['total'],
+                        'batch_id' => $item['batch_id'] ?? null,       
+                        'batch_number' => $item['batch_number'] ?? null,
+                        'serial_id' => $item['serial_id'] ?? null,
+                        'serial_number' => $item['serial_number'] ?? null,
                         'inventory_data' => json_encode($inventoryData),
                         'tax_data' => json_encode($item['taxes'] ?? []),
                         'promotion_data' => json_encode($item['promotions'] ?? []),
@@ -942,10 +1145,10 @@ class POSController extends Controller
 
                 $order->refresh();
 
-                \Log::info('[POS] Order totals updated after cart change', [
-                    'order_id' => $order->id,
-                    'new_total' => $newTotal,
-                ]);
+                // \Log::info('[POS] Order totals updated after cart change', [
+                //     'order_id' => $order->id,
+                //     'new_total' => $newTotal,
+                // ]);
             }
 
             // ── Apply negotiated/bargain discount (if any) ─────────────────
@@ -1128,15 +1331,83 @@ class POSController extends Controller
 
             // ── Inventory ──────────────────────────────────────────────────
             $order->load('orderItems');
+
+            // First pass: Validate all items (check stock before depleting)
             foreach ($order->orderItems as $item) {
                 $variant = ProductVariant::find($item->variant_id);
                 if (!$variant) continue;
-                if ($isSingleShop) {
-                    $this->handleSingleShopInventory($variant, $item, $order);
+                
+                $product = $variant->product;
+                if (!$product) continue;
+                
+                $strategy = $product->resolvedInventoryStrategy();
+                
+                // For recipes, validate ingredients first
+                if ($strategy === 'recipe') {
+                    $this->validateRecipeIngredients($product, $item->quantity);
                 } else {
-                    $this->handleMultiShopInventory($variant, $item, $order);
+                    // For non-recipe, check stock
+                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
                 }
             }
+
+            // Second pass: Actually deplete inventory
+            foreach ($order->orderItems as $item) {
+                $variant = ProductVariant::find($item->variant_id);
+                if (!$variant) continue;
+                
+                $product = $variant->product;
+                if (!$product) continue;
+                
+                $strategy = $product->resolvedInventoryStrategy();
+                
+                if ($strategy === 'recipe') {
+                    $this->depleteRecipeIngredients($variant, $item, $order);  // ← $item is OrderItem model
+                } else {
+                    $this->depleteInventoryByStrategy($variant, $item, $order);
+                }
+            }
+
+            // ── First pass: Validate all items (check stock before depleting) ──
+            // \Log::info('Validating order items', [
+            //     'order_id' => $order->id,
+            //     'items_count' => $order->orderItems->count()
+            // ]);
+
+            foreach ($order->orderItems as $item) {
+                $variant = ProductVariant::find($item->variant_id);
+                if (!$variant) {
+                    \Log::warning('Variant not found', ['variant_id' => $item->variant_id]);
+                    continue;
+                }
+                
+                $product = $variant->product;
+                if (!$product) {
+                    \Log::warning('Product not found for variant', ['variant_id' => $variant->id]);
+                    continue;
+                }
+                
+                $strategy = $product->resolvedInventoryStrategy();
+                
+                // \Log::info('Validating item', [
+                //     'item_name' => $item->item_name,
+                //     'variant_id' => $variant->id,
+                //     'strategy' => $strategy,
+                //     'quantity' => $item->quantity,
+                //     'batch_id' => $item->batch_id ?? null,  // ✅ Check if batch_id exists
+                //     'inventory_data' => $item->inventory_data
+                // ]);
+                
+                // For recipes, validate ingredients first
+                if ($strategy === 'recipe') {
+                    $this->validateRecipeIngredients($product, $item->quantity);
+                } else {
+                    // For non-recipe, check stock
+                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
+                }
+            }
+
+            //Log it here
 
             // ── Complete the order ─────────────────────────────────────────
             $order->update([
@@ -1370,11 +1641,11 @@ class POSController extends Controller
 
             app('payment-transaction')->recordTransaction($transactionData);
 
-            \Log::info('[POS] Promotion discount recorded (no balance effect)', [
-                'order_id' => $order->id,
-                'discount_amount' => $discountAmount,
-                'payment_method_balance' => $currentBalance,
-            ]);
+            // \Log::info('[POS] Promotion discount recorded (no balance effect)', [
+            //     'order_id' => $order->id,
+            //     'discount_amount' => $discountAmount,
+            //     'payment_method_balance' => $currentBalance,
+            // ]);
         } catch (\Exception $e) {
             \Log::error('Failed to record promotion discount: ' . $e->getMessage(), [
                 'order_id' => $order->id,
@@ -1441,11 +1712,11 @@ class POSController extends Controller
 
             app('payment-transaction')->recordTransaction($transactionData);
 
-            \Log::info('[POS] Bargain discount recorded (no balance effect)', [
-                'order_id' => $order->id,
-                'discount_amount' => $order->bargain_discount_applied,
-                'payment_method_balance' => $currentBalance,
-            ]);
+            // \Log::info('[POS] Bargain discount recorded (no balance effect)', [
+            //     'order_id' => $order->id,
+            //     'discount_amount' => $order->bargain_discount_applied,
+            //     'payment_method_balance' => $currentBalance,
+            // ]);
         } catch (\Exception $e) {
             \Log::error('Failed to record bargain discount: ' . $e->getMessage(), [
                 'order_id' => $order->id,
@@ -1475,212 +1746,923 @@ class POSController extends Controller
     // }
 
     /**
-     * Handle inventory updates for single shop
+     * Deplete recipe ingredients
+     * Each ingredient is depleted using its own strategy AND shop mode
      */
-    private function handleSingleShopInventory($variant, $item, $order)
+    private function depleteRecipeIngredients($variant, $item, $order)
     {
-        $beforeQty = $variant->overal_quantity_at_hand;
-        $afterQty = $beforeQty - $item['quantity'];
+        $product = $variant->product;
+        
+        if (!$product->hasRecipe()) {
+            throw new \Exception("No recipe found for {$product->name}");
+        }
 
-        // Update overall quantity
-        $variant->update([
-            'overal_quantity_at_hand' => $afterQty
-        ]);
+        $recipe = $product->recipe;
+        $ingredients = $recipe->ingredients;
+        $quantityMultiplier = $item->quantity;
 
-        // Record single shop transaction using the new model
+        if ($ingredients->isEmpty()) {
+            throw new \Exception("Recipe for {$product->name} has no ingredients");
+        }
+
+        foreach ($ingredients as $ingredient) {
+            $ingredientVariant = $ingredient->ingredientVariant;
+            $requiredQuantity = $ingredient->quantity_required * $quantityMultiplier;
+
+            if (!$ingredientVariant) {
+                throw new \Exception("Ingredient variant not found for recipe '{$product->name}'");
+            }
+
+            $ingredientProduct = $ingredientVariant->product;
+            if (!$ingredientProduct) {
+                throw new \Exception("Product not found for ingredient '{$ingredientVariant->name}'");
+            }
+
+            $strategy = $ingredientProduct->resolvedInventoryStrategy();
+            
+            if ($strategy === 'recipe') {
+                throw new \Exception("Nested recipes are not allowed. '{$ingredientVariant->name}' is also a recipe product.");
+            }
+
+            // ✅ Check stock BEFORE depleting
+            $this->checkIngredientStock($ingredientVariant, $requiredQuantity, $order->tenant_id);
+
+            // ✅ Deplete using the correct shop mode
+            $ingredientItem = (object) [
+                'variant_id' => $ingredientVariant->id,
+                'quantity' => $requiredQuantity,
+                'name' => $ingredientVariant->name,
+                'price' => 0,
+                'tax_total' => 0,
+                'discount' => 0,
+                'total' => 0,
+            ];
+
+            $this->depleteInventoryByStrategy($ingredientVariant, $ingredientItem, $order);
+        }
+
+        // Update recipe product quantity (virtual, for reference only)
+        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $item->quantity);
+        $variant->save();
+
+        // \Log::info('[Recipe] Depleted', [
+        //     'product' => $product->name,
+        //     'quantity' => $item->quantity,
+        //     'order_id' => $order->id
+        // ]);
+    }
+
+    /**
+     * Deplete inventory based on product's strategy
+     * THIS IS THE ONLY ENTRY POINT - everything else calls this
+     */
+    private function depleteInventoryByStrategy($variant, $item, $order)
+    {
+        $product = $variant->product;
+        if (!$product) {
+            throw new \Exception("Product not found for variant '{$variant->name}'");
+        }
+        
+        $strategy = $product->resolvedInventoryStrategy();
+        $isSingleShop = tenant_is_single_shop($order->tenant_id);
+        
+        // ✅ Prevent nested recipes
+        if ($strategy === 'recipe') {
+            throw new \Exception("Nested recipes are not allowed. '{$variant->name}' is a recipe product.");
+        }
+        
+        // \Log::info('[Inventory Depletion]', [
+        //     'variant' => $variant->name,
+        //     'strategy' => $strategy,
+        //     'shop_mode' => $isSingleShop ? 'single' : 'multi',
+        //     'quantity' => $item->quantity,
+        //     'order_id' => $order->id
+        // ]);
+
+        // Route to correct depletion method based on shop mode AND strategy
+        if ($isSingleShop) {
+            // SINGLE SHOP - use overall_quantity_at_hand
+            match ($strategy) {
+                'quantity' => $this->depleteSingleQuantity($variant, $item, $order),
+                'batch'    => $this->depleteSingleBatch($variant, $item, $order),
+                'serial'   => $this->depleteSingleSerial($variant, $item, $order),
+                default    => throw new \Exception("Unknown strategy '{$strategy}' for single shop"),
+            };
+        } else {
+            // MULTI SHOP - use inventory_items table
+            match ($strategy) {
+                'quantity' => $this->depleteMultiQuantity($variant, $item, $order),
+                'batch'    => $this->depleteMultiBatch($variant, $item, $order),
+                'serial'   => $this->depleteMultiSerial($variant, $item, $order),
+                default    => throw new \Exception("Unknown strategy '{$strategy}' for multi shop"),
+            };
+        }
+    }
+
+    // ============================================================
+    // SINGLE SHOP DEPLETION METHODS
+    // ============================================================
+
+    /**
+     * Single Shop - Quantity strategy
+     * Depletes from: overal_quantity_at_hand
+     */
+    private function depleteSingleQuantity($variant, $item, $order)
+    {
+        $before = $variant->overal_quantity_at_hand;
+        $after = $before - $item->quantity;
+
+        if ($after < 0) {
+            throw new \Exception("Insufficient stock for {$variant->name}. Available: {$before}, Required: {$item->quantity}");
+        }
+
+        $variant->update(['overal_quantity_at_hand' => $after]);
+
+        // Log
         SingleShopInventoryLog::create([
             'variant_id' => $variant->id,
             'order_id' => $order->id,
             'tenant_id' => $order->tenant_id,
             'created_by' => auth()->id(),
-            'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
-            'quantity_change' => -$item['quantity'],
+            'quantity_before' => $before,
+            'quantity_after' => $after,
+            'quantity_change' => -$item->quantity,
             'reason' => 'pos_sale',
-            'notes' => 'POS sale - Order #' . $order->order_number,
+            'notes' => "POS sale - Order #{$order->order_number}",
             'source' => 'pos',
-            'metadata' => [
-                'item_name' => $item['name'],
-                'unit_price' => $item['price'],
-                'customer_name' => $order->customer_name,
-                'location_id' => $order->location_id,
-                'department_id' => $order->department_id,
-            ],
+            'metadata' => ['strategy' => 'quantity']
         ]);
+
+        // \Log::info('[Single Shop] Quantity depleted', [
+        //     'variant' => $variant->name,
+        //     'before' => $before,
+        //     'after' => $after
+        // ]);
+    }
+
+    /**
+     * Single Shop - Batch strategy
+     * Depletes from the specific batch ID
+     */
+    private function depleteSingleBatch($variant, $item, $order)
+    {
+        $tenantId = $order->tenant_id;
+        $quantityNeeded = $item->quantity;
+        
+        // ✅ Get batch_id from the order item
+        $batchId = $item->batch_id ?? null;
+        
+        // \Log::info('Depleting Single Batch', [
+        //     'variant_id' => $variant->id,
+        //     'variant_name' => $variant->name,
+        //     'batch_id' => $batchId,
+        //     'batch_number' => $item->batch_number ?? null,
+        //     'quantity_needed' => $quantityNeeded,
+        //     'order_id' => $order->id
+        // ]);
+        
+        if ($batchId) {
+            // ✅ Deduct from specific batch
+            $batch = PurchaseReceiptItem::query()
+                ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+                ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+                ->where('purchase_orders.tenant_id', $tenantId)
+                ->where('purchase_receipt_items.id', $batchId)
+                ->where(function($q) {
+                    $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                    ->orWhereNull('purchase_receipt_items.quantity_remaining');
+                })
+                ->select('purchase_receipt_items.*')
+                ->first();
+                
+            if (!$batch) {
+                throw new \Exception("Batch not found or has no remaining quantity");
+            }
+            
+            $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+            if ($effectiveQuantity < $quantityNeeded) {
+                throw new \Exception("Insufficient quantity in batch {$batch->batch_number}. Available: {$effectiveQuantity}, Required: {$quantityNeeded}");
+            }
+            
+            // ✅ Update quantity_remaining
+            if ($batch->quantity_remaining !== null) {
+                $batch->quantity_remaining -= $quantityNeeded;
+            } else {
+                $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $quantityNeeded;
+            }
+            $batch->save();
+            
+            // Log batch depletion
+            $this->logBatchDepletion($batch, $variant, $item, $order, $quantityNeeded);
+            
+            // Update overall quantity for reporting only
+            $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded);
+            $variant->save();
+            
+            return;
+        }
+        
+        // ✅ If no batch_id, fallback to FIFO
+        // ... FIFO logic ...
     }
 
 
+
+    // ============================================================
+    // MULTI SHOP DEPLETION METHODS
+    // ============================================================
+
     /**
-     * Handle inventory updates for multi shop
+     * Multi Shop - Quantity strategy
+     * Depletes from: inventory_items table (location_id + department_id)
      */
-    private function handleMultiShopInventory($variant, $item, $order, $user = null)
+    private function depleteMultiQuantity($variant, $item, $order)
     {
-        if (!$user) {
-            $user = Auth::user();
+        $user = Auth::user();
+        $tenantId = $order->tenant_id;
+
+        // ✅ Get inventory data - handles both OrderItem and stdClass
+        $inventoryData = [];
+        if (is_object($item) && property_exists($item, 'inventory_data')) {
+            $inventoryData = json_decode($item->inventory_data, true);
+        } else if (is_array($item) && isset($item['inventory_data'])) {
+            $inventoryData = json_decode($item['inventory_data'], true);
+        }
+        
+        // If no inventory_data, try to use what's available
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
+        
+        // Get quantity from item
+        $quantity = is_object($item) ? ($item->quantity ?? 0) : ($item['quantity'] ?? 0);
+
+        // Find the inventory record
+        $inventory = null;
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
         }
 
-        // ✅ Get inventory_id from inventory_data JSON
-        $inventoryData = json_decode($item->inventory_data, true);
-        $inventoryId = $inventoryData['inventory_id'] ?? null;
-        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
-        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
-
-        // ✅ Load inventory with relationships
-        if ($inventoryId) {
-            $inventory = InventoryItems::with(['itemLocation', 'departmentItem'])->find($inventoryId);
-        } else {
-            // Fallback: query inventory
-            $inventory = $variant->inventory()
-                ->with(['itemLocation', 'departmentItem'])
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
                 ->where('location_id', $locationId)
                 ->where('department_id', $departmentId)
                 ->first();
         }
 
         if (!$inventory) {
-            \Log::warning("No inventory found for variant {$variant->id} in multi-shop mode", [
-                'variant_id' => $variant->id,
-                'location_id' => $locationId,
-                'department_id' => $departmentId,
-                'order_id' => $order->id
-            ]);
-            return;
+            throw new \Exception("No inventory found for {$variant->name} at location {$locationId} / department {$departmentId}");
         }
 
-        // ─── Get Location and Department Names ────────────────────────
-        $locationName = $inventory->itemLocation ? $inventory->itemLocation->name : 'Unknown Location';
-        $departmentName = $inventory->departmentItem ? $inventory->departmentItem->name : 'Unknown Department';
-        $variantName = $variant->name ?? 'Unknown Variant';
-        $variantSku = $variant->sku ?? 'N/A';
+        $before = $inventory->quantity_allocated;
+        $after = $before - $quantity;
 
-        // ─── Build Readable Notes ──────────────────────────────────────
-        $adjustmentNote = 'Stock reduced — ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') sold from ' 
-                        . $locationName . ' (' . $departmentName . ') via order #' . $order->order_number;
-
-        $transactionNote = 'Sold ' . $item->quantity . ' unit(s) of "' . $variantName . '" (' . $variantSku . ') from ' 
-                        . $locationName . ' (' . $departmentName . ') for order #' . $order->order_number;
-
-        $beforeQty = $inventory->quantity_allocated;
-        $afterQty = $beforeQty - $item->quantity;
+        if ($after < 0) {
+            throw new \Exception("Insufficient stock for {$variant->name}. Available: {$before}, Required: {$quantity}");
+        }
 
         // Update inventory
-        $inventory->update([
-            'quantity_allocated' => $afterQty
-        ]);
+        $inventory->update(['quantity_allocated' => $after]);
 
-        // Record adjustment (audit trail)
-        InventoryAdjustments::create([
-            'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
-            'reason' => 'order_sale',
-            'notes' => $adjustmentNote,
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $order->tenant_id,
-        ]);
-
-        // Record transaction (movement)
+        // Log transaction
         InventoryTransactions::create([
-            'quantity' => -$item->quantity,
+            'quantity' => -$quantity,
             'reference_id' => $order->id,
             'reference_type' => 'order',
             'type' => 'sale',
-            'notes' => $transactionNote,
+            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name}",
             'inventory_id' => $inventory->id,
             'created_by' => auth()->id(),
-            'tenant_id' => $order->tenant_id,
+            'tenant_id' => $tenantId,
         ]);
 
-        \Log::info('Multi-shop inventory updated', [
-            'variant_id' => $variant->id,
+        // Log adjustment
+        InventoryAdjustments::create([
+            'quantity_before' => $before,
+            'quantity_after' => $after,
+            'reason' => 'order_sale',
+            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name}",
             'inventory_id' => $inventory->id,
-            'location_id' => $locationId,
-            'department_id' => $departmentId,
-            'quantity_sold' => $item->quantity,
-            'before' => $beforeQty,
-            'after' => $afterQty
+            'created_by' => auth()->id(),
+            'tenant_id' => $tenantId,
+        ]);
+
+        // \Log::info('[Multi Shop] Quantity depleted', [
+        //     'variant' => $variant->name,
+        //     'inventory_id' => $inventory->id,
+        //     'location_id' => $inventory->location_id,
+        //     'department_id' => $inventory->department_id,
+        //     'before' => $before,
+        //     'after' => $after
+        // ]);
+    }
+
+    /**
+     * Multi Shop - Batch strategy
+     * Depletes from: inventory_items AND batch items (filtered by location/department)
+     */
+    private function depleteMultiBatch($variant, $item, $order)
+    {
+        $user = Auth::user();
+        $tenantId = $order->tenant_id;
+        
+        // ✅ Get quantity from item
+        $quantityNeeded = $item->quantity;  // ✅ This is the actual quantity, not 0
+        
+        // ✅ Get batch_id from the order item
+        $batchId = $item->batch_id ?? null;
+        
+        // \Log::info('depleteMultiBatch called', [
+        //     'variant_id' => $variant->id,
+        //     'variant_name' => $variant->name,
+        //     'quantity_needed' => $quantityNeeded,
+        //     'batch_id' => $batchId,
+        //     'batch_number' => $item->batch_number ?? null,
+        //     'order_id' => $order->id
+        // ]);
+        
+        // ✅ Get inventory data
+        $inventoryData = [];
+        if (is_object($item) && property_exists($item, 'inventory_data')) {
+            $inventoryData = json_decode($item->inventory_data, true);
+        } else if (is_array($item) && isset($item['inventory_data'])) {
+            $inventoryData = json_decode($item['inventory_data'], true);
+        }
+        
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
+        
+        // Get item name
+        $itemName = is_object($item) ? ($item->item_name ?? $item->name ?? $variant->name) : ($item['name'] ?? $variant->name);
+
+        // Get inventory record
+        $inventory = null;
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
+        }
+
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+
+        if (!$inventory) {
+            throw new \Exception("No inventory found for {$variant->name} at this location/department");
+        }
+
+        // ✅ Get batches for this variant
+        $batches = PurchaseReceiptItem::query()
+            ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+            ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+            ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+            ->where('purchase_orders.tenant_id', $tenantId)
+            ->where('purchase_order_items.product_variant_id', $variant->id)
+            ->where(function($q) {
+                $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                ->orWhereNull('purchase_receipt_items.quantity_remaining');
+            })
+            ->when($locationId, function($q) use ($locationId) {
+                return $q->where('purchase_receipt_items.location_id', $locationId);
+            })
+            ->when($departmentId, function($q) use ($departmentId) {
+                return $q->where('purchase_receipt_items.department_id', $departmentId);
+            })
+            ->orderBy('purchase_receipt_items.expiry_date', 'asc')
+            ->select('purchase_receipt_items.*')
+            ->get();
+
+        if ($batches->isEmpty()) {
+            throw new \Exception("No available batches for {$variant->name} at this location/department");
+        }
+
+        $totalAvailable = $batches->sum(function($batch) {
+            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+        });
+        
+        if ($totalAvailable < $quantityNeeded) {
+            throw new \Exception("Insufficient batch stock for {$variant->name}. Available: {$totalAvailable}, Required: {$quantityNeeded}");
+        }
+
+        // ✅ Deduct from batches - if batch_id is provided, use that specific batch
+        if ($batchId) {
+            // Find the specific batch
+            $targetBatch = $batches->firstWhere('id', $batchId);
+            if (!$targetBatch) {
+                throw new \Exception("Specified batch not found or not available");
+            }
+            
+            $effectiveQuantity = $targetBatch->quantity_remaining ?? $targetBatch->quantity_received ?? 0;
+            if ($effectiveQuantity < $quantityNeeded) {
+                throw new \Exception("Insufficient quantity in batch {$targetBatch->batch_number}. Available: {$effectiveQuantity}, Required: {$quantityNeeded}");
+            }
+            
+            // ✅ Update the specific batch
+            if ($targetBatch->quantity_remaining !== null) {
+                $targetBatch->quantity_remaining -= $quantityNeeded;
+            } else {
+                $targetBatch->quantity_remaining = ($targetBatch->quantity_received ?? 0) - $quantityNeeded;
+            }
+            $targetBatch->save();
+            
+            // Log batch depletion
+            BatchLog::create([
+                'batch_id' => $targetBatch->id,
+                'batch_number' => $targetBatch->batch_number,
+                'variant_id' => $variant->id,
+                'variant_name' => $variant->name,
+                'type' => BatchLog::TYPE_DEPLETED,
+                'quantity_change' => -$quantityNeeded,
+                'quantity_before' => $effectiveQuantity,
+                'quantity_after' => $targetBatch->quantity_remaining,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tenant_id' => $tenantId,
+                'location_id' => $locationId,
+                'department_id' => $departmentId,
+                'expiry_date' => $targetBatch->expiry_date,
+                'event_date' => now(),
+                'performed_by' => auth()->id(),
+                'metadata' => [
+                    'inventory_id' => $inventory->id,
+                    'customer_name' => $order->customer_name,
+                    'item_name' => $itemName,
+                    'deducted_from_batch' => $targetBatch->batch_number
+                ]
+            ]);
+            
+            // \Log::info('Batch depleted from specific batch', [
+            //     'batch_id' => $targetBatch->id,
+            //     'batch_number' => $targetBatch->batch_number,
+            //     'quantity_deducted' => $quantityNeeded,
+            //     'remaining' => $targetBatch->quantity_remaining
+            // ]);
+            
+        } else {
+            // ✅ No batch_id specified - use FIFO
+            foreach ($batches as $batch) {
+                if ($quantityNeeded <= 0) break;
+
+                $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                $deduct = min($effectiveQuantity, $quantityNeeded);
+                
+                if ($batch->quantity_remaining !== null) {
+                    $batch->quantity_remaining -= $deduct;
+                } else {
+                    $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $deduct;
+                }
+                $batch->save();
+                $quantityNeeded -= $deduct;
+
+                BatchLog::create([
+                    'batch_id' => $batch->id,
+                    'batch_number' => $batch->batch_number,
+                    'variant_id' => $variant->id,
+                    'variant_name' => $variant->name,
+                    'type' => BatchLog::TYPE_DEPLETED,
+                    'quantity_change' => -$deduct,
+                    'quantity_before' => $effectiveQuantity,
+                    'quantity_after' => $batch->quantity_remaining,
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'tenant_id' => $tenantId,
+                    'location_id' => $locationId,
+                    'department_id' => $departmentId,
+                    'expiry_date' => $batch->expiry_date,
+                    'event_date' => now(),
+                    'performed_by' => auth()->id(),
+                    'metadata' => [
+                        'inventory_id' => $inventory->id,
+                        'customer_name' => $order->customer_name,
+                        'item_name' => $itemName,
+                    ]
+                ]);
+            }
+        }
+
+        // Update inventory allocation
+        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityNeeded);
+        $inventory->save();
+
+        // Log inventory transaction
+        InventoryTransactions::create([
+            'quantity' => -$quantityNeeded,
+            'reference_id' => $order->id,
+            'reference_type' => 'order',
+            'type' => 'sale',
+            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name} (BATCH)",
+            'inventory_id' => $inventory->id,
+            'created_by' => auth()->id(),
+            'tenant_id' => $tenantId,
+        ]);
+
+        // \Log::info('[Multi Shop] Batch depleted', [
+        //     'variant' => $variant->name,
+        //     'inventory_id' => $inventory->id,
+        //     'location_id' => $locationId,
+        //     'department_id' => $departmentId,
+        //     'quantity' => $quantityNeeded,
+        //     'batch_id_used' => $batchId
+        // ]);
+    }
+
+    /**
+     * Multi Shop - Serial strategy
+     * Depletes from: inventory_items AND serial numbers (filtered by location/department)
+     */
+    private function depleteMultiSerial($variant, $item, $order)
+    {
+        $user = Auth::user();
+        $tenantId = $order->tenant_id;
+
+        // Get inventory data
+        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryId = $inventoryData['inventory_id'] ?? null;
+        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
+        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
+
+        // Get inventory record
+        $inventory = null;
+        if ($inventoryId) {
+            $inventory = InventoryItems::find($inventoryId);
+        }
+
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+
+        if (!$inventory) {
+            throw new \Exception("No inventory found for {$variant->name} at this location/department");
+        }
+
+        // ✅ Get serial_id from order item
+        $serialId = $item->serial_id ?? null;
+        
+        if ($serialId) {
+            // ✅ Deplete SPECIFIC serial
+            $serial = SerialNumber::where('id', $serialId)
+                ->where('variant_id', $variant->id)
+                ->where('status', SerialNumber::STATUS_AVAILABLE)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+                
+            if (!$serial) {
+                throw new \Exception("Serial number not found or already sold at this location");
+            }
+            
+            $serial->update([
+                'status' => SerialNumber::STATUS_SOLD,
+                'order_id' => $order->id,
+                'sold_at' => now(),
+                'sold_by' => auth()->id(),
+            ]);
+            
+            $quantity = 1;
+            
+        } else {
+            // Fallback: FIFO
+            $serials = SerialNumber::where('variant_id', $variant->id)
+                ->where('status', SerialNumber::STATUS_AVAILABLE)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->limit($item->quantity)
+                ->get();
+
+            if ($serials->count() < $item->quantity) {
+                throw new \Exception("Insufficient serial numbers for {$variant->name}. Available: {$serials->count()}, Required: {$item->quantity}");
+            }
+
+            foreach ($serials as $serial) {
+                $serial->update([
+                    'status' => SerialNumber::STATUS_SOLD,
+                    'order_id' => $order->id,
+                    'sold_at' => now(),
+                    'sold_by' => auth()->id(),
+                ]);
+            }
+            
+            $quantity = $item->quantity;
+        }
+
+        // Update inventory allocation
+        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantity);
+        $inventory->save();
+
+        // Log inventory transaction
+        InventoryTransactions::create([
+            'quantity' => -$quantity,
+            'reference_id' => $order->id,
+            'reference_type' => 'order',
+            'type' => 'sale',
+            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name} (SERIAL)",
+            'inventory_id' => $inventory->id,
+            'created_by' => auth()->id(),
+            'tenant_id' => $tenantId,
         ]);
     }
 
-        
-    public function cancel(Request $request, $id)
+
+    /**
+     * Validate that all recipe ingredients have sufficient stock
+     */
+    private function validateRecipeIngredients($product, $quantity)
     {
-        $user = Auth::user();
-        $tenantId = $user->tenant_id;
-                  
-        if (!$user->hasPermissionTo('cancel order')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
+        if (!$product->hasRecipe()) {
+            throw new \Exception("No recipe found for {$product->name}");
+        }
+
+        $recipe = $product->recipe;
+        $ingredients = $recipe->ingredients;
+        $quantityMultiplier = $quantity;
+
+        if ($ingredients->isEmpty()) {
+            throw new \Exception("Recipe for {$product->name} has no ingredients");
+        }
+
+        $isSingleShop = tenant_is_single_shop($product->tenant_id);
+
+        foreach ($ingredients as $ingredient) {
+            $ingredientVariant = $ingredient->ingredientVariant;
+            
+            if (!$ingredientVariant) {
+                throw new \Exception("Missing ingredient variant in recipe '{$product->name}'");
+            }
+
+            $ingredientProduct = $ingredientVariant->product;
+            if (!$ingredientProduct) {
+                throw new \Exception("Product not found for ingredient '{$ingredientVariant->name}'");
+            }
+
+            $strategy = $ingredientProduct->resolvedInventoryStrategy();
+            
+            // ✅ Prevent nested recipes
+            if ($strategy === 'recipe') {
+                throw new \Exception("Nested recipes not allowed: '{$ingredientVariant->name}' is a recipe product");
+            }
+
+            $requiredQuantity = $ingredient->quantity_required * $quantityMultiplier;
+
+            // ✅ Check stock based on shop mode and strategy
+            if ($isSingleShop) {
+                if ($strategy === 'quantity') {
+                    // ✅ Check overal_quantity_at_hand
+                    if ($ingredientVariant->overal_quantity_at_hand < $requiredQuantity) {
+                        throw new \Exception("Insufficient stock for ingredient '{$ingredientVariant->name}'. Available: {$ingredientVariant->overal_quantity_at_hand}, Required: {$requiredQuantity}");
+                    }
+                } elseif ($strategy === 'batch') {
+                    // ✅ Check batch quantity_remaining
+                    $available = PurchaseReceiptItem::query()
+                        ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+                        ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+                        ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+                        ->where('purchase_orders.tenant_id', $product->tenant_id)
+                        ->where('purchase_order_items.product_variant_id', $ingredientVariant->id)
+                        ->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                        ->sum('purchase_receipt_items.quantity_remaining');
+                        
+                    if ($available < $requiredQuantity) {
+                        throw new \Exception("Insufficient batch stock for ingredient '{$ingredientVariant->name}'. Available: {$available}, Required: {$requiredQuantity}");
+                    }
+                } elseif ($strategy === 'serial') {
+                    $available = SerialNumber::where('variant_id', $ingredientVariant->id)
+                        ->where('status', 'available')
+                        ->where('tenant_id', $product->tenant_id)
+                        ->count();
+                        
+                    if ($available < $requiredQuantity) {
+                        throw new \Exception("Insufficient serial numbers for ingredient '{$ingredientVariant->name}'. Available: {$available}, Required: {$requiredQuantity}");
+                    }
+                }
+            } else {
+                // MULTI SHOP: Check inventory_items table
+                $inventory = InventoryItems::where('variant_id', $ingredientVariant->id)
+                    ->where('tenant_id', $product->tenant_id)
+                    ->first();
+
+                if (!$inventory) {
+                    throw new \Exception("No inventory allocation found for ingredient '{$ingredientVariant->name}'");
+                }
+
+                if ($inventory->quantity_allocated < $requiredQuantity) {
+                    throw new \Exception("Insufficient stock for ingredient '{$ingredientVariant->name}'. Available: {$inventory->quantity_allocated}, Required: {$requiredQuantity}");
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if an ingredient/variant has enough stock (for non-recipe items)
+     */
+    private function checkIngredientStock($variant, $requiredQuantity, $tenantId)
+    {
+        $product = $variant->product;
+        if (!$product) {
+            throw new \Exception("Product not found for variant '{$variant->name}'");
+        }
+
+        $strategy = $product->resolvedInventoryStrategy();
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        // \Log::info('checkIngredientStock called', [
+        //     'variant_id' => $variant->id,
+        //     'variant_name' => $variant->name,
+        //     'strategy' => $strategy,
+        //     'required_quantity' => $requiredQuantity,
+        //     'is_single_shop' => $isSingleShop
+        // ]);
+
+        if ($strategy === 'recipe') {
+            throw new \Exception("Nested recipes are not allowed. '{$variant->name}' is a recipe product.");
+        }
+
+        // ✅ FOR BATCH PRODUCTS - Check batches regardless of single or multi shop
+        if ($strategy === 'batch') {
+            // Get ALL batches with their quantities for this variant
+            $batches = PurchaseReceiptItem::query()
+                ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+                ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+                ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+                ->where('purchase_orders.tenant_id', $tenantId)
+                ->where('purchase_order_items.product_variant_id', $variant->id)
+                ->where(function($q) {
+                    $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                    ->orWhereNull('purchase_receipt_items.quantity_remaining');
+                })
+                ->select('purchase_receipt_items.*')
+                ->get();
+
+            $totalAvailable = $batches->sum(function($batch) {
+                return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+            });
+
+            // \Log::info('Batch strategy stock check', [
+            //     'variant' => $variant->name,
+            //     'total_available' => $totalAvailable,
+            //     'required' => $requiredQuantity,
+            //     'batches_count' => $batches->count(),
+            //     'batches' => $batches->map(function($batch) {
+            //         return [
+            //             'id' => $batch->id,
+            //             'batch_number' => $batch->batch_number,
+            //             'quantity_remaining' => $batch->quantity_remaining,
+            //             'quantity_received' => $batch->quantity_received,
+            //             'effective' => $batch->quantity_remaining ?? $batch->quantity_received,
+            //             'location_id' => $batch->location_id,
+            //             'department_id' => $batch->department_id,
+            //         ];
+            //     })->toArray()
+            // ]);
+
+            if ($totalAvailable < $requiredQuantity) {
+                throw new \Exception("Insufficient batch stock for {$variant->name}. Available: {$totalAvailable}, Required: {$requiredQuantity}");
+            }
+            
+            return true;
+        }
+
+        // ✅ FOR QUANTITY PRODUCTS
+        if ($isSingleShop) {
+            // SINGLE SHOP - Check overal_quantity_at_hand
+            $available = $variant->overal_quantity_at_hand ?? 0;
+            // \Log::info('Single shop quantity stock check', [
+            //     'variant' => $variant->name,
+            //     'overal_quantity_at_hand' => $available,
+            //     'required' => $requiredQuantity
+            // ]);
+            if ($available < $requiredQuantity) {
+                throw new \Exception("Insufficient stock for {$variant->name}. Available: {$available}, Required: {$requiredQuantity}");
+            }
+        } else {
+            // MULTI SHOP - Check inventory_items
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if (!$inventory) {
+                throw new \Exception("No inventory allocation found for {$variant->name}");
+            }
+
+            // \Log::info('Multi-shop quantity stock check', [
+            //     'variant' => $variant->name,
+            //     'inventory_id' => $inventory->id,
+            //     'available' => $inventory->quantity_allocated,
+            //     'required' => $requiredQuantity
+            // ]);
+
+            if ($inventory->quantity_allocated < $requiredQuantity) {
+                throw new \Exception("Insufficient stock for {$variant->name}. Available: {$inventory->quantity_allocated}, Required: {$requiredQuantity}");
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Log a batch depletion event
+     */
+    private function logBatchDepletion($batch, $variant, $item, $order, $quantityDeducted)
+    {
+        $beforeQty = ($batch->quantity_remaining ?? $batch->quantity_received ?? 0) + $quantityDeducted;
+        $afterQty = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+        
+        BatchLog::create([
+            'batch_id' => $batch->id,
+            'batch_number' => $batch->batch_number,
+            'variant_id' => $variant->id,
+            'variant_name' => $variant->name,
+            'variant_sku' => $variant->sku,
+            'type' => BatchLog::TYPE_DEPLETED,
+            'quantity_change' => -$quantityDeducted,
+            'quantity_before' => $beforeQty,
+            'quantity_after' => $afterQty,
+            'unit_cost' => $batch->unit_cost ?? 0,
+            'total_cost' => ($batch->unit_cost ?? 0) * $quantityDeducted,
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'tenant_id' => $order->tenant_id,
+            'location_id' => $batch->location_id ?? $order->location_id,
+            'department_id' => $batch->department_id ?? $order->department_id,
+            'expiry_date' => $batch->expiry_date,
+            'event_date' => now(),
+            'performed_by' => auth()->id(),
+            'metadata' => [
+                'item_name' => $item->name ?? $variant->name,
+                'customer_name' => $order->customer_name,
+                'unit_price' => $item->price ?? 0,
+            ],
+        ]);
+    }
+
+    private function depleteSingleSerial($variant, $item, $order)
+    {
+        // ✅ Get serial_id from the order item
+        $serialId = $item->serial_id ?? null;
+        $serialNumber = $item->serial_number ?? null;
+        
+        if ($serialId) {
+            // ✅ Deplete SPECIFIC serial
+            $serial = SerialNumber::where('id', $serialId)
+                ->where('variant_id', $variant->id)
+                ->where('status', SerialNumber::STATUS_AVAILABLE)
+                ->where('tenant_id', $order->tenant_id)
+                ->first();
+                
+            if (!$serial) {
+                throw new \Exception("Serial number not found or already sold");
+            }
+            
+            // ✅ Mark as SOLD
+            $serial->update([
+                'status' => SerialNumber::STATUS_SOLD,
+                'order_id' => $order->id,
+                'sold_at' => now(),
+                'sold_by' => auth()->id(),
+            ]);
+            
+            // Log the sale
+            \Log::info('Serial sold', [
+                'serial_id' => $serial->id,
+                'serial_number' => $serial->serial_number,
+                'order_id' => $order->id,
+                'variant_id' => $variant->id,
+            ]);
+            
+        } else {
+            // Fallback: FIFO - get first available serial
+            $serial = SerialNumber::where('variant_id', $variant->id)
+                ->where('status', SerialNumber::STATUS_AVAILABLE)
+                ->where('tenant_id', $order->tenant_id)
+                ->first();
+                
+            if (!$serial) {
+                throw new \Exception("No available serial numbers for {$variant->name}");
+            }
+            
+            $serial->update([
+                'status' => SerialNumber::STATUS_SOLD,
+                'order_id' => $order->id,
+                'sold_at' => now(),
+                'sold_by' => auth()->id(),
             ]);
         }
 
-        $validated = $request->validate([
-            'status' => 'required', 
-        ]);
-        
-        $order = Order::where('id', $id)
-                    ->where('tenant_id', $tenantId)
-                    ->first();
-
-        if (!$order) {
-            return response()->json([
-                'success' => false,
-                'message' => __('auth._not_found'),
-            ], 404);
-        }
-
-        // Check if status is already cancelled
-        if ($order->status === 'cancelled') {
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.already_cancelled'),
-            ], 400);
-        }
-        
-        // Validate that the requested status is cancelled
-        if ($validated['status'] !== 'cancelled') {
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.invalid_status_transition'),
-            ], 400);
-        }
-
-        DB::beginTransaction();
-        try {
-            // Update purchase order status
-            $order->status = $validated['status'];
-            $order->created_by = auth()->id();
-            
-            if ($order->save()) {  
-                DB::commit();
-
-                // Return JSON success - don't redirect here
-                return response()->json([
-                    'success' => true,
-                    'message' => __('passwords.cancel_success'),
-                    'redirect' => route('orders.index') // Optional: send redirect URL if needed
-                ]);
-            }
-
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.status_update_failed'),
-            ], 500);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.error_occurred') . $e->getMessage(),
-            ], 500);
-        }
+        // Update overall quantity
+        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - 1);
+        $variant->save();
     }
-
-
-
-    
 
 }
 

@@ -126,6 +126,58 @@ class ProductVariant extends Model
         $this->attributes['discount_selling_price'] = to_base_currency($value);
     }
 
+
+
+    /**
+     * Get the batches for this variant
+     * Relationship path: ProductVariant -> PurchaseOrderItem -> PurchaseReceiptItem
+     */
+    public function batches()
+    {
+        return $this->hasManyThrough(
+            PurchaseReceiptItem::class,        // Final model we want
+            PurchaseOrderItem::class,          // Intermediate model
+            'product_variant_id',              // Foreign key on purchase_order_items (matches ProductVariant.id)
+            'purchase_order_item_id',          // Foreign key on purchase_receipt_items (matches PurchaseOrderItem.id)
+            'id',                              // Local key on ProductVariant
+            'id'                               // Local key on PurchaseOrderItem
+        )
+        ->where(function($q) {
+            $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+            ->orWhereNull('purchase_receipt_items.quantity_remaining');
+        })
+        ->orderBy('purchase_receipt_items.expiry_date', 'asc');
+    }
+
+    /**
+     * Get available batches filtered by location and department
+     */
+    public function getAvailableBatches($locationId = null, $departmentId = null)
+    {
+        $query = $this->batches();
+        
+        if ($locationId) {
+            $query->where('purchase_receipt_items.location_id', $locationId);
+        }
+        if ($departmentId) {
+            $query->where('purchase_receipt_items.department_id', $departmentId);
+        }
+        
+        return $query->get();
+    }
+
+    /**
+     * Get total available quantity across all batches
+     */
+    public function getTotalBatchQuantity($locationId = null, $departmentId = null)
+    {
+        return $this->getAvailableBatches($locationId, $departmentId)
+            ->sum(function($batch) {
+                return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+            });
+    }
+
+
     // ─── Business Logic ──────────────────────────────────────
 
     /**
@@ -340,4 +392,44 @@ class ProductVariant extends Model
     {
         return $query->where('is_active', true);
     }
+
+    
+
+    /**
+     * Get the serial numbers for this variant
+     */
+    public function serialNumbers()
+    {
+        return $this->hasMany(SerialNumber::class, 'variant_id'); // ✅ Explicit foreign key
+    }
+
+    /**
+     * Get available serial numbers
+     */
+    public function getAvailableSerialNumbers($locationId = null, $departmentId = null)
+    {
+        $query = $this->serialNumbers()
+            ->where('status', SerialNumber::STATUS_AVAILABLE)
+            ->where('tenant_id', $this->tenant_id);
+        
+        if ($locationId) {
+            $query->where('location_id', $locationId);
+        }
+        if ($departmentId) {
+            $query->where('department_id', $departmentId);
+        }
+        
+        return $query->get();
+    }
+
+    /**
+     * Get count of available serial numbers
+     */
+    public function getAvailableSerialCount($locationId = null, $departmentId = null)
+    {
+        return $this->getAvailableSerialNumbers($locationId, $departmentId)->count();
+    }
+
+
+
 }

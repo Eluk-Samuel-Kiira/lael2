@@ -98,14 +98,30 @@ function getCartTbody() {
     return document.getElementById('pos-cart-tbody');
 }
 
-// ✅ Generate unique cart item key based on shop mode
-function getCartItemKey(variantId, departmentId, inventoryId) {
+// ============================================================
+// GET CART ITEM KEY - Unique per item including batch and serial
+// ============================================================
+function getCartItemKey(variantId, departmentId, inventoryId, batchId = null, serialId = null) {
+    const variantIdStr = String(variantId || '');
+    
+    // ✅ CHECK SERIAL FIRST - This is the most specific
+    if (serialId) {
+        return variantIdStr + '_serial_' + String(serialId);
+    }
+    
+    // ✅ CHECK BATCH SECOND
+    if (batchId) {
+        return variantIdStr + '_batch_' + String(batchId);
+    }
+    
+    // ✅ QUANTITY PRODUCTS - Least specific
+    const deptStr = String(departmentId || '');
+    const invStr = String(inventoryId || '');
+    
     if (!window.userData.isSingleShop) {
-        // Multi-shop: use variant_id + department_id + inventory_id
-        return variantId + '_' + departmentId + '_' + inventoryId;
+        return variantIdStr + '_' + deptStr + '_' + invStr;
     } else {
-        // Single shop: use only variant_id
-        return variantId;
+        return variantIdStr;
     }
 }
 
@@ -143,22 +159,184 @@ function showDepartmentWarning() {
 }
 
 
+// ============================================================
+// BATCH SELECTION FUNCTIONS
+// ============================================================
+let pendingBatchProduct = null;
+
+function showBatchSelectionModal(variantId, variantName, batches, productData) {
+    pendingBatchProduct = productData;
+    document.getElementById('batchVariantName').textContent = variantName;
+    
+    const body = document.getElementById('batchSelectionBody');
+    body.innerHTML = batches.map(batch => `
+        <div class="batch-option card card-dashed mb-3 p-3" 
+            style="cursor: pointer;"
+            onclick="selectBatch(${batch.id}, ${batch.quantity_remaining}, '${batch.batch_number}')">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-bold">${batch.batch_number}</span>
+                    <br>
+                    <small class="text-muted">${batch.expiry_date ? 'Expires: ' + batch.expiry_date : 'No expiry'}</small>
+                </div>
+                <div>
+                    <span class="badge badge-light-primary fs-6">
+                        ${batch.quantity_remaining} available
+                    </span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    new bootstrap.Modal(document.getElementById('batchSelectionModal')).show();
+}
+
+function selectBatch(batchId, batchQuantity, batchNumber) {
+    if (!pendingBatchProduct) return;
+    
+    // ✅ Create unique cart key WITH batch_id for batch products
+    const itemKey = getCartItemKey(
+        pendingBatchProduct.id, 
+        pendingBatchProduct.department_id, 
+        pendingBatchProduct.inventory_id
+    ) + '_' + batchId;  // ✅ Include batch_id in key
+    
+    // Check if this specific batch is already in cart
+    const existingItem = cart.find(i => i.cartKey === itemKey);
+    if (existingItem && existingItem.quantity >= batchQuantity) {
+        toastr.warning('Maximum quantity for this batch reached');
+        return;
+    }
+    
+    addToCart({
+        id: pendingBatchProduct.id,
+        name: pendingBatchProduct.name,
+        price: pendingBatchProduct.price,
+        image: pendingBatchProduct.image,
+        quantity_available: batchQuantity,
+        taxes: pendingBatchProduct.taxes,
+        promotions: pendingBatchProduct.promotions,
+        inventory_id: pendingBatchProduct.inventory_id,
+        department_id: pendingBatchProduct.department_id,
+        strategy: 'batch',
+        is_recipe: false,
+        batch_id: batchId,
+        batch_number: batchNumber
+    });
+    
+    pendingBatchProduct = null;
+    bootstrap.Modal.getInstance(document.getElementById('batchSelectionModal')).hide();
+}
+
+// ============================================================
+// GET CART ITEM KEY - Unique per item including batch
+// ============================================================
+function getCartItemKey(variantId, departmentId, inventoryId, batchId = null, serialId = null) {
+    const variantIdStr = String(variantId || '');
+    const deptStr = String(departmentId || '');
+    const invStr = String(inventoryId || '');
+    
+    // ✅ CHECK SERIAL FIRST - This is the most specific
+    if (serialId) {
+        const serialIdStr = String(serialId);
+        // ✅ Ensure we include ALL parts to make it truly unique
+        return variantIdStr + '_' + deptStr + '_' + invStr + '_serial_' + serialIdStr;
+    }
+    
+    // ✅ CHECK BATCH SECOND
+    if (batchId) {
+        const batchIdStr = String(batchId);
+        return variantIdStr + '_' + deptStr + '_' + invStr + '_batch_' + batchIdStr;
+    }
+    
+    // ✅ QUANTITY PRODUCTS - Least specific
+    if (!window.userData.isSingleShop) {
+        return variantIdStr + '_' + deptStr + '_' + invStr;
+    } else {
+        return variantIdStr;
+    }
+}
+
+
 function addToCart(variant) {
-    // ✅ Check stock availability
-    if (variant.quantity_available <= 0) {
+    // ✅ For recipe products, always allow adding
+    if (!variant.is_recipe && variant.quantity_available <= 0) {
         toastr['error']('{{ __("pagination.out_of_stock") }}');
         return;
     }
     
-    // ✅ Generate unique key based on shop mode
-    const itemKey = getCartItemKey(variant.id, variant.department_id, variant.inventory_id);
+    // ✅ CRITICAL: If this is a serial product, we MUST have a unique cartKey
+    let itemKey = variant.cartKey;
     
-    // ✅ Find item by composite key
+    // If no cartKey provided, generate one
+    if (!itemKey) {
+        // For serial products, generate a unique key with serial_id
+        if (variant.strategy === 'serial' && variant.serial_id) {
+            const variantIdStr = String(variant.id || '');
+            const deptStr = String(variant.department_id || '');
+            const invStr = String(variant.inventory_id || '');
+            const serialIdStr = String(variant.serial_id);
+            itemKey = variantIdStr + '_' + deptStr + '_' + invStr + '_serial_' + serialIdStr;
+        } else {
+            // For other products, use the standard key generation
+            itemKey = getCartItemKey(
+                variant.id, 
+                variant.department_id, 
+                variant.inventory_id,
+                variant.batch_id || null,
+                variant.serial_id || null
+            );
+        }
+    }
+    
+    // console.log('🛒 addToCart - final itemKey:', itemKey);
+    // console.log('🛒 addToCart - variant data:', {
+    //     id: variant.id,
+    //     strategy: variant.strategy,
+    //     serial_id: variant.serial_id,
+    //     serial_number: variant.serial_number,
+    //     cartKey: variant.cartKey
+    // });
+    
+    // ✅ Check if this item is already in cart using the unique key
     const idx = cart.findIndex(i => i.cartKey === itemKey);
     
+    // ✅ For serial products, if it's already in cart, prevent adding
+    if (variant.strategy === 'serial' && idx > -1) {
+        toastr['warning']('This serial number is already in the cart');
+        return;
+    }
+    
+    // ✅ Include all relevant data in cart item
+    const cartItem = {
+        id: variant.id,
+        cartKey: itemKey,
+        name: variant.name,
+        price: variant.price,
+        image: variant.image || '/images/default-product.png',
+        quantity: 1,
+        quantity_available: variant.quantity_available,
+        taxes: variant.taxes || [],
+        promotions: variant.promotions || [],
+        inventory_id: variant.inventory_id || null,
+        department_id: variant.department_id || null,
+        strategy: variant.strategy || 'quantity',
+        is_recipe: variant.is_recipe || false,
+        batch_id: variant.batch_id || null,
+        batch_number: variant.batch_number || null,
+        serial_id: variant.serial_id || null,
+        serial_number: variant.serial_number || null
+    };
+    
     if (idx > -1) {
-        // ✅ Check if adding one more would exceed available quantity
-        if (cart[idx].quantity < variant.quantity_available) {
+        // ✅ For serial products, this shouldn't happen (we already returned)
+        // For batch or quantity, increment quantity
+        if (variant.strategy === 'serial') {
+            toastr['warning']('This serial number is already in the cart');
+            return;
+        }
+        
+        if (cart[idx].quantity < cart[idx].quantity_available || cart[idx].is_recipe) {
             cart[idx].quantity += 1;
             updateCartItem(idx);
             toastr['success']('{{ __("pagination.item_added") }}');
@@ -166,117 +344,17 @@ function addToCart(variant) {
             toastr['warning']('{{ __("pagination.max_quantity_reached") }}');
         }
     } else {
-        // ✅ Only add if quantity_available > 0
-        if (variant.quantity_available > 0) {
-            const cartItem = {
-                id: variant.id,
-                cartKey: itemKey,
-                name: variant.name,
-                price: variant.price,
-                image: variant.image,
-                quantity: 1,
-                quantity_available: variant.quantity_available,
-                taxes: variant.taxes || [],
-                promotions: variant.promotions || [],
-                inventory_id: variant.inventory_id || null,
-                department_id: variant.department_id || null
-            };
-            cart.push(cartItem);
-            renderCartItem(cartItem);
-            toastr['success']('{{ __("pagination.item_added") }}');
-        } else {
-            toastr['error']('{{ __("pagination.out_of_stock") }}');
-        }
+        cart.push(cartItem);
+        renderCartItem(cartItem);
+        toastr['success']('{{ __("pagination.item_added") }}');
     }
 }
 
 
-// ✅ KEEP THIS - It properly checks quantity before adding
-function handleVariantClick(el) {
-    @if(!$isSingleShop)
-        if (!isDepartmentSelected()) {
-            showDepartmentWarning();
-            return;
-        }
-    @endif
 
-    const variantId = parseInt(el.dataset.variantId);
-    const name = el.dataset.name;
-    const price = parseFloat(el.dataset.price);
-    const image = el.dataset.image;
-    const taxes = JSON.parse(el.dataset.taxes || '[]');
-    const promotions = JSON.parse(el.dataset.promotions || '[]');
-    
-    let quantityAvailable = 0;
-    let inventoryId = null;
-    let departmentId = null;
-
-    @if(!$isSingleShop)
-        const selectedDept = document.getElementById('departmentFilter').value;
-        const inventoryData = JSON.parse(el.dataset.inventory || '{}');
-        
-        // console.log('Selected Department:', selectedDept);
-        // console.log('Inventory Data:', inventoryData);
-        // console.log('Available departments:', Object.keys(inventoryData));
-        
-        if (inventoryData[selectedDept]) {
-            quantityAvailable = inventoryData[selectedDept].quantity || 0;
-            inventoryId = inventoryData[selectedDept].inventory_id;
-            departmentId = parseInt(selectedDept);
-            // console.log('Quantity found:', quantityAvailable);
-        } else {
-            // ✅ Check if inventoryData has the department as string or number
-            const deptKeys = Object.keys(inventoryData);
-            const foundKey = deptKeys.find(key => parseInt(key) === parseInt(selectedDept));
-            if (foundKey !== undefined) {
-                quantityAvailable = inventoryData[foundKey].quantity || 0;
-                inventoryId = inventoryData[foundKey].inventory_id;
-                departmentId = parseInt(selectedDept);
-                // console.log('Quantity found via string conversion:', quantityAvailable);
-            } else {
-                toastr.warning('This item is not available in the selected department');
-                return;
-            }
-        }
-    @else
-        // ✅ For single shop, get quantity from the displayed text
-        const qtySpan = el.querySelector('.variant-qty');
-        if (qtySpan) {
-            const qtyText = qtySpan.textContent.trim();
-            const qtyMatch = qtyText.match(/(\d+)/);
-            quantityAvailable = qtyMatch ? parseInt(qtyMatch[1]) : 0;
-        }
-        // console.log('Single shop quantity:', quantityAvailable);
-    @endif
-
-    // ✅ Check if quantity is available BEFORE adding to cart
-    if (quantityAvailable <= 0) {
-        toastr.error('{{ __("pagination.out_of_stock") }}');
-        // console.log('Out of stock! quantityAvailable:', quantityAvailable);
-        return;
-    }
-
-    // ✅ Check if item is already in cart at max quantity
-    const itemKey = getCartItemKey(variantId, departmentId, inventoryId);
-    const existingItem = cart.find(i => i.cartKey === itemKey);
-    if (existingItem && existingItem.quantity >= quantityAvailable) {
-        toastr.warning('{{ __("pagination.max_quantity_reached") }}');
-        return;
-    }
-
-    addToCart({
-        id: variantId,
-        name: name,
-        price: price,
-        image: image,
-        quantity_available: quantityAvailable,
-        taxes: taxes,
-        promotions: promotions,
-        inventory_id: inventoryId,
-        department_id: departmentId
-    });
-}
-
+// ============================================================
+// RENDER CART ITEM - Show batch number for batch products
+// ============================================================
 function renderCartItem(item) {
     const cartTbody = getCartTbody();
     if (!cartTbody) { console.error('[POS] #pos-cart-tbody not found'); return; }
@@ -286,28 +364,50 @@ function renderCartItem(item) {
     newRow.setAttribute('data-cart-key', item.cartKey);
     newRow.setAttribute('data-inventory-id', item.inventory_id || '');
     newRow.setAttribute('data-department-id', item.department_id || '');
+    newRow.setAttribute('data-strategy', item.strategy || 'quantity');
+    newRow.setAttribute('data-is-recipe', item.is_recipe ? 'true' : 'false');
+    newRow.setAttribute('data-batch-id', item.batch_id || '');
+    newRow.setAttribute('data-serial-id', item.serial_id || '');
+    
+    // ✅ Build display name with batch or serial info
+    let displayName = item.name;
+    if (item.strategy === 'batch' && item.batch_number) {
+        displayName = `${item.name} (${item.batch_number})`;
+    } else if (item.strategy === 'serial' && item.serial_number) {
+        // ✅ Show serial number clearly in the cart
+        displayName = `${item.name}`;
+        // The serial number is already in the name from selectSerial
+    }
+    
     newRow.innerHTML = `
         <td class="pe-0">
             <div class="d-flex align-items-center gap-3">
                 <img src="${item.image}" class="w-50px h-50px rounded-3 object-fit-cover border" alt="${item.name}" />
                 <div class="d-flex flex-column">
-                    <span class="fw-bold text-gray-800 text-hover-primary fs-6">${item.name}</span>
-                    @if(!$isSingleShop)
-                        {{-- ✅ HIDDEN: Department ID removed from cart display --}}
-                    @endif
+                    <span class="fw-bold text-gray-800 text-hover-primary fs-6">${displayName}</span>
+                    ${item.serial_number ? `<small class="text-muted">SN: ${item.serial_number}</small>` : ''}
+                    <div class="d-flex gap-1 mt-1">
+                        ${item.is_recipe ? `<span class="badge badge-success fs-8">${getStrategyLabel('recipe')}</span>` : ''}
+                        ${!item.is_recipe && item.strategy === 'batch' ? `<span class="badge badge-info fs-8">${getStrategyLabel('batch')}</span>` : ''}
+                        ${!item.is_recipe && item.strategy === 'serial' ? `<span class="badge badge-warning fs-8">${getStrategyLabel('serial')}</span>` : ''}
+                    </div>
                 </div>
             </div>
         </td>
         <td class="pe-0">
             <div class="d-flex align-items-center gap-1">
-                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="decreaseQuantity('${item.cartKey}')">
-                    <i class="ki-duotone ki-minus fs-4"></i>
-                </button>
-                <input type="text" class="form-control border-0 text-center px-0 fs-5 fw-bold text-gray-800 w-35px quantity-input"
-                       name="quantity_${item.cartKey}" value="${item.quantity}" onchange="updateQuantity('${item.cartKey}', this.value)" />
-                <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="increaseQuantity('${item.cartKey}')">
-                    <i class="ki-duotone ki-plus fs-4"></i>
-                </button>
+                ${item.strategy === 'serial' ? `
+                    <span class="fw-bold fs-5 text-center w-35px">1</span>
+                ` : `
+                    <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="decreaseQuantity('${item.cartKey}')">
+                        <i class="ki-duotone ki-minus fs-4"></i>
+                    </button>
+                    <input type="text" class="form-control border-0 text-center px-0 fs-5 fw-bold text-gray-800 w-35px quantity-input"
+                           name="quantity_${item.cartKey}" value="${item.quantity}" onchange="updateQuantity('${item.cartKey}', this.value)" />
+                    <button type="button" class="btn btn-icon btn-sm btn-light btn-icon-gray-500 w-30px h-30px" onclick="increaseQuantity('${item.cartKey}')">
+                        <i class="ki-duotone ki-plus fs-4"></i>
+                    </button>
+                `}
             </div>
         </td>
         <td class="text-end">
@@ -324,6 +424,309 @@ function renderCartItem(item) {
         </td>`;
     cartTbody.appendChild(newRow);
     updateItemExtraLines(item.cartKey);
+}
+
+
+
+// ============================================================
+// UPDATE HANDLE VARIANT CLICK - Fix for multiple batches and serials
+// ============================================================
+function handleVariantClick(el) {
+    @if(!$isSingleShop)
+        if (!isDepartmentSelected()) {
+            showDepartmentWarning();
+            return;
+        }
+    @endif
+
+    const variantId = parseInt(el.dataset.variantId);
+    const name = el.dataset.name;
+    const price = parseFloat(el.dataset.price);
+    const image = el.dataset.image;
+    const taxes = JSON.parse(el.dataset.taxes || '[]');
+    const promotions = JSON.parse(el.dataset.promotions || '[]');
+    const strategy = el.dataset.strategy || 'quantity';
+    const isRecipe = el.dataset.isRecipe === 'true';
+    const batches = JSON.parse(el.dataset.batches || '[]');
+    const serials = JSON.parse(el.dataset.serials || '[]');  
+    
+    let quantityAvailable = parseInt(el.dataset.quantityAvailable) || 0;
+    let inventoryId = null;
+    let departmentId = null;
+
+    @if(!$isSingleShop)
+        const selectedDept = document.getElementById('departmentFilter').value;
+        const inventoryData = JSON.parse(el.dataset.inventory || '{}');
+        
+        if (inventoryData[selectedDept]) {
+            if (strategy === 'batch') {
+                // quantityAvailable already set from batches
+            } else if (strategy === 'serial') {
+                // quantityAvailable already set from serials
+            } else {
+                quantityAvailable = inventoryData[selectedDept].quantity || 0;
+            }
+            inventoryId = inventoryData[selectedDept].inventory_id;
+            departmentId = parseInt(selectedDept);
+        } else {
+            const deptKeys = Object.keys(inventoryData);
+            const foundKey = deptKeys.find(key => parseInt(key) === parseInt(selectedDept));
+            if (foundKey !== undefined) {
+                if (strategy === 'batch' || strategy === 'serial') {
+                    // quantityAvailable already set from batches/serials
+                } else {
+                    quantityAvailable = inventoryData[foundKey].quantity || 0;
+                }
+                inventoryId = inventoryData[foundKey].inventory_id;
+                departmentId = parseInt(selectedDept);
+            } else {
+                toastr.warning('This item is not available in the selected department');
+                return;
+            }
+        }
+    @else
+        if (quantityAvailable === 0) {
+            const qtySpan = el.querySelector('.variant-qty');
+            if (qtySpan) {
+                const qtyText = qtySpan.textContent.trim();
+                const qtyMatch = qtyText.match(/(\d+)/);
+                quantityAvailable = qtyMatch ? parseInt(qtyMatch[1]) : 0;
+            }
+        }
+    @endif
+
+    // ✅ FOR SERIAL PRODUCTS: Show serial selection
+    if (strategy === 'serial') {
+        if (!serials || serials.length === 0) {
+            toastr.error('No serial numbers available for this product');
+            return;
+        }
+        
+        // ✅ Filter to ONLY available serials (not sold, not reserved)
+        const availableSerials = serials.filter(s => s.status === 'available');
+        if (availableSerials.length === 0) {
+            toastr.error('No available serial numbers for this product');
+            return;
+        }
+        
+        // console.log('📋 Available serials for modal:', availableSerials);
+        
+        // ✅ Show serial selection modal with available serials
+        showSerialSelectionModal(variantId, name, availableSerials, {
+            id: variantId,
+            name: name,
+            price: price,
+            image: image,
+            taxes: taxes,
+            promotions: promotions,
+            inventory_id: inventoryId,
+            department_id: departmentId,
+            strategy: strategy,
+            is_recipe: isRecipe
+        });
+        return;
+    }
+
+
+    // ✅ FOR BATCH PRODUCTS: Show batch selection
+    if (strategy === 'batch') {
+        if (!batches || batches.length === 0) {
+            toastr.error('No batches available for this product');
+            return;
+        }
+        
+        const totalBatchQty = batches.reduce((sum, b) => sum + b.quantity_remaining, 0);
+        if (totalBatchQty <= 0) {
+            toastr.error('No batches available for this product');
+            return;
+        }
+        
+        // ✅ If only one batch, use it directly
+        if (batches.length === 1) {
+            const batch = batches[0];
+            // ✅ Check if this specific batch is already in cart
+            const itemKey = getCartItemKey(variantId, departmentId, inventoryId, batch.id);
+            const existingItem = cart.find(i => i.cartKey === itemKey);
+            if (existingItem && existingItem.quantity >= batch.quantity_remaining) {
+                toastr.warning('Maximum quantity for this batch reached');
+                return;
+            }
+            
+            addToCart({
+                id: variantId,
+                name: name,
+                price: price,
+                image: image,
+                quantity_available: batch.quantity_remaining,
+                taxes: taxes,
+                promotions: promotions,
+                inventory_id: inventoryId,
+                department_id: departmentId,
+                strategy: strategy,
+                is_recipe: isRecipe,
+                batch_id: batch.id,
+                batch_number: batch.batch_number
+            });
+            return;
+        }
+        
+        // ✅ Show batch selection modal for multiple batches
+        showBatchSelectionModal(variantId, name, batches, {
+            id: variantId,
+            name: name,
+            price: price,
+            image: image,
+            taxes: taxes,
+            promotions: promotions,
+            inventory_id: inventoryId,
+            department_id: departmentId,
+            strategy: strategy,
+            is_recipe: isRecipe
+        });
+        return;
+    }
+
+    // ✅ For recipe products
+    if (isRecipe) {
+        toastr.info('{{ __("passwords.recipe_product_info") }}');
+        quantityAvailable = 9999;
+    }
+
+    // ✅ Check quantity for non-recipe products
+    if (!isRecipe && quantityAvailable <= 0) {
+        toastr.error('{{ __("pagination.out_of_stock") }}');
+        return;
+    }
+
+    // ✅ Check if item is already in cart
+    // ✅ NOTE: For non-serial items, serial_id is null, so getCartItemKey works correctly
+    const itemKey = getCartItemKey(variantId, departmentId, inventoryId, null, null);
+    const existingItem = cart.find(i => i.cartKey === itemKey);
+    if (existingItem && existingItem.quantity >= quantityAvailable) {
+        toastr.warning('{{ __("pagination.max_quantity_reached") }}');
+        return;
+    }
+
+    addToCart({
+        id: variantId,
+        name: name,
+        price: price,
+        image: image,
+        quantity_available: quantityAvailable,
+        taxes: taxes,
+        promotions: promotions,
+        inventory_id: inventoryId,
+        department_id: departmentId,
+        strategy: strategy,
+        is_recipe: isRecipe,
+        batch_id: null,
+        batch_number: null,
+        serial_id: null,
+        serial_number: null
+    });
+}
+
+// ============================================================
+// SERIAL SELECTION FUNCTIONS
+// ============================================================
+let pendingSerialProduct = null;
+
+function showSerialSelectionModal(variantId, variantName, serials, productData) {
+    pendingSerialProduct = productData;
+    document.getElementById('serialVariantName').textContent = variantName;
+    
+    const body = document.getElementById('serialSelectionBody');
+    body.innerHTML = serials.map(serial => `
+        <div class="serial-option card card-dashed mb-3 p-3" 
+            style="cursor: pointer; border-left: 4px solid #009ef7;"
+            onclick="selectSerial(${serial.id}, '${serial.serial_number}')">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-bold">${serial.serial_number}</span>
+                    <br>
+                    <small class="text-muted">
+                        ${serial.location_name !== 'N/A' ? '📍 ' + serial.location_name : ''}
+                        ${serial.department_name !== 'N/A' ? ' | 🏢 ' + serial.department_name : ''}
+                    </small>
+                </div>
+                <div>
+                    <span class="badge badge-light-success fs-6">
+                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                        Available
+                    </span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    new bootstrap.Modal(document.getElementById('serialSelectionModal')).show();
+}
+
+function selectSerial(serialId, serialNumber) {
+    if (!pendingSerialProduct) return;
+    
+    // ✅ IMPORTANT: Convert to string to ensure consistent comparison
+    const serialIdStr = String(serialId);
+    const variantIdStr = String(pendingSerialProduct.id);
+    
+    // ✅ Generate UNIQUE key for this serial
+    // Include ALL parts to make it truly unique
+    const itemKey = variantIdStr + '_' + 
+                   (pendingSerialProduct.department_id || '') + '_' + 
+                   (pendingSerialProduct.inventory_id || '') + '_serial_' + 
+                   serialIdStr;
+    
+    // console.log('🔑 Generated serial key:', itemKey);
+    // console.log('📦 Serial data:', {
+    //     serialId: serialIdStr,
+    //     variantId: variantIdStr,
+    //     department: pendingSerialProduct.department_id,
+    //     inventory: pendingSerialProduct.inventory_id,
+    //     serialNumber: serialNumber
+    // });
+    
+    // Check if this serial is already in cart
+    const existingItem = cart.find(i => i.cartKey === itemKey);
+    if (existingItem) {
+        toastr.warning('This serial number is already in the cart');
+        return;
+    }
+    
+    // ✅ Create the variant data with ALL required fields
+    const variantData = {
+        id: pendingSerialProduct.id,
+        name: pendingSerialProduct.name + ' (SN: ' + serialNumber + ')',
+        price: pendingSerialProduct.price,
+        image: pendingSerialProduct.image,
+        quantity_available: 1,
+        taxes: pendingSerialProduct.taxes || [],
+        promotions: pendingSerialProduct.promotions || [],
+        inventory_id: pendingSerialProduct.inventory_id,
+        department_id: pendingSerialProduct.department_id,
+        strategy: 'serial',
+        is_recipe: false,
+        batch_id: null,
+        batch_number: null,
+        serial_id: serialIdStr,      // ✅ MUST be set as string
+        serial_number: serialNumber,
+        cartKey: itemKey              // ✅ MUST be set
+    };
+    
+    // console.log('📤 Calling addToCart with:', variantData);
+    addToCart(variantData);
+    
+    pendingSerialProduct = null;
+    bootstrap.Modal.getInstance(document.getElementById('serialSelectionModal')).hide();
+}
+
+function getStrategyLabel(strategy) {
+    const labels = {
+        'quantity': '{{ __("passwords.quantity_tracking") }}',
+        'batch': '{{ __("passwords.batch_tracking") }}',
+        'serial': '{{ __("passwords.serial_tracking") }}',
+        'recipe': '{{ __("passwords.recipe_product") }}'
+    };
+    return labels[strategy] || strategy;
 }
 
 function updateItemExtraLines(cartKey) {
@@ -531,9 +934,12 @@ function processPayment() {
                 discount: discountTotal, 
                 promotions: appliedPromotions,
                 total: itemSubtotal - discountTotal + itemTaxTotal,
-                // ✅ Include inventory_id and department_id
                 inventory_id: item.inventory_id || null,
-                department_id: item.department_id || null
+                department_id: item.department_id || null,
+                batch_id: item.batch_id || null,     
+                batch_number: item.batch_number || null, 
+                serial_id: item.serial_id || null,
+                serial_number: item.serial_number || null
             };
         }),
         customer: customerData,
@@ -641,9 +1047,10 @@ function generateInvoice() {
                 discount: discountTotal, 
                 promotions: appliedPromotions,
                 total: itemSubtotal - discountTotal + itemTaxTotal,
-                // ✅ Include inventory_id and department_id
                 inventory_id: item.inventory_id || null,
-                department_id: item.department_id || null
+                department_id: item.department_id || null,
+                batch_id: item.batch_id || null,     
+                batch_number: item.batch_number || null,
             };
         }),
         customer: customerData,

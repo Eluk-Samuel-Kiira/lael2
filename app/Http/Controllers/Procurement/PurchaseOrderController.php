@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\{ Supplier, PurchaseOrder, ProductVariant, PurchaseOrderItem, InventoryItems, PaymentMethod,
         PurchaseReceipt, InventoryTransactions, InventoryAdjustment, PurchaseReceiptItem, SingleShopInventoryLog,
-        Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant, Tenant };
+        Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant, Tenant, BatchLog };
 use Illuminate\Support\Facades\{ Auth, DB };
 use Illuminate\Support\Str;
 
@@ -997,6 +997,19 @@ class PurchaseOrderController extends Controller
                         'expiry_date' => $validated['expiry_date'] ?? null,
                     ]);
 
+                    // ✅ Log batch receipt for batch-strategy items
+                    if ($strategy === 'batch' && $quantityReceived > 0) {
+                        $this->logBatchReceipt(
+                            $receiptItem,        // batchItem
+                            $variant,            // variant
+                            $purchaseOrder,      // purchaseOrder
+                            $purchaseReceipt,    // purchaseReceipt
+                            $quantityReceived,   // ✅ quantityReceived (the integer)
+                            $user,               // user
+                            $tenantId            // tenantId
+                        );
+                    }
+
                     // Log received product variant — always recorded for audit,
                     // regardless of strategy. Metadata notes which strategy
                     // applied so the trail is self-explanatory later.
@@ -1218,6 +1231,77 @@ class PurchaseOrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.receiving_error') . ': ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+    * Log a batch receipt event
+    */
+    private function logBatchReceipt($batchItem, $variant, $purchaseOrder, $purchaseReceipt, $quantityReceived, $user, $tenantId)
+    {
+        try {
+            // Ensure quantityReceived is a number
+            $quantityReceived = (int) $quantityReceived;
+            
+            if ($quantityReceived <= 0) {
+                \Log::warning('[Batch Receipt] Skipped - quantity is zero or negative', [
+                    'batch_id' => $batchItem->id ?? null,
+                    'quantity' => $quantityReceived
+                ]);
+                return; // Don't log zero or negative quantities
+            }
+
+            // Get unit cost from batch item
+            $unitCost = (float) ($batchItem->unit_cost ?? 0);
+            $totalCost = $unitCost * $quantityReceived;
+
+            // Ensure we have a valid batch number
+            $batchNumber = $batchItem->batch_number ?? 'BATCH-' . $batchItem->id;
+
+            BatchLog::create([
+                'batch_id' => $batchItem->id,
+                'batch_number' => $batchNumber,
+                'variant_id' => $variant->id,
+                'variant_name' => $variant->name,
+                'variant_sku' => $variant->sku,
+                'type' => BatchLog::TYPE_RECEIVED,
+                'quantity_change' => $quantityReceived,
+                'quantity_before' => 0,
+                'quantity_after' => $quantityReceived,
+                'unit_cost' => $unitCost,
+                'total_cost' => $totalCost,
+                'purchase_order_id' => $purchaseOrder->id,
+                'purchase_order_number' => $purchaseOrder->po_number,
+                'purchase_receipt_id' => $purchaseReceipt->id,
+                'supplier_id' => $purchaseOrder->supplier_id,
+                'supplier_name' => $purchaseOrder->supplier ? $purchaseOrder->supplier->name : null,
+                'tenant_id' => $tenantId,
+                'expiry_date' => $batchItem->expiry_date,
+                'event_date' => now(),
+                'performed_by' => $user->id,
+                'metadata' => [
+                    'location_id' => $purchaseOrder->location_id,
+                    'department_id' => $purchaseOrder->department_id ?? null,
+                    'inventory_strategy' => 'batch',
+                    'receipt_notes' => $purchaseReceipt->notes,
+                ],
+            ]);
+
+            // \Log::info('[Batch Receipt] Logged successfully', [
+            //     'batch_id' => $batchItem->id,
+            //     'batch_number' => $batchNumber,
+            //     'quantity' => $quantityReceived,
+            //     'total_cost' => $totalCost,
+            //     'variant' => $variant->name
+            // ]);
+
+        } catch (\Exception $e) {
+            // Log error but don't break the receipt process
+            \Log::error('Failed to log batch receipt: ' . $e->getMessage(), [
+                'batch_id' => $batchItem->id ?? null,
+                'variant_id' => $variant->id ?? null,
+                'quantity_received' => $quantityReceived ?? null,
             ]);
         }
     }

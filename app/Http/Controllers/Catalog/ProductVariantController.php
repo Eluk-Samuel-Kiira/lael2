@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ProductVariant;
-use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredient };
+use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredient, SerialNumber };
 use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class ProductVariantController extends Controller
 {
@@ -1001,5 +1002,440 @@ class ProductVariantController extends Controller
                 ];
             });
     }
+
+    /**
+     * Get serial numbers for a variant
+     */
+    public function getSerials($variantId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $variantId)
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found'
+            ], 404);
+        }
+
+        // ✅ EAGER LOAD location and department with proper foreign keys
+        $serials = SerialNumber::with(['location', 'department'])
+            ->where('variant_id', $variantId)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // // ✅ DEBUG: Log location and department data
+        // \Log::info('Serial Data Debug', [
+        //     'total_serials' => $serials->count(),
+        //     'first_serial' => $serials->first() ? [
+        //         'id' => $serials->first()->id,
+        //         'serial_number' => $serials->first()->serial_number,
+        //         'location_id' => $serials->first()->location_id,
+        //         'location' => $serials->first()->location ? [
+        //             'id' => $serials->first()->location->id,
+        //             'name' => $serials->first()->location->name,
+        //         ] : null,
+        //         'department_id' => $serials->first()->department_id,
+        //         'department' => $serials->first()->department ? [
+        //             'id' => $serials->first()->department->id,
+        //             'name' => $serials->first()->department->name,
+        //         ] : null,
+        //     ] : null,
+        //     'all_serials' => $serials->map(function($serial) {
+        //         return [
+        //             'id' => $serial->id,
+        //             'serial_number' => $serial->serial_number,
+        //             'location_id' => $serial->location_id,
+        //             'location_name' => $serial->location ? $serial->location->name : 'N/A',
+        //             'department_id' => $serial->department_id,
+        //             'department_name' => $serial->department ? $serial->department->name : 'N/A',
+        //         ];
+        //     })->toArray()
+        // ]);
+
+        $summary = [
+            'total' => $serials->count(),
+            'available' => $serials->where('status', SerialNumber::STATUS_AVAILABLE)->count(),
+            'sold' => $serials->where('status', SerialNumber::STATUS_SOLD)->count(),
+            'reserved' => $serials->where('status', SerialNumber::STATUS_RESERVED)->count(),
+            'returned' => $serials->where('status', SerialNumber::STATUS_RETURNED)->count(),
+            'lost' => $serials->where('status', SerialNumber::STATUS_LOST)->count(),
+            'damaged' => $serials->where('status', SerialNumber::STATUS_DAMAGED)->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'variant' => [
+                    'id' => $variant->id,
+                    'name' => $variant->name,
+                    'sku' => $variant->sku,
+                ],
+                'serials' => $serials,
+                'summary' => $summary,
+            ]
+        ]);
+    }
+
+    /**
+     * Generate serial numbers
+     */
+    public function generateSerials(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'variant_id' => 'required|exists:product_variants,id',
+            'quantity' => 'required|integer|min:1|max:1000',
+            'prefix' => 'nullable|string|max:10',
+        ]);
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $validated['variant_id'])
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found'
+            ], 404);
+        }
+
+        $product = $variant->product;
+        if (!$product || $product->resolvedInventoryStrategy() !== 'serial') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This product does not use serial tracking strategy'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $generatedSerials = [];
+            $prefix = $validated['prefix'] ?? strtoupper(substr($variant->sku, 0, 4));
+
+            for ($i = 0; $i < $validated['quantity']; $i++) {
+                $serial = SerialNumber::create([
+                    'variant_id' => $variant->id,
+                    'tenant_id' => $tenantId,
+                    'serial_number' => SerialNumber::generateSerialNumber($variant->id, $prefix),
+                    'status' => SerialNumber::STATUS_AVAILABLE,
+                    'created_by' => $user->id,
+                ]);
+                $generatedSerials[] = $serial;
+            }
+
+            $variant->overal_quantity_at_hand = ($variant->overal_quantity_at_hand ?? 0) + $validated['quantity'];
+            $variant->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "{$validated['quantity']} serial number(s) generated successfully",
+                'reload' => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to generate serial numbers', [
+                'variant_id' => $validated['variant_id'],
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate serial numbers: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Import serial numbers
+     */
+    public function importSerials(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'variant_id' => 'required|exists:product_variants,id',
+            'serial_numbers' => 'required|string',
+        ]);
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $validated['variant_id'])
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found'
+            ], 404);
+        }
+
+        $serialList = array_filter(array_map('trim', explode("\n", $validated['serial_numbers'])));
+
+        if (empty($serialList)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No valid serial numbers found'
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $imported = 0;
+            $errors = [];
+
+            foreach ($serialList as $serialNumber) {
+                $exists = SerialNumber::where('tenant_id', $tenantId)
+                    ->where('serial_number', $serialNumber)
+                    ->exists();
+
+                if ($exists) {
+                    $errors[] = "Serial '{$serialNumber}' already exists";
+                    continue;
+                }
+
+                SerialNumber::create([
+                    'variant_id' => $variant->id,
+                    'tenant_id' => $tenantId,
+                    'serial_number' => $serialNumber,
+                    'status' => SerialNumber::STATUS_AVAILABLE,
+                    'created_by' => $user->id,
+                ]);
+
+                $imported++;
+            }
+
+            $variant->overal_quantity_at_hand = ($variant->overal_quantity_at_hand ?? 0) + $imported;
+            $variant->save();
+
+            DB::commit();
+
+            $message = "{$imported} serial number(s) imported successfully";
+            if (!empty($errors)) {
+                $message .= ". " . implode(', ', $errors);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'reload' => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to import serial numbers', [
+                'variant_id' => $validated['variant_id'],
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to import serial numbers: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Assign selected serials to location and department
+     */
+    public function assignSelectedSerials(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'serial_ids' => 'required|array',
+            'serial_ids.*' => 'exists:serial_numbers,id',
+            'location_id' => 'nullable|exists:locations,id',
+            'department_id' => 'nullable|exists:departments,id',
+        ]);
+
+        // ✅ Allow assigning location OR department individually
+        if (!$validated['location_id'] && !$validated['department_id']) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.select_location_or_department'),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $query = SerialNumber::where('tenant_id', $tenantId)
+                ->whereIn('id', $validated['serial_ids'])
+                ->where('status', SerialNumber::STATUS_AVAILABLE);
+
+            // ✅ Build update array dynamically
+            $updateData = [];
+            if ($validated['location_id']) {
+                $updateData['location_id'] = $validated['location_id'];
+            }
+            if ($validated['department_id']) {
+                $updateData['department_id'] = $validated['department_id'];
+            }
+
+            $updated = $query->update($updateData);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => __('passwords.selected_serials_assigned', ['count' => $updated]),
+                'reload' => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to assign selected serials', [
+                'serial_ids' => $validated['serial_ids'],
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to assign serials: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Update serial number status
+     */
+    public function updateSerialStatus(Request $request, $serialId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:available,sold,reserved,returned,lost,damaged',
+            'order_id' => 'nullable|exists:orders,id',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $serial = SerialNumber::where('tenant_id', $tenantId)
+            ->where('id', $serialId)
+            ->first();
+
+        if (!$serial) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial number not found'
+            ], 404);
+        }
+
+        if ($validated['status'] === SerialNumber::STATUS_SOLD && !$validated['order_id']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order ID is required when marking as sold'
+            ], 422);
+        }
+
+        $serial->update([
+            'status' => $validated['status'],
+            'order_id' => $validated['order_id'] ?? $serial->order_id,
+            'sold_at' => $validated['status'] === SerialNumber::STATUS_SOLD ? now() : $serial->sold_at,
+            'sold_by' => $validated['status'] === SerialNumber::STATUS_SOLD ? $user->id : $serial->sold_by,
+            'notes' => $validated['notes'] ?? $serial->notes,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial number status updated successfully',
+            'reload' => true,
+        ]);
+    }
+
+    /**
+     * Delete serial number
+     */
+    public function deleteSerial($serialId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('delete variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $serial = SerialNumber::where('tenant_id', $tenantId)
+            ->where('id', $serialId)
+            ->first();
+
+        if (!$serial) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial number not found'
+            ], 404);
+        }
+
+        if ($serial->status === SerialNumber::STATUS_SOLD) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete a sold serial number'
+            ], 422);
+        }
+
+        $serial->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Serial number deleted successfully',
+            'reload' => true,
+        ]);
+    }
+
+
 
 }
