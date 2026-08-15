@@ -235,6 +235,18 @@
                                                     </button>
                                                 @endif
                                             @endcan
+                                            @can('edit variant')
+                                                @if($product_variants->inventory_strategy === 'serial')
+                                                    <button 
+                                                        class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                                        onclick="openSerialManagementModal({{ $product->id }}, '{{ $product->name }}')"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#serialManagementModal">
+                                                        <i class="bi bi-upc-scan me-1 fs-5"></i> 
+                                                        <span>{{ __('passwords.serials') }}</span>
+                                                    </button>
+                                                @endif
+                                            @endcan
                                             @can('delete variant')
                                                 <button type="button" 
                                                     class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
@@ -276,6 +288,7 @@
                                         @include('inventory.product-variant.edit')
                                         @include('inventory.product-variant.variant-assignt')
                                         @include('inventory.product-variant.recipe-ingredients-modal')
+                                        @include('inventory.product-variant.serials-modal')
                                         
                                     </td>
                                 </tr>

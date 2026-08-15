@@ -1249,6 +1249,7 @@ return [
     '_exchange_rate' => 'Exchange Rate Against...',
     '_currency_table' => 'Currency Table',
     '_currency_index' => 'Currency Index',
+    'products_analyzed' => 'Products Analyzed',
     '_slogan' => 'Unify Your Businesses In One.',
     
 ];

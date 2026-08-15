@@ -43,6 +43,43 @@
                     @endif
                 </ul>
                 <!--end::Nav-->
+
+                <!-- Batch Selection Modal -->
+                <div class="modal fade" id="batchSelectionModal" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="ki-duotone ki-boxes fs-2 me-2"></i>
+                                    Select Batch for <span id="batchVariantName"></span>
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" id="batchSelectionBody">
+                                <!-- Batches will be listed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Serial Selection Modal -->
+                <div class="modal fade" id="serialSelectionModal" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="bi bi-upc-scan fs-2 me-2 text-primary"></i>
+                                    {{ __('passwords.select_serial') }}
+                                    <span id="serialVariantName" class="fs-6 text-muted ms-2"></span>
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" id="serialSelectionBody">
+                                <!-- Serials will be listed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 <style>
                     .product-item .product-card {
@@ -107,9 +144,30 @@
                             <div class="tab-pane fade {{ $firstTab ? 'show active' : '' }}" id="kt_pos_{{ $product->id }}">
                                 <div class="d-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container">
                                     @foreach ($product->variants as $variant)
-                                        @php
+                                    @php
                                         $inventoryJson = !$isSingleShop ? json_encode($variant->inventory_by_dept ?? []) : '{}';
+                                        $strategy = $product->resolvedInventoryStrategy();
+                                        
+                                        $strategyColors = [
+                                            'quantity' => 'primary',  
+                                            'batch' => 'info',         
+                                            'serial' => 'warning',     
+                                            'recipe' => 'success'       
+                                        ];
+                                        
+                                        $strategyLabels = [
+                                            'quantity' => __('passwords.quantity'),
+                                            'batch' => __('passwords.batch'),
+                                            'serial' => __('passwords.serial'),
+                                            'recipe' => __('passwords.recipe')
+                                        ];
+                                        
+                                        $strategyColor = $strategyColors[$strategy] ?? 'primary';
+                                        $strategyLabel = $strategyLabels[$strategy] ?? $strategy;
+                                        $badgeClass = 'bg-' . $strategyColor;
+                                        $isRecipe = $product->hasRecipe();
                                     @endphp
+                                    
                                     <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative" 
                                         data-name="{{ strtolower($variant->name ?? $product->name) }}"
                                         data-product="{{ $product->id }}"
@@ -118,47 +176,85 @@
                                         data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
                                         data-taxes='@json($variant->applicable_taxes ?? [])'
                                         data-promotions='@json($variant->applicable_promotions ?? [])'
+                                        data-strategy="{{ $strategy }}"
+                                        data-is-recipe="{{ $isRecipe ? 'true' : 'false' }}"
+                                        data-batches='@json($variant->available_batches ?? [])'
+                                        data-serials='@json($variant->available_serials ?? [])'  
+                                        data-quantity-available="{{ $variant->quantity_available ?? 0 }}"  
+                                        data-variant-name="{{ $variant->name ?? $product->name }}"         
                                         @if(!$isSingleShop) data-inventory='{{ $inventoryJson }}' @endif
                                         onclick="handleVariantClick(this)"
                                         style="cursor: pointer;">
 
-                                            {{-- ✅ Top-left Badge for Taxes --}}
-                                            @if(!empty($variant->applicable_taxes) && count($variant->applicable_taxes) > 0)
-                                                <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm">
-                                                    {{ __('passwords._tax') }}
+                                        <!-- ✅ Inventory Strategy Badge - No Icon -->
+                                        <span class="badge {{ $badgeClass }} text-white position-absolute top-0 start-50 translate-middle-x mt-2 px-3 py-2 shadow-sm" 
+                                            style="z-index: 10; min-width: 60px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.3px;">
+                                            {{ $strategyLabel }}
+                                            @if($isRecipe)
+                                                <span class="badge bg-warning text-dark ms-1" style="font-size: 0.55rem; padding: 1px 6px; border-radius: 10px;">
+                                                    Recipe
                                                 </span>
                                             @endif
+                                        </span>
 
-                                            {{-- ✅ Top-right Badge for Promotions --}}
-                                            @if(!empty($variant->applicable_promotions) && count($variant->applicable_promotions) > 0)
-                                                <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm">
-                                                    {{ __('passwords._promo') }}
-                                                </span>
-                                            @endif
+                                        <!-- ✅ Top-left Badge for Taxes (Red) - No Icon -->
+                                        @if(!empty($variant->applicable_taxes) && count($variant->applicable_taxes) > 0)
+                                            <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
+                                                {{ __('passwords._tax') }}
+                                            </span>
+                                        @endif
 
-                                            <div class="card-body text-center">
-                                                <img src="{{ productVariantImage($variant->image_url ?? $product->image_url) }}" 
-                                                    class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                                    alt="{{ $variant->name ?? $product->name }}" />
+                                        <!-- ✅ Top-right Badge for Promotions (Green/Success) - No Icon -->
+                                        @if(!empty($variant->applicable_promotions) && count($variant->applicable_promotions) > 0)
+                                            <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
+                                                {{ __('passwords._promo') }}
+                                            </span>
+                                        @endif
 
-                                                <div class="mb-2">
-                                                    <div class="text-center">
-                                                        <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
-                                                            data-bs-toggle="tooltip" 
-                                                            title="{{ $variant->name ?? $product->name }}">
-                                                            {{ \Illuminate\Support\Str::words($variant->name ?? $product->name, 2, '...') }}
+                                        <!-- ✅ Batch indicator badge (bottom) - No Icon -->
+                                        @if($strategy === 'batch' && !empty($variant->available_batches) && count($variant->available_batches) > 0)
+                                            <span class="badge bg-info text-white position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
+                                                style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
+                                                {{ count($variant->available_batches) }} {{ __('passwords.batches_available') }}
+                                            </span>
+                                        @endif
+
+                                        <!-- ✅ Serial indicator badge (bottom) -->
+                                        @if($strategy === 'serial' && !empty($variant->available_serials) && count($variant->available_serials) > 0)
+                                            <span class="badge bg-warning text-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
+                                                style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
+                                                {{ count($variant->available_serials) }} {{ __('passwords.serials_available') }}
+                                            </span>
+                                        @endif
+
+                                        <div class="card-body text-center">
+                                            <img src="{{ productVariantImage($variant->image_url ?? $product->image_url) }}" 
+                                                class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
+                                                alt="{{ $variant->name ?? $product->name }}" />
+
+                                            <div class="mb-2">
+                                                <div class="text-center">
+                                                    <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
+                                                        data-bs-toggle="tooltip" 
+                                                        title="{{ $variant->name ?? $product->name }}">
+                                                        {{ \Illuminate\Support\Str::words($variant->name ?? $product->name, 2, '...') }}
+                                                    </span>
+                                                    <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
+                                                        {{ $variant->quantity_available ?? 0 }} {{__('pagination._available')}}
+                                                    </span>
+                                                    @if($strategy === 'batch' && !empty($variant->available_batches) && count($variant->available_batches) > 0)
+                                                        <span class="text-muted d-block fs-8">
+                                                            {{ count($variant->available_batches) }} {{ __('passwords.batches') }}
                                                         </span>
-                                                        <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
-                                                            {{ $variant->quantity_available ?? 0 }} {{__('pagination._available')}}
-                                                        </span>
-                                                    </div>
+                                                    @endif
                                                 </div>
-
-                                                <span class="text-success text-end fw-bold fs-1">
-                                                    {{ $variant->selling_price }} {{ currency_symbol() }}
-                                                </span>
                                             </div>
+
+                                            <span class="text-success text-end fw-bold fs-1">
+                                                {{ $variant->selling_price }} {{ currency_symbol() }}
+                                            </span>
                                         </div>
+                                    </div>
                                     @endforeach
                                 </div>
                             </div>
@@ -172,48 +268,62 @@
                     function filterVariants(searchTerm) {
                         const searchValue = searchTerm.toLowerCase().trim();
                         const allVariantItems = document.querySelectorAll('.variant-item');
-                        const activeTab = document.querySelector('.tab-pane.active');
-                        
+                        const allTabPanes = document.querySelectorAll('.tab-pane');
+
                         if (searchValue === '') {
-                            // Show all variants when search is empty
-                            allVariantItems.forEach(item => {
-                                item.style.display = '';
-                            });
+                            allVariantItems.forEach(item => { item.style.display = ''; });
                             return;
                         }
 
-                        // Filter variants based on search term
                         allVariantItems.forEach(item => {
-                            const variantName = item.getAttribute('data-name');
-                            const isInActiveTab = activeTab && activeTab.contains(item);
-                            
-                            if (variantName.includes(searchValue)) {
-                                item.style.display = '';
-                                // If not in active tab, ensure it's visible when user switches to that tab
-                            } else {
-                                item.style.display = 'none';
-                            }
+                            const variantName = item.getAttribute('data-name') || '';
+                            item.style.display = variantName.includes(searchValue) ? '' : 'none';
                         });
 
-                        // Optional: Show message if no variants found in active tab
-                        const visibleVariantsInActiveTab = activeTab ? 
-                            activeTab.querySelectorAll('.variant-item[style=""]').length : 0;
-                        
-                        if (visibleVariantsInActiveTab === 0 && searchValue !== '') {
-                            // You could add a "no results" message here if desired
-                            console.log('No variants found matching search');
+                        const panesWithMatches = [];
+                        allTabPanes.forEach(pane => {
+                            const hasMatch = Array.from(pane.querySelectorAll('.variant-item'))
+                                .some(item => item.style.display !== 'none');
+                            if (hasMatch) panesWithMatches.push(pane);
+                        });
+
+                        const activePane = document.querySelector('.tab-pane.active');
+                        const activeHasMatch = activePane && panesWithMatches.includes(activePane);
+
+                        if (!activeHasMatch && panesWithMatches.length > 0) {
+                            const targetPane = panesWithMatches[0];
+                            const trigger = document.querySelector(
+                                `[data-bs-toggle="tab"][href="#${targetPane.id}"], ` +
+                                `[data-bs-toggle="pill"][href="#${targetPane.id}"], ` +
+                                `[data-bs-toggle="tab"][data-bs-target="#${targetPane.id}"], ` +
+                                `[data-bs-toggle="pill"][data-bs-target="#${targetPane.id}"]`
+                            );
+                            if (trigger) {
+                                if (window.bootstrap?.Tab) {
+                                    bootstrap.Tab.getOrCreateInstance(trigger).show();
+                                } else {
+                                    trigger.click();
+                                }
+                            }
                         }
                     }
 
-                    // Optional: Add event listener for tab changes to reapply search filter
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const tabPanes = document.querySelectorAll('.tab-pane');
-                        
-                        tabPanes.forEach(tab => {
-                            tab.addEventListener('shown.bs.tab', function () {
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const tabTriggers = document.querySelectorAll('[data-bs-toggle="tab"], [data-bs-toggle="pill"]');
+
+                        tabTriggers.forEach(trigger => {
+                            trigger.addEventListener('shown.bs.tab', function () {
                                 const searchInput = document.getElementById('variantSearchInput');
-                                if (searchInput.value) {
-                                    filterVariants(searchInput.value);
+                                if (searchInput && searchInput.value.trim()) {
+                                    const searchValue = searchInput.value.toLowerCase().trim();
+                                    document.querySelectorAll('.variant-item').forEach(item => {
+                                        const variantName = item.getAttribute('data-name') || '';
+                                        item.style.display = variantName.includes(searchValue) ? '' : 'none';
+                                    });
+                                } else {
+                                    document.querySelectorAll('.variant-item').forEach(item => {
+                                        item.style.display = '';
+                                    });
                                 }
                             });
                         });
@@ -460,7 +570,7 @@
                         const tabContent = document.getElementById('variantTabContent');
                         if (!tabContent) return;
 
-                        // ✅ Clear ALL existing content first
+                        // Clear ALL existing content first
                         tabContent.innerHTML = '';
 
                         let hasProducts = false;
@@ -482,7 +592,26 @@
                                 grid.className = 'd-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container';
 
                                 product.variants.forEach(variant => {
-                                    const card = createVariantCard(variant, product, isSingleShop);
+                                    // ✅ Get strategy from product
+                                    const strategy = product.inventory_strategy || 'quantity';
+                                    const isRecipe = strategy === 'recipe' && (product.recipe !== null);
+                                    
+                                    // ✅ Get batches, serials, and quantity from variant
+                                    const batches = variant.available_batches || [];
+                                    const serials = variant.available_serials || [];
+                                    const quantityAvailable = variant.quantity_available || 0;
+                                    
+                                    // ✅ Pass strategy, batches, serials, and quantity to card creation
+                                    const card = createVariantCardWithStrategy(
+                                        variant, 
+                                        product, 
+                                        isSingleShop, 
+                                        strategy, 
+                                        isRecipe,
+                                        batches,
+                                        serials,
+                                        quantityAvailable
+                                    );
                                     grid.appendChild(card);
                                 });
 
@@ -495,9 +624,162 @@
                         if (!hasProducts) {
                             showNoResults('');
                         } else {
-                            // ✅ Update product pills - hide all and show only found products
+                            // Update product pills - hide all and show only found products
                             updateProductPills(foundProductIds, products.length);
                         }
+                    }
+
+                    function createVariantCardWithStrategy(variant, product, isSingleShop, strategy, isRecipe, batches = [], serials = [], quantityAvailable = 0) {
+                        const card = document.createElement('div');
+                        card.className = 'card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative';
+                        
+                        // Build image URL
+                        let imageUrl = variant.image_url || product.image_url || '';
+                        if (imageUrl) {
+                            imageUrl = imageUrl.replace(/^\/+/, '');
+                            imageUrl = '{{ asset("storage") }}/' + imageUrl;
+                        } else {
+                            imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
+                        }
+                        
+                        // Set data attributes
+                        card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
+                        card.setAttribute('data-product', product.id);
+                        card.setAttribute('data-variant-id', variant.id);
+                        card.setAttribute('data-price', variant.selling_price);
+                        card.setAttribute('data-image', imageUrl);
+                        card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
+                        card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
+                        card.setAttribute('data-strategy', strategy);
+                        card.setAttribute('data-is-recipe', isRecipe ? 'true' : 'false');
+                        card.setAttribute('data-quantity-available', quantityAvailable);
+                        card.setAttribute('data-variant-name', variant.name || product.name);
+                        card.setAttribute('data-batches', JSON.stringify(batches));
+                        card.setAttribute('data-serials', JSON.stringify(serials));  // ✅ Add serials data
+                        
+                        // Inventory data for multi-shop
+                        if (!isSingleShop && variant.inventory_by_dept) {
+                            card.setAttribute('data-inventory', JSON.stringify(variant.inventory_by_dept || {}));
+                        }
+                        
+                        card.onclick = function() { handleVariantClick(this); };
+                        card.style.cursor = 'pointer';
+
+                        // Strategy badge configuration
+                        const strategyColors = {
+                            'quantity': 'primary',
+                            'batch': 'info',
+                            'serial': 'warning',
+                            'recipe': 'success'
+                        };
+                        const strategyLabels = {
+                            'quantity': '{{ __("passwords.quantity") }}',
+                            'batch': '{{ __("passwords.batch") }}',
+                            'serial': '{{ __("passwords.serial") }}',
+                            'recipe': '{{ __("passwords.recipe") }}'
+                        };
+                        
+                        // const strategyIcons = {
+                        //     'quantity': 'bi-box-seam',
+                        //     'batch': 'bi-layers',
+                        //     'serial': 'bi-upc-scan',
+                        //     'recipe': 'bi-journal-bookmark-fill'
+                        // };
+                        
+                        const strategyColor = strategyColors[strategy] || 'primary';
+                        const strategyLabel = strategyLabels[strategy] || strategy;
+                        // const strategyIcon = strategyIcons[strategy] || 'bi-box-seam';
+                        const badgeClass = 'bg-' + strategyColor;
+
+                        const hasTaxes = variant.applicable_taxes && variant.applicable_taxes.length > 0;
+                        const hasPromos = variant.applicable_promotions && variant.applicable_promotions.length > 0;
+                        const hasBatches = strategy === 'batch' && batches && batches.length > 0;
+                        const hasSerials = strategy === 'serial' && serials && serials.length > 0;
+
+                        // ✅ Build display name with variant info
+                        let displayName = variant.name || product.name;
+                        if (displayName.length > 20) {
+                            displayName = displayName.substring(0, 20) + '...';
+                        }
+
+                        card.innerHTML = `
+                            <!-- ✅ Inventory Strategy Badge -->
+                            <span class="badge ${badgeClass} text-white position-absolute top-0 start-50 translate-middle-x mt-2 px-3 py-2 shadow-sm" 
+                                style="z-index: 10; min-width: 70px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.3px;">                    
+                                ${strategyLabel}
+                                ${isRecipe ? `
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size: 0.55rem; padding: 1px 6px; border-radius: 10px;">
+                                        <i class="bi bi-info-circle me-1"></i>Recipe
+                                    </span>
+                                ` : ''}
+                            </span>
+
+                            <!-- ✅ Top-left Badge for Taxes (Red) -->
+                            ${hasTaxes ? `
+                                <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
+                                    {{ __("passwords._tax") }}
+                                </span>
+                            ` : ''}
+
+                            <!-- ✅ Top-right Badge for Promotions (Green/Success) -->
+                            ${hasPromos ? `
+                                <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
+                                    {{ __("passwords._promo") }}
+                                </span>
+                            ` : ''}
+
+                            <!-- ✅ Batch indicator badge (bottom) -->
+                            ${hasBatches ? `
+                                <span class="badge bg-info text-white position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
+                                    style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
+                                    ${batches.length} {{ __("passwords.batches_available") }}
+                                </span>
+                            ` : ''}
+
+                            <!-- ✅ Serial indicator badge (bottom) -->
+                            ${hasSerials ? `
+                                <span class="badge bg-warning text-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
+                                    style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
+                                    ${serials.length} {{ __("passwords.serials_available") }}
+                                </span>
+                            ` : ''}
+
+                            <div class="card-body text-center">
+                                <img src="${imageUrl}" 
+                                    class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
+                                    alt="${variant.name || product.name}"
+                                    onerror="this.src='{{ asset('assets/media/stock/ecommerce/2.png') }}'" />
+
+                                <div class="mb-2">
+                                    <div class="text-center">
+                                        <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
+                                            data-bs-toggle="tooltip" 
+                                            title="${variant.name || product.name}">
+                                            ${displayName}
+                                        </span>
+                                        <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
+                                            ${quantityAvailable} {{ __('pagination._available') }}
+                                        </span>
+                                        ${hasBatches ? `
+                                            <span class="text-muted d-block fs-8">
+                                                ${batches.length} {{ __("passwords.batches") }}
+                                            </span>
+                                        ` : ''}
+                                        ${hasSerials ? `
+                                            <span class="text-muted d-block fs-8">
+                                                ${serials.length} {{ __("passwords.serials") }}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+
+                                <span class="text-success text-end fw-bold fs-1">
+                                    ${variant.selling_price} {{ currency_symbol() }}
+                                </span>
+                            </div>
+                        `;
+
+                        return card;
                     }
 
 
@@ -522,12 +804,12 @@
                         `;
                         productList.prepend(msg);
 
-                        // ✅ HIDE ALL product pills first
+                        // HIDE ALL product pills first
                         document.querySelectorAll('.product-item').forEach(item => {
                             item.style.display = 'none';
                         });
 
-                        // ✅ SHOW ONLY the found products
+                        // SHOW ONLY the found products
                         if (foundProductIds && foundProductIds.size > 0) {
                             document.querySelectorAll('.product-item').forEach(item => {
                                 const link = item.querySelector('a');
@@ -540,7 +822,7 @@
                                 }
                             });
 
-                            // ✅ Activate the first found product tab
+                            // Activate the first found product tab
                             const firstVisiblePill = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
                             if (firstVisiblePill) {
                                 if (window.bootstrap?.Tab) {
@@ -556,10 +838,13 @@
                         const tabContent = document.getElementById('variantTabContent');
                         if (!tabContent) return;
 
-                        // ✅ Clear the tab content and show the no results message
+                        // Clear the tab content and show the no results message
                         tabContent.innerHTML = `
                             <div class="text-center py-10 w-100 no-results-message">
-                                <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block"></i>
+                                <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
                                 <span class="text-gray-500 fw-semibold fs-5">
                                     No products found for "${searchTerm || ''}"
                                 </span>
@@ -582,7 +867,7 @@
                             msg.innerHTML = `<span class="fw-bold text-danger fs-6">No results found</span>`;
                             productList.prepend(msg);
 
-                            // ✅ Hide all product pills
+                            // Hide all product pills
                             document.querySelectorAll('.product-item').forEach(item => {
                                 item.style.display = 'none';
                             });
@@ -816,6 +1101,8 @@
         opacity: 0.5 !important;
     }
 </style>
+
+
 
 
 @include('orders.pos.pause-buy')

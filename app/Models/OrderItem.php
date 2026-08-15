@@ -19,7 +19,11 @@ class OrderItem extends Model
         'quantity',
         'discount',
         'tax_amount',
-        'total_price',
+        'total_price',    
+        'batch_id',        
+        'batch_number',
+        'serial_id',
+        'serial_number',
         'inventory_data',
         'tax_data',
         'promotion_data',
@@ -39,6 +43,7 @@ class OrderItem extends Model
         'inventory_data' => 'array',
         'tax_data' => 'array',
         'promotion_data' => 'array',
+        'batch_id' => 'integer',
     ];
 
     /**
@@ -101,6 +106,11 @@ class OrderItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function serialNumber()
+    {
+        return $this->belongsTo(SerialNumber::class, 'serial_id');
     }
 
     /**

@@ -139,6 +139,8 @@ class BatchController extends Controller
 
         try {
             $assigned = 0;
+            $skipped = 0;
+            $assignmentDetails = [];
 
             foreach ($request->batch_ids as $batchId) {
                 $batch = PurchaseReceiptItem::query()
@@ -152,30 +154,64 @@ class BatchController extends Controller
                     ->where('purchase_receipt_items.id', $batchId)
                     ->where(function($q) {
                         $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
-                          ->orWhereNull('purchase_receipt_items.quantity_remaining');
+                        ->orWhereNull('purchase_receipt_items.quantity_remaining');
                     })
                     ->select('purchase_receipt_items.*')
                     ->first();
 
-                if (!$batch) continue;
+                if (!$batch) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Store old values for logging
+                $oldLocationId = $batch->location_id;
+                $oldDepartmentId = $batch->department_id;
 
                 $batch->location_id = $request->location_id;
                 $batch->department_id = $request->department_id;
                 $batch->save();
+
                 $assigned++;
+
+                // ✅ LOG ASSIGNMENT TO BATCHLOG TABLE
+                $this->logBatchAssignment(
+                    $batch,
+                    $oldLocationId,
+                    $oldDepartmentId,
+                    $request->location_id,
+                    $request->department_id,
+                    $user,
+                    $tenantId
+                );
+
+                $assignmentDetails[] = [
+                    'batch_id' => $batch->id,
+                    'batch_number' => $batch->batch_number,
+                    'old_location_id' => $oldLocationId,
+                    'old_department_id' => $oldDepartmentId,
+                    'new_location_id' => $batch->location_id,
+                    'new_department_id' => $batch->department_id,
+                ];
             }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => "{$assigned} batch(es) assigned successfully.",
+                'message' => "{$assigned} batch(es) assigned successfully." . ($skipped > 0 ? " {$skipped} skipped." : ""),
                 'reload' => true,
+                'data' => [
+                    'assigned' => $assigned,
+                    'skipped' => $skipped,
+                    'details' => $assignmentDetails,
+                ],
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Batch assignment failed: ' . $e->getMessage());
+            
+            \Log::error('Batch assignment failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
@@ -208,6 +244,8 @@ class BatchController extends Controller
 
         try {
             $unassigned = 0;
+            $skipped = 0;
+            $unassignmentDetails = [];
 
             foreach ($request->batch_ids as $batchId) {
                 $batch = PurchaseReceiptItem::query()
@@ -222,30 +260,182 @@ class BatchController extends Controller
                     ->select('purchase_receipt_items.*')
                     ->first();
 
-                if ($batch) {
-                    $batch->location_id = null;
-                    $batch->department_id = null;
-                    $batch->save();
-                    $unassigned++;
+                if (!$batch) {
+                    $skipped++;
+                    continue;
                 }
+
+                // Store old values for logging
+                $oldLocationId = $batch->location_id;
+                $oldDepartmentId = $batch->department_id;
+
+                $batch->location_id = null;
+                $batch->department_id = null;
+                $batch->save();
+
+                $unassigned++;
+
+                // ✅ LOG UNASSIGNMENT TO BATCHLOG TABLE
+                $this->logBatchUnassignment(
+                    $batch,
+                    $oldLocationId,
+                    $oldDepartmentId,
+                    $user,
+                    $tenantId
+                );
+
+                $unassignmentDetails[] = [
+                    'batch_id' => $batch->id,
+                    'batch_number' => $batch->batch_number,
+                    'old_location_id' => $oldLocationId,
+                    'old_department_id' => $oldDepartmentId,
+                ];
             }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => "{$unassigned} batch(es) unassigned successfully.",
+                'message' => "{$unassigned} batch(es) unassigned successfully." . ($skipped > 0 ? " {$skipped} skipped." : ""),
                 'reload' => true,
+                'data' => [
+                    'unassigned' => $unassigned,
+                    'skipped' => $skipped,
+                    'details' => $unassignmentDetails,
+                ],
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Batch unassignment failed: ' . $e->getMessage());
+            
+            \Log::error('Batch unassignment failed: ' . $e->getMessage());
             
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to unassign batches: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Log batch assignment to BatchLog table
+     */
+    private function logBatchAssignment($batch, $oldLocationId, $oldDepartmentId, $newLocationId, $newDepartmentId, $user, $tenantId)
+    {
+        try {
+            // Get variant details
+            $variant = $batch->purchaseOrderItem->productVariant ?? null;
+            
+            // Get purchase order details
+            $purchaseOrder = $batch->purchaseReceipt->purchaseOrder ?? null;
+            
+            BatchLog::create([
+                'batch_id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'variant_id' => $variant ? $variant->id : null,
+                'variant_name' => $variant ? $variant->name : 'Unknown',
+                'variant_sku' => $variant ? $variant->sku : 'Unknown',
+                'type' => BatchLog::TYPE_TRANSFERRED,
+                'quantity_change' => 0, // No quantity change, just location change
+                'quantity_before' => $batch->quantity_remaining ?? $batch->quantity_received,
+                'quantity_after' => $batch->quantity_remaining ?? $batch->quantity_received,
+                'unit_cost' => $batch->unit_cost ?? 0,
+                'total_cost' => 0,
+                'order_id' => null,
+                'order_number' => null,
+                'purchase_order_id' => $purchaseOrder ? $purchaseOrder->id : null,
+                'purchase_order_number' => $purchaseOrder ? $purchaseOrder->po_number : null,
+                'purchase_receipt_id' => $batch->purchase_receipt_id,
+                'supplier_id' => $purchaseOrder ? $purchaseOrder->supplier_id : null,
+                'supplier_name' => $purchaseOrder && $purchaseOrder->supplier ? $purchaseOrder->supplier->name : null,
+                'tenant_id' => $tenantId,
+                'location_id' => $newLocationId,
+                'department_id' => $newDepartmentId,
+                'expiry_date' => $batch->expiry_date,
+                'event_date' => now(),
+                'performed_by' => $user->id,
+                'metadata' => [
+                    'action' => 'assigned',
+                    'old_location_id' => $oldLocationId,
+                    'old_department_id' => $oldDepartmentId,
+                    'new_location_id' => $newLocationId,
+                    'new_department_id' => $newDepartmentId,
+                    'assigned_by' => $user->name,
+                    'assigned_at' => now()->toDateTimeString(),
+                ],
+            ]);
+
+            \Log::info('Batch assignment logged to BatchLog', [
+                'batch_id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'old_location' => $oldLocationId,
+                'new_location' => $newLocationId,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to log batch assignment: ' . $e->getMessage(), [
+                'batch_id' => $batch->id,
+            ]);
+        }
+    }
+
+    /**
+     * Log batch unassignment to BatchLog table
+     */
+    private function logBatchUnassignment($batch, $oldLocationId, $oldDepartmentId, $user, $tenantId)
+    {
+        try {
+            // Get variant details
+            $variant = $batch->purchaseOrderItem->productVariant ?? null;
+            
+            // Get purchase order details
+            $purchaseOrder = $batch->purchaseReceipt->purchaseOrder ?? null;
+            
+            BatchLog::create([
+                'batch_id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'variant_id' => $variant ? $variant->id : null,
+                'variant_name' => $variant ? $variant->name : 'Unknown',
+                'variant_sku' => $variant ? $variant->sku : 'Unknown',
+                'type' => BatchLog::TYPE_TRANSFERRED,
+                'quantity_change' => 0, // No quantity change, just location change
+                'quantity_before' => $batch->quantity_remaining ?? $batch->quantity_received,
+                'quantity_after' => $batch->quantity_remaining ?? $batch->quantity_received,
+                'unit_cost' => $batch->unit_cost ?? 0,
+                'total_cost' => 0,
+                'order_id' => null,
+                'order_number' => null,
+                'purchase_order_id' => $purchaseOrder ? $purchaseOrder->id : null,
+                'purchase_order_number' => $purchaseOrder ? $purchaseOrder->po_number : null,
+                'purchase_receipt_id' => $batch->purchase_receipt_id,
+                'supplier_id' => $purchaseOrder ? $purchaseOrder->supplier_id : null,
+                'supplier_name' => $purchaseOrder && $purchaseOrder->supplier ? $purchaseOrder->supplier->name : null,
+                'tenant_id' => $tenantId,
+                'location_id' => null,
+                'department_id' => null,
+                'expiry_date' => $batch->expiry_date,
+                'event_date' => now(),
+                'performed_by' => $user->id,
+                'metadata' => [
+                    'action' => 'unassigned',
+                    'old_location_id' => $oldLocationId,
+                    'old_department_id' => $oldDepartmentId,
+                    'unassigned_by' => $user->name,
+                    'unassigned_at' => now()->toDateTimeString(),
+                ],
+            ]);
+
+            \Log::info('Batch unassignment logged to BatchLog', [
+                'batch_id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'old_location' => $oldLocationId,
+                'old_department' => $oldDepartmentId,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to log batch unassignment: ' . $e->getMessage(), [
+                'batch_id' => $batch->id,
+            ]);
         }
     }
 
