@@ -39,7 +39,7 @@ return new class extends Migration
             
             $table->timestamps();
             
-            // ✅ Indexes
+            // ✅ Indexes (no foreign keys for optional fields)
             $table->index('production_order_id');
             $table->index('product_variant_id');
             $table->index('purchase_receipt_item_id');
@@ -47,12 +47,14 @@ return new class extends Migration
             $table->index('serial_number_id');
             $table->index('quality_status');
             
-            // ✅ Foreign keys
+            // ✅ Foreign keys (only for required relationships)
             $table->foreign('production_order_id')->references('id')->on('production_orders')->onDelete('cascade');
             $table->foreign('product_variant_id')->references('id')->on('product_variants');
-            $table->foreign('purchase_receipt_item_id')->references('id')->on('purchase_receipt_items')->onDelete('set null');
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->onDelete('set null');
-            $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
+            
+            // ❌ REMOVE these optional foreign keys to avoid errors
+            // $table->foreign('purchase_receipt_item_id')->references('id')->on('purchase_receipt_items')->onDelete('set null');
+            // $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->onDelete('set null');
+            // $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
         });
     }
 
