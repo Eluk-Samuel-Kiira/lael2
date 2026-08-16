@@ -15,9 +15,9 @@ return new class extends Migration
             $table->unsignedBigInteger('product_variant_id');
             
             // ✅ Output batch tracking (optional fields - no foreign keys)
-            $table->string('batch_number', 100)->nullable()->index();
-            $table->unsignedBigInteger('serial_number_id')->nullable()->index();
-            $table->string('serial_number', 100)->nullable()->index();
+            $table->string('batch_number', 100)->nullable();
+            $table->unsignedBigInteger('serial_number_id')->nullable();
+            $table->string('serial_number', 100)->nullable();
             
             // ✅ Quantities
             $table->decimal('planned_quantity', 15, 4)->default(0);
