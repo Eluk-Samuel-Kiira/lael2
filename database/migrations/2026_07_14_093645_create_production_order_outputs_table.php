@@ -14,10 +14,10 @@ return new class extends Migration
             $table->unsignedBigInteger('production_order_id');
             $table->unsignedBigInteger('product_variant_id');
             
-            // ✅ Output batch tracking
-            $table->string('batch_number', 100)->nullable()->unique();
-            $table->unsignedBigInteger('serial_number_id')->nullable();
-            $table->string('serial_number', 100)->nullable();
+            // ✅ Output batch tracking (optional fields - no foreign keys)
+            $table->string('batch_number', 100)->nullable()->index();
+            $table->unsignedBigInteger('serial_number_id')->nullable()->index();
+            $table->string('serial_number', 100)->nullable()->index();
             
             // ✅ Quantities
             $table->decimal('planned_quantity', 15, 4)->default(0);
@@ -51,10 +51,12 @@ return new class extends Migration
             $table->index('quality_status');
             $table->index('inventory_strategy');
             
-            // ✅ Foreign keys
+            // ✅ Foreign keys - ONLY for required relationships
             $table->foreign('production_order_id')->references('id')->on('production_orders')->onDelete('cascade');
             $table->foreign('product_variant_id')->references('id')->on('product_variants');
-            $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
+            
+            // ❌ REMOVE optional foreign keys to avoid errors
+            // $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
         });
     }
 
