@@ -14,8 +14,8 @@ class ProductionOrderInput extends Model
     protected $fillable = [
         'production_order_id',
         'product_variant_id',
-        'batch_no',
-        'purchase_order_item_id',
+        'purchase_receipt_item_id',
+        'inventory_item_id',
         'planned_quantity',
         'actual_quantity',
         'waste_quantity',
@@ -34,46 +34,63 @@ class ProductionOrderInput extends Model
         'actual_cost' => 'integer',
     ];
 
-    // Status Constants
     const QUALITY_PENDING = 'pending';
     const QUALITY_ACCEPTED = 'accepted';
     const QUALITY_REJECTED = 'rejected';
 
-    /**
-     * Get the production order this input belongs to
-     */
+    // ============================================================
+    // ACCESSORS & MUTATORS - Money Fields
+    // ============================================================
+
+    public function getEstimatedCostAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function setEstimatedCostAttribute($value): void
+    {
+        $this->attributes['estimated_cost'] = to_base_currency($value);
+    }
+
+    public function getActualCostAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function setActualCostAttribute($value): void
+    {
+        $this->attributes['actual_cost'] = to_base_currency($value);
+    }
+
+    // ─── Relationships ──────────────────────────────────────────────────
+
     public function productionOrder(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class);
     }
 
-    /**
-     * Get the product variant being consumed
-     */
     public function productVariant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class);
     }
 
-    /**
-     * Get the purchase order item this input came from
-     */
-    public function purchaseOrderItem(): BelongsTo
+    public function purchaseReceiptItem(): BelongsTo
     {
-        return $this->belongsTo(PurchaseOrderItem::class);
+        return $this->belongsTo(PurchaseReceiptItem::class, 'purchase_receipt_item_id');
     }
 
-    /**
-     * Calculate total quantity (actual + waste)
-     */
+    public function inventoryItem(): BelongsTo
+    {
+        return $this->belongsTo(InventoryItems::class, 'inventory_item_id');
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────
+
     public function getTotalQuantityAttribute(): float
     {
         return $this->actual_quantity + $this->waste_quantity;
     }
 
-    /**
-     * Calculate yield percentage (actual / planned)
-     */
     public function getYieldPercentageAttribute(): float
     {
         if ($this->planned_quantity > 0) {
@@ -82,9 +99,6 @@ class ProductionOrderInput extends Model
         return 0;
     }
 
-    /**
-     * Calculate waste percentage
-     */
     public function getWastePercentageAttribute(): float
     {
         if ($this->planned_quantity > 0) {
@@ -93,9 +107,6 @@ class ProductionOrderInput extends Model
         return 0;
     }
 
-    /**
-     * Get the cost per unit
-     */
     public function getCostPerUnitAttribute(): float
     {
         if ($this->actual_quantity > 0) {
@@ -104,51 +115,23 @@ class ProductionOrderInput extends Model
         return 0;
     }
 
-    /**
-     * Get the estimated cost in dollars
-     */
-    public function getEstimatedCostInDollarsAttribute(): float
-    {
-        return $this->estimated_cost / 100;
-    }
-
-    /**
-     * Get the actual cost in dollars
-     */
-    public function getActualCostInDollarsAttribute(): float
-    {
-        return $this->actual_cost / 100;
-    }
-
-    /**
-     * Check if quality is accepted
-     */
     public function isQualityAccepted(): bool
     {
         return $this->quality_status === self::QUALITY_ACCEPTED;
     }
 
-    /**
-     * Check if quality is rejected
-     */
     public function isQualityRejected(): bool
     {
         return $this->quality_status === self::QUALITY_REJECTED;
     }
 
-    /**
-     * Accept the quality
-     */
     public function acceptQuality(): self
     {
         $this->update(['quality_status' => self::QUALITY_ACCEPTED]);
         return $this;
     }
 
-    /**
-     * Reject the quality
-     */
-    public function rejectQuality(string $notes = null): self
+    public function rejectQuality(?string $notes = null): self
     {
         $this->update([
             'quality_status' => self::QUALITY_REJECTED,
@@ -157,7 +140,8 @@ class ProductionOrderInput extends Model
         return $this;
     }
 
-    // Scopes
+    // ─── Scopes ──────────────────────────────────────────────────────────
+
     public function scopeAccepted($query)
     {
         return $query->where('quality_status', self::QUALITY_ACCEPTED);
@@ -176,10 +160,5 @@ class ProductionOrderInput extends Model
     public function scopeByVariant($query, $variantId)
     {
         return $query->where('product_variant_id', $variantId);
-    }
-
-    public function scopeByBatch($query, $batchNo)
-    {
-        return $query->where('batch_no', $batchNo);
     }
 }

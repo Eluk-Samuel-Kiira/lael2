@@ -30,28 +30,15 @@ class AddNewPermissions extends Command
      * New permissions to add - only these will be processed
      */
     protected $newPermissions = [
-        'Dashboard Management' => [
-            'view dashboard sales',
-            'view dashboard orders',
-            'view dashboard profit',
-            'view dashboard active users',
-            'view dashboard weekly sales',
-            'view dashboard best selling',
-            'view dashboard top category',
-            'view dashboard inventory alerts',
-            'view dashboard recent orders',
-            'view dashboard overview',
-        ],
-        'Invoice Management' => [
-            'view invoice',
-            'create invoice',
-            'edit invoice',
-            'delete invoice',
-            'send invoice',
-            'void invoice',
-            'update invoice',
-            'reconcile invoice',
-            'download invoice',
+        'Production Management' => [
+            'view production_orders',
+            'create production_orders',
+            'edit production_orders',
+            'delete production_orders',
+            'start production_orders',
+            'complete production_orders',
+            'cancel production_orders',
+            'approve production_orders',
         ],
     ];
 
