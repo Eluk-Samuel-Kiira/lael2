@@ -46,7 +46,6 @@ return new class extends Migration
             // ✅ Indexes
             $table->index('production_order_id');
             $table->index('product_variant_id');
-            $table->index('batch_number');
             $table->index('serial_number_id');
             $table->index('quality_status');
             $table->index('inventory_strategy');
