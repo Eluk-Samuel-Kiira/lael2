@@ -14,15 +14,15 @@ class ProductionOrderOutput extends Model
     protected $fillable = [
         'production_order_id',
         'product_variant_id',
-        'batch_no',
+        'batch_number',
         'planned_quantity',
         'actual_quantity',
         'defective_quantity',
         'unit',
-        'packaging_type',
-        'packaging_weight',
         'production_cost',
         'selling_price',
+        'total_cost',
+        'inventory_strategy',
         'quality_status',
         'notes',
     ];
@@ -31,43 +31,68 @@ class ProductionOrderOutput extends Model
         'planned_quantity' => 'decimal:4',
         'actual_quantity' => 'decimal:4',
         'defective_quantity' => 'decimal:4',
-        'packaging_weight' => 'decimal:4',
         'production_cost' => 'integer',
         'selling_price' => 'integer',
+        'total_cost' => 'integer',
     ];
 
-    // Status Constants
     const QUALITY_PENDING = 'pending';
     const QUALITY_APPROVED = 'approved';
     const QUALITY_REJECTED = 'rejected';
 
-    /**
-     * Get the production order this output belongs to
-     */
+    // ============================================================
+    // ACCESSORS & MUTATORS - Money Fields
+    // ============================================================
+
+    public function getProductionCostAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function setProductionCostAttribute($value): void
+    {
+        $this->attributes['production_cost'] = to_base_currency($value);
+    }
+
+    public function getSellingPriceAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function setSellingPriceAttribute($value): void
+    {
+        $this->attributes['selling_price'] = to_base_currency($value);
+    }
+
+    public function getTotalCostAttribute($value): float
+    {
+        return from_base_currency($value);
+    }
+
+    public function setTotalCostAttribute($value): void
+    {
+        $this->attributes['total_cost'] = to_base_currency($value);
+    }
+
+    // ─── Relationships ──────────────────────────────────────────────────
+
     public function productionOrder(): BelongsTo
     {
         return $this->belongsTo(ProductionOrder::class);
     }
 
-    /**
-     * Get the product variant being produced
-     */
     public function productVariant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class);
     }
 
-    /**
-     * Calculate total quantity (actual + defective)
-     */
+    // ─── Helpers ──────────────────────────────────────────────────────────
+
     public function getTotalQuantityAttribute(): float
     {
         return $this->actual_quantity + $this->defective_quantity;
     }
 
-    /**
-     * Calculate yield percentage (actual / planned)
-     */
     public function getYieldPercentageAttribute(): float
     {
         if ($this->planned_quantity > 0) {
@@ -76,9 +101,6 @@ class ProductionOrderOutput extends Model
         return 0;
     }
 
-    /**
-     * Calculate defective percentage
-     */
     public function getDefectivePercentageAttribute(): float
     {
         if ($this->total_quantity > 0) {
@@ -87,9 +109,6 @@ class ProductionOrderOutput extends Model
         return 0;
     }
 
-    /**
-     * Get the cost per unit
-     */
     public function getCostPerUnitAttribute(): float
     {
         if ($this->actual_quantity > 0) {
@@ -98,47 +117,22 @@ class ProductionOrderOutput extends Model
         return 0;
     }
 
-    /**
-     * Get the production cost in dollars
-     */
-    public function getProductionCostInDollarsAttribute(): float
-    {
-        return $this->production_cost / 100;
-    }
-
-    /**
-     * Get the selling price in dollars
-     */
-    public function getSellingPriceInDollarsAttribute(): float
-    {
-        return $this->selling_price ? $this->selling_price / 100 : 0;
-    }
-
-    /**
-     * Calculate profit per unit
-     */
     public function getProfitPerUnitAttribute(): float
     {
         if ($this->selling_price && $this->actual_quantity > 0) {
-            return ($this->selling_price - ($this->production_cost / $this->actual_quantity)) / 100;
+            return ($this->selling_price - $this->production_cost) / $this->actual_quantity;
         }
         return 0;
     }
 
-    /**
-     * Calculate total profit
-     */
     public function getTotalProfitAttribute(): float
     {
         if ($this->selling_price) {
-            return ($this->selling_price - $this->production_cost) / 100;
+            return $this->selling_price - $this->production_cost;
         }
         return 0;
     }
 
-    /**
-     * Calculate profit margin percentage
-     */
     public function getProfitMarginAttribute(): float
     {
         if ($this->selling_price && $this->selling_price > 0) {
@@ -147,75 +141,43 @@ class ProductionOrderOutput extends Model
         return 0;
     }
 
-    /**
-     * Generate batch number automatically
-     */
-    public function generateBatchNumber(): string
-    {
-        return $this->productionOrder->production_number . '-' . $this->product_variant_id;
-    }
-
-    /**
-     * Check if quality is approved
-     */
     public function isQualityApproved(): bool
     {
         return $this->quality_status === self::QUALITY_APPROVED;
     }
 
-    /**
-     * Check if quality is rejected
-     */
     public function isQualityRejected(): bool
     {
         return $this->quality_status === self::QUALITY_REJECTED;
     }
 
-    /**
-     * Check if there are defects
-     */
     public function hasDefects(): bool
     {
         return $this->defective_quantity > 0;
     }
 
-    /**
-     * Check if fully produced (actual >= planned)
-     */
     public function isFullyProduced(): bool
     {
         return $this->actual_quantity >= $this->planned_quantity;
     }
 
-    /**
-     * Get remaining quantity to produce
-     */
     public function getRemainingQuantityAttribute(): float
     {
         return max(0, $this->planned_quantity - $this->actual_quantity);
     }
 
-    /**
-     * Approve the quality
-     */
     public function approveQuality(): self
     {
         $this->update(['quality_status' => self::QUALITY_APPROVED]);
         return $this;
     }
 
-    /**
-     * Reject the quality
-     */
     public function rejectQuality(): self
     {
         $this->update(['quality_status' => self::QUALITY_REJECTED]);
         return $this;
     }
 
-    /**
-     * Update actual quantity
-     */
     public function updateActualQuantity(float $quantity, float $defective = 0): self
     {
         $this->update([
@@ -225,9 +187,6 @@ class ProductionOrderOutput extends Model
         return $this;
     }
 
-    /**
-     * Add production to this output
-     */
     public function addProduction(float $quantity, float $defective = 0): self
     {
         $this->update([
@@ -237,7 +196,8 @@ class ProductionOrderOutput extends Model
         return $this;
     }
 
-    // Scopes
+    // ─── Scopes ──────────────────────────────────────────────────────────
+
     public function scopeApproved($query)
     {
         return $query->where('quality_status', self::QUALITY_APPROVED);
@@ -258,11 +218,6 @@ class ProductionOrderOutput extends Model
         return $query->where('product_variant_id', $variantId);
     }
 
-    public function scopeByBatch($query, $batchNo)
-    {
-        return $query->where('batch_no', $batchNo);
-    }
-
     public function scopeWithAvailableStock($query)
     {
         return $query->where('actual_quantity', '>', 0)
@@ -277,5 +232,10 @@ class ProductionOrderOutput extends Model
     public function scopeCompleted($query)
     {
         return $query->where('actual_quantity', '>', 0);
+    }
+
+    public function scopeByStrategy($query, $strategy)
+    {
+        return $query->where('inventory_strategy', $strategy);
     }
 }

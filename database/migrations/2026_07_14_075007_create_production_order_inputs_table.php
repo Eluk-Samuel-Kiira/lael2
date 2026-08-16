@@ -1,5 +1,5 @@
 <?php
-// database/migrations/2026_07_14_000002_create_production_order_inputs_table.php
+// database/migrations/2026_01_15_000002_create_production_order_inputs_table.php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -11,35 +11,48 @@ return new class extends Migration
     {
         Schema::create('production_order_inputs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('production_order_id')->constrained()->onDelete('cascade');
+            $table->unsignedBigInteger('production_order_id');
+            $table->unsignedBigInteger('product_variant_id');
             
-            // What raw material is being consumed
-            $table->foreignId('product_variant_id')->constrained('product_variants')->onDelete('restrict');
+            // ✅ Source tracking - where did this raw material come from?
+            $table->unsignedBigInteger('purchase_receipt_item_id')->nullable();
+            $table->unsignedBigInteger('inventory_item_id')->nullable();
+            $table->unsignedBigInteger('serial_number_id')->nullable();
+            $table->string('serial_number', 100)->nullable();
             
-            // ✅ Optional: track which supplier batch this came from
-            $table->string('batch_no', 50)->nullable()->comment('Supplier batch number');
-            $table->foreignId('purchase_order_item_id')->nullable()->constrained()->onDelete('set null');
-            
-            // Quantities
-            $table->decimal('planned_quantity', 12, 4);
-            $table->decimal('actual_quantity', 12, 4)->default(0);
-            $table->decimal('waste_quantity', 12, 4)->default(0);
+            // ✅ Quantities
+            $table->decimal('planned_quantity', 15, 4)->default(0);
+            $table->decimal('actual_quantity', 15, 4)->default(0);
+            $table->decimal('waste_quantity', 15, 4)->default(0);
             $table->string('unit', 20)->default('kg');
             
-            // Cost
+            // ✅ Costs (stored as integers for base currency)
             $table->bigInteger('estimated_cost')->default(0);
             $table->bigInteger('actual_cost')->default(0);
             
-            // Quality
+            // ✅ Quality
             $table->enum('quality_status', ['pending', 'accepted', 'rejected'])->default('pending');
             $table->text('quality_notes')->nullable();
             
+            // ✅ Source type
+            $table->string('source_type', 50)->nullable();
+            
             $table->timestamps();
-
+            
+            // ✅ Indexes
             $table->index('production_order_id');
             $table->index('product_variant_id');
-            $table->index('batch_no');
-            $table->unique(['production_order_id', 'product_variant_id'], 'unique_production_input');
+            $table->index('purchase_receipt_item_id');
+            $table->index('inventory_item_id');
+            $table->index('serial_number_id');
+            $table->index('quality_status');
+            
+            // ✅ Foreign keys
+            $table->foreign('production_order_id')->references('id')->on('production_orders')->onDelete('cascade');
+            $table->foreign('product_variant_id')->references('id')->on('product_variants');
+            $table->foreign('purchase_receipt_item_id')->references('id')->on('purchase_receipt_items')->onDelete('set null');
+            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->onDelete('set null');
+            $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
         });
     }
 

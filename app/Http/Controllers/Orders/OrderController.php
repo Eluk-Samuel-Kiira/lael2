@@ -139,8 +139,6 @@ class OrderController extends Controller
         //
     }
 
-
-        
     public function getPausedOrders(Request $request)
     {
         \Log::info('[PauseBuy] hit');
@@ -159,10 +157,8 @@ class OrderController extends Controller
             $tenantId = $user->tenant_id;
             $locationId = $user->location_id ?? 1;
             
-            // ✅ Get the selected department from request
             $selectedDepartmentId = $request->input('department', '');
             
-            // ✅ If no department selected, return empty (or all orders with 0 stock)
             if (empty($selectedDepartmentId)) {
                 return response()->json([
                     'orders' => [],
@@ -183,7 +179,7 @@ class OrderController extends Controller
             \Log::info('[PauseBuy] found ' . $orders->count());
 
             $result = $orders->map(function ($order) use ($selectedDepartmentId, $locationId) {
-                $items = $order->orderItems->map(function ($item) use ($selectedDepartmentId, $locationId) {
+                $items = $order->orderItems->map(function ($item) use ($selectedDepartmentId, $locationId, $order) { // ✅ Pass $order here
                     $variant = $item->variant;
                     $product = $variant?->product;
 
@@ -193,7 +189,6 @@ class OrderController extends Controller
                     $quantityAvailable = 0;
 
                     if ($variant) {
-                        // ✅ Find inventory for the selected department
                         $inventory = $variant->inventory()
                             ->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $locationId)
@@ -204,12 +199,6 @@ class OrderController extends Controller
                             $departmentId = $inventory->department_id;
                             $quantityAvailable = (int) $inventory->quantity_allocated;
                         }
-                    }
-
-                    // ✅ If no inventory found, item is out of stock for this department
-                    if ($quantityAvailable <= 0) {
-                        // Still return the item but with quantity_available = 0
-                        // The frontend will show it as out of stock
                     }
 
                     // Decode JSON blobs
@@ -227,6 +216,25 @@ class OrderController extends Controller
                             ? $item->promotion_data
                             : json_decode($item->promotion_data, true);
                         $promotions = is_array($decoded) ? $decoded : [];
+                    }
+
+                    // ✅ Get inventory strategy from product
+                    $strategy = $product?->inventory_strategy ?? 'quantity';
+
+                    // ✅ Get batch and serial data
+                    $batchId = $item->batch_id ?? null;
+                    $batchNumber = $item->batch_number ?? null;
+                    $serialId = $item->serial_id ?? null;
+                    $serialNumber = $item->serial_number ?? null;
+
+                    // ✅ If serial_id exists, verify it's still available
+                    $serialAvailable = true;
+                    if ($serialId) {
+                        $serial = \App\Models\SerialNumber::where('id', $serialId)
+                            ->where('status', 'available')
+                            ->where('tenant_id', $order->tenant_id) // ✅ Now $order is in scope
+                            ->exists();
+                        $serialAvailable = $serial;
                     }
 
                     // Image
@@ -251,7 +259,7 @@ class OrderController extends Controller
                         'unit_price'         => (float) $item->unit_price,
                         'price'              => (float) $item->unit_price,
                         'quantity'           => (int)   $item->quantity,
-                        'quantity_available' => $quantityAvailable, // ✅ Now from selected department
+                        'quantity_available' => $quantityAvailable,
                         'image_url'          => $imageUrl,
                         'taxes'              => $taxes,
                         'promotions'         => $promotions,
@@ -260,6 +268,13 @@ class OrderController extends Controller
                         'total'              => (float) $item->total_price,
                         'inventory_id'       => $inventoryId,
                         'department_id'      => $departmentId,
+                        // ✅ NEW: Add strategy, batch, and serial data
+                        'strategy'           => $strategy,
+                        'batch_id'           => $batchId,
+                        'batch_number'       => $batchNumber,
+                        'serial_id'          => $serialId,
+                        'serial_number'      => $serialNumber,
+                        'serial_available'   => $serialAvailable,
                     ];
                 })->values()->toArray();
 
@@ -290,5 +305,6 @@ class OrderController extends Controller
             ], 500);
         }
     }
+
 
 }

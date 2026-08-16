@@ -1253,6 +1253,7 @@
 
 
 
+
 <!-- Suppliers and Purchases -->
 <script>
     
@@ -1314,6 +1315,562 @@
 
 
 
+
+
+<script>
+// ── START PRODUCTION WITH PAYMENT ─────────────────────────────────────────────
+function startProductionWithPayment(orderId) {
+    // ✅ Find the form (it should always exist now)
+    const form = document.getElementById(`startProductionForm${orderId}`);
+    
+    if (!form) {
+        console.error('Form not found for order:', orderId);
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: 'Could not find production form. Please refresh the page and try again.',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+        return;
+    }
+
+    // Get the submit button
+    const submitButton = form.closest('.modal-body').querySelector('.btn-warning');
+    
+    // Show loading
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
+    }
+
+    const formData = new FormData(form);
+    const data = {
+        order_id: formData.get('order_id'),
+        payment_method_id: formData.get('payment_method_id'),
+        withdrawal_amount: formData.get('withdrawal_amount'),
+        notes: formData.get('notes') || null,
+        estimated_cost: formData.get('estimated_cost'),
+        _token: document.querySelector('meta[name="csrf-token"]').content
+    };
+
+    // ✅ Check if payment is required (estimated_cost > 0)
+    const estimatedCost = parseFloat(data.estimated_cost) || 0;
+    const isPaymentRequired = estimatedCost > 0;
+
+    // ✅ If payment is required, validate payment method
+    if (isPaymentRequired) {
+        if (!data.payment_method_id) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("payments.select_payment_method") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd'
+            });
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+            }
+            return;
+        }
+
+        // Validate amount
+        const amount = parseFloat(data.withdrawal_amount);
+        if (!amount || amount <= 0) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("passwords.please_enter_valid_amount") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd'
+            });
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+            }
+            return;
+        }
+    }
+
+    // Get payment method name for display (if payment is required)
+    let paymentMethodName = 'N/A';
+    if (isPaymentRequired) {
+        const paymentMethodSelect = form.querySelector('select[name="payment_method_id"]');
+        paymentMethodName = paymentMethodSelect.options[paymentMethodSelect.selectedIndex]?.text || 'N/A';
+    }
+
+    // Build confirmation message
+    let confirmationHtml = `{{ __("passwords.start_production_confirmation") }}<br><br>`;
+    if (isPaymentRequired) {
+        confirmationHtml += `
+            <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}${parseFloat(data.withdrawal_amount).toFixed(2)}<br>
+            <strong>{{ __("payments.payment_method") }}:</strong> ${paymentMethodName}
+        `;
+    } else {
+        confirmationHtml += `
+            <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}0.00<br>
+            <strong>{{ __("passwords.payment_status") }}:</strong> {{ __("passwords.no_payment_required") }}
+        `;
+    }
+
+    // Show confirmation
+    Swal.fire({
+        title: '{{ __("passwords.start_production") }}',
+        html: confirmationHtml,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '{{ __("passwords.start") }}',
+        cancelButtonText: '{{ __("passwords.cancel") }}',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            return fetch(`/production-orders/${orderId}/start-with-payment`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+                return data;
+            })
+            .catch(error => {
+                throw new Error(error.message);
+            });
+        }
+    })
+    .then((result) => {
+        if (result.isConfirmed && result.value) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById(`startProductionModal${orderId}`));
+            if (modal) modal.hide();
+
+            Swal.fire({
+                title: '{{ __("passwords.success") }}',
+                text: result.value.message,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                if (result.value.redirect) {
+                    window.location.href = result.value.redirect;
+                } else {
+                    location.reload();
+                }
+            });
+        }
+    })
+    .catch(error => {
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: error.message || '{{ __("passwords.production_start_failed") }}',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+    })
+    .finally(() => {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+        }
+    });
+}
+
+// ── UPDATE ACTUAL OUTPUT ──────────────────────────────────────────────────────
+function updateActualOutput(orderId) {
+    const form = document.getElementById(`updateOutputForm${orderId}`);
+    if (!form) {
+        console.error('Form not found for order:', orderId);
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: 'Could not find update form. Please refresh the page and try again.',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+        return;
+    }
+
+    const submitButton = form.querySelector('button.btn-warning') || form.closest('.modal-body').querySelector('.btn-warning');
+    
+    // Show loading
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.saving") }}...';
+    }
+
+    const data = {
+        outputs: []
+    };
+
+    // Collect output data
+    document.querySelectorAll(`#updateOutputForm${orderId} .actual-quantity-input`).forEach(input => {
+        const outputId = input.dataset.outputId;
+        const actualQuantity = parseFloat(input.value) || 0;
+        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
+
+        if (actualQuantity > 0 || defectiveQuantity > 0) {
+            data.outputs.push({
+                output_id: outputId,
+                actual_quantity: actualQuantity,
+                defective_quantity: defectiveQuantity
+            });
+        }
+    });
+
+    // Validate
+    if (data.outputs.length === 0) {
+        Swal.fire({
+            title: '{{ __("passwords.validation_error") }}',
+            text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
+            icon: 'warning',
+            confirmButtonColor: '#0d6efd'
+        });
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
+        }
+        return;
+    }
+
+    fetch(`/production-orders/${orderId}/update-output`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
+        }
+
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById(`updateOutputModal${orderId}`));
+            if (modal) modal.hide();
+
+            Swal.fire({
+                title: '{{ __("passwords.success") }}',
+                text: data.message,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                location.reload();
+            });
+        } else {
+            Swal.fire({
+                title: '{{ __("passwords.error") }}',
+                text: data.message || '{{ __("passwords.failed_to_update_output") }}',
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
+            });
+        }
+    })
+    .catch(error => {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
+        }
+
+        console.error('Error:', error);
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: '{{ __("passwords.failed_to_update_output") }}',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+    });
+}
+
+// ── REAL-TIME VALIDATION ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('input', function(e) {
+        const target = e.target;
+        if (target.classList.contains('actual-quantity-input')) {
+            const outputId = target.dataset.outputId;
+            const planned = parseFloat(target.dataset.planned) || 0;
+            const actual = parseFloat(target.value) || 0;
+            
+            const remainingDisplay = document.querySelector(`.remaining-display[data-output-id="${outputId}"]`);
+            if (remainingDisplay) {
+                remainingDisplay.textContent = Math.max(0, planned - actual).toFixed(2);
+            }
+            
+            const totalDisplay = document.querySelector(`.total-display[data-output-id="${outputId}"]`);
+            if (totalDisplay) {
+                totalDisplay.textContent = actual.toFixed(2);
+            }
+        }
+    });
+
+    // Debug: Log when forms are found
+    console.log('🔍 Checking for production forms...');
+    const forms = document.querySelectorAll('[id^="startProductionForm"]');
+    console.log('Found ' + forms.length + ' production forms');
+    forms.forEach(form => {
+        console.log('  - Form ID:', form.id);
+    });
+});
+
+// ── COMPLETE PRODUCTION WITH OUTPUTS ──────────────────────────────────────────
+function completeProductionWithOutputs(orderId) {
+    const form = document.getElementById(`completeProductionForm${orderId}`);
+    if (!form) {
+        console.error('Form not found for order:', orderId);
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: 'Could not find production form. Please refresh the page and try again.',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+        return;
+    }
+
+    const submitButton = form.querySelector('button.btn-success');
+    
+    // Show loading
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
+    }
+
+    const data = {
+        outputs: [],
+        complete: true
+    };
+
+    // ✅ Collect output data - allow some to be 0
+    let hasQuantity = false;
+    const errors = [];
+    let outputCount = 0;
+
+    document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
+        outputCount++;
+        const outputId = input.dataset.outputId;
+        const actualQuantity = parseFloat(input.value) || 0;
+        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
+
+        // ✅ Track if any output has quantity > 0
+        if (actualQuantity > 0) {
+            hasQuantity = true;
+        }
+
+        // ✅ Validate: Actual quantity cannot be negative
+        if (actualQuantity < 0) {
+            errors.push(`"${input.closest('.card-body').querySelector('h6').textContent}" - Actual quantity cannot be negative`);
+        }
+
+        // ✅ Validate: Defective quantity cannot exceed actual quantity
+        if (defectiveQuantity > actualQuantity) {
+            errors.push(`"${input.closest('.card-body').querySelector('h6').textContent}" - Defective quantity cannot exceed actual quantity`);
+        }
+
+        data.outputs.push({
+            output_id: outputId,
+            actual_quantity: actualQuantity,
+            defective_quantity: defectiveQuantity
+        });
+    });
+
+    // ✅ Show specific validation errors
+    if (errors.length > 0) {
+        Swal.fire({
+            title: '{{ __("passwords.validation_error") }}',
+            html: errors.join('<br>'),
+            icon: 'warning',
+            confirmButtonColor: '#0d6efd'
+        });
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
+        }
+        return;
+    }
+
+    // ✅ Validate: At least one output must have quantity > 0
+    if (!hasQuantity) {
+        Swal.fire({
+            title: '{{ __("passwords.validation_error") }}',
+            text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
+            icon: 'warning',
+            confirmButtonColor: '#0d6efd'
+        });
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
+        }
+        return;
+    }
+
+    // ✅ Show confirmation with summary
+    let summaryHtml = '{{ __("passwords.complete_production_confirmation") }}<br><br>';
+    document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
+        const outputId = input.dataset.outputId;
+        const actualQuantity = parseFloat(input.value) || 0;
+        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
+        const name = input.closest('.card-body').querySelector('h6').textContent;
+        
+        if (actualQuantity > 0) {
+            summaryHtml += `<strong>${name}:</strong> ${actualQuantity} units`;
+            if (defectiveQuantity > 0) {
+                summaryHtml += ` (${defectiveQuantity} defective)`;
+            }
+            summaryHtml += `<br>`;
+        }
+    });
+
+    Swal.fire({
+        title: '{{ __("passwords.complete_production") }}',
+        html: summaryHtml,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '{{ __("passwords.complete") }}',
+        cancelButtonText: '{{ __("passwords.cancel") }}',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            return fetch(`/production-orders/${orderId}/complete-with-outputs`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+                return data;
+            })
+            .catch(error => {
+                throw new Error(error.message);
+            });
+        }
+    })
+    .then((result) => {
+        if (result.isConfirmed && result.value) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById(`completeProductionModal${orderId}`));
+            if (modal) modal.hide();
+
+            Swal.fire({
+                title: '{{ __("passwords.success") }}',
+                text: result.value.message,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                if (result.value.redirect) {
+                    window.location.href = result.value.redirect;
+                } else {
+                    location.reload();
+                }
+            });
+        }
+    })
+    .catch(error => {
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: error.message || '{{ __("passwords.production_complete_failed") }}',
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+    })
+    .finally(() => {
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
+        }
+    });
+}
+
+// ── REAL-TIME VALIDATION ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('input', function(e) {
+        const target = e.target;
+        if (target.classList.contains('actual-quantity-input')) {
+            const outputId = target.dataset.outputId;
+            const planned = parseFloat(target.dataset.planned) || 0;
+            const actual = parseFloat(target.value) || 0;
+            
+            // Update remaining display
+            const remainingDisplay = document.querySelector(`.remaining-display[data-output-id="${outputId}"]`);
+            if (remainingDisplay) {
+                remainingDisplay.textContent = Math.max(0, planned - actual).toFixed(2);
+            }
+            
+            // Update total display
+            const totalDisplay = document.querySelector(`.total-display[data-output-id="${outputId}"]`);
+            if (totalDisplay) {
+                totalDisplay.textContent = actual.toFixed(2);
+            }
+        }
+    });
+});
+
+// ── CANCEL PRODUCTION ────────────────────────────────────────────────────────
+function cancelProduction(orderId) {
+    Swal.fire({
+        title: '{{ __("passwords.cancel_production") }}',
+        text: '{{ __("passwords.cancel_production_confirmation") }}',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '{{ __("passwords.cancel") }}',
+        cancelButtonText: '{{ __("passwords.keep") }}',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            return fetch(`/production-orders/${orderId}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.message);
+                }
+                return data;
+            });
+        }
+    })
+    .then((result) => {
+        if (result.isConfirmed && result.value) {
+            Swal.fire({
+                title: '{{ __("passwords.success") }}',
+                text: result.value.message,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                location.reload();
+            });
+        }
+    })
+    .catch(error => {
+        Swal.fire({
+            title: '{{ __("passwords.error") }}',
+            text: error.message,
+            icon: 'error',
+            confirmButtonColor: '#0d6efd'
+        });
+    });
+}
+</script>
 
 
 

@@ -1,5 +1,5 @@
 <?php
-// database/migrations/2026_07_14_000001_create_production_orders_table.php
+// database/migrations/2026_01_15_000001_create_production_orders_table.php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -11,51 +11,62 @@ return new class extends Migration
     {
         Schema::create('production_orders', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
-            $table->foreignId('location_id')->constrained()->onDelete('restrict');
-            $table->foreignId('recipe_id')->nullable()->constrained()->onDelete('set null');
+            $table->unsignedBigInteger('tenant_id');
+            $table->unsignedBigInteger('location_id')->nullable();
             
-            // ✅ This IS the batch number
             $table->string('production_number', 50)->unique();
-            
-            // Status
             $table->enum('status', [
-                'draft',
-                'planned',
-                'approved',
-                'in_progress',
-                'quality_check',
-                'completed',
+                'draft', 
+                'in_progress', 
+                'completed', 
                 'cancelled'
             ])->default('draft');
             
-            // Scheduling
-            $table->timestamp('scheduled_date')->nullable();
-            $table->timestamp('started_at')->nullable();
-            $table->timestamp('completed_at')->nullable();
+            $table->dateTime('scheduled_date')->nullable();
+            $table->dateTime('started_at')->nullable();
+            $table->dateTime('completed_at')->nullable();
+            $table->dateTime('cancelled_at')->nullable();
             
-            // Totals
-            $table->decimal('total_input_quantity', 12, 4)->default(0);
-            $table->decimal('total_output_quantity', 12, 4)->default(0);
-            $table->bigInteger('estimated_cost')->default(0);
-            $table->bigInteger('actual_cost')->default(0);
+            // ✅ Totals
+            $table->decimal('total_input_quantity', 15, 4)->default(0);
+            $table->decimal('total_output_quantity', 15, 4)->default(0);
             
-            // User tracking
-            $table->foreignId('created_by')->nullable()->constrained('users');
-            $table->foreignId('approved_by')->nullable()->constrained('users');
-            $table->foreignId('started_by')->nullable()->constrained('users');
-            $table->foreignId('completed_by')->nullable()->constrained('users');
-            $table->foreignId('cancelled_by')->nullable()->constrained('users');
+            // ✅ Costs (stored as integers for base currency)
+            $table->bigInteger('total_input_cost')->default(0);
+            $table->bigInteger('total_output_cost')->default(0);
+            $table->bigInteger('total_cost')->default(0);
+            $table->bigInteger('estimated_cost')->default(0)->nullable();
             
-            $table->timestamp('approved_at')->nullable();
-            $table->timestamp('cancelled_at')->nullable();
+            // ✅ Payment tracking
+            $table->unsignedBigInteger('payment_method_id')->nullable();
+            $table->string('payment_transaction_ref', 100)->nullable();
+            
+            // ✅ Foreign keys
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('started_by')->nullable();
+            $table->unsignedBigInteger('completed_by')->nullable();
+            $table->unsignedBigInteger('cancelled_by')->nullable();
             
             $table->text('notes')->nullable();
-            $table->text('quality_notes')->nullable();
+            
             $table->timestamps();
-
+            
+            // ✅ Indexes
+            $table->index('tenant_id');
             $table->index('status');
             $table->index('production_number');
+            $table->index('scheduled_date');
+            $table->index('payment_method_id');
+            $table->index('payment_transaction_ref');
+            
+            // ✅ Foreign keys
+            $table->foreign('tenant_id')->references('id')->on('tenants');
+            $table->foreign('location_id')->references('id')->on('locations');
+            $table->foreign('created_by')->references('id')->on('users');
+            $table->foreign('started_by')->references('id')->on('users');
+            $table->foreign('completed_by')->references('id')->on('users');
+            $table->foreign('cancelled_by')->references('id')->on('users');
+            $table->foreign('payment_method_id')->references('id')->on('payment_methods')->onDelete('set null');
         });
     }
 

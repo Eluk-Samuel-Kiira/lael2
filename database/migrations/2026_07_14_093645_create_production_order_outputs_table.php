@@ -1,5 +1,5 @@
 <?php
-// database/migrations/2026_07_14_000003_create_production_order_outputs_table.php
+// database/migrations/2026_01_15_000003_create_production_order_outputs_table.php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -11,38 +11,50 @@ return new class extends Migration
     {
         Schema::create('production_order_outputs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('production_order_id')->constrained()->onDelete('cascade');
+            $table->unsignedBigInteger('production_order_id');
+            $table->unsignedBigInteger('product_variant_id');
             
-            // What finished good is being produced
-            $table->foreignId('product_variant_id')->constrained('product_variants')->onDelete('restrict');
+            // ✅ Output batch tracking
+            $table->string('batch_number', 100)->nullable()->unique();
+            $table->unsignedBigInteger('serial_number_id')->nullable();
+            $table->string('serial_number', 100)->nullable();
             
-            // ✅ This IS the batch number (from production order)
-            $table->string('batch_no', 50)->nullable()->comment('Auto-generated from production number');
+            // ✅ Quantities
+            $table->decimal('planned_quantity', 15, 4)->default(0);
+            $table->decimal('actual_quantity', 15, 4)->default(0);
+            $table->decimal('defective_quantity', 15, 4)->default(0);
+            $table->string('unit', 20)->default('kg');
             
-            // Quantities
-            $table->decimal('planned_quantity', 12, 4);
-            $table->decimal('actual_quantity', 12, 4)->default(0);
-            $table->decimal('defective_quantity', 12, 4)->default(0);
-            $table->string('unit', 20)->default('pcs');
-            
-            // Packaging
-            $table->string('packaging_type', 50)->nullable();
-            $table->decimal('packaging_weight', 10, 4)->nullable();
-            
-            // Cost & Pricing
+            // ✅ Costs (stored as integers for base currency)
             $table->bigInteger('production_cost')->default(0);
-            $table->bigInteger('selling_price')->nullable();
+            $table->bigInteger('selling_price')->default(0);
+            $table->bigInteger('total_cost')->default(0);
             
-            // Quality
+            // ✅ Inventory strategy for the output product
+            $table->enum('inventory_strategy', ['quantity', 'batch', 'serial'])->default('quantity');
+            
+            // ✅ Packaging
+            $table->string('packaging_type', 100)->nullable();
+            $table->decimal('packaging_weight', 15, 4)->nullable();
+            
+            // ✅ Quality
             $table->enum('quality_status', ['pending', 'approved', 'rejected'])->default('pending');
-            
             $table->text('notes')->nullable();
+            
             $table->timestamps();
-
+            
+            // ✅ Indexes
             $table->index('production_order_id');
             $table->index('product_variant_id');
-            $table->index('batch_no');
-            $table->unique(['production_order_id', 'product_variant_id'], 'unique_production_output');
+            $table->index('batch_number');
+            $table->index('serial_number_id');
+            $table->index('quality_status');
+            $table->index('inventory_strategy');
+            
+            // ✅ Foreign keys
+            $table->foreign('production_order_id')->references('id')->on('production_orders')->onDelete('cascade');
+            $table->foreign('product_variant_id')->references('id')->on('product_variants');
+            $table->foreign('serial_number_id')->references('id')->on('serial_numbers')->onDelete('set null');
         });
     }
 

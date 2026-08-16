@@ -66,42 +66,61 @@ Route::prefix('public/invoices')->name('public.invoice.')->group(function () {
 });
 
 
+use App\Http\Controllers\Manufacturing\ProductionOrderController;
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    
+    Route::prefix('production-orders')->name('production-orders.')->group(function () {
+        Route::get('/', [ProductionOrderController::class, 'index'])->name('index');
+        Route::post('/', [ProductionOrderController::class, 'store'])->name('store');
+        Route::post('/{id}/start-with-payment', [ProductionOrderController::class, 'startWithPayment'])->name('start-with-payment');
+        Route::post('/{id}/start', [ProductionOrderController::class, 'start'])->name('start');
+        // Route::post('/{id}/complete', [ProductionOrderController::class, 'complete'])->name('complete');
+        Route::post('/{id}/cancel', [ProductionOrderController::class, 'cancel'])->name('cancel');
+        Route::post('/{id}/update-output', [ProductionOrderController::class, 'updateOutput'])->name('update-output');
+        Route::get('/available-batches', [ProductionOrderController::class, 'getAvailableBatches'])->name('available-batches');
+        Route::post('{id}/complete-with-outputs', [ProductionOrderController::class, 'completeWithOutputs'])
+            ->name('complete-with-outputs');
+    });
+});
 
 
-Route::get('/debug/batches', function() {
-    $user = Auth::user();
-    $tenantId = $user->tenant_id;
-    $locationId = $user->location_id;
+
+
+// Route::get('/debug/batches', function() {
+//     $user = Auth::user();
+//     $tenantId = $user->tenant_id;
+//     $locationId = $user->location_id;
     
-    // Get all batches for this tenant
-    $batches = DB::table('purchase_receipt_items as pri')
-        ->join('purchase_receipts as pr', 'pri.purchase_receipt_id', '=', 'pr.id')
-        ->join('purchase_orders as po', 'pr.purchase_order_id', '=', 'po.id')
-        ->join('purchase_order_items as poi', 'pri.purchase_order_item_id', '=', 'poi.id')
-        ->leftJoin('product_variants as pv', 'poi.product_variant_id', '=', 'pv.id')
-        ->leftJoin('products as p', 'pv.product_id', '=', 'p.id')
-        ->where('po.tenant_id', $tenantId)
-        ->select(
-            'pri.id',
-            'pri.batch_number',
-            'pri.quantity_received',
-            'pri.quantity_remaining',
-            'pri.location_id',
-            'pri.department_id',
-            'pv.id as variant_id',
-            'pv.name as variant_name',
-            'p.name as product_name',
-            'p.inventory_strategy'
-        )
-        ->get();
+//     // Get all batches for this tenant
+//     $batches = DB::table('purchase_receipt_items as pri')
+//         ->join('purchase_receipts as pr', 'pri.purchase_receipt_id', '=', 'pr.id')
+//         ->join('purchase_orders as po', 'pr.purchase_order_id', '=', 'po.id')
+//         ->join('purchase_order_items as poi', 'pri.purchase_order_item_id', '=', 'poi.id')
+//         ->leftJoin('product_variants as pv', 'poi.product_variant_id', '=', 'pv.id')
+//         ->leftJoin('products as p', 'pv.product_id', '=', 'p.id')
+//         ->where('po.tenant_id', $tenantId)
+//         ->select(
+//             'pri.id',
+//             'pri.batch_number',
+//             'pri.quantity_received',
+//             'pri.quantity_remaining',
+//             'pri.location_id',
+//             'pri.department_id',
+//             'pv.id as variant_id',
+//             'pv.name as variant_name',
+//             'p.name as product_name',
+//             'p.inventory_strategy'
+//         )
+//         ->get();
     
-    return response()->json([
-        'total' => $batches->count(),
-        'batches' => $batches,
-        'location_id' => $locationId,
-        'assigned_to_current_location' => $batches->filter(function($b) use ($locationId) {
-            return $b->location_id == $locationId;
-        })->values()
-    ]);
-})->middleware(['auth']);
+//     return response()->json([
+//         'total' => $batches->count(),
+//         'batches' => $batches,
+//         'location_id' => $locationId,
+//         'assigned_to_current_location' => $batches->filter(function($b) use ($locationId) {
+//             return $b->location_id == $locationId;
+//         })->values()
+//     ]);
+// })->middleware(['auth']);
 

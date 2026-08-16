@@ -1368,4 +1368,171 @@ return [
     'all_batches' => 'All Batches',
     'search_batch_number' => 'Search Batch Number...',
     'enter_batch_number_to_filter' => 'Enter batch number to filter results',
+
+
+    
+    // ─── Production Orders (NEW) ─────────────────────────────────────────────
+    'production_orders' => 'Production Orders',
+    'production_order' => 'Production Order',
+    'create_production_order' => 'Create Production Order',
+    'new_production_order' => 'New Production Order',
+    'production_number' => 'Production Number',
+    'production_order_created' => 'Production order created successfully',
+    'production_order_creation_failed' => 'Failed to create production order',
+    
+    // Status (NEW)
+    'start_production' => 'Start Production',
+    'start_production_confirmation' => 'Are you sure you want to start this production order? This will consume raw materials.',
+    'complete_production' => 'Complete Production',
+    'complete_production_confirmation' => 'Are you sure you want to complete this production order? This will add finished goods to inventory.',
+    'cancel_production' => 'Cancel Production',
+    'cancel_production_confirmation' => 'Are you sure you want to cancel this production order? This will reverse any consumed materials.',
+    'production_started' => 'Production started successfully',
+    'production_completed' => 'Production completed successfully',
+    'production_cancelled' => 'Production cancelled successfully',
+    'can_only_start_draft_orders' => 'Only draft orders can be started',
+    'can_only_complete_in_progress_orders' => 'Only in-progress orders can be completed',
+    'cannot_cancel_completed_order' => 'Cannot cancel a completed production order',
+    'all_outputs_must_have_quantity' => 'All outputs must have actual quantity before completing',
+    'can_only_update_in_progress' => 'Can only update quantities for in-progress orders',
+    'output_quantity_updated' => 'Output quantity updated successfully',
+
+    // resources/lang/en/passwords.php
+    'no_payment_required' => 'No payment required for this production order.',
+    'start_production_no_payment_info' => 'This production order has no associated cost. No payment will be recorded.',
+    'payment_method_required' => 'Payment method is required when production cost is greater than 0.',
+    'processing' => 'Processing...',
+    'production_start_failed' => 'Failed to start production. Please try again.',
+    
+    // Input/Output (NEW)
+    'input_materials' => 'Input Materials',
+    'output_products' => 'Output Products',
+    'estimated_output' => 'Estimated Output Output',
+    'material' => 'Material',
+    'inputs' => 'Inputs',
+    'unit' => 'Unit',
+    'scheduled_date' => 'Schedule Date',
+    'inventory_strategy' => 'Inventory Strategy',
+    'outputs' => 'Outputs',
+    '_add_material' => 'Add Material',
+    '_add_product' => 'Add Product',
+    'add_at_least_one_input' => 'Please add at least one input material',
+    'add_at_least_one_output' => 'Please add at least one output product',
+    'select_material_first' => 'Please select a material first',
+    'batch_source' => 'Batch Source',
+    'load_batches' => 'Load Batches',
+    'loading_batches' => 'Loading Batches',
+    'no_batch' => 'No Batch',
+    'batches_loaded' => 'Batches loaded successfully',
+    'no_batches_available' => 'No batches available for this material',
+    'failed_to_load_batches' => 'Failed to load batches',
+    
+    // Costs (NEW)
+    'total_input_cost' => 'Total Input Cost',
+    'total_output_cost' => 'Total Output Cost',
+    'total_cost' => 'Total Cost',
+    'estimated_cost' => 'Estimated Cost',
+    'estimated_profit' => 'Estimated Profit',
+    'production_cost' => 'Production Cost',
+    
+    // Recipe (NEW - if you keep it optional)
+    'recipe' => 'Recipe',
+    'recipe_product' => 'Recipe Product',
+    
+    // Inventory Strategies (NEW)
+    'quantity_tracking' => 'Quantity Tracking',
+    'batch_tracking' => 'Batch Tracking',
+    'serial_tracking' => 'Serial Tracking',
+    
+    // Batch Log Types (NEW)
+    'produced' => 'Produced',
+    'consumed' => 'Consumed',
+    
+    // Validation (NEW)
+    'cannot_receive_unpaid_items' => 'Cannot receive items until purchase order is fully paid',
+    'validation_error' => 'Validation Error',
+    
+    // Action buttons (NEW)
+    'start' => 'Start',
+    'complete' => 'Complete',
+    'keep' => 'Keep',
+    'info' => 'Info',
+    'select_material_first' => 'Please select a material first',
+
+
+    // ─── Start Production Modal ─────────────────────────────────────────────────────
+    'start_production' => 'Start Production',
+    'start_production_info' => 'Production Information',
+    'start_production_info_text' => 'Review the materials below before starting production. This will consume raw materials from inventory.',
+    'start_production_payment_info' => 'Payment will be withdrawn from the selected payment method when production starts.',
+    'start_production_no_payment_info' => 'This production order has no associated cost. No payment will be recorded.',
+    'start_production_notes' => 'Add any notes about this production (optional)',
+    'start_production_confirmation' => 'Are you sure you want to start this production order?',
+    'no_payment_required' => 'No payment required for this production order.',
+    'production_information' => 'Production Information',
+    
+    // ─── Input Materials ─────────────────────────────────────────────────────────────
+    'input_materials' => 'Input Materials',
+    'insufficient_stock' => 'Insufficient Stock',
+    'available' => 'Available',
+    'no_records_found' => 'No Records Found',
+
+
+    // ─── View Production Modal ─────────────────────────────────────────────────────
+    'production_order' => 'Production Order',
+    'production_number' => 'Production Number',
+    'scheduled_date' => 'Scheduled Date',
+    'location' => 'Location',
+    'creater' => 'Created By',
+    'total_cost' => 'Total Cost',
+    'please_enter_valid_amount' => 'Please enter valid amount',
+    'actual_quantity' => 'Actual Quantity',
+    'defective_quantity' => 'Defective Quantity',
+    'enter_actual_produced' => 'Enter Actual Produced',
+    'enter_defective_units' => 'Enter Defective Quantity',
+    'remaining' => 'Remaining',
+
+    'complete_production_instruction' => 'Enter the actual quantities produced. These will be added to inventory and the production order will be marked as completed.',
+    'produced_so_far' => 'Produced so far',
+    'total_produced' => 'Total Produced',
+    'production_complete_failed' => 'Failed to complete production. Please try again.',
+    'enter_at_least_one_actual_quantity' => 'Please enter actual quantity for at least one output product',
+    
+    // ─── Input Materials ───────────────────────────────────────────────────────────
+    'input_materials' => 'Input Materials',
+    'material' => 'Material',
+    'planned' => 'Planned',
+    'actual' => 'Actual',
+    'unit' => 'Unit',
+    'cost' => 'Cost',
+    
+    // ─── Output Products ───────────────────────────────────────────────────────────
+    'output_products' => 'Output Products',
+    'product' => 'Product',
+    'defective' => 'Defective',
+    'strategy' => 'Strategy',
+    
+    // ─── Status ────────────────────────────────────────────────────────────────────
+    'status' => 'Status',
+    
+    // ─── Buttons ───────────────────────────────────────────────────────────────────
+    'close' => 'Close',
+    
+    // ─── Production Cost ─────────────────────────────────────────────────────────────
+    'production_cost' => 'Production Cost',
+    'estimated_cost' => 'Estimated Cost',
+    
+    // ─── Payment Information ─────────────────────────────────────────────────────────
+    'payment_information' => 'Payment Information',
+    'select_payment_method' => 'Select Payment Method',
+    'payment_method' => 'Payment Method',
+    
+    // ─── Notes ───────────────────────────────────────────────────────────────────────
+    'notes' => 'Notes',
+    'start_production_notes_placeholder' => 'Add any notes about this production (optional)',
+    
+    // ─── Buttons ─────────────────────────────────────────────────────────────────────
+    'start' => 'Start',
+    'cancel' => 'Cancel',
+
 ];

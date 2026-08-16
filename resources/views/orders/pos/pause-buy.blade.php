@@ -273,6 +273,17 @@
                 (items.length - 4) + ' {{ __("pagination.more") }}</span>';
         }
 
+        var hasSerial = items.some(function(i) { return i.strategy === 'serial'; });
+        var hasBatch = items.some(function(i) { return i.strategy === 'batch'; });
+        
+        var indicatorHtml = '';
+        if (hasSerial) {
+            indicatorHtml += '<span class="badge badge-warning fw-bold fs-8 me-1">🔢 Serial</span>';
+        }
+        if (hasBatch) {
+            indicatorHtml += '<span class="badge badge-info fw-bold fs-8 me-1">📦 Batch</span>';
+        }
+
         var total    = parseFloat(order.total || 0).toFixed(2);
         var customer = escHtml(customerName);
         var orderNo  = escHtml(order.order_number  || '#' + order.id);
@@ -354,77 +365,92 @@
         }
     });
 
-    // ── Restore cart ──────────────────────────────────────────
     function pbDoRestore(order) {
         var drawer = bootstrap.Offcanvas.getInstance(pbDrawerEl);
         if (drawer) drawer.hide();
 
         if (typeof clearCart === 'function') clearCart();
 
-        var items  = order.items || [];
+        var items = order.items || [];
         var failed = 0;
         var restored = 0;
+        var serialItems = [];
+        var batchItems = [];
 
+        // ✅ First pass: Group items by type
         items.forEach(function (item) {
-            // ✅ Check if item has quantity available
-            var qtyAvailable = parseInt(item.quantity_available) || 0;
+            var strategy = item.strategy || 'quantity';
             
-            if (qtyAvailable <= 0) {
-                // ✅ Item is out of stock in the selected department
-                failed++;
-                console.warn('[PauseBuy] Item out of stock:', item.name, 'Available:', qtyAvailable);
-                
-                // Show a warning toast for out of stock items
-                if (typeof toastr !== 'undefined') {
-                    toastr.warning(item.name + ' is out of stock in the selected department');
-                }
-                return;
-            }
-
-            var imageUrl = '';
-            if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
-                imageUrl = item.image_url;
+            if (strategy === 'serial') {
+                serialItems.push(item);
+            } else if (strategy === 'batch') {
+                batchItems.push(item);
             } else {
-                imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
-            }
-
-            var variant = {
-                id:                 item.variant_id || item.id,
-                name:               item.name || item.item_name || 'Item',
-                price:              parseFloat(item.unit_price || item.price || 0),
-                image:              imageUrl,
-                quantity_available: qtyAvailable,
-                taxes:              Array.isArray(item.taxes)      ? item.taxes      : [],
-                promotions:         Array.isArray(item.promotions) ? item.promotions : [],
-                inventory_id:       item.inventory_id || null,
-                department_id:      item.department_id || null
-            };
-
-            var targetQty = parseInt(item.quantity) || 1;
-            
-            // ✅ Only add if we have enough stock
-            var addQty = Math.min(targetQty, qtyAvailable);
-            
-            for (var q = 0; q < addQty; q++) {
-                if (typeof addToCart === 'function') {
-                    addToCart(variant);
-                    restored++;
-                } else {
+                // Quantity items - can be restored normally
+                var qtyAvailable = parseInt(item.quantity_available) || 0;
+                
+                if (qtyAvailable <= 0) {
                     failed++;
-                    break;
+                    if (typeof toastr !== 'undefined') {
+                        toastr.warning(item.name + ' is out of stock in the selected department');
+                    }
+                    return;
                 }
-            }
-            
-            if (targetQty > qtyAvailable) {
-                if (typeof toastr !== 'undefined') {
-                    toastr.warning('Only ' + qtyAvailable + ' of ' + item.name + ' available, restored ' + addQty);
+
+                var imageUrl = '';
+                if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
+                    imageUrl = item.image_url;
+                } else {
+                    imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
+                }
+
+                var variant = {
+                    id: item.variant_id || item.id,
+                    name: item.name || item.item_name || 'Item',
+                    price: parseFloat(item.unit_price || item.price || 0),
+                    image: imageUrl,
+                    quantity_available: qtyAvailable,
+                    taxes: Array.isArray(item.taxes) ? item.taxes : [],
+                    promotions: Array.isArray(item.promotions) ? item.promotions : [],
+                    inventory_id: item.inventory_id || null,
+                    department_id: item.department_id || null,
+                    strategy: 'quantity'
+                };
+
+                var targetQty = parseInt(item.quantity) || 1;
+                var addQty = Math.min(targetQty, qtyAvailable);
+                
+                for (var q = 0; q < addQty; q++) {
+                    if (typeof addToCart === 'function') {
+                        addToCart(variant);
+                        restored++;
+                    } else {
+                        failed++;
+                        break;
+                    }
+                }
+                
+                if (targetQty > qtyAvailable) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.warning('Only ' + qtyAvailable + ' of ' + item.name + ' available, restored ' + addQty);
+                    }
                 }
             }
         });
 
+        // ✅ Second pass: Restore BATCH items
+        batchItems.forEach(function (item) {
+            restoreBatchItem(item);
+        });
+
+        // ✅ Third pass: Restore SERIAL items
+        serialItems.forEach(function (item) {
+            restoreSerialItem(item);
+        });
+
         pbRestoreCustomer(order);
 
-        window.resumedOrderId     = order.id;
+        window.resumedOrderId = order.id;
         window.resumedOrderNumber = order.order_number;
 
         var custLabel = order.customer_name || '{{ __("pagination.guest") }}';
@@ -436,6 +462,121 @@
         }
 
         if (failed > 0) console.warn('[PauseBuy] ' + failed + ' items could not be restored.');
+    }
+
+    // ✅ New function: Restore batch item
+    function restoreBatchItem(item) {
+        var qtyAvailable = parseInt(item.quantity_available) || 0;
+        
+        if (qtyAvailable <= 0) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Batch ' + (item.batch_number || '') + ' for ' + item.name + ' is out of stock');
+            }
+            return;
+        }
+
+        // ✅ Check if the batch is still available
+        if (item.batch_id) {
+            // The batch exists and has quantity
+            var imageUrl = '';
+            if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
+                imageUrl = item.image_url;
+            } else {
+                imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
+            }
+
+            var variant = {
+                id: item.variant_id || item.id,
+                name: item.name || item.item_name || 'Item',
+                price: parseFloat(item.unit_price || item.price || 0),
+                image: imageUrl,
+                quantity_available: qtyAvailable,
+                taxes: Array.isArray(item.taxes) ? item.taxes : [],
+                promotions: Array.isArray(item.promotions) ? item.promotions : [],
+                inventory_id: item.inventory_id || null,
+                department_id: item.department_id || null,
+                strategy: 'batch',
+                is_recipe: false,
+                batch_id: item.batch_id,
+                batch_number: item.batch_number || null,
+                // ✅ Generate unique cart key for this batch
+                cartKey: String(item.variant_id || item.id) + '_batch_' + String(item.batch_id)
+            };
+
+            var targetQty = parseInt(item.quantity) || 1;
+            var addQty = Math.min(targetQty, qtyAvailable);
+            
+            // ✅ For batch items, we can add multiple quantities from the same batch
+            for (var q = 0; q < addQty; q++) {
+                if (typeof addToCart === 'function') {
+                    addToCart(variant);
+                }
+            }
+            
+            if (targetQty > qtyAvailable) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('Only ' + qtyAvailable + ' of batch ' + (item.batch_number || '') + ' available');
+                }
+            }
+        }
+    }
+
+    // ✅ New function: Restore serial item
+    function restoreSerialItem(item) {
+        // ✅ Check if serial is still available
+        if (!item.serial_available || !item.serial_id) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Serial ' + (item.serial_number || '') + ' for ' + item.name + ' is no longer available');
+            }
+            return;
+        }
+
+        var imageUrl = '';
+        if (item.image_url && item.image_url !== '' && item.image_url !== 'null') {
+            imageUrl = item.image_url;
+        } else {
+            imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
+        }
+
+        // ✅ Create the serial variant with ALL required data
+        var variant = {
+            id: item.variant_id || item.id,
+            name: item.name || item.item_name || 'Item' + ' (SN: ' + (item.serial_number || '') + ')',
+            price: parseFloat(item.unit_price || item.price || 0),
+            image: imageUrl,
+            quantity_available: 1,
+            taxes: Array.isArray(item.taxes) ? item.taxes : [],
+            promotions: Array.isArray(item.promotions) ? item.promotions : [],
+            inventory_id: item.inventory_id || null,
+            department_id: item.department_id || null,
+            strategy: 'serial',
+            is_recipe: false,
+            serial_id: String(item.serial_id),
+            serial_number: item.serial_number || null,
+            // ✅ Generate unique cart key for this serial
+            cartKey: String(item.variant_id || item.id) + '_' + 
+                    (item.department_id || '') + '_' + 
+                    (item.inventory_id || '') + '_serial_' + String(item.serial_id)
+        };
+
+        // ✅ Add the serial to cart
+        if (typeof addToCart === 'function') {
+            // Check if already in cart
+            var exists = typeof cart !== 'undefined' && cart.some(function(c) {
+                return c.cartKey === variant.cartKey;
+            });
+            
+            if (!exists) {
+                addToCart(variant);
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('Restored serial: ' + (item.serial_number || ''));
+                }
+            } else {
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('Serial ' + (item.serial_number || '') + ' already in cart');
+                }
+            }
+        }
     }
 
     // ── Restore customer panel ────────────────────────────────

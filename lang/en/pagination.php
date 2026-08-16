@@ -1352,6 +1352,9 @@ return [
     'default_inventory_strategy' => 'Default Inventory Strategy',
     'inventory_strategy' => 'Inventory Strategy',
     
+    // ─── Production Orders ──────────────────────────────────────────────────
+    'production_orders' => 'Production Orders',
+    'production_order' => 'Production Order',
 
 
     'recipe_ingredients' => 'Recipe Ingredients',

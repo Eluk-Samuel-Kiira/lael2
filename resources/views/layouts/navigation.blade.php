@@ -188,7 +188,6 @@
 
                 <!-- Inventory Items -->
                 @if (tenant_can('inventory'))
-                @if(auth()->check() && !tenant_is_single_shop(auth()->user()->tenant_id))
                 @can('view inventory')
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
@@ -207,6 +206,7 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+                        @if(auth()->check() && !tenant_is_single_shop(auth()->user()->tenant_id))
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('items.index') }}')">
                                 <span class="menu-bullet">
@@ -224,6 +224,7 @@
                                 <span class="menu-title-list">{{ __('passwords.stock_adjustments') }}</span>
                             </a>
                         </div>
+                        @endif
 
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('batches.index') }}')">
@@ -233,11 +234,28 @@
                                 <span class="menu-title-list">{{ __('pagination.stock_batches') }}</span>
                             </a>
                         </div>
+                        
+                        @can('view production_orders')
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('production-orders.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">
+                                    <i class="ki-duotone ki-cubes fs-3 me-2">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                        <span class="path3"></span>
+                                    </i>
+                                    {{ __('passwords.production_orders') }}
+                                </span>
+                            </a>
+                        </div>
+                        @endcan
 
                     </div>
                 </div>
                 @endcan
-                @endif
                 @endif
 
 
