@@ -66,6 +66,20 @@
                                                 </select>
                                             </div>
                                         </div>
+
+                                        <div class="flex-grow-1">
+                                            <label class="form-label fw-semibold">{{ __('passwords.inventory_strategy') }}</label>
+                                            <div class="input-group w-100">
+                                                <span class="input-group-text"><i class="ki-duotone ki-boxes fs-2"></i></span>
+                                                <select class="form-select" name="inventory_strategy">
+                                                    <option value="all">{{ __('passwords.all_strategies') }}</option>
+                                                    <option value="quantity" {{ $inventoryStrategy == 'quantity' ? 'selected' : '' }}>{{ __('passwords.quantity_tracking') }}</option>
+                                                    <option value="batch" {{ $inventoryStrategy == 'batch' ? 'selected' : '' }}>{{ __('passwords.batch_tracking') }}</option>
+                                                    <option value="serial" {{ $inventoryStrategy == 'serial' ? 'selected' : '' }}>{{ __('passwords.serial_tracking') }}</option>
+                                                    <option value="recipe" {{ $inventoryStrategy == 'recipe' ? 'selected' : '' }}>{{ __('passwords.recipe_product') }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                         
                                         <div class="flex-grow-1">
                                             <label class="form-label fw-semibold">{{ __('auth.status') }}</label>
@@ -121,9 +135,9 @@
                                         ['key' => 'total_products', 'color' => 'primary', 'icon' => 'ki-package', 'label' => 'total_products', 'value' => number_format($summary['total_products'])],
                                         ['key' => 'total_variants', 'color' => 'success', 'icon' => 'ki-abstract-44', 'label' => 'total_variants', 'value' => number_format($summary['total_variants'])],
                                         ['key' => 'total_stock', 'color' => 'info', 'icon' => 'ki-inbox', 'label' => 'total_stock', 'value' => number_format($summary['total_stock'])],
-                                        ['key' => 'average_price', 'color' => 'warning', 'icon' => 'ki-dollar', 'label' => 'average_price', 'value' => '$' . number_format($summary['average_price'], 2)],
-                                        ['key' => 'average_cost', 'color' => 'danger', 'icon' => 'ki-money', 'label' => 'average_cost', 'value' => '$' . number_format($summary['average_cost'], 2)],
-                                        ['key' => 'active_products', 'color' => 'secondary', 'icon' => 'ki-check', 'label' => 'active', 'value' => number_format($summary['active_products'])]
+                                        ['key' => 'avg_selling_price', 'color' => 'warning', 'icon' => 'ki-dollar', 'label' => 'avg_selling_price', 'value' => currency_symbol() . number_format($summary['avg_selling_price'], 2)],
+                                        ['key' => 'avg_cost_price', 'color' => 'danger', 'icon' => 'ki-money', 'label' => 'avg_cost_price', 'value' => currency_symbol() . number_format($summary['avg_cost_price'], 2)],
+                                        ['key' => 'avg_margin', 'color' => 'secondary', 'icon' => 'ki-chart-line', 'label' => 'avg_margin', 'value' => number_format($summary['avg_margin'], 1) . '%']
                                     ] as $stat)
                                     <div class="col-md-6 col-lg-2">
                                         <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
@@ -140,170 +154,196 @@
                         </div>
                     </div>
                 </div>
+                @endif
 
-                {{-- Distribution Row --}}
+
+                {{-- Charts - Each on its own row --}}
                 <div class="row mb-6">
-                    {{-- Category Distribution --}}
-                    @if($categoryBreakdown->count() > 0)
-                    <div class="col-lg-4">
-                        <div class="card">
+                    <div class="col-12">
+                        <div class="card h-100">
                             <div class="card-header">
-                                <h3 class="card-title"><i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i> {{ __('auth.category_distribution') }}</h3>
+                                <h3 class="card-title">
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i> 
+                                    {{ __('auth.category_distribution') }}
+                                </h3>
                             </div>
                             <div class="card-body">
                                 <div id="categoryChart" style="height: 280px;"></div>
                             </div>
                         </div>
                     </div>
-                    @endif
-                    
-                    {{-- Type Distribution --}}
-                    @if($typeBreakdown->count() > 0)
-                    <div class="col-lg-4">
-                        <div class="card">
+                </div>
+
+                <div class="row mb-6">
+                    <div class="col-12">
+                        <div class="card h-100">
                             <div class="card-header">
-                                <h3 class="card-title"><i class="ki-duotone ki-chart-bar fs-2 me-2 text-info"></i> {{ __('auth.type_distribution') }}</h3>
+                                <h3 class="card-title">
+                                    <i class="ki-duotone ki-chart-bar fs-2 me-2 text-info"></i> 
+                                    {{ __('auth.type_distribution') }}
+                                </h3>
                             </div>
                             <div class="card-body">
                                 <div id="typeChart" style="height: 280px;"></div>
                             </div>
                         </div>
                     </div>
-                    @endif
-                    
-                    {{-- Status Distribution --}}
-                    @if($statusBreakdown->count() > 0)
-                    <div class="col-lg-4">
-                        <div class="card">
+                </div>
+
+                <div class="row mb-6">
+                    <div class="col-12">
+                        <div class="card h-100">
                             <div class="card-header">
-                                <h3 class="card-title"><i class="ki-duotone ki-status fs-2 me-2 text-success"></i> {{ __('auth.status_distribution') }}</h3>
+                                <h3 class="card-title">
+                                    <i class="ki-duotone ki-boxes fs-2 me-2 text-warning"></i> 
+                                    {{ __('passwords.inventory_strategy') }}
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="strategyChart" style="height: 280px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-6">
+                    <div class="col-12">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="ki-duotone ki-status fs-2 me-2 text-success"></i> 
+                                    {{ __('auth.status_distribution') }}
+                                </h3>
                             </div>
                             <div class="card-body">
                                 <div id="statusChart" style="height: 280px;"></div>
                             </div>
                         </div>
                     </div>
-                    @endif
                 </div>
 
                 {{-- Products Table --}}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
-                    <h3 class="fw-bold m-0">{{ __('auth.products') }}</h3>
-                </div>
-            </div>
-            
-            @if($products->count() > 0)
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="productSummaryTable">
-                        <thead class="bg-light">
-                            <tr class="fw-bold fs-6 text-gray-800">
-                                <th class="ps-4">{{ __('auth.sku') }}</th>
-                                <th>{{ __('accounting.name') }}</th>
-                                <th>{{ __('accounting.category') }}</th>
-                                <th>{{ __('accounting.type') }}</th>
-                                <th>{{ __('auth.status') }}</th>
-                                <th>{{ __('auth.tax_status') }}</th>
-                                <th class="text-center">{{ __('auth.variant_count') }}</th>
-                                <th>{{ __('auth.created_at') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($products as $product)
-                            <tr>
-                                <td class="ps-4 fw-semibold">{{ $product->sku }}</td>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        @if($product->image_url)
-                                        <div class="symbol symbol-50px me-3">
-                                            <img src="{{ asset($product->image_url) }}" alt="{{ $product->name }}" class="rounded">
-                                        </div>
-                                        @endif
-                                        <div>
-                                            <div class="fw-bold text-gray-800">{{ $product->name }}</div>
-                                            @if($product->description)
-                                            <div class="text-muted fs-7">{{ Str::limit($product->description, 50) }}</div>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    @if($product->category)
-                                    <span class="badge badge-light-info">{{ $product->category->name }}</span>
-                                    @else
-                                    <span class="text-muted">-</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    <span class="badge badge-light-{{ $product->type == 'physical' ? 'primary' : ($product->type == 'digital' ? 'success' : 'warning') }}">
-                                        {{ ucfirst($product->type) }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-light-{{ $product->is_active ? 'success' : 'danger' }}">
-                                        {{ $product->is_active ? __('auth.active') : __('auth.inactive') }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-light-{{ $product->is_taxable ? 'primary' : 'secondary' }}">
-                                        {{ $product->is_taxable ? __('auth.taxable') : __('auth.non_taxable') }}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-light-primary">{{ $product->variants->count() }}</span>
-                                </td>
-                                <td>
-                                    <span class="text-muted">{{ $product->created_at->format('Y-m-d') }}</span>
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="card-footer">
-                @include('partials.pagination', [
-                    'paginator' => $products,
-                    'pageName' => 'page',
-                    'perPageName' => 'per_page',
-                    'showPerPage' => true
-                ])
-            </div>
-            @else
-            <div class="card-body">
-                <div class="text-center py-10">
-                    <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
-                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                    <p class="text-muted fs-6">{{ __('auth.no_products_found') }}</p>
-                </div>
-            </div>
-            @endif
-        </div>
-    </div>
-</div>
-                @else
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.products') }}</h3>
+                                </div>
+                            </div>
+                            
+                            @if($products->count() > 0)
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="productSummaryTable">
+                                        <thead class="bg-light">
+                                            <tr class="fw-bold fs-6 text-gray-800">
+                                                <th class="ps-4">{{ __('auth.sku') }}</th>
+                                                <th>{{ __('accounting.name') }}</th>
+                                                <th>{{ __('accounting.category') }}</th>
+                                                <th>{{ __('accounting.type') }}</th>
+                                                <th>{{ __('passwords.inventory_strategy') }}</th>
+                                                <th>{{ __('auth.status') }}</th>
+                                                <th>{{ __('auth.tax_status') }}</th>
+                                                <th class="text-center">{{ __('auth.variant_count') }}</th>
+                                                <th>{{ __('auth.stock') }}</th>
+                                                <th>{{ __('auth.created_at') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($products as $product)
+                                            <tr>
+                                                <td class="ps-4 fw-semibold">{{ $product->sku }}</td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        @if($product->image_url)
+                                                        <div class="symbol symbol-50px me-3">
+                                                            <img src="{{ asset($product->image_url) }}" alt="{{ $product->name }}" class="rounded">
+                                                        </div>
+                                                        @endif
+                                                        <div>
+                                                            <div class="fw-bold text-gray-800">{{ $product->name }}</div>
+                                                            @if($product->description)
+                                                            <div class="text-muted fs-7">{{ Str::limit($product->description, 50) }}</div>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    @if($product->category)
+                                                    <span class="badge badge-light-info">{{ $product->category->name }}</span>
+                                                    @else
+                                                    <span class="text-muted">-</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-{{ $product->type == 'physical' ? 'primary' : ($product->type == 'digital' ? 'success' : 'warning') }}">
+                                                        {{ ucfirst($product->type) }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    @php
+                                                        $strategyColors = ['quantity' => 'primary', 'batch' => 'info', 'serial' => 'warning', 'recipe' => 'success'];
+                                                        $strategyLabels = ['quantity' => 'Quantity', 'batch' => 'Batch', 'serial' => 'Serial', 'recipe' => 'Recipe'];
+                                                        $strategy = $product->inventory_strategy ?? 'quantity';
+                                                    @endphp
+                                                    <span class="badge badge-light-{{ $strategyColors[$strategy] ?? 'secondary' }}">
+                                                        <i class="ki-duotone ki-boxes fs-5 me-1"></i>
+                                                        {{ $strategyLabels[$strategy] ?? ucfirst($strategy) }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-{{ $product->is_active ? 'success' : 'danger' }}">
+                                                        {{ $product->is_active ? __('auth.active') : __('auth.inactive') }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-{{ $product->is_taxable ? 'primary' : 'secondary' }}">
+                                                        {{ $product->is_taxable ? __('auth.taxable') : __('auth.non_taxable') }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-primary">{{ $product->variant_count ?? $product->variants->count() }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-light-info">{{ number_format($product->total_stock ?? 0) }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="text-muted">{{ $product->created_at->format('Y-m-d') }}</span>
+                                                </td>
+                                            </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                @include('partials.pagination', [
+                                    'paginator' => $products,
+                                    'pageName' => 'page',
+                                    'perPageName' => 'per_page',
+                                    'showPerPage' => true
+                                ])
+                            </div>
+                            @else
                             <div class="card-body">
                                 <div class="text-center py-10">
                                     <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
                                     <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
                                     <p class="text-muted fs-6">{{ __('auth.no_products_found') }}</p>
                                     @if(request()->hasAny(['category_id', 'product_type', 'is_active', 'is_taxable']))
-                                    <a href="{{ route('reports.products.summary') }}" class="btn btn-light-primary"><i class="ki-duotone ki-cross fs-2 me-2"></i> {{ __('accounting.clear_filters_view_all') }}</a>
+                                    <a href="{{ route('reports.products.summary') }}" class="btn btn-light-primary">
+                                        <i class="ki-duotone ki-cross fs-2 me-2"></i> 
+                                        {{ __('accounting.clear_filters_view_all') }}
+                                    </a>
                                     @endif
                                 </div>
                             </div>
+                            @endif
                         </div>
                     </div>
                 </div>
-                @endif
             </div>
         </div>
     </div>
@@ -358,6 +398,46 @@
         }
         @endif
     });
+
+    @if(isset($strategyBreakdown) && $strategyBreakdown->count() > 0)
+    const strategyData = @json($strategyBreakdown);
+    if (strategyData && strategyData.length > 0) {
+        new ApexCharts(document.querySelector("#strategyChart"), {
+            series: strategyData.map(item => item.count),
+            chart: { type: 'donut', height: 280, toolbar: { show: false } },
+            labels: strategyData.map(item => item.strategy),
+            colors: strategyData.map(item => {
+                const colors = {
+                    'quantity': '#3E97FF',
+                    'batch': '#50CD89', 
+                    'serial': '#FFC700',
+                    'recipe': '#7239EA'
+                };
+                return colors[item.key] || '#A1A5B7';
+            }),
+            legend: { position: 'bottom' },
+            tooltip: { 
+                y: { 
+                    formatter: function(v) { 
+                        return v + ' products'; 
+                    } 
+                } 
+            },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '65%',
+                        labels: {
+                            show: true,
+                            name: { show: true },
+                            value: { show: true }
+                        }
+                    }
+                }
+            }
+        }).render();
+    }
+    @endif
 </script>
 @endpush
 

@@ -20,6 +20,7 @@ return [
     'apply_filters' => 'Apply Filters',
     'top_vendor' => 'Top Vendor',
     'export' => 'Export',
+    'results' => 'Results',
     'clear' => 'Clear',
     'accounts' => 'Accounts',
     'search_accounts' => 'Search accounts...',

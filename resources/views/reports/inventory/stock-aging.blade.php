@@ -210,7 +210,7 @@
                                 
                                 {{-- Additional Summary Info --}}
                                 <div class="row mt-6">
-                                    <div class="col-md-6">
+                                    <div class="col-md-3">
                                         <div class="card card-flush bg-light-primary border border-primary border-dashed">
                                             <div class="card-body d-flex justify-content-between align-items-center">
                                                 <div>
@@ -224,7 +224,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-md-3">
                                         <div class="card card-flush bg-light-danger border border-danger border-dashed">
                                             <div class="card-body d-flex justify-content-between align-items-center">
                                                 <div>
@@ -234,6 +234,38 @@
                                                     </div>
                                                 </div>
                                                 <i class="ki-duotone ki-dollar fs-2tx text-danger">
+                                                    <span class="path1"></span>
+                                                    <span class="path2"></span>
+                                                </i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="card card-flush bg-light-success border border-success border-dashed">
+                                            <div class="card-body d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="text-muted">{{ __('pagination.total_inventory_value') }}</span>
+                                                    <div class="fs-2 fw-bold text-success">
+                                                        {{ currency_symbol() }}{{ number_format($summary['total_inventory_value'] ?? 0, 2) }}
+                                                    </div>
+                                                </div>
+                                                <i class="ki-duotone ki-dollar fs-2tx text-success">
+                                                    <span class="path1"></span>
+                                                    <span class="path2"></span>
+                                                </i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="card card-flush bg-light-info border border-info border-dashed">
+                                            <div class="card-body d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <span class="text-muted">{{ __('pagination.batch_tracked_items') }}</span>
+                                                    <div class="fs-2 fw-bold text-info">
+                                                        {{ number_format($summary['batch_tracked_items'] ?? 0) }}
+                                                    </div>
+                                                </div>
+                                                <i class="ki-duotone ki-barcode fs-2tx text-info">
                                                     <span class="path1"></span>
                                                     <span class="path2"></span>
                                                 </i>
@@ -312,19 +344,24 @@
                                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="stockAgingTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('pagination.sku') }}</th>
-                                                <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('pagination.department') }}</th>
-                                                <th>{{ __('pagination.location') }}</th>
-                                                <th>{{ __('pagination.batch_number') }}</th>
-                                                <th>{{ __('pagination.expiry_date') }}</th>
-                                                <th>{{ __('pagination.days_to_expiry') }}</th>
-                                                <th>{{ __('pagination.quantity') }}</th>
-                                                <th>{{ __('pagination.status') }}</th>
+                                                <th class="ps-4 min-w-120px">{{ __('pagination.sku') }}</th>
+                                                <th class="min-w-180px">{{ __('pagination.product') }}</th>
+                                                <th class="min-w-120px">{{ __('pagination.department') }}</th>
+                                                <th class="min-w-120px">{{ __('pagination.location') }}</th>
+                                                <th class="min-w-150px">{{ __('pagination.batch_info') }}</th>
+                                                <th class="min-w-120px">{{ __('pagination.expiry_date') }}</th>
+                                                <th class="min-w-100px">{{ __('pagination.days_to_expiry') }}</th>
+                                                <th class="min-w-100px text-center">{{ __('pagination.quantity') }}</th>
+                                                <th class="min-w-150px">{{ __('pagination.pricing') }}</th>
+                                                <th class="min-w-120px text-center">{{ __('pagination.status') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($agingItems as $item)
+                                            @php
+                                                $profitMargin = $item->profit_margin ?? 0;
+                                                $marginColor = $profitMargin > 30 ? 'success' : ($profitMargin > 15 ? 'warning' : 'danger');
+                                            @endphp
                                             <tr>
                                                 <td class="ps-4">
                                                     <div class="fw-semibold">{{ $item->sku }}</div>
@@ -336,7 +373,7 @@
                                                     <div class="d-flex align-items-center">
                                                         @if($item->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($item->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant_name }}">
+                                                            <img src="{{ productVariantImage($item->image_url ?? null) }}" class="img-fluid rounded" alt="{{ $item->variant_name }}">
                                                         </div>
                                                         @endif
                                                         <div>
@@ -352,24 +389,79 @@
                                                     <span class="badge badge-light-info">{{ $item->location_name }}</span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-light-dark">{{ $item->batch_number ?? '-' }}</span>
+                                                    @if($item->is_batch_tracked)
+                                                        <div class="d-flex flex-column">
+                                                            <span class="badge badge-light-success">
+                                                                <i class="ki-duotone ki-barcode fs-2 me-1"></i>
+                                                                {{ $item->batch_number }}
+                                                            </span>
+                                                            @if($item->last_batch_event)
+                                                                <div class="text-muted fs-8 mt-1">
+                                                                    <span class="badge badge-light-{{ $item->last_batch_event_type === 'received' ? 'success' : ($item->last_batch_event_type === 'expired' ? 'danger' : 'warning') }}">
+                                                                        {{ $item->last_batch_event_type ?? 'event' }}
+                                                                    </span>
+                                                                    {{ $item->last_batch_event ? Carbon\Carbon::parse($item->last_batch_event)->format('Y-m-d') : '' }}
+                                                                </div>
+                                                            @endif
+                                                            @if($item->last_batch_quantity)
+                                                                <small class="text-muted mt-1">
+                                                                    {{ __('pagination.last_qty') }}: {{ number_format($item->last_batch_quantity) }}
+                                                                </small>
+                                                            @endif
+                                                        </div>
+                                                    @else
+                                                        <span class="badge badge-light-secondary">{{ __('pagination.not_batch_tracked') }}</span>
+                                                    @endif
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold {{ $item->days_to_expiry < 0 ? 'text-danger' : 'text-success' }}">
-                                                        {{ Carbon\Carbon::parse($item->expiry_date)->format('Y-m-d') }}
-                                                    </span>
+                                                    @if($item->expiry_date)
+                                                        <span class="fw-bold {{ $item->days_to_expiry < 0 ? 'text-danger' : 'text-success' }}">
+                                                            {{ Carbon\Carbon::parse($item->expiry_date)->format('Y-m-d') }}
+                                                        </span>
+                                                    @else
+                                                        <span class="text-muted">-</span>
+                                                    @endif
                                                 </td>
                                                 <td>
                                                     <span class="fw-bold {{ $item->days_to_expiry < 0 ? 'text-danger' : ($item->days_to_expiry <= 30 ? 'text-warning' : 'text-success') }}">
                                                         @if($item->days_to_expiry < 0)
                                                             {{ __('pagination.expired') }}
+                                                        @elseif($item->days_to_expiry > 999)
+                                                            {{ __('pagination.over_999_days') }}
                                                         @else
                                                             {{ number_format($item->days_to_expiry) }} {{ __('pagination.days') }}
                                                         @endif
                                                     </span>
                                                 </td>
                                                 <td class="text-center">
-                                                    <span class="fw-bold">{{ number_format($item->quantity_on_hand) }}</span>
+                                                    <span class="fw-bold">{{ number_format($item->quantity_allocated ?? 0) }}</span>
+                                                    @if(isset($item->quantity_on_hand) && $item->quantity_on_hand != $item->quantity_allocated)
+                                                        <div class="text-muted fs-8">
+                                                            ({{ __('pagination.on_hand') }}: {{ number_format($item->quantity_on_hand) }})
+                                                        </div>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex flex-column">
+                                                        <div class="d-flex justify-content-between">
+                                                            <span class="text-muted fs-8">{{ __('pagination.cost') }}:</span>
+                                                            <span class="fw-bold">{{ currency_symbol() }}{{ number_format($item->cost_price, 2) }}</span>
+                                                        </div>
+                                                        <div class="d-flex justify-content-between">
+                                                            <span class="text-muted fs-8">{{ __('pagination.selling') }}:</span>
+                                                            <span class="fw-bold text-primary">{{ currency_symbol() }}{{ number_format($item->selling_price, 2) }}</span>
+                                                        </div>
+                                                        <div class="d-flex justify-content-between">
+                                                            <span class="text-muted fs-8">{{ __('pagination.margin') }}:</span>
+                                                            <span class="badge badge-light-{{ $marginColor }}">
+                                                                {{ number_format($profitMargin, 1) }}%
+                                                            </span>
+                                                        </div>
+                                                        <div class="d-flex justify-content-between mt-1">
+                                                            <span class="text-muted fs-8">{{ __('pagination.value') }}:</span>
+                                                            <span class="fw-bold text-success">{{ currency_symbol() }}{{ number_format($item->inventory_value, 2) }}</span>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $item->status_color }} fs-7 py-2 px-3">
@@ -396,10 +488,30 @@
                                                         <div class="progress-bar bg-{{ $item->progress_color }}" 
                                                             style="width: {{ min(100, $progressWidth) }}%"></div>
                                                     </div>
+                                                    @if($item->category_key == 'expired')
+                                                        <div class="text-danger fs-8 mt-1">
+                                                            <i class="ki-duotone ki-cross fs-2 me-1"></i>
+                                                            {{ __('pagination.value_at_risk') }}: {{ currency_symbol() }}{{ number_format($item->value_at_risk, 2) }}
+                                                        </div>
+                                                    @endif
                                                 </td>
                                             </tr>
                                             @endforeach
                                         </tbody>
+                                        <tfoot class="bg-light">
+                                            <tr>
+                                                <td colspan="7" class="text-end fw-bold">{{ __('pagination.total') }}:</td>
+                                                <td class="text-center fw-bold">{{ number_format($agingItems->sum('quantity_allocated')) }}</td>
+                                                <td colspan="2"></td>
+                                            </tr>
+                                            @if($agingItems->total() > $agingItems->count())
+                                            <tr>
+                                                <td colspan="7" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }}:</td>
+                                                <td class="text-center fw-bold">{{ number_format($summary['total_items'] ?? 0) }}</td>
+                                                <td colspan="2"></td>
+                                            </tr>
+                                            @endif
+                                        </tfoot>
                                     </table>
                                 </div>
                                 
@@ -458,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return name.length > 20 ? name.substring(0, 17) + '...' : name;
     });
     const daysToExpiry = agingData.map(item => item.days_to_expiry || 0);
-    const quantities = agingData.map(item => item.quantity_on_hand || 0);
+    const quantities = agingData.map(item => item.quantity_allocated || 0);
     
     const hasData = quantities.some(q => q > 0);
     
@@ -491,8 +603,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
             },
             yaxis: [
-                { title: { text: 'Days to Expiry' }, min: 0 },
-                { opposite: true, title: { text: 'Quantity' } }
+                { 
+                    title: { text: 'Days to Expiry' }, 
+                    min: 0,
+                    labels: {
+                        formatter: function(val) {
+                            return val + ' days';
+                        }
+                    }
+                },
+                { 
+                    opposite: true, 
+                    title: { text: 'Quantity' },
+                    labels: {
+                        formatter: function(val) {
+                            return val.toLocaleString();
+                        }
+                    }
+                }
             ],
             colors: ['#3E97FF', '#50CD89'],
             tooltip: {
@@ -500,7 +628,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 intersect: false,
                 y: {
                     formatter: function(val, { seriesIndex }) {
-                        return seriesIndex === 0 ? val + ' days' : val + ' units';
+                        return seriesIndex === 0 ? val + ' days' : val.toLocaleString() + ' units';
                     }
                 }
             }
@@ -558,14 +686,20 @@ document.addEventListener('DOMContentLoaded', function() {
                                 show: true,
                                 label: 'Total Items',
                                 formatter: function(w) {
-                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                    return w.globals.seriesTotals.reduce((a, b) => a + b, 0).toLocaleString();
                                 }
                             }
                         }
                     }
                 }
             },
-            tooltip: { y: { formatter: function(val) { return val + ' units'; } } }
+            tooltip: { 
+                y: { 
+                    formatter: function(val) { 
+                        return val.toLocaleString() + ' units'; 
+                    } 
+                } 
+            }
         });
         categoryChart.render();
     } else {

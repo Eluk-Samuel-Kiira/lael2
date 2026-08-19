@@ -308,49 +308,7 @@
                 {{-- ============================================================ --}}
                 @if(!empty($peakAnalysis) && $timeAnalysis->count() > 0)
                 <div class="row g-6 mb-6">
-                    @if($groupBy == 'hourly' || $groupBy == 'daily')
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-header bg-light-success">
-                                <h3 class="card-title">
-                                    <i class="ki-duotone ki-clock fs-2 me-2 text-success"></i>
-                                    {{ __('auth.peak_hours') }}
-                                </h3>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 bg-light">
-                                                <th class="ps-4">{{ __('accounting.time') }}</th>
-                                                <th>{{ __('auth.order_count') }}</th>
-                                                <th class="text-end">{{ __('accounting.total_sales') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($peakAnalysis['peak_hours'] ?? [] as $peak)
-                                            <tr>
-                                                <td class="ps-4 fw-bold">
-                                                    @php
-                                                        $hour = intval($peak->hour);
-                                                        $period = $hour >= 12 ? 'PM' : 'AM';
-                                                        $displayHour = $hour % 12 ?: 12;
-                                                    @endphp
-                                                    {{ $displayHour }}:00 {{ $period }}
-                                                </td>
-                                                <td><span class="badge badge-light-primary">{{ $peak->order_count }}</span></td>
-                                                <td class="text-end fw-bold text-success">{{ currency_symbol() }}{{ number_format($peak->hourly_total, 2) }}</td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-                    
-                    <div class="col-lg-{{ $groupBy == 'hourly' || $groupBy == 'daily' ? '6' : '12' }}">
+                    <div class="col-12">
                         <div class="card h-100">
                             <div class="card-header bg-light-warning">
                                 <h3 class="card-title">
@@ -370,23 +328,31 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($peakAnalysis['peak_days'] ?? [] as $peak)
-                                            @php
-                                                $date = \Carbon\Carbon::parse($peak->date);
-                                                $dayName = $date->format('l');
-                                                $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4 fw-bold">{{ $date->format('M d, Y') }}</td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
-                                                        {{ $dayName }}
-                                                    </span>
-                                                </td>
-                                                <td><span class="badge badge-light-primary">{{ $peak->order_count }}</span></td>
-                                                <td class="text-end fw-bold text-success">{{ currency_symbol() }}{{ number_format($peak->total_sales, 2) }}</td>
-                                            </tr>
-                                            @endforeach
+                                            @if(isset($peakAnalysis['peak_days']) && $peakAnalysis['peak_days']->count() > 0)
+                                                @foreach($peakAnalysis['peak_days'] as $peak)
+                                                @php
+                                                    $date = \Carbon\Carbon::parse($peak->date);
+                                                    $dayName = $date->format('l');
+                                                    $isWeekend = in_array($dayName, ['Saturday', 'Sunday']);
+                                                @endphp
+                                                <tr>
+                                                    <td class="ps-4 fw-bold">{{ $date->format('M d, Y') }}</td>
+                                                    <td>
+                                                        <span class="badge badge-light-{{ $isWeekend ? 'danger' : 'primary' }}">
+                                                            {{ $dayName }}
+                                                        </span>
+                                                    </td>
+                                                    <td><span class="badge badge-light-primary">{{ $peak->order_count }}</span></td>
+                                                    <td class="text-end fw-bold text-success">{{ currency_symbol() }}{{ number_format($peak->total_sales, 2) }}</td>
+                                                </tr>
+                                                @endforeach
+                                            @else
+                                                <tr>
+                                                    <td colspan="4" class="text-center py-3 text-muted">
+                                                        {{ __('accounting.no_peak_days_found') }}
+                                                    </td>
+                                                </tr>
+                                            @endif
                                         </tbody>
                                     </table>
                                 </div>
@@ -578,6 +544,63 @@
                         <span class="badge badge-light-info mx-1">📈</span> {{ __('accounting.trend') }}
                     </div>
                 </div>
+
+                {{-- Peak Hours Chart (only for hourly grouping) --}}
+                @if($groupBy == 'hourly' && isset($peakAnalysis['peak_hours']) && $peakAnalysis['peak_hours']->count() > 0)
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header bg-light-success">
+                            <h3 class="card-title">
+                                <i class="ki-duotone ki-clock fs-2 me-2 text-success"></i>
+                                {{ __('auth.peak_hours') }}
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="peakHoursChart" style="height: 250px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                @push('scripts')
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const peakHoursData = @json($peakAnalysis['peak_hours'] ?? []);
+                    if (peakHoursData.length > 0) {
+                        const hours = peakHoursData.map(p => {
+                            const h = parseInt(p.hour);
+                            const display = h % 12 || 12;
+                            return display + ':00';
+                        });
+                        const sales = peakHoursData.map(p => parseFloat(p.hourly_total));
+                        
+                        const options = {
+                            series: [{ name: 'Sales', data: sales }],
+                            chart: { type: 'bar', height: 250, toolbar: { show: false } },
+                            plotOptions: { bar: { horizontal: false, columnWidth: '60%' } },
+                            colors: ['#50CD89'],
+                            xaxis: { categories: hours },
+                            yaxis: {
+                                labels: {
+                                    formatter: function(val) {
+                                        return '{{ currency_symbol() }}' + val.toFixed(2);
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                y: {
+                                    formatter: function(val) {
+                                        return '{{ currency_symbol() }}' + val.toFixed(2);
+                                    }
+                                }
+                            }
+                        };
+                        
+                        new ApexCharts(document.querySelector("#peakHoursChart"), options).render();
+                    }
+                });
+                </script>
+                @endpush
+                @endif
 
                 {{-- ============================================================ --}}
                 {{-- METADATA FOOTER --}}

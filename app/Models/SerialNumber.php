@@ -19,7 +19,7 @@ class SerialNumber extends Model
     const STATUS_DAMAGED = 'damaged';
 
     protected $fillable = [
-        'variant_id',  // ✅ This is the correct column name
+        'variant_id',  
         'tenant_id',
         'serial_number',
         'status',

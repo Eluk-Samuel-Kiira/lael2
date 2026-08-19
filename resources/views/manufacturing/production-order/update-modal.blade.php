@@ -162,8 +162,8 @@
 
 {{-- resources/views/manufacturing/production-order/complete-modal.blade.php --}}
 <!-- COMPLETE PRODUCTION MODAL -->
-<div class="modal fade" id="completeProductionModal{{ $order->id }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+<div class="modal fade" id="completeProductionModal{{ $order->id }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-success">
                 <h5 class="modal-title text-white">
@@ -172,107 +172,261 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info d-flex align-items-center">
+
+            {{-- max-height trimmed from 70vh to 60vh so the footer below
+                 always has guaranteed room, regardless of viewport height --}}
+            <div class="modal-body scroll-y mx-5 my-7" style="max-height: 60vh; overflow-y: auto;">
+
+                <div class="alert alert-info d-flex align-items-center mb-5">
                     <i class="bi bi-info-circle fs-2 me-3"></i>
                     <div>
                         {{ __('passwords.complete_production_instruction') }}
                     </div>
                 </div>
 
+                {{-- Form still wraps ALL fields (batch info, outputs, summary,
+                     notes) — only the action buttons moved out of it and into
+                     modal-footer below. JS reads this form by the same ID
+                     (completeProductionForm{{ $order->id }}), so nothing in
+                     pos-scripts.js needs to change. --}}
                 <form id="completeProductionForm{{ $order->id }}">
                     @csrf
-                    @foreach($order->outputs as $index => $output)
-                        @php
-                            $variant = $output->productVariant;
-                            $planned = $output->planned_quantity;
-                            $actual = $output->actual_quantity;
-                            $defective = $output->defective_quantity;
-                        @endphp
-                        <div class="card card-dashed mb-4">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <div>
-                                        <h6 class="fw-bold mb-0">{{ $variant->name ?? 'Product' }}</h6>
-                                        <small class="text-muted">
-                                            {{ __('passwords.planned') }}: {{ number_format($planned, 2) }} {{ $output->unit }}
-                                            @if($actual > 0)
-                                                <span class="badge badge-success ms-2">
-                                                    {{ __('passwords.produced_so_far') }}: {{ number_format($actual, 2) }}
-                                                </span>
-                                            @endif
-                                        </small>
-                                    </div>
-                                    <span class="badge badge-light-primary">
-                                        {{ $output->inventory_strategy }}
-                                    </span>
-                                </div>
-                                
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">
-                                            {{ __('passwords.actual_quantity') }}
-                                            @if($loop->first)
-                                                <span class="text-danger">*</span>
-                                            @endif
-                                        </label>
-                                        <input type="number" 
-                                               name="outputs[{{ $output->id }}][actual_quantity]" 
-                                               class="form-control actual-quantity-input"
-                                               min="0" 
-                                               step="0.01"
-                                               value="{{ $actual > 0 ? $actual : '' }}"
-                                               placeholder="{{ __('passwords.enter_actual_produced') }}"
-                                               data-output-id="{{ $output->id }}"
-                                               data-planned="{{ $planned }}"
-                                               {{ $loop->first ? 'required' : '' }}>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label fw-semibold">
-                                            {{ __('passwords.defective_quantity') }}
-                                        </label>
-                                        <input type="number" 
-                                               name="outputs[{{ $output->id }}][defective_quantity]" 
-                                               class="form-control defective-quantity-input"
-                                               min="0" 
-                                               step="0.01"
-                                               value="{{ $defective > 0 ? $defective : '' }}"
-                                               placeholder="{{ __('passwords.enter_defective_units') }}"
-                                               data-output-id="{{ $output->id }}">
+
+                    {{-- ─── BATCH & EXPIRY INFORMATION ─────────────────────────── --}}
+                    <div class="card card-flush bg-light mb-6">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="bi bi-upc-scan me-2 text-primary"></i>
+                                {{ __('passwords.batch_information') }}
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">
+                                        {{ __('passwords.batch_number') }}
+                                        <span class="text-muted fs-7">({{ __('passwords.auto_generated') }})</span>
+                                    </label>
+                                    <input type="text"
+                                           name="batch_number"
+                                           class="form-control"
+                                           value="{{ $order->production_number }}-{{ date('Ymd') }}"
+                                           placeholder="{{ __('passwords.batch_number_auto') }}">
+                                    <div class="form-text text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        {{ __('passwords.batch_number_generated_from_production') }}
                                     </div>
                                 </div>
-                                <div class="d-flex justify-content-between text-muted fs-7 mt-2">
-                                    <span>
-                                        {{ __('passwords.remaining') }}: 
-                                        <span class="fw-bold remaining-display" data-output-id="{{ $output->id }}">
-                                            {{ number_format(max(0, $planned - $actual), 2) }}
-                                        </span>
-                                    </span>
-                                    <span>
-                                        {{ __('passwords.total_produced') }}: 
-                                        <span class="fw-bold total-display" data-output-id="{{ $output->id }}">
-                                            {{ number_format($actual, 2) }}
-                                        </span>
-                                    </span>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">
+                                        {{ __('passwords.expiry_date') }}
+                                        <span class="text-muted fs-7">({{ __('passwords.optional') }})</span>
+                                    </label>
+                                    <input type="date"
+                                           name="expiry_date"
+                                           class="form-control"
+                                           min="{{ date('Y-m-d') }}"
+                                           placeholder="{{ __('passwords.select_expiry_date') }}">
+                                    <div class="form-text text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        {{ __('passwords.expiry_date_optional') }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    @endforeach
-                </form>
+                    </div>
 
-                <div class="d-flex justify-content-between border-top pt-4">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">
-                        <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
-                    </button>
-                    <button type="button" class="btn btn-success" onclick="completeProductionWithOutputs({{ $order->id }})">
-                        <i class="bi bi-check-circle me-2"></i>
-                        {{ __('passwords.complete_production') }}
-                    </button>
-                </div>
+                    {{-- ─── OUTPUT PRODUCTS ────────────────────────────────────── --}}
+                    <div class="card card-flush mb-6">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="bi bi-box-arrow-out me-2 text-success"></i>
+                                {{ __('passwords.output_products') }}
+                            </h3>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                    <thead>
+                                        <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                            <th class="ps-4 min-w-200px">{{ __('passwords.product') }}</th>
+                                            <th class="min-w-100px text-center">{{ __('passwords.planned') }}</th>
+                                            <th class="min-w-100px text-center">{{ __('passwords.produced_so_far') }}</th>
+                                            <th class="min-w-150px text-center text-primary">{{ __('passwords.actual_quantity') }}</th>
+                                            <th class="min-w-120px text-center">{{ __('passwords.defective_quantity') }}</th>
+                                            <th class="min-w-100px text-center">{{ __('passwords.unit') }}</th>
+                                            <th class="min-w-100px text-center">{{ __('passwords.strategy') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($order->outputs as $index => $output)
+                                        @php
+                                            $variant = $output->productVariant;
+                                            $planned = $output->planned_quantity;
+                                            $actual = $output->actual_quantity;
+                                            $defective = $output->defective_quantity;
+                                            $remaining = max(0, $planned - $actual);
+                                        @endphp
+                                        <tr>
+                                            <td class="ps-4">
+                                                <div class="d-flex flex-column">
+                                                    <span class="fw-bold text-gray-800">{{ $variant->name ?? 'Product' }}</span>
+                                                    <span class="text-muted fs-7">SKU: {{ $variant->sku ?? 'N/A' }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="fw-bold">{{ number_format($planned, 2) }}</span>
+                                            </td>
+                                            <td class="text-center">
+                                                @if($actual > 0)
+                                                    <span class="badge badge-success">{{ number_format($actual, 2) }}</span>
+                                                @else
+                                                    <span class="text-muted">0.00</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <input type="number"
+                                                       name="outputs[{{ $output->id }}][actual_quantity]"
+                                                       class="form-control actual-quantity-input text-center"
+                                                       min="0"
+                                                       step="0.01"
+                                                       value="{{ $actual > 0 ? $actual : '' }}"
+                                                       placeholder="0.00"
+                                                       data-output-id="{{ $output->id }}"
+                                                       data-planned="{{ $planned }}"
+                                                       data-remaining="{{ $remaining }}">
+                                                <small class="text-muted fs-7">
+                                                    {{ __('passwords.max') }}: {{ number_format($planned, 2) }}
+                                                    @if($remaining > 0)
+                                                        <span class="text-warning">({{ __('passwords.remaining') }}: {{ number_format($remaining, 2) }})</span>
+                                                    @endif
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <input type="number"
+                                                       name="outputs[{{ $output->id }}][defective_quantity]"
+                                                       class="form-control defective-quantity-input text-center"
+                                                       min="0"
+                                                       step="0.01"
+                                                       value="{{ $defective > 0 ? $defective : '' }}"
+                                                       placeholder="0.00"
+                                                       data-output-id="{{ $output->id }}">
+                                                <small class="text-muted fs-7">{{ __('passwords.defective') }}</small>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-light-primary">{{ $output->unit }}</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-light-{{ $output->inventory_strategy == 'batch' ? 'info' : ($output->inventory_strategy == 'serial' ? 'warning' : 'primary') }}">
+                                                    {{ ucfirst($output->inventory_strategy) }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ─── PRODUCTION SUMMARY ──────────────────────────────────── --}}
+                    <div class="card card-flush bg-light-primary mb-6">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="bi bi-calculator me-2"></i>
+                                {{ __('passwords.production_summary') }}
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <span class="text-muted d-block">{{ __('passwords.total_produced') }}</span>
+                                        {{-- ID includes {{ $order->id }} — JS must target
+                                             this exact suffixed ID, not a bare
+                                             "total_produced_display" --}}
+                                        <span class="fw-bold fs-2 text-success" id="total_produced_display_{{ $order->id }}">0.00</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <span class="text-muted d-block">{{ __('passwords.total_defective') }}</span>
+                                        <span class="fw-bold fs-2 text-danger" id="total_defective_display_{{ $order->id }}">0.00</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <span class="text-muted d-block">{{ __('passwords.total_cost') }}</span>
+                                        <span class="fw-bold fs-2 text-primary">{{ number_format($order->total_output_cost ?? 0, 2) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ─── NOTES ───────────────────────────────────────────────── ──}}
+                    <div class="mb-2">
+                        <label class="form-label">{{ __('passwords.production_notes') }}</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.enter_production_notes') }}"></textarea>
+                    </div>
+                </form>
             </div>
+
+            {{-- ─── ACTION BUTTONS — moved into a real modal-footer, OUTSIDE
+                 the scrolling .modal-body, so they're always visible and
+                 never get scrolled out of view below a long outputs table --}}
+            <div class="modal-footer d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
+                </button>
+                <button type="button" class="btn btn-success" onclick="completeProductionWithOutputs({{ $order->id }})">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <span class="indicator-label">{{ __('passwords.complete_production') }}</span>
+                    <span class="indicator-progress">{{ __('passwords.processing') }}
+                        <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                    </span>
+                </button>
+            </div>
+
         </div>
     </div>
 </div>
+<script>
+    // ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('input', function(e) {
+        const target = e.target;
+        if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
+            const form = target.closest('form[id^="completeProductionForm"]');
+            if (!form) return;
+            const orderId = form.id.replace('completeProductionForm', '');
+            updateProductionSummary(orderId);
+        }
+    });
+});
+
+function updateProductionSummary(orderId) {
+    let totalProduced = 0;
+    let totalDefective = 0;
+
+    // Scoped to THIS order's form only — no cross-contamination between
+    // multiple production-order modals open in the same DOM.
+    document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
+        totalProduced += parseFloat(input.value) || 0;
+    });
+
+    document.querySelectorAll(`#completeProductionForm${orderId} .defective-quantity-input`).forEach(input => {
+        totalDefective += parseFloat(input.value) || 0;
+    });
+
+    // Match the ACTUAL ids rendered in Blade — with the order suffix
+    const producedDisplay = document.getElementById(`total_produced_display_${orderId}`);
+    const defectiveDisplay = document.getElementById(`total_defective_display_${orderId}`);
+
+    if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
+    if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
+}
+</script>
 
 
 {{-- resources/views/manufacturing/production-order/view-modal.blade.php --}}

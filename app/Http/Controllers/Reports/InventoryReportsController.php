@@ -11,6 +11,8 @@ use App\Models\InventoryAdjustments;
 use App\Models\Department;
 use App\Models\Location;
 use App\Models\SingleShopInventoryLog;
+use App\Models\BatchLog;
+use App\Models\PurchaseReceiptItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -32,8 +34,6 @@ class InventoryReportsController extends Controller
 
         return $tenantId;
     }
-
-    
     
     /**
      * ✅ Reusable pagination method
@@ -535,13 +535,14 @@ class InventoryReportsController extends Controller
         ));
     }
 
+
     /**
-     * Stock Aging Report with Pure Eloquent - Fixed for all inventory items
+     * ✅ FIXED: Stock Aging Report with Proper Prices and Batch Tracking
      */
     public function stockAging(Request $request)
     {
         $tenantId = $this->getTenantId();
-        $isSingleShop = tenant_is_single_shop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId); 
         
         $departmentId = $request->get('department_id');
         $locationId = $request->get('location_id');
@@ -549,14 +550,14 @@ class InventoryReportsController extends Controller
         $category = $request->get('category');
         $perPage = (int)$request->get('per_page', 15);
         
-        // Get all inventory items with relationships
+        // ─── Get all inventory items with relationships ──────────────
         $allItems = InventoryItems::with([
             'variant.product',
             'departmentItem',
             'itemLocation'
         ])
         ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0)
+        ->where('quantity_allocated', '>', 0)
         ->when($departmentId, function($q, $departmentId) {
             return $q->where('department_id', $departmentId);
         })
@@ -568,7 +569,34 @@ class InventoryReportsController extends Controller
         })
         ->get();
         
-        // Calculate aging metrics for each item
+        // ─── Get Batch Logs for batch-based items ─────────────────────
+        $batchLogs = BatchLog::where('tenant_id', $tenantId)
+            ->whereIn('variant_id', $allItems->pluck('variant_id')->filter())
+            ->orderBy('event_date', 'desc')
+            ->get()
+            ->groupBy('variant_id');
+        
+        // ─── Get Purchase Receipt Items for batch details ─────────────
+        // ✅ FIXED: tenant_id is on PurchaseOrder, filter through that relationship
+        $batchNumbers = $allItems->pluck('batch_number')->filter()->values();
+        $batchItems = collect();
+        
+        if ($batchNumbers->isNotEmpty()) {
+            $batchItems = PurchaseReceiptItem::with([
+                'purchaseReceipt.purchaseOrder' // Eager load receipt -> order
+            ])
+            ->whereIn('batch_number', $batchNumbers)
+            ->get()
+            ->filter(function($item) use ($tenantId) {
+                // Filter by tenant through: item -> purchaseReceipt -> purchaseOrder
+                return $item->purchaseReceipt 
+                    && $item->purchaseReceipt->purchaseOrder 
+                    && $item->purchaseReceipt->purchaseOrder->tenant_id == $tenantId;
+            })
+            ->groupBy('batch_number');
+        }
+        
+        // ─── Calculate aging metrics for each item ─────────────────────
         $agingCollection = collect();
         $agingCategories = [
             'expired' => 0,
@@ -581,16 +609,39 @@ class InventoryReportsController extends Controller
         
         $today = now();
         $totalValueAtRisk = 0;
+        $totalInventoryValue = 0;
         
         foreach ($allItems as $item) {
-            // ─── Get Days Since Last Movement ────────────────────────────
+            // ─── Get variant with proper pricing ────────────────────────
+            $variant = $item->variant;
+            
+            // ✅ Use grand_total_cost_price for accurate cost
+            $costPrice = $variant->grand_total_cost_price ?? 0;
+            $sellingPrice = $variant->selling_price ?? 0;
+            
+            // ─── Get Days Since Last Movement ──────────────────────────
             $daysSinceLastMovement = $this->getDaysSinceLastMovement($item, $isSingleShop);
             
-            // ─── Get Expiry Date (if available) ──────────────────────────
-            $expiryDate = $item->expiry_date ? Carbon::parse($item->expiry_date) : null;
+            // ─── Get Expiry Date ────────────────────────────────────────
+            $expiryDate = null;
+            $batchNumber = $item->batch_number;
+            
+            if ($item->expiry_date) {
+                $expiryDate = Carbon::parse($item->expiry_date);
+            } elseif ($batchNumber && $batchItems->has($batchNumber)) {
+                $batchInfo = $batchItems->get($batchNumber)->first();
+                if ($batchInfo && $batchInfo->expiry_date) {
+                    $expiryDate = Carbon::parse($batchInfo->expiry_date);
+                }
+            }
+            
             $daysToExpiry = $expiryDate ? $today->diffInDays($expiryDate, false) : null;
             
-            // ─── Determine Aging Category ────────────────────────────────
+            // ─── Get batch logs for this variant ────────────────────────
+            $variantBatchLogs = $batchLogs->get($item->variant_id, collect());
+            $lastBatchLog = $variantBatchLogs->first();
+            
+            // ─── Determine Aging Category ──────────────────────────────
             if ($expiryDate && $daysToExpiry !== null) {
                 if ($daysToExpiry < 0) {
                     $categoryKey = 'expired';
@@ -601,31 +652,31 @@ class InventoryReportsController extends Controller
                 } elseif ($daysToExpiry <= 7) {
                     $categoryKey = '1_week';
                     $statusColor = 'warning';
-                    $statusText = __('pagination.critical');
+                    $statusText = __('pagination.expires_in_1_week');
                     $progressColor = 'warning';
                     $urgency = 'critical';
                 } elseif ($daysToExpiry <= 30) {
                     $categoryKey = '1_month';
                     $statusColor = 'warning';
-                    $statusText = __('pagination.warning');
+                    $statusText = __('pagination.expires_in_1_month');
                     $progressColor = 'warning';
                     $urgency = 'high';
                 } elseif ($daysToExpiry <= 90) {
                     $categoryKey = '3_months';
                     $statusColor = 'info';
-                    $statusText = __('pagination.monitor');
+                    $statusText = __('pagination.expires_in_3_months');
                     $progressColor = 'info';
                     $urgency = 'medium';
                 } elseif ($daysToExpiry <= 180) {
                     $categoryKey = '6_months';
                     $statusColor = 'success';
-                    $statusText = __('pagination.good');
+                    $statusText = __('pagination.expires_in_6_months');
                     $progressColor = 'success';
                     $urgency = 'low';
                 } else {
                     $categoryKey = 'over_6_months';
                     $statusColor = 'primary';
-                    $statusText = __('pagination.excellent');
+                    $statusText = __('pagination.expires_after_6_months');
                     $progressColor = 'primary';
                     $urgency = 'none';
                 }
@@ -652,16 +703,22 @@ class InventoryReportsController extends Controller
                 }
             }
             
+            // ✅ Use quantity_allocated for stock
+            $quantity = $item->quantity_allocated;
+            
             // Add to category totals
-            $agingCategories[$categoryKey] += $item->quantity_on_hand;
+            $agingCategories[$categoryKey] += $quantity;
             
             // Filter by category if specified
             if ($category && $category !== $categoryKey) {
                 continue;
             }
             
-            $costPrice = $item->variant->cost_price ?? 0;
-            $inventoryValue = $item->quantity_on_hand * $costPrice;
+            // ✅ Calculate inventory value using grand_total_cost_price
+            $inventoryValue = $quantity * $costPrice;
+            $totalInventoryValue += $inventoryValue;
+            
+            // Calculate value at risk (expired or near expiry)
             $valueAtRisk = ($categoryKey === 'expired' || $categoryKey === '1_week' || $categoryKey === '1_month') 
                 ? $inventoryValue 
                 : 0;
@@ -670,41 +727,65 @@ class InventoryReportsController extends Controller
                 $totalValueAtRisk += $valueAtRisk;
             }
             
+            // ─── Build the aging item object ────────────────────────────
             $agingCollection->push((object)[
                 'id' => $item->id,
-                'variant' => $item->variant,
+                'variant' => $variant,
                 'departmentItem' => $item->departmentItem,
                 'itemLocation' => $item->itemLocation,
+                
+                // ✅ Use quantity_allocated
+                'quantity_allocated' => $quantity,
                 'quantity_on_hand' => $item->quantity_on_hand,
-                'batch_number' => $item->batch_number ?? '-',
-                'expiry_date' => $item->expiry_date,
+                
+                // Batch information
+                'batch_number' => $batchNumber ?? '-',
+                'expiry_date' => $expiryDate ? $expiryDate->format('Y-m-d') : null,
+                'is_batch_tracked' => !empty($batchNumber),
+                
+                // Aging metrics
                 'days_to_expiry' => $daysToExpiry ?? $daysSinceLastMovement,
                 'days_since_last_movement' => $daysSinceLastMovement,
+                
+                // ✅ Pricing using grand_total_cost_price
+                'cost_price' => $costPrice,
+                'selling_price' => $sellingPrice,
                 'inventory_value' => $inventoryValue,
                 'value_at_risk' => $valueAtRisk,
+                'profit_margin' => $costPrice > 0 ? (($sellingPrice - $costPrice) / $costPrice) * 100 : 0,
+                
+                // Status and category
                 'category_key' => $categoryKey,
                 'status_color' => $statusColor,
                 'status_text' => $statusText,
                 'progress_color' => $progressColor,
                 'urgency' => $urgency,
-                'cost_price' => $costPrice,
-                'sku' => $item->variant->sku ?? '-',
-                'barcode' => $item->variant->barcode ?? '-',
-                'variant_name' => $item->variant->name ?? '-',
-                'product_name' => $item->variant->product->name ?? '',
-                'image_url' => $item->variant->image_url ?? null,
+                
+                // Variant details
+                'sku' => $variant->sku ?? '-',
+                'barcode' => $variant->barcode ?? '-',
+                'variant_name' => $variant->name ?? '-',
+                'product_name' => $variant->product->name ?? '',
+                'image_url' => $variant->image_url ?? null,
+                
+                // Department and location
                 'department_name' => $item->departmentItem->name ?? '-',
                 'location_name' => $item->itemLocation->name ?? '-',
+                
+                // Batch log info
+                'last_batch_event' => $lastBatchLog ? $lastBatchLog->event_date : null,
+                'last_batch_event_type' => $lastBatchLog ? $lastBatchLog->type : null,
+                'last_batch_quantity' => $lastBatchLog ? $lastBatchLog->quantity_after : null,
             ]);
         }
         
-        // Sort by urgency (most urgent first)
+        // ─── Sort by urgency (most urgent first) ──────────────────────
         $urgencyOrder = ['immediate' => 1, 'critical' => 2, 'high' => 3, 'medium' => 4, 'low' => 5, 'none' => 6];
         $sortedAging = $agingCollection->sortBy(function($item) use ($urgencyOrder) {
             return $urgencyOrder[$item->urgency] ?? 99;
         })->values();
         
-        // Calculate summary
+        // ─── Calculate summary ────────────────────────────────────────
         $summary = [
             'expired' => $agingCategories['expired'],
             '1_week' => $agingCategories['1_week'],
@@ -714,13 +795,16 @@ class InventoryReportsController extends Controller
             'over_6_months' => $agingCategories['over_6_months'],
             'total_items' => $sortedAging->count(),
             'total_value_at_risk' => $totalValueAtRisk,
-            'total_inventory_value' => $sortedAging->sum('inventory_value'),
+            'total_inventory_value' => $totalInventoryValue,
+            'batch_tracked_items' => $sortedAging->where('is_batch_tracked', true)->count(),
+            'expired_value' => $sortedAging->where('category_key', 'expired')->sum('inventory_value'),
+            'avg_profit_margin' => $sortedAging->avg('profit_margin') ?? 0,
         ];
         
-        // Apply pagination
+        // ─── Apply pagination ──────────────────────────────────────────
         $agingItems = $this->paginateCollection($sortedAging, $perPage, 'page');
         
-        // Get filter options
+        // ─── Get filter options ────────────────────────────────────────
         $departments = Department::where('tenant_id', $tenantId)->get();
         $locations = Location::where('tenant_id', $tenantId)->get();
         $variants = ProductVariant::where('tenant_id', $tenantId)
@@ -744,21 +828,26 @@ class InventoryReportsController extends Controller
         ));
     }
 
+
     /**
-     * Get days since last movement for a variant
+     * ✅ FIXED: Get days since last movement with batch support
      */
     private function getDaysSinceLastMovement($item, $isSingleShop)
     {
+        $lastMovement = null;
+        
         if ($isSingleShop) {
+            // ─── Single Shop: Use SingleShopInventoryLog ──────────────
             $lastLog = SingleShopInventoryLog::where('variant_id', $item->variant_id)
                 ->where('tenant_id', $item->tenant_id)
                 ->latest('created_at')
                 ->first();
             
             if ($lastLog) {
-                return Carbon::parse($lastLog->created_at)->diffInDays(now());
+                $lastMovement = Carbon::parse($lastLog->created_at);
             }
         } else {
+            // ─── Multi-Shop: Use InventoryTransactions ──────────────────
             $lastTransaction = InventoryTransactions::whereHas('InventoryItems', function($q) use ($item) {
                     $q->where('variant_id', $item->variant_id);
                 })
@@ -767,13 +856,36 @@ class InventoryReportsController extends Controller
                 ->first();
             
             if ($lastTransaction) {
-                return Carbon::parse($lastTransaction->created_at)->diffInDays(now());
+                $lastMovement = Carbon::parse($lastTransaction->created_at);
             }
         }
         
-        // No movement found - assume product is old
-        return 999;
+        // ─── If no movement found, check batch logs ──────────────────
+        if (!$lastMovement) {
+            $lastBatchLog = BatchLog::where('variant_id', $item->variant_id)
+                ->where('tenant_id', $item->tenant_id)
+                ->latest('event_date')
+                ->first();
+            
+            if ($lastBatchLog) {
+                $lastMovement = Carbon::parse($lastBatchLog->event_date);
+            }
+        }
+        
+        // ─── If still no movement, check inventory creation ──────────
+        if (!$lastMovement && $item->created_at) {
+            $lastMovement = Carbon::parse($item->created_at);
+        }
+        
+        // ─── If no movement found at all ──────────────────────────────
+        if (!$lastMovement) {
+            return 999; // Assume very old
+        }
+        
+        return $lastMovement->diffInDays(now());
     }
+
+
     
     /**
      * Low Stock Alerts Report with Pure Eloquent - Supports Single & Multi-Shop
@@ -808,12 +920,12 @@ class InventoryReportsController extends Controller
         ->get();
         
         // ✅ Log the data for debugging
-        \Log::info('Low Stock Alerts - Total items found: ' . $allItems->count());
-        \Log::info('Low Stock Alerts - Sample item:', [
-            'quantity_allocated' => $allItems->first()->quantity_allocated ?? 'N/A',
-            'preferred_stock_level' => $allItems->first()->preferred_stock_level ?? 'N/A',
-            'reorder_point' => $allItems->first()->reorder_point ?? 'N/A',
-        ]);
+        // \Log::info('Low Stock Alerts - Total items found: ' . $allItems->count());
+        // \Log::info('Low Stock Alerts - Sample item:', [
+        //     'quantity_allocated' => $allItems->first()->quantity_allocated ?? 'N/A',
+        //     'preferred_stock_level' => $allItems->first()->preferred_stock_level ?? 'N/A',
+        //     'reorder_point' => $allItems->first()->reorder_point ?? 'N/A',
+        // ]);
         
         // ─── Calculate Low Stock Metrics ──────────────────────────────────
         $lowStockItems = collect();
@@ -937,7 +1049,7 @@ class InventoryReportsController extends Controller
         }
         
         // ✅ Log how many low stock items were found
-        \Log::info('Low Stock Alerts - Low stock items found: ' . $lowStockItems->count());
+        // \Log::info('Low Stock Alerts - Low stock items found: ' . $lowStockItems->count());
         
         // Sort by severity (critical first, then warning)
         $severityOrder = ['critical' => 1, 'warning' => 2, 'low' => 3, 'normal' => 4];

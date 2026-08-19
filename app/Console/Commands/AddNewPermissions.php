@@ -39,6 +39,8 @@ class AddNewPermissions extends Command
             'complete production_orders',
             'cancel production_orders',
             'approve production_orders',
+            'view production_orders reports',
+            'production reports',
         ],
     ];
 

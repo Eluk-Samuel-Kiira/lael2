@@ -521,7 +521,7 @@ class ProductionOrderController extends Controller
     }
 
 
-    
+        
     /**
      * Complete production with outputs (update actual quantities and complete in one step)
      */
@@ -553,6 +553,9 @@ class ProductionOrderController extends Controller
             'outputs.*.output_id' => 'required|exists:production_order_outputs,id',
             'outputs.*.actual_quantity' => 'required|numeric|min:0',
             'outputs.*.defective_quantity' => 'nullable|numeric|min:0',
+            'batch_number' => 'nullable|string|max:100',
+            'expiry_date' => 'nullable|date|after_or_equal:today',
+            'notes' => 'nullable|string|max:500',
             'complete' => 'boolean',
         ]);
 
@@ -576,6 +579,8 @@ class ProductionOrderController extends Controller
 
         try {
             $totalActualQuantity = 0;
+            $batchNumber = $validated['batch_number'] ?? $productionOrder->production_number . '-' . date('Ymd');
+            $expiryDate = $validated['expiry_date'] ?? null;
 
             // ✅ Update all outputs with actual quantities
             foreach ($validated['outputs'] as $outputData) {
@@ -596,6 +601,14 @@ class ProductionOrderController extends Controller
                 $newActual = $outputData['actual_quantity'];
                 $quantityDifference = $newActual - $oldActual;
                 $defectiveQuantity = $outputData['defective_quantity'] ?? 0;
+
+                // ✅ Update output record with batch info
+                $output->update([
+                    'actual_quantity' => $newActual,
+                    'defective_quantity' => $defectiveQuantity,
+                    'batch_number' => $batchNumber,
+                    'expiry_date' => $expiryDate,
+                ]);
 
                 // ✅ Only update inventory if there's a positive difference
                 if ($quantityDifference > 0) {
@@ -625,17 +638,62 @@ class ProductionOrderController extends Controller
                             'quantity_added' => $quantityDifference,
                             'cost' => $output->production_cost,
                             'inventory_strategy' => $output->inventory_strategy,
+                            'batch_number' => $batchNumber,
+                            'expiry_date' => $expiryDate,
                         ],
                     ]);
 
+                    // ✅ If batch strategy, create batch record
+                    if ($output->inventory_strategy === 'batch') {
+                        $unitCost = $output->production_cost / max(1, $quantityDifference);
+                        
+                        $batch = PurchaseReceiptItem::create([
+                            'purchase_receipt_id' => null,
+                            'purchase_order_item_id' => null,
+                            'quantity_received' => $quantityDifference,
+                            'quantity_remaining' => $quantityDifference,
+                            'unit_cost' => $unitCost,
+                            'batch_number' => $batchNumber,
+                            'expiry_date' => $expiryDate,
+                            'location_id' => $productionOrder->location_id,
+                            'tenant_id' => $productionOrder->tenant_id,
+                            'notes' => "Produced from production #{$productionOrder->production_number}",
+                        ]);
+
+                        BatchLog::create([
+                            'batch_id' => $batch->id,
+                            'batch_number' => $batch->batch_number,
+                            'variant_id' => $variant->id,
+                            'variant_name' => $variant->name,
+                            'variant_sku' => $variant->sku,
+                            'type' => 'produced',
+                            'quantity_change' => $quantityDifference,
+                            'quantity_before' => 0,
+                            'quantity_after' => $quantityDifference,
+                            'unit_cost' => $unitCost,
+                            'total_cost' => $output->production_cost,
+                            'production_order_id' => $productionOrder->id,
+                            'production_order_output_id' => $output->id,
+                            'tenant_id' => $productionOrder->tenant_id,
+                            'location_id' => $productionOrder->location_id,
+                            'expiry_date' => $expiryDate,
+                            'event_date' => now(),
+                            'performed_by' => auth()->id(),
+                            'metadata' => [
+                                'production_number' => $productionOrder->production_number,
+                                'batch_generated' => true,
+                            ],
+                        ]);
+                    }
+
                     $totalActualQuantity += $quantityDifference;
                 }
+            }
 
-                // ✅ Update output record
-                $output->update([
-                    'actual_quantity' => $newActual,
-                    'defective_quantity' => $defectiveQuantity,
-                ]);
+            // ✅ Update production order notes
+            if ($validated['notes']) {
+                $productionOrder->notes = ($productionOrder->notes ? $productionOrder->notes . "\n" : '') . $validated['notes'];
+                $productionOrder->save();
             }
 
             // ✅ Complete the production order
@@ -652,6 +710,8 @@ class ProductionOrderController extends Controller
                 'data' => [
                     'total_output_quantity' => $productionOrder->outputs->sum('actual_quantity'),
                     'inventory_updated' => $totalActualQuantity > 0,
+                    'batch_number' => $batchNumber,
+                    'expiry_date' => $expiryDate,
                 ],
             ]);
 
@@ -667,6 +727,7 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
+    
 
     public function cancel(Request $request, $id)
     {

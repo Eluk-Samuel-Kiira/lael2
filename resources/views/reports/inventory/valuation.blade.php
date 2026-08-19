@@ -284,7 +284,7 @@
                                             <div class="d-flex align-items-center">
                                                 @if($item->variant && $item->variant->image_url)
                                                 <div class="symbol symbol-40px me-2">
-                                                    <img src="{{ asset($item->variant->image_url) }}" class="rounded" alt="{{ $item->variant->name }}">
+                                                    <img src="{{ productVariantImage($item->variant->image_url) }}" class="rounded" alt="{{ $item->variant->name }}">
                                                 </div>
                                                 @endif
                                                 <div>

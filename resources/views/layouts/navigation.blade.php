@@ -883,11 +883,11 @@
                                 
                                 <!-- Product Margin -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.margin') }}')">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.strategy') }}')">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
-                                        <span class="menu-title-list">{{ __('auth.product_margin') }}</span>
+                                        <span class="menu-title-list">{{ __('pagination.inventory_strategy') }}</span>
                                     </a>
                                 </div>
                                 
@@ -1140,6 +1140,130 @@
                                         <span class="menu-title-list">{{ __('pagination.purchase_cost_analysis') }}</span>
                                     </a>
                                 </div>
+                            </div>
+                        </div>
+                        @endcan
+
+                        <!-- Production Orders Section -->
+                        @can('view production_orders')
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
+                            <span class="menu-link">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{ __('pagination.production_orders') }}
+                                </span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                <!-- Production Order Report -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.index') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_order_report') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Summary -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.summary') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_summary') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Cost Analysis -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.cost-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_cost_analysis') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Efficiency -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.efficiency') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_efficiency') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Inventory Impact -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.inventory-impact') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_inventory_impact') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Quality Analysis -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.quality-analysis') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_quality_analysis') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Input vs Output -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.input-output') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_input_output') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Waste Report -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.waste') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_waste_report') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
+                                
+                                <!-- Production Batch Tracking -->
+                                @can('view production_orders reports')
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.batch-tracking') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.production_batch_tracking') }}</span>
+                                    </a>
+                                </div>
+                                @endcan
                             </div>
                         </div>
                         @endcan
