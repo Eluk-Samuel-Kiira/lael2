@@ -1480,145 +1480,7 @@ function startProductionWithPayment(orderId) {
     });
 }
 
-// ── UPDATE ACTUAL OUTPUT ──────────────────────────────────────────────────────
-function updateActualOutput(orderId) {
-    const form = document.getElementById(`updateOutputForm${orderId}`);
-    if (!form) {
-        console.error('Form not found for order:', orderId);
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: 'Could not find update form. Please refresh the page and try again.',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
-        });
-        return;
-    }
 
-    const submitButton = form.querySelector('button.btn-warning') || form.closest('.modal-body').querySelector('.btn-warning');
-    
-    // Show loading
-    if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.saving") }}...';
-    }
-
-    const data = {
-        outputs: []
-    };
-
-    // Collect output data
-    document.querySelectorAll(`#updateOutputForm${orderId} .actual-quantity-input`).forEach(input => {
-        const outputId = input.dataset.outputId;
-        const actualQuantity = parseFloat(input.value) || 0;
-        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
-
-        if (actualQuantity > 0 || defectiveQuantity > 0) {
-            data.outputs.push({
-                output_id: outputId,
-                actual_quantity: actualQuantity,
-                defective_quantity: defectiveQuantity
-            });
-        }
-    });
-
-    // Validate
-    if (data.outputs.length === 0) {
-        Swal.fire({
-            title: '{{ __("passwords.validation_error") }}',
-            text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
-            icon: 'warning',
-            confirmButtonColor: '#0d6efd'
-        });
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
-        }
-        return;
-    }
-
-    fetch(`/production-orders/${orderId}/update-output`, {
-        method: 'POST',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
-        }
-
-        if (data.success) {
-            const modal = bootstrap.Modal.getInstance(document.getElementById(`updateOutputModal${orderId}`));
-            if (modal) modal.hide();
-
-            Swal.fire({
-                title: '{{ __("passwords.success") }}',
-                text: data.message,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                location.reload();
-            });
-        } else {
-            Swal.fire({
-                title: '{{ __("passwords.error") }}',
-                text: data.message || '{{ __("passwords.failed_to_update_output") }}',
-                icon: 'error',
-                confirmButtonColor: '#0d6efd'
-            });
-        }
-    })
-    .catch(error => {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-save me-2"></i> {{ __("passwords.save_actual_output") }}';
-        }
-
-        console.error('Error:', error);
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: '{{ __("passwords.failed_to_update_output") }}',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
-        });
-    });
-}
-
-// ── REAL-TIME VALIDATION ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-    document.addEventListener('input', function(e) {
-        const target = e.target;
-        if (target.classList.contains('actual-quantity-input')) {
-            const outputId = target.dataset.outputId;
-            const planned = parseFloat(target.dataset.planned) || 0;
-            const actual = parseFloat(target.value) || 0;
-            
-            const remainingDisplay = document.querySelector(`.remaining-display[data-output-id="${outputId}"]`);
-            if (remainingDisplay) {
-                remainingDisplay.textContent = Math.max(0, planned - actual).toFixed(2);
-            }
-            
-            const totalDisplay = document.querySelector(`.total-display[data-output-id="${outputId}"]`);
-            if (totalDisplay) {
-                totalDisplay.textContent = actual.toFixed(2);
-            }
-        }
-    });
-
-    // Debug: Log when forms are found
-    console.log('🔍 Checking for production forms...');
-    const forms = document.querySelectorAll('[id^="startProductionForm"]');
-    console.log('Found ' + forms.length + ' production forms');
-    forms.forEach(form => {
-        console.log('  - Form ID:', form.id);
-    });
-});
 
 // ── COMPLETE PRODUCTION WITH OUTPUTS ──────────────────────────────────────────
 function completeProductionWithOutputs(orderId) {
@@ -1642,9 +1504,15 @@ function completeProductionWithOutputs(orderId) {
         submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
     }
 
+    // ✅ Get form data including batch and expiry
+    const formData = new FormData(form);
+    
     const data = {
         outputs: [],
-        complete: true
+        complete: true,
+        batch_number: formData.get('batch_number') || null,
+        expiry_date: formData.get('expiry_date') || null,
+        notes: formData.get('notes') || null
     };
 
     // ✅ Collect output data - allow some to be 0
@@ -1656,7 +1524,15 @@ function completeProductionWithOutputs(orderId) {
         outputCount++;
         const outputId = input.dataset.outputId;
         const actualQuantity = parseFloat(input.value) || 0;
-        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
+        
+        // ✅ Get defective quantity from the same row
+        const row = input.closest('.card-dashed');
+        const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
+        const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
+
+        // ✅ Get product name for error messages
+        const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
+        const productName = nameEl ? nameEl.textContent : 'Product';
 
         // ✅ Track if any output has quantity > 0
         if (actualQuantity > 0) {
@@ -1665,12 +1541,12 @@ function completeProductionWithOutputs(orderId) {
 
         // ✅ Validate: Actual quantity cannot be negative
         if (actualQuantity < 0) {
-            errors.push(`"${input.closest('.card-body').querySelector('h6').textContent}" - Actual quantity cannot be negative`);
+            errors.push(`"${productName}" - Actual quantity cannot be negative`);
         }
 
         // ✅ Validate: Defective quantity cannot exceed actual quantity
         if (defectiveQuantity > actualQuantity) {
-            errors.push(`"${input.closest('.card-body').querySelector('h6').textContent}" - Defective quantity cannot exceed actual quantity`);
+            errors.push(`"${productName}" - Defective quantity (${defectiveQuantity}) cannot exceed actual quantity (${actualQuantity})`);
         }
 
         data.outputs.push({
@@ -1710,22 +1586,37 @@ function completeProductionWithOutputs(orderId) {
         return;
     }
 
-    // ✅ Show confirmation with summary
+    // ✅ Show confirmation with summary including batch info
     let summaryHtml = '{{ __("passwords.complete_production_confirmation") }}<br><br>';
+    
     document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
-        const outputId = input.dataset.outputId;
         const actualQuantity = parseFloat(input.value) || 0;
-        const defectiveQuantity = parseFloat(input.closest('.row').querySelector('.defective-quantity-input')?.value) || 0;
-        const name = input.closest('.card-body').querySelector('h6').textContent;
+        
+        const row = input.closest('.card-dashed');
+        const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
+        const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
+        const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
+        const productName = nameEl ? nameEl.textContent : 'Product';
         
         if (actualQuantity > 0) {
-            summaryHtml += `<strong>${name}:</strong> ${actualQuantity} units`;
+            summaryHtml += `<strong>${productName}:</strong> ${actualQuantity} units`;
             if (defectiveQuantity > 0) {
                 summaryHtml += ` (${defectiveQuantity} defective)`;
             }
             summaryHtml += `<br>`;
         }
     });
+
+    // ✅ Add batch and expiry info to confirmation
+    if (data.batch_number) {
+        summaryHtml += `<br><strong>{{ __("passwords.batch_number") }}:</strong> ${data.batch_number}`;
+    }
+    if (data.expiry_date) {
+        summaryHtml += `<br><strong>{{ __("passwords.expiry_date") }}:</strong> ${data.expiry_date}`;
+    }
+    if (data.notes) {
+        summaryHtml += `<br><strong>{{ __("passwords.notes") }}:</strong> ${data.notes}`;
+    }
 
     Swal.fire({
         title: '{{ __("passwords.complete_production") }}',
@@ -1795,29 +1686,35 @@ function completeProductionWithOutputs(orderId) {
     });
 }
 
-// ── REAL-TIME VALIDATION ──────────────────────────────────────────────────────
+// ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('input', function(e) {
         const target = e.target;
-        if (target.classList.contains('actual-quantity-input')) {
-            const outputId = target.dataset.outputId;
-            const planned = parseFloat(target.dataset.planned) || 0;
-            const actual = parseFloat(target.value) || 0;
-            
-            // Update remaining display
-            const remainingDisplay = document.querySelector(`.remaining-display[data-output-id="${outputId}"]`);
-            if (remainingDisplay) {
-                remainingDisplay.textContent = Math.max(0, planned - actual).toFixed(2);
-            }
-            
-            // Update total display
-            const totalDisplay = document.querySelector(`.total-display[data-output-id="${outputId}"]`);
-            if (totalDisplay) {
-                totalDisplay.textContent = actual.toFixed(2);
-            }
+        if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
+            updateProductionSummary();
         }
     });
 });
+
+function updateProductionSummary() {
+    let totalProduced = 0;
+    let totalDefective = 0;
+    
+    document.querySelectorAll('.actual-quantity-input').forEach(input => {
+        totalProduced += parseFloat(input.value) || 0;
+    });
+    
+    document.querySelectorAll('.defective-quantity-input').forEach(input => {
+        totalDefective += parseFloat(input.value) || 0;
+    });
+    
+    // Update displays if they exist
+    const producedDisplay = document.getElementById('total_produced_display');
+    const defectiveDisplay = document.getElementById('total_defective_display');
+    
+    if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
+    if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
+}
 
 // ── CANCEL PRODUCTION ────────────────────────────────────────────────────────
 function cancelProduction(orderId) {

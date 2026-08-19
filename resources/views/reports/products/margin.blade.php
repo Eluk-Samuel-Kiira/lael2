@@ -276,44 +276,18 @@
                                         <tbody>
                                             @foreach($variants as $variant)
                                             @php
-                                                // ✅ Calculate everything in blade
+                                                // ✅ Use the already calculated properties
                                                 $price = (float)($variant->price ?? 0);
                                                 $costPrice = (float)($variant->cost_price ?? 0);
                                                 $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
+                                                $marginAmount = (float)($variant->margin_amount ?? 0);
+                                                $marginPercentage = (float)($variant->margin_percentage ?? 0);
+                                                $totalMarginValue = (float)($variant->total_margin_value ?? 0);
+                                                $marginLabel = $variant->margin_label ?? __('auth.very_low_margin');
+                                                $marginBadge = $variant->margin_badge ?? 'danger';
+                                                $marginColor = $variant->margin_color ?? 'danger';
                                                 
-                                                // Calculate margin amount
-                                                $marginAmount = $price - $costPrice;
-                                                
-                                                // Calculate margin percentage
-                                                $marginPercentage = $price > 0 ? ($marginAmount / $price) * 100 : 0;
-                                                
-                                                // Calculate total margin value
-                                                $totalMarginValue = $marginAmount * $quantity;
-                                                
-                                                // Determine margin category
-                                                if ($marginPercentage >= 50) {
-                                                    $marginCategory = 'high';
-                                                    $marginLabel = __('auth.high_margin');
-                                                    $marginColor = 'success';
-                                                    $badgeClass = 'success';
-                                                } elseif ($marginPercentage >= 30) {
-                                                    $marginCategory = 'medium';
-                                                    $marginLabel = __('auth.medium_margin');
-                                                    $marginColor = 'primary';
-                                                    $badgeClass = 'primary';
-                                                } elseif ($marginPercentage >= 10) {
-                                                    $marginCategory = 'low';
-                                                    $marginLabel = __('auth.low_margin');
-                                                    $marginColor = 'warning';
-                                                    $badgeClass = 'warning';
-                                                } else {
-                                                    $marginCategory = 'very_low';
-                                                    $marginLabel = __('auth.very_low_margin');
-                                                    $marginColor = 'danger';
-                                                    $badgeClass = 'danger';
-                                                }
-                                                
-                                                // Determine text color for margin amount
+                                                // Determine text color
                                                 $marginAmountClass = $marginAmount >= 0 ? 'success' : 'danger';
                                                 $totalMarginClass = $totalMarginValue >= 0 ? 'success' : 'danger';
                                             @endphp
@@ -342,18 +316,18 @@
                                                     @endif
                                                 </td>
                                                 <td class="text-end">
-                                                    <span class="text-gray-800 fw-semibold">${{ number_format($price, 2) }}</span>
+                                                    <span class="text-gray-800 fw-semibold">{{ currency_symbol() }}{{ number_format($price, 2) }}</span>
                                                 </td>
                                                 <td class="text-end">
-                                                    <span class="text-gray-600">${{ number_format($costPrice, 2) }}</span>
+                                                    <span class="text-gray-600">{{ currency_symbol() }}{{ number_format($costPrice, 2) }}</span>
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="text-{{ $marginAmountClass }} fw-bold">
-                                                        ${{ number_format($marginAmount, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($marginAmount, 2) }}
                                                     </span>
                                                 </td>
                                                 <td class="text-center">
-                                                    <span class="badge badge-{{ $badgeClass }}">
+                                                    <span class="badge badge-{{ $marginBadge }}">
                                                         {{ number_format($marginPercentage, 1) }}%
                                                     </span>
                                                 </td>
@@ -362,7 +336,7 @@
                                                 </td>
                                                 <td class="text-end">
                                                     <span class="text-{{ $totalMarginClass }} fw-bold">
-                                                        ${{ number_format($totalMarginValue, 2) }}
+                                                        {{ currency_symbol() }}{{ number_format($totalMarginValue, 2) }}
                                                     </span>
                                                 </td>
                                                 <td class="text-center">
@@ -452,248 +426,84 @@
 @if($variants->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // ✅ Use data from marginSummary (already calculated from filtered data)
-        const highMarginCount = {{ $marginSummary['high_margin_count'] ?? 0 }};
-        const mediumMarginCount = {{ $marginSummary['medium_margin_count'] ?? 0 }};
-        const lowMarginCount = {{ $marginSummary['low_margin_count'] ?? 0 }};
-        const veryLowMarginCount = {{ $marginSummary['very_low_margin_count'] ?? 0 }};
+// Top Margin Products Chart (Bar Chart)
+@php
+    $topProductNames = [];
+    $topProductMargins = [];
+    $topProductPrices = [];
+    $topProductCosts = [];
+    $topProductIds = [];
+    
+    foreach($topMarginProducts as $product) {
+        $price = (float)($product->price ?? 0);
+        $costPrice = (float)($product->cost_price ?? 0);
+        $marginPercentage = (float)($product->margin_percentage ?? 0);
         
-        console.log('Chart Data:', { highMarginCount, mediumMarginCount, lowMarginCount, veryLowMarginCount });
-        
-        // Margin Distribution Chart (Pie Chart)
-        const marginDistElement = document.querySelector("#marginDistributionChart");
-        if (marginDistElement && (highMarginCount > 0 || mediumMarginCount > 0 || lowMarginCount > 0 || veryLowMarginCount > 0)) {
-            const marginDistributionChart = new ApexCharts(marginDistElement, {
-                series: [highMarginCount, mediumMarginCount, lowMarginCount, veryLowMarginCount],
-                chart: {
-                    type: 'pie',
-                    height: 350,
-                    width: '100%',
-                    toolbar: {
-                        show: true,
-                        tools: {
-                            download: true
-                        }
-                    }
-                },
-                labels: [
-                    '{{ __("auth.high_margin") }} (≥50%)',
-                    '{{ __("auth.medium_margin") }} (30-49%)',
-                    '{{ __("auth.low_margin") }} (10-29%)',
-                    '{{ __("auth.very_low_margin") }} (<10%)'
-                ],
-                colors: ['#50CD89', '#3E97FF', '#FFC700', '#F1416C'],
-                legend: {
-                    position: 'bottom',
-                    fontSize: '12px',
-                    labels: {
-                        colors: '#5B5B5B'
-                    }
-                },
-                tooltip: {
-                    y: {
-                        formatter: function(value) {
-                            const total = highMarginCount + mediumMarginCount + lowMarginCount + veryLowMarginCount;
-                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                            return value + ' {{ __("auth.items") }} (' + percentage + '%)';
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: function(val, opts) {
-                        const total = highMarginCount + mediumMarginCount + lowMarginCount + veryLowMarginCount;
-                        const percentage = total > 0 ? ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1) : 0;
-                        return opts.w.config.series[opts.seriesIndex] + ' (' + percentage + '%)';
-                    },
-                    style: {
-                        fontSize: '11px',
-                        fontWeight: 'bold'
-                    }
-                },
-                responsive: [{
-                    breakpoint: 480,
-                    options: {
-                        chart: {
-                            height: 300
-                        },
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }]
-            });
-            marginDistributionChart.render();
-        } else {
-            console.warn('No data for margin distribution chart');
-            if (marginDistElement) {
-                marginDistElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+        $name = $product->product?->name ?? $product->name;
+        $topProductNames[] = strlen($name) > 20 ? substr($name, 0, 17) . '...' : $name;
+        $topProductMargins[] = $marginPercentage;
+        $topProductPrices[] = $price;
+        $topProductCosts[] = $costPrice;
+        $topProductIds[] = $product->id;
+    }
+@endphp
+
+const topProductsElement = document.querySelector("#topMarginChart");
+if (topProductsElement && {{ count($topProductMargins) }} > 0) {
+    new ApexCharts(topProductsElement, {
+        series: [{
+            name: '{{ __("auth.margin_percentage") }}',
+            data: @json($topProductMargins)
+        }],
+        chart: {
+            type: 'bar',
+            height: 350,
+            toolbar: { show: true }
+        },
+        plotOptions: {
+            bar: {
+                horizontal: false,
+                borderRadius: 4,
+                columnWidth: '60%'
             }
-        }
-        
-        // Top Margin Products Chart (Bar Chart)
-        // Top Margin Products Chart (Bar Chart)
-        @php
-            // Get top 10 products by margin percentage from sortedVariants
-            $topProducts = isset($sortedVariants) ? $sortedVariants->take(10) : collect();
-            $topProductNames = [];
-            $topProductMargins = [];
-            $topProductPrices = [];
-            $topProductCosts = [];
-            
-            foreach($topProducts as $product) {
-                $price = (float)($product->price ?? 0);
-                $costPrice = (float)($product->cost_price ?? 0);
-                $marginPercentage = $price > 0 ? (($price - $costPrice) / $price) * 100 : 0;
-                
-                $name = $product->product?->name ?? $product->name;
-                $topProductNames[] = strlen($name) > 20 ? substr($name, 0, 17) . '...' : $name;
-                $topProductMargins[] = $marginPercentage;
-                $topProductPrices[] = $price;
-                $topProductCosts[] = $costPrice;
+        },
+        xaxis: {
+            categories: @json($topProductNames),
+            labels: {
+                rotate: -45,
+                style: { fontSize: '11px' }
             }
-        @endphp
-        
-        const topProductsElement = document.querySelector("#topMarginChart");
-        if (topProductsElement && {{ count($topProductMargins) }} > 0) {
-            const topMarginChart = new ApexCharts(topProductsElement, {
-                series: [{
-                    name: '{{ __("auth.margin_percentage") }}',
-                    data: @json($topProductMargins)
-                }],
-                chart: {
-                    type: 'bar',
-                    height: 350,
-                    width: '100%',
-                    toolbar: {
-                        show: true,
-                        tools: {
-                            download: true
-                        }
-                    }
-                },
-                plotOptions: {
-                    bar: {
-                        horizontal: false,
-                        borderRadius: 4,
-                        columnWidth: '60%',
-                        distributed: true
-                    }
-                },
-                xaxis: {
-                    categories: @json($topProductNames),
-                    labels: {
-                        rotate: -45,
-                        style: {
-                            fontSize: '11px',
-                            colors: '#5B5B5B'
-                        },
-                        trim: true
-                    },
-                    title: {
-                        text: '{{ __("accounting.product") }}',
-                        style: {
-                            fontSize: '12px',
-                            fontWeight: 'bold'
-                        }
-                    }
-                },
-                yaxis: {
-                    title: {
-                        text: '{{ __("auth.margin_percentage") }} (%)',
-                        style: {
-                            fontSize: '12px',
-                            fontWeight: 'bold'
-                        }
-                    },
-                    labels: {
-                        formatter: function(val) {
-                            return val.toFixed(1) + '%';
-                        }
-                    },
-                    min: 0
-                },
-                colors: ['#3E97FF'],
-                tooltip: {
-                    y: {
-                        formatter: function(value, { dataPointIndex }) {
-                            const product = @json($topMarginProducts->values())[dataPointIndex];
-                            return value.toFixed(1) + '%\n' + 
-                                   '{{ __("auth.price") }}: $' + (product.price || 0).toFixed(2) + '\n' +
-                                   '{{ __("auth.cost_price") }}: $' + (product.cost_price || 0).toFixed(2) + '\n' +
-                                   '{{ __("auth.margin_amount") }}: $' + (product.margin_amount || 0).toFixed(2);
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: function(val) {
-                        return val.toFixed(1) + '%';
-                    },
-                    offsetY: -20,
-                    style: {
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        colors: ["#333"]
-                    }
-                },
-                grid: {
-                    borderColor: '#e7e7e7',
-                    row: {
-                        colors: ['#f3f3f3', 'transparent'],
-                        opacity: 0.5
-                    }
+        },
+        yaxis: {
+            title: { text: '{{ __("auth.margin_percentage") }} (%)' },
+            labels: { formatter: function(val) { return val.toFixed(1) + '%'; } },
+            min: 0
+        },
+        colors: ['#3E97FF'],
+        tooltip: {
+            y: { 
+                formatter: function(value, { dataPointIndex }) {
+                    const products = @json($topMarginProducts->values());
+                    const product = products[dataPointIndex] || {};
+                    return value.toFixed(1) + '%\n' + 
+                           '{{ __("auth.price") }}: ' + '{{ currency_symbol() }}' + (product.price || 0).toFixed(2) + '\n' +
+                           '{{ __("auth.cost_price") }}: ' + '{{ currency_symbol() }}' + (product.cost_price || 0).toFixed(2) + '\n' +
+                           '{{ __("auth.margin_amount") }}: ' + '{{ currency_symbol() }}' + (product.margin_amount || 0).toFixed(2);
                 }
-            });
-            topMarginChart.render();
-        } else {
-            console.warn('No data for top margin chart');
-            if (topProductsElement) {
-                topProductsElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: function(val) { return val.toFixed(1) + '%'; },
+            offsetY: -20,
+            style: { fontSize: '10px', fontWeight: 'bold' }
         }
-        
-        // Add export functionality
-        window.exportCurrentPage = function(options) {
-            const { tableId, filename } = options;
-            const table = document.getElementById(tableId);
-            
-            if (!table) {
-                alert('Table not found');
-                return;
-            }
-            
-            let csv = [];
-            const rows = table.querySelectorAll('tr');
-            
-            for (let i = 0; i < rows.length; i++) {
-                const row = [];
-                const cols = rows[i].querySelectorAll('td, th');
-                
-                for (let j = 0; j < cols.length; j++) {
-                    let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
-                    if (text.includes(',') || text.includes('"')) {
-                        text = '"' + text.replace(/"/g, '""') + '"';
-                    }
-                    row.push(text);
-                }
-                csv.push(row.join(","));
-            }
-            
-            const csvContent = "\uFEFF" + csv.join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            
-            link.href = url;
-            link.setAttribute("download", filename + '.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        };
-    });
+    }).render();
+} else {
+    document.querySelector("#topMarginChart").innerHTML = 
+        '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+}
+
 </script>
 @endif
 @endpush

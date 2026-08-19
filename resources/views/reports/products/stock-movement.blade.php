@@ -187,16 +187,13 @@
                 </div>
 
                 {{-- Movement Charts --}}
-                <div class="row mb-6">
+                <div class="row g-6 mb-6">
                     {{-- Movement Status Distribution --}}
                     <div class="col-lg-6">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.movement_status_distribution') }}</h3>
                                 </div>
                             </div>
@@ -211,10 +208,7 @@
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary"></i>
                                     <h3 class="fw-bold m-0">{{ __('auth.activity_timeline') }}</h3>
                                 </div>
                             </div>
@@ -261,6 +255,28 @@
                                             </thead>
                                             <tbody>
                                                 @foreach($variants as $variant)
+                                                @php
+                                                    $daysSinceUpdate = $variant->days_since_update ?? 0;
+                                                    $daysSinceCreation = $variant->days_since_creation ?? 0;
+                                                    
+                                                    // Movement status
+                                                    if ($daysSinceUpdate <= 7) {
+                                                        $statusLabel = __('auth.recently_updated');
+                                                        $statusColor = 'success';
+                                                        $activityIcon = 'ki-check-circle';
+                                                        $activityIconColor = 'text-success';
+                                                    } elseif ($daysSinceUpdate <= 30) {
+                                                        $statusLabel = __('auth.active');
+                                                        $statusColor = 'primary';
+                                                        $activityIcon = 'ki-clock';
+                                                        $activityIconColor = 'text-primary';
+                                                    } else {
+                                                        $statusLabel = __('auth.stale');
+                                                        $statusColor = 'warning';
+                                                        $activityIcon = 'ki-hourglass';
+                                                        $activityIconColor = 'text-warning';
+                                                    }
+                                                @endphp
                                                 <tr>
                                                     <td class="ps-4 fw-semibold">{{ $variant->sku }}</td>
                                                     <td>
@@ -295,26 +311,28 @@
                                                         <span class="text-gray-800 fw-semibold">{{ $variant->updated_at->format('Y-m-d H:i') }}</span>
                                                     </td>
                                                     <td class="text-center">
-                                                        <span class="badge badge-light-{{ $variant->days_since_update <= 7 ? 'success' : ($variant->days_since_update <= 30 ? 'warning' : 'danger') }}">
-                                                            {{ $variant->days_since_update }} {{ __('auth.days') }}
+                                                        <span class="badge badge-light-{{ $daysSinceUpdate <= 7 ? 'success' : ($daysSinceUpdate <= 30 ? 'warning' : 'danger') }}">
+                                                            {{ $daysSinceUpdate }} {{ __('auth.days') }}
                                                         </span>
                                                     </td>
                                                     <td class="text-center">
-                                                        <span class="badge badge-light-info">{{ $variant->days_since_creation }} {{ __('auth.days') }}</span>
+                                                        <span class="badge badge-light-info">{{ $daysSinceCreation }} {{ __('auth.days') }}</span>
                                                     </td>
                                                     <td class="text-center">
-                                                        <span class="badge badge-{{ $variant->movement_color }}">
-                                                            {{ $variant->movement_label }}
+                                                        <span class="badge badge-{{ $statusColor }}">
+                                                            {{ $statusLabel }}
                                                         </span>
                                                     </td>
                                                     <td class="text-center">
-                                                        @if($variant->days_since_update <= 7)
-                                                            <i class="ki-duotone ki-check-circle fs-2 text-success"></i>
-                                                        @elseif($variant->days_since_update <= 30)
-                                                            <i class="ki-duotone ki-clock fs-2 text-primary"></i>
-                                                        @else
-                                                            <i class="ki-duotone ki-hourglass fs-2 text-warning"></i>
-                                                        @endif
+                                                        <i class="ki-duotone {{ $activityIcon }} fs-2 {{ $activityIconColor }}">
+                                                            @if($activityIcon === 'ki-check-circle')
+                                                                <span class="path1"></span><span class="path2"></span>
+                                                            @elseif($activityIcon === 'ki-clock')
+                                                                <span class="path1"></span><span class="path2"></span>
+                                                            @elseif($activityIcon === 'ki-hourglass')
+                                                                <span class="path1"></span><span class="path2"></span>
+                                                            @endif
+                                                        </i>
                                                     </td>
                                                 </tr>
                                                 @endforeach
@@ -323,7 +341,7 @@
                                     </div>
                                 </div>
                                 
-                                {{-- ✅ Add Clean Pagination Component --}}
+                                {{-- Pagination --}}
                                 <div class="card-footer">
                                     @include('partials.pagination', [
                                         'paginator' => $variants,
@@ -388,252 +406,150 @@
 @if($variants->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // ✅ Use the movementSummary data which already has all the counts
-        // These numbers come from the FULL dataset, not paginated data
-        const recentCount = {{ $movementSummary['recent_count'] ?? 0 }};
-        const activeCount = {{ $movementSummary['active_count'] ?? 0 }};
-        const staleCount = {{ $movementSummary['stale_count'] ?? 0 }};
-        
-        console.log('Chart Data:', { recentCount, activeCount, staleCount }); // Debug
-        
-        // Movement Status Distribution Chart (Pie Chart)
-        const movementStatusElement = document.querySelector("#movementStatusChart");
-        if (movementStatusElement && (recentCount > 0 || activeCount > 0 || staleCount > 0)) {
-            const movementStatusChart = new ApexCharts(movementStatusElement, {
-                series: [recentCount, activeCount, staleCount],
-                chart: {
-                    type: 'pie',
-                    height: 350,
-                    width: '100%',
-                    toolbar: {
-                        show: true,
-                        tools: {
-                            download: true
-                        }
-                    }
-                },
-                labels: [
-                    '{{ __("auth.recently_updated") }} (≤7 days)',
-                    '{{ __("auth.active") }} (8-30 days)',
-                    '{{ __("auth.stale") }} (>30 days)'
-                ],
-                colors: ['#50CD89', '#3E97FF', '#FFC700'],
-                legend: {
-                    position: 'bottom',
-                    fontSize: '12px',
-                    labels: {
-                        colors: '#5B5B5B'
-                    }
-                },
-                tooltip: {
-                    y: {
-                        formatter: function(value) {
-                            return value + ' {{ __("auth.items") }}';
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    formatter: function(val, opts) {
-                        const total = recentCount + activeCount + staleCount;
-                        const percentage = ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1);
-                        return opts.w.config.series[opts.seriesIndex] + ' (' + percentage + '%)';
-                    },
-                    style: {
-                        fontSize: '12px',
-                        fontWeight: 'bold'
-                    }
-                },
-                responsive: [{
-                    breakpoint: 480,
-                    options: {
-                        chart: {
-                            height: 300
-                        },
-                        legend: {
-                            position: 'bottom'
-                        }
-                    }
-                }]
-            });
-            movementStatusChart.render();
-        } else {
-            console.warn('No data for movement status chart');
-            if (movementStatusElement) {
-                movementStatusElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+document.addEventListener('DOMContentLoaded', function() {
+    // Movement Status Distribution Chart
+    const recentCount = {{ $recentCount ?? 0 }};
+    const activeCount = {{ $activeCount ?? 0 }};
+    const staleCount = {{ $staleCount ?? 0 }};
+    
+    if (recentCount > 0 || activeCount > 0 || staleCount > 0) {
+        new ApexCharts(document.querySelector("#movementStatusChart"), {
+            series: [recentCount, activeCount, staleCount],
+            chart: {
+                type: 'pie',
+                height: 300,
+                toolbar: { show: true }
+            },
+            labels: [
+                '{{ __("auth.recently_updated") }} (≤7 days)',
+                '{{ __("auth.active") }} (8-30 days)',
+                '{{ __("auth.stale") }} (>30 days)'
+            ],
+            colors: ['#50CD89', '#3E97FF', '#FFC700'],
+            legend: { position: 'bottom', fontSize: '12px' },
+            tooltip: { 
+                y: { 
+                    formatter: function(value) { 
+                        return value + ' {{ __("auth.items") }}'; 
+                    } 
+                } 
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val, opts) {
+                    const total = recentCount + activeCount + staleCount;
+                    const percentage = ((opts.w.config.series[opts.seriesIndex] / total) * 100).toFixed(1);
+                    return opts.w.config.series[opts.seriesIndex] + ' (' + percentage + '%)';
+                }
             }
-        }
-        
-        // Activity Timeline Chart - Use the activity data from PHP
-        @php
-            // Calculate activity by days from ALL variants (not paginated)
-            $activityByDay = [];
-            $today = \Carbon\Carbon::now();
-            
-            for ($i = 29; $i >= 0; $i--) {
-                $date = $today->copy()->subDays($i);
-                $dateStart = $date->copy()->startOfDay();
-                $dateEnd = $date->copy()->endOfDay();
-                
-                // Count updates from ALL variants on this date
-                $count = $allVariants->filter(function($variant) use ($dateStart, $dateEnd) {
-                    $updatedAt = \Carbon\Carbon::parse($variant->updated_at);
-                    return $updatedAt->between($dateStart, $dateEnd);
-                })->count();
-                
-                $activityByDay[] = [
-                    'date' => $date->format('M d'),
-                    'count' => $count
-                ];
-            }
-        @endphp
-        
-        const activityData = @json(array_column($activityByDay, 'count'));
-        const activityLabels = @json(array_column($activityByDay, 'date'));
-        
-        console.log('Activity Data:', activityData); // Debug
-        
-        // Activity Timeline Chart (Line Chart)
-        const timelineElement = document.querySelector("#activityTimelineChart");
-        if (timelineElement && activityData.some(value => value > 0)) {
-            const activityTimelineChart = new ApexCharts(timelineElement, {
-                series: [{
-                    name: '{{ __("auth.updates") }}',
-                    data: activityData
-                }],
-                chart: {
-                    type: 'line',
-                    height: 350,
-                    width: '100%',
-                    toolbar: {
-                        show: true,
-                        tools: {
-                            download: true
-                        }
-                    },
-                    zoom: {
-                        enabled: true
-                    }
-                },
-                stroke: {
-                    curve: 'smooth',
-                    width: 3
-                },
-                fill: {
-                    type: 'gradient',
-                    gradient: {
-                        shade: 'light',
-                        type: 'vertical',
-                        shadeIntensity: 0.3,
-                        gradientToColors: ['#3E97FF'],
-                        inverseColors: false,
-                        opacityFrom: 0.8,
-                        opacityTo: 0.2,
-                        stops: [0, 100]
-                    }
-                },
-                xaxis: {
-                    categories: activityLabels,
-                    labels: {
-                        rotate: -45,
-                        style: {
-                            fontSize: '10px',
-                            colors: '#5B5B5B'
-                        }
-                    },
-                    title: {
-                        text: '{{ __("auth.date") }}',
-                        style: {
-                            fontSize: '12px',
-                            fontWeight: 'bold'
-                        }
-                    }
-                },
-                yaxis: {
-                    title: {
-                        text: '{{ __("auth.number_of_updates") }}',
-                        style: {
-                            fontSize: '12px',
-                            fontWeight: 'bold'
-                        }
-                    },
-                    min: 0,
-                    tickAmount: 5
-                },
+        }).render();
+    } else {
+        document.querySelector("#movementStatusChart").innerHTML = 
+            '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+    }
+    
+    // Activity Timeline Chart
+    const activityLabels = @json($activityLabels ?? []);
+    const activityData = @json($activityData ?? []);
+    
+    if (activityData.length > 0 && activityData.some(v => v > 0)) {
+        new ApexCharts(document.querySelector("#activityTimelineChart"), {
+            series: [{
+                name: '{{ __("auth.updates") }}',
+                data: activityData
+            }],
+            chart: {
+                type: 'line',
+                height: 300,
+                toolbar: { show: true },
+                zoom: { enabled: true }
+            },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shade: 'light',
+                    type: 'vertical',
+                    shadeIntensity: 0.3,
+                    gradientToColors: ['#3E97FF'],
+                    inverseColors: false,
+                    opacityFrom: 0.8,
+                    opacityTo: 0.2,
+                    stops: [0, 100]
+                }
+            },
+            xaxis: {
+                categories: activityLabels,
+                labels: {
+                    rotate: -45,
+                    style: { fontSize: '10px' }
+                }
+            },
+            yaxis: {
+                title: { text: '{{ __("auth.number_of_updates") }}' },
+                min: 0
+            },
+            colors: ['#3E97FF'],
+            tooltip: {
+                y: { 
+                    formatter: function(value) { 
+                        return value + ' {{ __("auth.update") }}' + (value !== 1 ? 's' : ''); 
+                    } 
+                }
+            },
+            markers: {
+                size: 5,
                 colors: ['#3E97FF'],
-                tooltip: {
-                    y: {
-                        formatter: function(value) {
-                            return value + ' {{ __("auth.update") }}' + (value !== 1 ? 's' : '');
-                        }
-                    }
-                },
-                markers: {
-                    size: 5,
-                    colors: ['#3E97FF'],
-                    strokeColors: '#fff',
-                    strokeWidth: 2,
-                    hover: {
-                        size: 7
-                    }
-                },
-                grid: {
-                    borderColor: '#e7e7e7',
-                    row: {
-                        colors: ['#f3f3f3', 'transparent'],
-                        opacity: 0.5
-                    }
+                strokeColors: '#fff',
+                strokeWidth: 2,
+                hover: { size: 7 }
+            },
+            grid: {
+                borderColor: '#e7e7e7',
+                row: {
+                    colors: ['#f3f3f3', 'transparent'],
+                    opacity: 0.5
                 }
-            });
-            activityTimelineChart.render();
-        } else {
-            console.warn('No data for activity timeline chart');
-            if (timelineElement) {
-                timelineElement.innerHTML = '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
             }
-        }
+        }).render();
+    } else {
+        document.querySelector("#activityTimelineChart").innerHTML = 
+            '<div class="text-center text-muted py-5">{{ __("accounting.no_data_available") }}</div>';
+    }
+    
+    // Export function
+    window.exportCurrentPage = function(options) {
+        const { tableId, filename } = options;
+        const table = document.getElementById(tableId);
+        if (!table) { alert('{{ __("accounting.table_not_found") }}'); return; }
         
-        // Export functionality
-        window.exportCurrentPage = function(options) {
-            const { tableId, filename, format = 'csv' } = options;
-            const table = document.getElementById(tableId);
-            
-            if (!table) {
-                alert('Table not found');
-                return;
-            }
-            
-            let csv = [];
-            const rows = table.querySelectorAll('tr');
-            
-            for (let i = 0; i < rows.length; i++) {
-                const row = [];
-                const cols = rows[i].querySelectorAll('td, th');
-                
-                for (let j = 0; j < cols.length; j++) {
-                    let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").trim();
-                    if (text.includes(',') || text.includes('"')) {
-                        text = '"' + text.replace(/"/g, '""') + '"';
-                    }
-                    row.push(text);
+        let csv = [];
+        const rows = table.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td, th');
+            const rowData = Array.from(cols).map(c => {
+                let text = c.innerText.trim();
+                if (text.includes(',') || text.includes('"')) {
+                    text = '"' + text.replace(/"/g, '""') + '"';
                 }
-                csv.push(row.join(","));
-            }
-            
-            const csvContent = csv.join("\n");
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            
-            link.href = url;
-            link.setAttribute("download", filename + '.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        };
-    });
+                return text;
+            });
+            csv.push(rowData.join(','));
+        });
+        
+        const blob = new Blob(["\uFEFF" + csv.join('\n')], { type: 'text/csv;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename + '.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    };
+});
 </script>
 @endif
 @endpush

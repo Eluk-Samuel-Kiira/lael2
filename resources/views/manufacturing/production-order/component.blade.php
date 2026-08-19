@@ -85,7 +85,7 @@
                                 
                                 @if($order->status === 'in_progress')
                                     @can('complete production_orders')
-                                        <button class="btn btn-sm btn-success" 
+                                        <button type="button" class="btn btn-sm btn-success" 
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#completeProductionModal{{ $order->id }}">
                                             <i class="bi bi-check-circle me-1"></i>

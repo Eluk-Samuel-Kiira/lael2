@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ Order,InventoryTransactions, SingleShopInventoryLog, Invoice };
+use App\Models\{ Product, SerialNumber, Order,InventoryTransactions, SingleShopInventoryLog, Invoice };
 use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\Location;
@@ -961,6 +961,7 @@ class OrderReportsController extends Controller
                     'variant_id' => $variantId,
                     'sku' => $variant->sku ?? 'N/A',
                     'variant_name' => $variant->name ?? 'Unknown',
+                    'image_url' => $variant->image_url ?? null,
                     'product_name' => $variant->product->name ?? $variant->name ?? 'Unknown',
                     'current_price' => $unitPrice,
                     'discount_price' => $discountPrice,
@@ -981,6 +982,8 @@ class OrderReportsController extends Controller
             ->filter()
             ->values();
         
+        
+        
         // ─── Apply Filters ──────────────────────────────────────────
         $productSales = $productSalesRaw->filter(function($product) use ($minQuantity, $maxQuantity, $minRevenue, $maxRevenue, $minProfit, $velocityFilter, $startDate, $endDate) {
             if ($minQuantity && $product->total_quantity_sold < (int)$minQuantity) return false;
@@ -998,12 +1001,14 @@ class OrderReportsController extends Controller
             
             return true;
         })->sortByDesc('total_revenue')->values();
+
+        
         
         // ─── Calculate Days in Period ──────────────────────────────
         $daysInPeriod = $this->getDaysInPeriod($startDate, $endDate);
         
         // ─── Calculate Sales Velocity ──────────────────────────────
-        $productSales = $productSales->map(function($product) use ($daysInPeriod) {
+        $productSales = $productSales->map(function($product) use ($daysInPeriod, $startDate, $endDate, $tenantId) {
             $dailySalesRate = $product->total_quantity_sold / max($daysInPeriod, 1);
             $dailyRevenueRate = $product->total_revenue / max($daysInPeriod, 1);
             
@@ -1017,6 +1022,62 @@ class OrderReportsController extends Controller
             // ─── Stock Coverage (Days of Stock) ──────────────────────
             $product->stock_coverage_days = $dailySalesRate > 0 ? $product->current_stock / $dailySalesRate : 0;
             
+            // ✅ Get variant and serial information
+            $variant = ProductVariant::find($product->variant_id);
+            if ($variant) {
+                $product->image_url = $variant->image_url ?? $product->image_url ?? null;
+                
+                // ─── Check if this variant's product has serial strategy ───
+                $product->inventory_strategy = $variant->product?->inventory_strategy ?? 'quantity';
+                $product->has_serials = $product->inventory_strategy === 'serial';
+                
+                if ($product->has_serials) {
+                    // Get sold serials for this variant within the period
+                    $soldSerials = SerialNumber::where('variant_id', $product->variant_id)
+                        ->where('tenant_id', $tenantId)
+                        ->where('status', SerialNumber::STATUS_SOLD)
+                        ->whereBetween('sold_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                        ->get();
+                    
+                    $product->total_serials_sold = $soldSerials->count();
+                    $product->serial_numbers = $soldSerials->pluck('serial_number')->take(10)->toArray();
+                    $product->total_available_serials = $variant->getAvailableSerialCount();
+                } else {
+                    $product->total_serials_sold = 0;
+                    $product->serial_numbers = [];
+                    $product->total_available_serials = 0;
+                }
+                
+                // ─── Check if product has recipe ──────────────────────────
+                if ($variant->product) {
+                    $product->has_recipe = $variant->product->inventory_strategy === 'recipe';
+                    $product->recipe_id = $variant->product->recipe?->id;
+                    
+                    if ($product->has_recipe && $variant->product->recipe) {
+                        $product->ingredients = $variant->product->recipe->ingredients->map(function($ingredient) {
+                            return (object)[
+                                'variant_name' => $ingredient->ingredientVariant->name ?? 'Unknown',
+                                'quantity_required' => $ingredient->quantity_required,
+                                'unit' => $ingredient->unit?->name ?? 'N/A',
+                            ];
+                        });
+                    } else {
+                        $product->ingredients = collect();
+                    }
+                } else {
+                    $product->has_recipe = false;
+                    $product->ingredients = collect();
+                }
+            } else {
+                $product->has_recipe = false;
+                $product->ingredients = collect();
+                $product->has_serials = false;
+                $product->total_serials_sold = 0;
+                $product->serial_numbers = [];
+                $product->total_available_serials = 0;
+                $product->inventory_strategy = 'quantity';
+            }
+
             return $product;
         });
         
@@ -1913,18 +1974,22 @@ class OrderReportsController extends Controller
         $peakHours = collect();
         $peakDays = collect();
         
+        // ─── PEAK HOURS (only for hourly grouping) ──────────────────
         if ($groupBy == 'hourly') {
             $peakHours = $orders->groupBy(function($order) {
-                return $order->created_at->format('H');
+                return (int)$order->created_at->format('H');
             })->map(function($hourOrders, $hour) {
                 return (object)[
                     'hour' => (int)$hour,
                     'order_count' => $hourOrders->count(),
                     'hourly_total' => $hourOrders->sum('total'),
-                    'hourly_average' => $hourOrders->avg('total'),
+                    'hourly_average' => $hourOrders->count() > 0 ? $hourOrders->sum('total') / $hourOrders->count() : 0,
                 ];
             })->sortByDesc('hourly_total')->take(5)->values();
-            
+        }
+        
+        // ─── PEAK DAYS ──────────────────────────────────────────────────
+        if ($groupBy == 'hourly' || $groupBy == 'daily') {
             $peakDays = $orders->groupBy(function($order) {
                 return $order->created_at->format('Y-m-d');
             })->map(function($dayOrders, $date) {
@@ -1932,10 +1997,9 @@ class OrderReportsController extends Controller
                     'date' => $date,
                     'order_count' => $dayOrders->count(),
                     'total_sales' => $dayOrders->sum('total'),
-                    'average_sale' => $dayOrders->avg('total'),
+                    'average_sale' => $dayOrders->count() > 0 ? $dayOrders->sum('total') / $dayOrders->count() : 0,
                 ];
             })->sortByDesc('total_sales')->take(5)->values();
-            
         } elseif ($groupBy == 'weekly') {
             $peakDays = $orders->groupBy(function($order) {
                 return $order->created_at->weekOfYear . '-' . $order->created_at->year;
@@ -1949,7 +2013,7 @@ class OrderReportsController extends Controller
                     'week_range' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
                     'order_count' => $weekOrders->count(),
                     'total_sales' => $weekOrders->sum('total'),
-                    'average_sale' => $weekOrders->avg('total'),
+                    'average_sale' => $weekOrders->count() > 0 ? $weekOrders->sum('total') / $weekOrders->count() : 0,
                 ];
             })->sortByDesc('total_sales')->take(5)->values();
             
@@ -1964,19 +2028,7 @@ class OrderReportsController extends Controller
                     'month_name' => $firstOrder->created_at->format('F Y'),
                     'order_count' => $monthOrders->count(),
                     'total_sales' => $monthOrders->sum('total'),
-                    'average_sale' => $monthOrders->avg('total'),
-                ];
-            })->sortByDesc('total_sales')->take(5)->values();
-            
-        } else {
-            $peakDays = $orders->groupBy(function($order) {
-                return $order->created_at->format('Y-m-d');
-            })->map(function($dayOrders, $date) {
-                return (object)[
-                    'date' => $date,
-                    'order_count' => $dayOrders->count(),
-                    'total_sales' => $dayOrders->sum('total'),
-                    'average_sale' => $dayOrders->avg('total'),
+                    'average_sale' => $monthOrders->count() > 0 ? $monthOrders->sum('total') / $monthOrders->count() : 0,
                 ];
             })->sortByDesc('total_sales')->take(5)->values();
         }
@@ -3025,6 +3077,7 @@ class OrderReportsController extends Controller
                     $movementCategory = 'Slow Mover';
                 }
                 
+                // \Log::info($movementCategory);
                 // ─── Get Current Stock ────────────────────────────────────
                 $currentStock = $this->getVariantStock($variant->id, $tenantId, $isSingleShop, $locationId, $departmentId);
                 
@@ -3032,6 +3085,7 @@ class OrderReportsController extends Controller
                     'id' => $variant->id,
                     'sku' => $variant->sku ?? 'N/A',
                     'name' => $variant->name ?? 'Unknown',
+                    'image_url' => $variant->image_url ?? null,
                     'price' => $variant->selling_price ?? 0,
                     'current_stock' => $currentStock,
                     'quantity_sold' => $items->sum('quantity'),
@@ -3040,7 +3094,7 @@ class OrderReportsController extends Controller
                     'times_ordered' => $items->unique('order_id')->count(),
                     'last_sold_date' => $items->max('created_at'),
                     'daily_sales_rate' => $dailySalesRate,
-                    'movement_category' => $movementCategory,
+                    'movement_category' => $movementCategory, 
                 ];
             })
             ->filter()
@@ -3213,6 +3267,117 @@ class OrderReportsController extends Controller
         );
     }
 
-    
+
+    public function getIngredients($variantId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        // ✅ First find the variant
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $variantId)
+            ->with(['product.recipe.ingredients.ingredientVariant', 'product.recipe.ingredients.unit'])
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.variant_not_found'),
+            ]);
+        }
+
+        $product = $variant->product;
+
+        if (!$product || !$product->recipe) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.no_recipe_found'),
+            ]);
+        }
+
+        $ingredients = $product->recipe->ingredients->map(function($ingredient) {
+            return [
+                'variant_name' => $ingredient->ingredientVariant->name ?? 'Unknown',
+                'quantity_required' => $ingredient->quantity_required,
+                'unit' => $ingredient->unit?->name ?? 'N/A',
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'ingredients' => $ingredients,
+        ]);
+    }
+
+    /**
+     * Get serial numbers for a variant
+     */
+    public function getVariantSerials($variantId)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->where('id', $variantId)
+            ->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variant not found'
+            ], 404);
+        }
+
+        // Get all serials for this variant with location and department
+        $serials = SerialNumber::with(['location', 'department'])
+            ->where('variant_id', $variantId)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $summary = [
+            'total' => $serials->count(),
+            'available' => $serials->where('status', SerialNumber::STATUS_AVAILABLE)->count(),
+            'sold' => $serials->where('status', SerialNumber::STATUS_SOLD)->count(),
+            'reserved' => $serials->where('status', SerialNumber::STATUS_RESERVED)->count(),
+            'returned' => $serials->where('status', SerialNumber::STATUS_RETURNED)->count(),
+            'lost' => $serials->where('status', SerialNumber::STATUS_LOST)->count(),
+            'damaged' => $serials->where('status', SerialNumber::STATUS_DAMAGED)->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'variant' => [
+                    'id' => $variant->id,
+                    'name' => $variant->name,
+                    'sku' => $variant->sku,
+                ],
+                'serials' => $serials->map(function($serial) {
+                    return [
+                        'id' => $serial->id,
+                        'serial_number' => $serial->serial_number,
+                        'status' => $serial->status,
+                        'status_label' => $serial->status_label,
+                        'location_name' => $serial->location ? $serial->location->name : 'N/A',
+                        'department_name' => $serial->department ? $serial->department->name : 'N/A',
+                        'order_id' => $serial->order_id,
+                        'sold_at' => $serial->sold_at,
+                        'created_at' => $serial->created_at,
+                        'notes' => $serial->notes,
+                    ];
+                }),
+                'summary' => $summary,
+            ]
+        ]);
+    }
+
 
 }

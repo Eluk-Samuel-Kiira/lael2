@@ -240,6 +240,8 @@ class UserSeeder extends Seeder
                 'complete production_orders',
                 'cancel production_orders',
                 'approve production_orders',
+                'view production_orders reports',
+                'production reports',
             ],
             'Dashboard Management' => [
                 'view dashboard sales',

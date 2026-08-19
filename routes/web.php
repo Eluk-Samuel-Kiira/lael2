@@ -12,7 +12,7 @@ use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMet
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
-    PurchasingReportsController };
+    PurchasingReportsController, InventoryStrategyReportController, ProductionOrderReportController };
 
     // Route::get('/test-currency', function() {
     //     return debug_currency_conversion(4, 'AUD');
@@ -459,6 +459,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('sales-forecast', [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
             Route::get('inventory-sales', [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
         });
+        Route::get('/recipes/{productId}/ingredients', [OrderReportsController::class, 'getIngredients'])
+            ->name('recipes.ingredients');
+        Route::get('/variants/{variantId}/serials', [OrderReportsController::class, 'getVariantSerials'])
+            ->name('variants.serials');
 
 
         // Product Reports Routes
@@ -469,6 +473,27 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('stock-movement', [ProductsController::class, 'stockMovement'])->name('stock-movement');
             Route::get('margin', [ProductsController::class, 'margin'])->name('margin');
             Route::get('by-category', [ProductsController::class, 'byCategory'])->name('by-category');
+        });
+
+        Route::prefix('reports/products')->name('reports.products.')->group(function () {
+            Route::get('/strategy', [InventoryStrategyReportController::class, 'index'])->name('strategy');
+            Route::get('/strategy/detail/{productId}', [InventoryStrategyReportController::class, 'detail'])->name('strategy.detail');
+            Route::get('/strategy/recipe-detail/{productId}', [InventoryStrategyReportController::class, 'recipeDetail'])->name('strategy.recipe-detail');
+        });
+
+        Route::prefix('reports/production')->name('reports.production.')->group(function () {
+            Route::get('/', [ProductionOrderReportController::class, 'index'])->name('index');
+            Route::get('/summary', [ProductionOrderReportController::class, 'summary'])->name('summary');
+            Route::get('/detail/{orderId}', [ProductionOrderReportController::class, 'detail'])->name('detail');
+            Route::get('/cost-analysis', [ProductionOrderReportController::class, 'costAnalysis'])->name('cost-analysis');
+            Route::get('/efficiency', [ProductionOrderReportController::class, 'efficiency'])->name('efficiency');
+            Route::get('/inventory-impact', [ProductionOrderReportController::class, 'inventoryImpact'])->name('inventory-impact');
+            Route::get('/quality-analysis', [ProductionOrderReportController::class, 'qualityAnalysis'])->name('quality-analysis');
+            Route::get('/input-output', [ProductionOrderReportController::class, 'inputOutput'])->name('input-output');
+            Route::get('/waste', [ProductionOrderReportController::class, 'waste'])->name('waste');
+            Route::get('/batch-tracking', [ProductionOrderReportController::class, 'batchTracking'])->name('batch-tracking');
+            Route::get('/export', [ProductionOrderReportController::class, 'export'])->name('export');
+            
         });
 
         // Inventory Reports Routes

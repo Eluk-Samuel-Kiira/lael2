@@ -13,6 +13,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 class ProductsController extends Controller
 {
+
     /**
      * Product Summary Report
      */
@@ -28,6 +29,7 @@ class ProductsController extends Controller
         // Get filter parameters
         $categoryId = $request->get('category_id');
         $productType = $request->get('product_type');
+        $inventoryStrategy = $request->get('inventory_strategy');
         $isActive = $request->get('is_active');
         $isTaxable = $request->get('is_taxable');
         $perPage = $request->get('per_page', 15);
@@ -45,6 +47,10 @@ class ProductsController extends Controller
             $query->where('type', $productType);
         }
         
+        if ($inventoryStrategy && $inventoryStrategy !== 'all') {
+            $query->where('inventory_strategy', $inventoryStrategy);
+        }
+        
         if ($isActive !== null && $isActive !== '') {
             $query->where('is_active', $isActive);
         }
@@ -56,24 +62,46 @@ class ProductsController extends Controller
         // Get products with pagination
         $products = $query->paginate($perPage)->withQueryString();
         
+        // Calculate aggregated metrics on the collection
+        $products->getCollection()->transform(function ($product) {
+            // Calculate prices from variants
+            $variants = $product->variants;
+            $totalCostValue = $variants->sum(function ($variant) {
+                return ($variant->grand_total_cost_price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+            });
+            $totalRevenueValue = $variants->sum(function ($variant) {
+                return ($variant->selling_price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+            });
+            
+            // Average prices (weighted by stock)
+            $totalStock = $variants->sum('overal_quantity_at_hand');
+            $avgCostPrice = $totalStock > 0 ? $totalCostValue / $totalStock : 0;
+            $avgSellingPrice = $totalStock > 0 ? $totalRevenueValue / $totalStock : 0;
+            
+            $product->total_stock = $totalStock;
+            $product->avg_cost_price = $avgCostPrice;
+            $product->avg_selling_price = $avgSellingPrice;
+            $product->total_cost_value = $totalCostValue;
+            $product->total_revenue_value = $totalRevenueValue;
+            $product->variant_count = $variants->count();
+            
+            return $product;
+        });
+        
         // Get summary statistics
         $summary = $this->getProductSummary($tenantId, [
             'category_id' => $categoryId,
             'product_type' => $productType,
+            'inventory_strategy' => $inventoryStrategy,
             'is_active' => $isActive,
             'is_taxable' => $isTaxable
         ]);
         
-        // Get category breakdown
+        // Get breakdowns
         $categoryBreakdown = $this->getCategoryBreakdown($tenantId);
-        
-        // Get type breakdown
         $typeBreakdown = $this->getTypeBreakdown($tenantId);
-        
-        // Get status breakdown
+        $strategyBreakdown = $this->getStrategyBreakdown($tenantId);
         $statusBreakdown = $this->getStatusBreakdown($tenantId);
-        
-        // Get tax status breakdown
         $taxBreakdown = $this->getTaxStatusBreakdown($tenantId);
         
         // Get filter options
@@ -82,16 +110,21 @@ class ProductsController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
         
+        $strategies = ['quantity', 'batch', 'serial', 'recipe'];
+        
         return view('reports.products.summary', compact(
             'products',
             'summary',
             'categoryBreakdown',
             'typeBreakdown',
+            'strategyBreakdown',
             'statusBreakdown',
             'taxBreakdown',
             'categories',
+            'strategies',
             'categoryId',
             'productType',
+            'inventoryStrategy',
             'isActive',
             'isTaxable',
             'perPage'
@@ -99,7 +132,7 @@ class ProductsController extends Controller
     }
 
     /**
-     * Get product summary statistics using pure Eloquent
+     * Get product summary statistics
      */
     private function getProductSummary($tenantId, $filters = [])
     {
@@ -112,6 +145,9 @@ class ProductsController extends Controller
         if (!empty($filters['product_type']) && $filters['product_type'] !== 'all') {
             $query->where('type', $filters['product_type']);
         }
+        if (!empty($filters['inventory_strategy']) && $filters['inventory_strategy'] !== 'all') {
+            $query->where('inventory_strategy', $filters['inventory_strategy']);
+        }
         if ($filters['is_active'] !== null && $filters['is_active'] !== '') {
             $query->where('is_active', $filters['is_active']);
         }
@@ -120,22 +156,86 @@ class ProductsController extends Controller
         }
         
         $products = $query->get();
+        $productIds = $products->pluck('id');
         
-        // Calculate total variants count
-        $totalVariants = ProductVariant::whereIn('product_id', $products->pluck('id'))->count();
+        // Get variants for these products
+        $variants = ProductVariant::whereIn('product_id', $productIds)
+            ->where('tenant_id', $tenantId)
+            ->get();
         
-        // Calculate total stock
-        $totalStock = ProductVariant::whereIn('product_id', $products->pluck('id'))
-            ->sum('overal_quantity_at_hand');
+        // Calculate variant metrics
+        $totalVariants = $variants->count();
+        $totalStock = $variants->sum('overal_quantity_at_hand');
+        $totalCostValue = $variants->sum(function ($variant) {
+            return ($variant->grand_total_cost_price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+        });
+        $totalRevenueValue = $variants->sum(function ($variant) {
+            return ($variant->selling_price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+        });
+        
+        $avgCostPrice = $totalStock > 0 ? $totalCostValue / $totalStock : 0;
+        $avgSellingPrice = $totalStock > 0 ? $totalRevenueValue / $totalStock : 0;
+        $avgMargin = $totalRevenueValue > 0 
+            ? (($totalRevenueValue - $totalCostValue) / $totalRevenueValue) * 100 
+            : 0;
+        
+        // Strategy counts
+        $strategyCounts = $products->groupBy('inventory_strategy')
+            ->map->count()
+            ->toArray();
         
         return [
             'total_products' => $products->count(),
             'total_variants' => $totalVariants,
             'total_stock' => $totalStock,
-            'average_price' => $products->avg('selling_price') ?? 0,
-            'average_cost' => $products->avg('grand_total_cost_price') ?? 0,
+            'total_cost_value' => $totalCostValue,
+            'total_revenue_value' => $totalRevenueValue,
+            'avg_cost_price' => $avgCostPrice,
+            'avg_selling_price' => $avgSellingPrice,
+            'avg_margin' => $avgMargin,
             'active_products' => $products->where('is_active', true)->count(),
+            'strategy_counts' => $strategyCounts,
         ];
+    }
+
+    /**
+     * Get inventory strategy breakdown
+     */
+    private function getStrategyBreakdown($tenantId)
+    {
+        $breakdown = Product::select('inventory_strategy', DB::raw('COUNT(*) as count'))
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->groupBy('inventory_strategy')
+            ->orderBy('count', 'desc')
+            ->get();
+        
+        $allStrategies = ['quantity', 'batch', 'serial', 'recipe'];
+        $labels = [
+            'quantity' => 'Quantity Tracking',
+            'batch' => 'Batch Tracking',
+            'serial' => 'Serial Tracking',
+            'recipe' => 'Recipe Product'
+        ];
+        $colors = [
+            'quantity' => 'primary',
+            'batch' => 'info',
+            'serial' => 'warning',
+            'recipe' => 'success'
+        ];
+        
+        $result = collect();
+        foreach ($allStrategies as $strategy) {
+            $found = $breakdown->firstWhere('inventory_strategy', $strategy);
+            $result->push((object)[
+                'strategy' => $labels[$strategy] ?? ucfirst($strategy),
+                'key' => $strategy,
+                'count' => $found ? $found->count : 0,
+                'color' => $colors[$strategy] ?? 'secondary'
+            ]);
+        }
+        
+        return $result->filter(fn($item) => $item->count > 0)->values();
     }
 
     /**
@@ -266,23 +366,49 @@ class ProductsController extends Controller
         // Paginate first, then calculate metrics on the collection
         $products = $query->paginate($perPage)->withQueryString();
         
-        // Calculate performance metrics on the paginated collection
-        // This preserves the Product model instances and their accessors
+        // In the transform function, add a check for zero values
         $products->getCollection()->transform(function ($product) {
             $variants = $product->variants;
             
-            // Use collection methods for calculations
+            // Skip products with no variants
+            if ($variants->isEmpty()) {
+                $product->total_stock = 0;
+                $product->total_cost_value = 0;
+                $product->total_revenue_value = 0;
+                $product->total_margin = 0;
+                $product->margin_percentage = 0;
+                return $product;
+            }
+            
             $totalStock = $variants->sum('overal_quantity_at_hand');
+            
             $totalCostValue = $variants->sum(function ($variant) {
-                return ($variant->cost_price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+                $costPrice = $variant->grand_total_cost_price ?? 0;
+                $quantity = $variant->overal_quantity_at_hand ?? 0;
+                return $costPrice * $quantity;
             });
+            
             $totalRevenueValue = $variants->sum(function ($variant) {
-                return ($variant->price ?? 0) * ($variant->overal_quantity_at_hand ?? 0);
+                $sellingPrice = $variant->selling_price ?? 0;
+                $quantity = $variant->overal_quantity_at_hand ?? 0;
+                return $sellingPrice * $quantity;
             });
+            
             $totalMargin = $totalRevenueValue - $totalCostValue;
             $marginPercentage = $totalRevenueValue > 0 ? ($totalMargin / $totalRevenueValue) * 100 : 0;
             
-            // Add calculated attributes to the product model
+            // Debug log to check values
+            // \Log::info('Product Performance Calculation', [
+            //     'product_id' => $product->id,
+            //     'product_name' => $product->name,
+            //     'total_stock' => $totalStock,
+            //     'total_cost_value' => $totalCostValue,
+            //     'total_revenue_value' => $totalRevenueValue,
+            //     'total_margin' => $totalMargin,
+            //     'margin_percentage' => $marginPercentage,
+            //     'variants_count' => $variants->count()
+            // ]);
+            
             $product->total_stock = $totalStock;
             $product->total_cost_value = $totalCostValue;
             $product->total_revenue_value = $totalRevenueValue;
@@ -291,7 +417,7 @@ class ProductsController extends Controller
             
             return $product;
         });
-        
+                
         // Sort the collection by margin percentage
         $sortedProducts = $products->getCollection()->sortByDesc('margin_percentage')->values();
         $products->setCollection($sortedProducts);
@@ -315,7 +441,7 @@ class ProductsController extends Controller
 
 
     /**
-     * Inventory Valuation Report with Clean Pagination Pattern
+     * Inventory Valuation Report - Simplified
      */
     public function inventory(Request $request)
     {
@@ -330,81 +456,102 @@ class ProductsController extends Controller
         $stockStatus = $request->get('stock_status');
         $perPage = (int)$request->get('per_page', 15);
         
-        // Build query with eager loading
-        $query = ProductVariant::with(['product.category', 'unitMeasure'])
+        $query = ProductVariant::with(['product.category'])
             ->where('tenant_id', $tenantId)
             ->where('is_active', true);
         
-        // Apply filters
         if ($categoryId && is_numeric($categoryId)) {
-            $query->whereHas('product', fn($q) => $q->where('category_id', (int)$categoryId));
+            $query->whereHas('product', function($q) use ($categoryId) {
+                $q->where('category_id', (int)$categoryId);
+            });
         }
         
         if ($stockStatus === 'low') {
-            $query->where('overal_quantity_at_hand', '<', 10);
+            $query->where('overal_quantity_at_hand', '<', 10)
+                ->where('overal_quantity_at_hand', '>', 0);
         } elseif ($stockStatus === 'out') {
             $query->where('overal_quantity_at_hand', '=', 0);
         } elseif ($stockStatus === 'overstock') {
             $query->where('overal_quantity_at_hand', '>', 100);
         }
         
-        // Get ALL variants for calculations
+        // Get all variants
         $allVariants = $query->get();
         
-        // Calculate metrics for ALL variants
-        $allVariants->transform(function ($variant) {
-            $variant->cost_value = ($variant->cost_price ?? 0) * $variant->overal_quantity_at_hand;
-            $variant->revenue_value = ($variant->price ?? 0) * $variant->overal_quantity_at_hand;
-            $variant->stock_value = $variant->cost_value;
-            $variant->potential_profit = $variant->revenue_value - $variant->cost_value;
-            $variant->margin_percentage = $variant->price > 0 
-                ? (($variant->price - ($variant->cost_price ?? 0)) / $variant->price) * 100 
-                : 0;
+        // Calculate stock health categories
+        $healthyCount = 0;
+        $warningCount = 0;
+        $criticalCount = 0;
+        $healthyValue = 0;
+        $lowStockValue = 0;
+        $overstockValue = 0;
+        $totalCostValue = 0;
+        $totalRevenueValue = 0;
+        $totalPotentialProfit = 0;
+        $totalQuantity = 0;
+        
+        foreach ($allVariants as $variant) {
+            $costPrice = (float)($variant->grand_total_cost_price ?? 0);
+            $sellingPrice = (float)($variant->selling_price ?? 0);
+            $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
+            
+            $costValue = $costPrice * $quantity;
+            $revenueValue = $sellingPrice * $quantity;
+            $potentialProfit = $revenueValue - $costValue;
+            
+            $totalCostValue += $costValue;
+            $totalRevenueValue += $revenueValue;
+            $totalPotentialProfit += $potentialProfit;
+            $totalQuantity += $quantity;
             
             // Stock health
-            if ($variant->overal_quantity_at_hand == 0) {
-                $variant->stock_health = 'critical';
-                $variant->stock_status = __('auth.out_of_stock');
-                $variant->stock_color = 'danger';
-            } elseif ($variant->overal_quantity_at_hand < 10) {
-                $variant->stock_health = 'warning';
-                $variant->stock_status = __('auth.low_stock');
-                $variant->stock_color = 'warning';
-            } elseif ($variant->overal_quantity_at_hand > 100) {
-                $variant->stock_health = 'warning';
-                $variant->stock_status = __('auth.overstock');
-                $variant->stock_color = 'info';
+            if ($quantity == 0) {
+                $criticalCount++;
+            } elseif ($quantity < 10) {
+                $warningCount++;
+                $lowStockValue += $costValue;
+            } elseif ($quantity > 100) {
+                $warningCount++;
+                $overstockValue += $costValue;
             } else {
-                $variant->stock_health = 'healthy';
-                $variant->stock_status = __('auth.in_stock');
-                $variant->stock_color = 'success';
+                $healthyCount++;
+                $healthyValue += $costValue;
             }
-            return $variant;
-        });
+        }
         
-        // Sort ALL variants by stock value
-        $sortedVariants = $allVariants->sortByDesc('stock_value')->values();
-        
-        // ✅ Use the SAME pagination pattern as inventorySales
-        $variants = $this->paginateCollection($sortedVariants, $perPage, 'page');
-        
-        // Calculate totals from ALL variants (for summary cards and charts)
         $totalValuation = [
-            'total_cost_value' => $allVariants->sum('cost_value'),
-            'total_revenue_value' => $allVariants->sum('revenue_value'),
-            'total_potential_profit' => $allVariants->sum('potential_profit'),
+            'total_cost_value' => $totalCostValue,
+            'total_revenue_value' => $totalRevenueValue,
+            'total_potential_profit' => $totalPotentialProfit,
             'total_items' => $allVariants->count(),
-            'total_quantity' => $allVariants->sum('overal_quantity_at_hand'),
-            'low_stock_count' => $allVariants->filter(fn($v) => $v->overal_quantity_at_hand < 10 && $v->overal_quantity_at_hand > 0)->count(),
-            'out_of_stock_count' => $allVariants->filter(fn($v) => $v->overal_quantity_at_hand == 0)->count(),
-            'overstock_count' => $allVariants->filter(fn($v) => $v->overal_quantity_at_hand > 100)->count(),
-            'healthy_count' => $allVariants->filter(fn($v) => $v->stock_health === 'healthy')->count(),
-            'warning_count' => $allVariants->filter(fn($v) => $v->stock_health === 'warning')->count(),
-            'critical_count' => $allVariants->filter(fn($v) => $v->stock_health === 'critical')->count(),
-            'healthy_value' => $allVariants->filter(fn($v) => $v->stock_health === 'healthy')->sum('cost_value'),
-            'low_stock_value' => $allVariants->filter(fn($v) => $v->overal_quantity_at_hand < 10 && $v->overal_quantity_at_hand > 0)->sum('cost_value'),
-            'overstock_value' => $allVariants->filter(fn($v) => $v->overal_quantity_at_hand > 100)->sum('cost_value'),
+            'total_quantity' => $totalQuantity,
+            'low_stock_count' => $warningCount,
+            'out_of_stock_count' => $criticalCount,
+            'overstock_count' => $warningCount,
+            'healthy_count' => $healthyCount,
+            'warning_count' => $warningCount,
+            'critical_count' => $criticalCount,
+            'healthy_value' => $healthyValue,
+            'low_stock_value' => $lowStockValue,
+            'overstock_value' => $overstockValue,
+            'avg_margin' => $totalRevenueValue > 0 ? ($totalPotentialProfit / $totalRevenueValue) * 100 : 0,
         ];
+        
+        // Paginate
+        $page = LengthAwarePaginator::resolveCurrentPage('page');
+        $currentPageItems = $allVariants->slice(($page - 1) * $perPage, $perPage)->values();
+        
+        $variants = new LengthAwarePaginator(
+            $currentPageItems,
+            $allVariants->count(),
+            $perPage,
+            $page,
+            [
+                'path' => request()->url(),
+                'pageName' => 'page',
+                'query' => request()->except('page', 'per_page')
+            ]
+        );
         
         $categories = ProductCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -421,6 +568,7 @@ class ProductsController extends Controller
             'perPage'
         ));
     }
+
 
     /**
      * ✅ Reusable pagination method (same as inventorySales)
@@ -446,7 +594,7 @@ class ProductsController extends Controller
                         
     
     /**
-     * Stock Movement Report with Clean Pagination Pattern
+     * Stock Movement Report
      */
     public function stockMovement(Request $request)
     {
@@ -457,15 +605,14 @@ class ProductsController extends Controller
             abort(403, __('payments.not_authorized'));
         }
         
-        // Get filter parameters
         $categoryId = $request->get('category_id');
-        $days = $request->get('days', 30);
-        $perPage = (int)$request->get('per_page', 15); // ✅ Add per_page parameter
+        $days = (int)$request->get('days', 30);
+        $perPage = (int)$request->get('per_page', 15);
         
         $startDate = Carbon::now()->subDays($days);
         
-        // Get variants created or updated recently
-        $query = ProductVariant::with(['product.category', 'unitMeasure'])
+        // Build query
+        $query = ProductVariant::with(['product.category'])
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where(function ($q) use ($startDate) {
@@ -479,46 +626,81 @@ class ProductsController extends Controller
             });
         }
         
-        // ✅ Get ALL variants for calculations (unpaginated for metrics)
+        // ✅ Get ALL variants for calculations
         $allVariants = $query->orderBy('updated_at', 'desc')->get();
         
-        // Calculate movement metrics for ALL variants
-        $allVariants->each(function ($variant) {
-            $variant->days_since_update = Carbon::parse($variant->updated_at)->diffInDays(Carbon::now());
-            $variant->days_since_creation = Carbon::parse($variant->created_at)->diffInDays(Carbon::now());
+        // ✅ Calculate movement metrics
+        $today = Carbon::now();
+        $recentCount = 0;
+        $activeCount = 0;
+        $staleCount = 0;
+        $newThisMonth = 0;
+        $updatedThisWeek = 0;
+        $activityByDay = [];
+        
+        // Initialize activity by day (last 30 days)
+        for ($i = 29; $i >= 0; $i--) {
+            $date = $today->copy()->subDays($i);
+            $activityByDay[$date->format('Y-m-d')] = [
+                'date' => $date->format('M d'),
+                'count' => 0
+            ];
+        }
+        
+        foreach ($allVariants as $variant) {
+            $createdAt = Carbon::parse($variant->created_at);
+            $updatedAt = Carbon::parse($variant->updated_at);
             
-            // Determine movement status
+            $variant->days_since_update = $updatedAt->diffInDays($today);
+            $variant->days_since_creation = $createdAt->diffInDays($today);
+            
+            // Movement status
             if ($variant->days_since_update <= 7) {
                 $variant->movement_status = 'recent';
                 $variant->movement_label = __('auth.recently_updated');
                 $variant->movement_color = 'success';
+                $recentCount++;
+                $updatedThisWeek++;
             } elseif ($variant->days_since_update <= 30) {
                 $variant->movement_status = 'active';
                 $variant->movement_label = __('auth.active');
                 $variant->movement_color = 'primary';
+                $activeCount++;
             } else {
                 $variant->movement_status = 'stale';
                 $variant->movement_label = __('auth.stale');
                 $variant->movement_color = 'warning';
+                $staleCount++;
             }
-        });
+            
+            // New this month
+            if ($createdAt->diffInDays($today) <= 30) {
+                $newThisMonth++;
+            }
+            
+            // Activity by day (count updates per day)
+            $dateKey = $updatedAt->format('Y-m-d');
+            if (isset($activityByDay[$dateKey])) {
+                $activityByDay[$dateKey]['count']++;
+            }
+        }
         
-        // ✅ Apply pagination using your helper method
-        $variants = $this->paginateCollection($allVariants, $perPage, 'page');
-        
-        // Get movement summary from ALL variants (not just paginated)
         $movementSummary = [
-            'recent_count' => $allVariants->where('days_since_update', '<=', 7)->count(),
-            'active_count' => $allVariants->where('days_since_update', '>', 7)
-                ->where('days_since_update', '<=', 30)
-                ->count(),
-            'stale_count' => $allVariants->where('days_since_update', '>', 30)->count(),
-            'new_this_month' => $allVariants->where('days_since_creation', '<=', 30)->count(),
-            'updated_this_week' => $allVariants->where('days_since_update', '<=', 7)->count(),
+            'recent_count' => $recentCount,
+            'active_count' => $activeCount,
+            'stale_count' => $staleCount,
+            'new_this_month' => $newThisMonth,
+            'updated_this_week' => $updatedThisWeek,
             'total_items' => $allVariants->count(),
         ];
         
-        // Get categories for filter
+        // ✅ Apply pagination using helper method
+        $variants = $this->paginateCollection($allVariants, $perPage, 'page');
+        
+        // ✅ Activity data for chart
+        $activityLabels = array_column($activityByDay, 'date');
+        $activityData = array_column($activityByDay, 'count');
+        
         $categories = ProductCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')
@@ -531,12 +713,17 @@ class ProductsController extends Controller
             'categoryId',
             'allVariants',
             'days',
-            'perPage'
+            'perPage',
+            'activityLabels',
+            'activityData',
+            'recentCount',
+            'activeCount',
+            'staleCount'
         ));
     }
-   
+    
     /**
-     * Product Margin Report with Clean Pagination Pattern
+     * Product Margin Report
      */
     public function margin(Request $request)
     {
@@ -556,9 +743,7 @@ class ProductsController extends Controller
         // Get product variants with cost and price
         $query = ProductVariant::with(['product.category', 'unitMeasure'])
             ->where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->whereNotNull('grand_total_cost_price')
-            ->where('grand_total_cost_price', '>', 0);
+            ->where('is_active', true);
         
         if ($categoryId) {
             $query->whereHas('product', function ($q) use ($categoryId) {
@@ -566,75 +751,80 @@ class ProductsController extends Controller
             });
         }
         
-        // Get ALL variants for calculations (unpaginated)
+        // Get ALL variants for calculations
         $allVariants = $query->get();
         
-        // ✅ Calculate margin for each variant (FIXED)
-        $allVariants->each(function ($variant) {
-            // Ensure we're working with float values
-            $price = (float)$variant->price;
-            $costPrice = (float)$variant->cost_price;
+        // ✅ Debug first variant to see what's in the database
+        if ($allVariants->count() > 0) {
+            $first = $allVariants->first();
+            // \Log::info('Margin Debug - First Variant', [
+            //     'id' => $first->id,
+            //     'sku' => $first->sku,
+            //     'raw_grand_total_cost_price' => $first->getRawOriginal('grand_total_cost_price'),
+            //     'raw_selling_price' => $first->getRawOriginal('selling_price'),
+            //     'grand_total_cost_price' => $first->grand_total_cost_price,
+            //     'selling_price' => $first->selling_price,
+            //     'overal_quantity_at_hand' => $first->overal_quantity_at_hand,
+            // ]);
+        }
+        
+        // Transform variants with calculated metrics
+        $allVariants->transform(function ($variant) {
+            // ✅ Use correct field names with fallback to 0
+            $sellingPrice = (float)($variant->selling_price ?? 0);
+            $costPrice = (float)($variant->grand_total_cost_price ?? 0);
+            $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
             
-            // Calculate margin amount
-            $marginAmount = $price - $costPrice;
+            // Calculate margin
+            $marginAmount = $sellingPrice - $costPrice;
+            $marginPercentage = $sellingPrice > 0 ? ($marginAmount / $sellingPrice) * 100 : 0;
             
-            // Calculate margin percentage
-            $marginPercentage = $price > 0 ? ($marginAmount / $price) * 100 : 0;
-            
-            // Assign to variant with proper casting
+            // Set properties for blade
+            $variant->price = $sellingPrice;
+            $variant->cost_price = $costPrice;
             $variant->margin_amount = $marginAmount;
             $variant->margin_percentage = $marginPercentage;
+            $variant->total_margin_value = $marginAmount * $quantity;
             
-            // For debugging - remove after fixing
-            \Log::info('Margin Calculation:', [
-                'sku' => $variant->sku,
-                'selling_price' => $price,
-                'grand_total_cost_price' => $costPrice,
-                'margin_amount' => $marginAmount,
-                'margin_percentage' => $marginPercentage
-            ]);
-            
-            // Categorize margin with locale support
+            // Determine category
             if ($marginPercentage >= 50) {
                 $variant->margin_category = 'high';
                 $variant->margin_label = __('auth.high_margin');
                 $variant->margin_color = 'success';
+                $variant->margin_badge = 'success';
             } elseif ($marginPercentage >= 30) {
                 $variant->margin_category = 'medium';
                 $variant->margin_label = __('auth.medium_margin');
                 $variant->margin_color = 'primary';
+                $variant->margin_badge = 'primary';
             } elseif ($marginPercentage >= 10) {
                 $variant->margin_category = 'low';
                 $variant->margin_label = __('auth.low_margin');
                 $variant->margin_color = 'warning';
+                $variant->margin_badge = 'warning';
             } else {
                 $variant->margin_category = 'very_low';
                 $variant->margin_label = __('auth.very_low_margin');
                 $variant->margin_color = 'danger';
+                $variant->margin_badge = 'danger';
             }
             
-            // Calculate total margin value for inventory
-            $quantity = (float)($variant->overal_quantity_at_hand ?? 0);
-            $variant->total_margin_value = $marginAmount * $quantity;
+            return $variant;
         });
         
-        // ✅ Apply margin range filter to ALL variants
-        if ($minMargin > 0 || $maxMargin < 100) {
-            $filteredVariants = $allVariants->filter(function ($variant) use ($minMargin, $maxMargin) {
-                return $variant->margin_percentage >= $minMargin && 
-                    $variant->margin_percentage <= $maxMargin;
-            });
-        } else {
-            $filteredVariants = $allVariants;
-        }
+        // Apply margin range filter
+        $filteredVariants = $allVariants->filter(function ($variant) use ($minMargin, $maxMargin) {
+            return $variant->margin_percentage >= $minMargin && 
+                $variant->margin_percentage <= $maxMargin;
+        });
         
         // Sort by margin percentage descending
         $sortedVariants = $filteredVariants->sortByDesc('margin_percentage')->values();
         
-        // ✅ Apply pagination using your helper method
+        // Apply pagination
         $variants = $this->paginateCollection($sortedVariants, $perPage, 'page');
         
-        // Get margin summary from FILTERED variants (not paginated)
+        // Get margin summary
         $marginSummary = [
             'total_variants' => $sortedVariants->count(),
             'average_margin' => $sortedVariants->avg('margin_percentage') ?? 0,
@@ -649,10 +839,12 @@ class ProductsController extends Controller
             'very_low_margin_count' => $sortedVariants->where('margin_percentage', '<', 10)->count(),
         ];
         
-        // Get top 10 products for chart (from filtered, unpaginated data)
+        // ✅ Log the margin summary
+        // \Log::info('Margin Summary', $marginSummary);
+        
+        // Top 10 products for chart
         $topMarginProducts = $sortedVariants->take(10);
         
-        // Get categories for filter
         $categories = ProductCategory::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('name')

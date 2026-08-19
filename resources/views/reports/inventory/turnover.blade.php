@@ -287,9 +287,9 @@
                                                 </td>
                                                 <td>
                                                     <div class="d-flex align-items-center">
-                                                        @if($item->variant && $item->variant->image_url)
+                                                        @if($item->variant->image_url)
                                                         <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ asset($item->variant->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
+                                                            <img src="{{ productVariantImage($item->variant->image_url ?? null) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
                                                         </div>
                                                         @endif
                                                         <div>
