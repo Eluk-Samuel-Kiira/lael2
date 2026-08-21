@@ -82,11 +82,6 @@ class SyncObserver
         'model_has_roles',
         'model_has_permissions',
         
-        // Billing
-        'billing_plans',
-        
-        // Settings
-        'settings',
         
         // Departments & Locations (Transactional - assignments)
         'departments',
@@ -114,11 +109,6 @@ class SyncObserver
         'recipe_ingredients',
         'serial_numbers',
 
-
-        // POS specific
-        'pos_cart_items',
-        'pos_cart_sessions',
-        'pos_transactions',
     ];
 
     /**
@@ -136,11 +126,110 @@ class SyncObserver
         
         // Unit of Measures
         'unit_of_measures',
+        'settings',
+        
         
         // Master Data (Read-only from remote)
         'roles',
         'permissions',
         'role_has_permissions',
+
+                // Sales & Orders
+        'orders',
+        'order_items',
+        'order_payments',
+        'order_taxes',
+        
+        // Purchasing
+        'purchase_orders',
+        'purchase_order_items',
+        'purchase_receipts',
+        'purchase_receipt_items',
+        'received_product_variants',
+        
+        // Inventory
+        'inventory_adjustments',
+        'inventory_items',
+        'inventory_transactions',
+        'single_shop_inventory_logs',
+        
+        // Accounting
+        'accounting_periods',
+        'account_balances',
+        'chart_of_accounts',
+        'general_ledger',
+        'journal_entries',
+        'journal_entry_lines',
+        
+        // Expenses
+        'expenses',
+        'expense_categories',
+        
+        // HR / Employees
+        'employees',
+        'employee_advances',
+        'employee_documents',
+        'employee_payments',
+        'leaves',
+        
+        // Customers & Suppliers
+        'customers',
+        'customer_groups',
+        'suppliers',
+        'supplier_tax_liabilities',
+        
+        // Products (Transactional changes - stock levels, prices)
+        'products',
+        'product_variants',
+        'variant_taxes',
+        
+        // Promotions
+        'promotions',
+        'promotion_products',
+        
+        // Financial
+        'currencies',
+        'payment_methods',
+        'payment_transaction_logs',
+        'tax_liabilities',
+        
+        // Tenant related
+        'tenants',
+        'tenant_configurations',
+        'tenant_settings',
+        'tenant_usage_tracking',
+        
+        // Users & Auth
+        'users',
+        'model_has_roles',
+        'model_has_permissions',
+        
+        
+        // Departments & Locations (Transactional - assignments)
+        'departments',
+        'department_product',
+        'department_user',
+        'locations',
+        'location_product',
+        
+        // Financial Reports
+        'financial_report_templates',
+        'report_sections',
+        
+        // Taxes (Transactional)
+        'tax_product',
+        
+
+        
+        // Advanced Variants
+        'batch_logs',
+        'invoices',
+        'invoice_payments',
+        'invoice_payment_webhooks',
+        'invoice_sends',
+        'recipes',
+        'recipe_ingredients',
+        'serial_numbers',
     ];
 
     /**
@@ -153,6 +242,7 @@ class SyncObserver
         'failed_jobs',
         'jobs',
         'job_batches',
+        'billing_plans',
         'sessions',
         'cache',
         'cache_locks',
