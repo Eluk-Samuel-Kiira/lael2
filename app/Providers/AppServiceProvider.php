@@ -339,6 +339,9 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\Recipe::class,
             \App\Models\RecipeIngredient::class,
             \App\Models\SerialNumber::class,
+            \App\Models\ProductionOrder::class,
+            \App\Models\ProductionOrderInput::class,
+            \App\Models\ProductionOrderOutput::class,
 
         ];
     }
