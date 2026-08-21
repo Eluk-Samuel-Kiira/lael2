@@ -13,45 +13,60 @@ class SyncController extends Controller
 
     public function __construct()
     {
-        // ── FIX: env() with special chars (;%!) breaks json_decode
-        // Use config() instead — set TENANT_TOKENS in config/sync.php
-        // Fallback: read directly and handle malformed JSON gracefully
-        $raw = config('sync.tenant_tokens', env('TENANT_TOKENS', '{}'));
-
-        if (is_array($raw)) {
-            $this->tenantTokens = $raw;
-        } else {
-            // Strip surrounding quotes if shell escaped them
-            $raw = trim($raw, "'\"");
-            $decoded = json_decode($raw, true);
-            $this->tenantTokens = is_array($decoded) ? $decoded : [];
-        }
-
-        if (empty($this->tenantTokens)) {
-            Log::warning('SyncController: TENANT_TOKENS is empty or could not be parsed. Check config/sync.php or .env quoting.');
-        }
+        // ─── Read tenant tokens from config ──────────────────────────
+        $this->tenantTokens = config('sync.tenant_tokens', []);
+        
+        // ─── LOG ALL AVAILABLE TOKENS FOR DEBUGGING ──────────────────
+        Log::info('SyncController initialized', [
+            'tenant_tokens_count' => count($this->tenantTokens),
+            'tenant_ids' => array_keys($this->tenantTokens),
+            'tokens' => array_map(function($token) {
+                return substr($token, 0, 10) . '...';
+            }, $this->tenantTokens),
+        ]);
     }
 
-    // ── Token validation ────────────────────────────────────────────────────
     private function validateToken(Request $request): ?\Illuminate\Http\JsonResponse
     {
         $token    = $request->header('X-Sync-Token');
         $tenantId = $request->header('X-Tenant-Id');
-
+    
+        Log::info('Token validation attempt', [
+            'tenant_id' => $tenantId,
+            'token' => substr($token ?? '', 0, 10) . '...',
+            'token_length' => strlen($token ?? ''),
+            'available_tokens' => array_keys($this->tenantTokens),
+        ]);
+    
         if (!$token || !$tenantId) {
+            Log::warning('Missing authentication headers', [
+                'has_token' => !empty($token),
+                'has_tenant' => !empty($tenantId),
+            ]);
             return response()->json(['success' => false, 'error' => 'Missing authentication headers'], 401);
         }
-
+    
         $expected = $this->tenantTokens[(string) $tenantId] ?? null;
-
+    
+        Log::info('Token comparison', [
+            'tenant_id' => $tenantId,
+            'expected' => $expected ? substr($expected, 0, 10) . '...' : 'null',
+            'provided' => substr($token, 0, 10) . '...',
+            'match' => $expected && hash_equals($expected, $token),
+        ]);
+    
         if (!$expected || !hash_equals($expected, $token)) {
-            Log::warning('SyncController: Invalid token', ['tenant_id' => $tenantId]);
+            Log::warning('SyncController: Invalid token', [
+                'tenant_id' => $tenantId,
+                'expected_exists' => !empty($expected),
+            ]);
             return response()->json(['success' => false, 'error' => 'Invalid authentication credentials'], 401);
         }
-
+    
         $request->merge(['authenticated_tenant_id' => (int) $tenantId]);
         return null;
     }
+
 
     // ── GET /sync/status — remote reachability check ────────────────────────
     public function status(Request $request): \Illuminate\Http\JsonResponse

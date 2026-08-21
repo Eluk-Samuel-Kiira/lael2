@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasTenant;
+
 
 class BatchLog extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     const TYPE_RECEIVED = 'received';
     const TYPE_DEPLETED = 'depleted';

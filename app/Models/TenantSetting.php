@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
+use App\Traits\HasTenant;
+
 
 class TenantSetting extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $primaryKey = 'setting_id';
 

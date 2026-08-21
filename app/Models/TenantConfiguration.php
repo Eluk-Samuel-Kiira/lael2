@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\HasTenant;
+
 
 class TenantConfiguration extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $primaryKey = 'config_id';
 

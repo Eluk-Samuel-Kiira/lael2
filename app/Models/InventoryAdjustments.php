@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasTenant;
+
 
 class InventoryAdjustments extends Model
 {
     /** @use HasFactory<\Database\Factories\InventoryAdjustmentsFactory> */
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $fillable = [
         'quantity_before',

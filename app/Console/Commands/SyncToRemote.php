@@ -20,14 +20,14 @@ class SyncToRemote extends Command
     {
         parent::__construct();
         // ── FIX: use config() not env() — avoids .env JSON/special-char issues
-        $this->remoteUrl  = rtrim(config('sync.remote_url', 'https://lael-pos.stardena.org'), '/');
+        $this->remoteUrl  = rtrim(config('sync.remote_url', 'https://suite.stardena.org'), '/');
         $this->syncToken  = config('sync.token', '');
         $this->tenantId   = (int) config('sync.tenant_id', 2);
     }
 
     public function handle(): void
     {
-        $this->info("🚀 Starting Sync for Tenant #2...");
+        $this->info("🚀 Starting Sync for Tenant...");
 
         $tenantId = (int) ($this->option('tenant') ?? $this->tenantId);
 
@@ -231,16 +231,59 @@ class SyncToRemote extends Command
     private function remoteIsReachable(int $tenantId): bool
     {
         try {
+            $url = $this->remoteUrl . '/sync/status';
+            
+            $this->info("🔗 Connecting to: {$url}");
+            $this->info("🔑 Using token: " . substr($this->syncToken, 0, 10) . '...');
+            $this->info("🏢 Tenant ID: {$tenantId}");
+            
             $response = Http::timeout(8)
                 ->withHeaders([
                     'X-Sync-Token' => $this->syncToken,
                     'X-Tenant-Id'  => (string) $tenantId,
                     'Accept'       => 'application/json',
                 ])
-                ->get($this->remoteUrl . '/sync/status');
+                ->get($url);
 
-            return $response->successful() && ($response->json('success') === true);
+            // ─── LOG FULL RESPONSE DETAILS ──────────────────────────────
+            $statusCode = $response->status();
+            $body = $response->body();
+            $json = $response->json();
+            
+            Log::channel('sync')->info('Remote status check', [
+                'url' => $url,
+                'tenant_id' => $tenantId,
+                'status_code' => $statusCode,
+                'response' => $body,
+                'json' => $json,
+                'successful' => $response->successful(),
+            ]);
+
+            $this->info("📡 Response Status: {$statusCode}");
+            
+            if ($statusCode !== 200) {
+                $this->error("❌ HTTP Error: {$statusCode}");
+                $this->error("Response: " . substr($body, 0, 500));
+                return false;
+            }
+
+            $isSuccess = $response->successful() && ($response->json('success') === true);
+            
+            if (!$isSuccess) {
+                $this->error("❌ API returned success: false");
+                $this->error("Response: " . json_encode($json, JSON_PRETTY_PRINT));
+            }
+            
+            return $isSuccess;
+
         } catch (\Exception $e) {
+            Log::channel('sync')->error('Remote status check exception', [
+                'tenant_id' => $tenantId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            $this->error("💥 Connection error: " . $e->getMessage());
             return false;
         }
     }

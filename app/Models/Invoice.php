@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Traits\HasTenant;
+
 
 class Invoice extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasTenant;
 
     // ============================================================
     // STATUS CONSTANTS

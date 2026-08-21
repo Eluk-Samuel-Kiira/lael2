@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasTenant;
+
 
 class InventoryItems extends Model
 {
     /** @use HasFactory<\Database\Factories\InventoryItemsFactory> */
-    use HasFactory;
+    use HasFactory, HasTenant;
     
     protected $fillable = [
         'quantity_on_hand',
