@@ -144,13 +144,13 @@ class AppServiceProvider extends ServiceProvider
                     // Use tenant mail settings
                     $this->setMailConfig(
                         $app_mails->mail_mailer ?? 'smtp',
-                        $app_mails->mail_host,
-                        $app_mails->mail_port,
-                        $app_mails->mail_username,
-                        $app_mails->mail_password,
-                        $app_mails->mail_encryption,
-                        $app_mails->mail_address,
-                        $app_mails->mail_name
+                        $app_mails->mail_host ?? 'smtp.mailtrap.io',
+                        $app_mails->mail_port ?? 2525,
+                        $app_mails->mail_username ?? null,
+                        $app_mails->mail_password ?? null,
+                        $app_mails->mail_encryption ?? 'tls',
+                        $app_mails->mail_address ?? 'pos@stardena.org',
+                        $app_mails->mail_name ?? 'STARPOSS Website'
                     );
                     
                     // Only log once per request
@@ -173,14 +173,13 @@ class AppServiceProvider extends ServiceProvider
                     env('MAIL_MAILER', 'smtp'),
                     env('STARDENA_POS_MAIL_HOST', env('MAIL_HOST', 'smtp.mailtrap.io')),
                     env('STARDENA_POS_MAIL_PORT', env('MAIL_PORT', 2525)),
-                    env('STARDENA_POS_MAIL_USERNAME', env('MAIL_USERNAME')),
-                    env('STARDENA_POS_MAIL_PASSWORD', env('MAIL_PASSWORD')),
+                    env('STARDENA_POS_MAIL_USERNAME', env('MAIL_USERNAME', null)),
+                    env('STARDENA_POS_MAIL_PASSWORD', env('MAIL_PASSWORD', null)),
                     env('STARDENA_POS_MAIL_ENCRYPTION', env('MAIL_ENCRYPTION', 'tls')),
                     env('STARDENA_POS_MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'pos@stardena.org')),
                     env('STARDENA_POS_MAIL_FROM_NAME', env('MAIL_FROM_NAME', 'STARPOSS Website'))
                 );
                 
-                // Log::info('Using fallback mail configuration from environment');
                 session()->put('mail_configured_fallback', true);
             }
 
@@ -193,8 +192,8 @@ class AppServiceProvider extends ServiceProvider
                     env('MAIL_MAILER', 'smtp'),
                     env('MAIL_HOST', 'smtp.mailtrap.io'),
                     env('MAIL_PORT', 2525),
-                    env('MAIL_USERNAME'),
-                    env('MAIL_PASSWORD'),
+                    null,
+                    null,
                     env('MAIL_ENCRYPTION', 'tls'),
                     env('MAIL_FROM_ADDRESS', 'hello@example.com'),
                     env('MAIL_FROM_NAME', 'Laravel')
@@ -223,8 +222,8 @@ class AppServiceProvider extends ServiceProvider
         string $transport,
         string $host,
         int|string $port,
-        string $username,
-        string $password,
+        ?string $username,  // ✅ Allow null
+        ?string $password,  // ✅ Allow null
         string $encryption,
         string $fromAddress,
         string $fromName
@@ -235,8 +234,8 @@ class AppServiceProvider extends ServiceProvider
             'host' => $host,
             'port' => (int) $port,
             'encryption' => $encryption,
-            'username' => $username,
-            'password' => $password,
+            'username' => $username ?? '', 
+            'password' => $password ?? '',  
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ]);
