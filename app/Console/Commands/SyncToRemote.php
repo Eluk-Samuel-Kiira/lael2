@@ -233,9 +233,9 @@ class SyncToRemote extends Command
         try {
             $url = $this->remoteUrl . '/sync/status';
             
-            $this->info("🔗 Connecting to: {$url}");
-            $this->info("🔑 Using token: " . substr($this->syncToken, 0, 10) . '...');
-            $this->info("🏢 Tenant ID: {$tenantId}");
+            // $this->info("🔗 Connecting to: {$url}");
+            // $this->info("🔑 Using token: " . substr($this->syncToken, 0, 10) . '...');
+            // $this->info("🏢 Tenant ID: {$tenantId}");
             
             $response = Http::timeout(8)
                 ->withHeaders([
@@ -250,14 +250,14 @@ class SyncToRemote extends Command
             $body = $response->body();
             $json = $response->json();
             
-            Log::channel('sync')->info('Remote status check', [
-                'url' => $url,
-                'tenant_id' => $tenantId,
-                'status_code' => $statusCode,
-                'response' => $body,
-                'json' => $json,
-                'successful' => $response->successful(),
-            ]);
+            // Log::channel('sync')->info('Remote status check', [
+            //     'url' => $url,
+            //     'tenant_id' => $tenantId,
+            //     'status_code' => $statusCode,
+            //     'response' => $body,
+            //     'json' => $json,
+            //     'successful' => $response->successful(),
+            // ]);
 
             $this->info("📡 Response Status: {$statusCode}");
             
