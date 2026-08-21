@@ -109,6 +109,11 @@ class SyncObserver
         'recipe_ingredients',
         'serial_numbers',
 
+        // Productions
+        'production_orders',
+        'production_order_inputs',
+        'production_order_outputs',
+
     ];
 
     /**

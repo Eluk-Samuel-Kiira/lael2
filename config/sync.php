@@ -34,16 +34,25 @@ return [
 
     'forbidden_tables' => [
         'change_log', 'sync_status', 'migrations', 'password_reset_tokens',
-        'sessions', 'jobs', 'failed_jobs',
+        'sessions', 'jobs', 'failed_jobs', 'billing_plans',
     ],
 
     'master_tables' => [
         'categories', 'product_categories', 'products', 'product_variants',
         'variant_taxes', 'unit_of_measures', 'taxes', 'tax_product',
         'promotions', 'promotion_products', 'currencies', 'payment_methods',
-        'expense_categories', 'customer_groups', 'billing_plans', 'locations',
-        'departments', 'financial_report_templates', 'report_sections',
-        'roles', 'permissions', 'role_has_permissions',
+        'expense_categories', 'customer_groups', 'locations', 'departments',
+        'roles', 'permissions', 'role_has_permissions','users', 'settings',
+        'employee_advances', 'employee_documents', 'employee_payments', 'leaves', 
+        'department_product', 'department_user',
+        'location_product', 'financial_report_templates', 'report_sections',
+        'employees', 'model_has_roles', 'model_has_permissions',
+        'recipes', 'recipe_ingredients', 'serial_numbers',
+        'purchase_orders', 'purchase_order_items', 'purchase_receipts',
+        'purchase_receipt_items', 'received_product_variants',
+        'inventory_adjustments', 'inventory_items', 'inventory_transactions',
+        
+        'production_orders', 'production_order_inputs', 'production_order_outputs',
     ],
 
     'transactional_tables' => [
@@ -53,18 +62,11 @@ return [
         'inventory_adjustments', 'inventory_items', 'inventory_transactions',
         'single_shop_inventory_logs', 'accounting_periods', 'account_balances',
         'chart_of_accounts', 'general_ledger', 'journal_entries',
-        'journal_entry_lines', 'expenses', 'expense_categories', 'employees',
-        'employee_advances', 'employee_documents', 'employee_payments',
-        'leaves', 'customers', 'customer_groups', 'suppliers',
+        'journal_entry_lines', 'expenses', 'expense_categories','customers', 'customer_groups', 'suppliers',
         'supplier_tax_liabilities', 'products', 'product_variants',
-        'variant_taxes', 'promotions', 'promotion_products', 'currencies',
-        'payment_methods', 'payment_transaction_logs', 'tax_liabilities',
-        'tenants', 'tenant_configurations', 'tenant_settings',
-        'tenant_usage_tracking', 'users', 'billing_plans', 'settings',
-        'departments', 'department_product', 'department_user', 'locations',
-        'location_product', 'financial_report_templates', 'report_sections',
-        'tax_product', 'model_has_roles', 'model_has_permissions',
+        'variant_taxes', 'promotions', 'promotion_products', 'payment_transaction_logs', 'tax_liabilities',
         'batch_logs', 'invoices', 'invoice_payments', 'invoice_payment_webhooks',
         'invoice_sends', 'recipes', 'recipe_ingredients', 'serial_numbers',
+        'production_orders', 'production_order_inputs', 'production_order_outputs',
     ],
 ];
