@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\HasTenant;
+
 
 class UnitOfMeasure extends Model
 {
     
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $fillable = ['name', 'isActive', 'symbol', 'created_by', 'tenant_id',];
 

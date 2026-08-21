@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Carbon\Carbon;
+use App\Traits\HasTenant;
+
 
 class TenantUsageTracking extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $table = 'tenant_usage_tracking';
     protected $primaryKey = 'usage_id';

@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasTenant;
 
 class AccountingPeriod extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $table = 'accounting_periods';
     

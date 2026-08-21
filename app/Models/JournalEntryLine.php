@@ -6,10 +6,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\HasTenant;
+
 
 class JournalEntryLine extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $table = 'journal_entry_lines';
 

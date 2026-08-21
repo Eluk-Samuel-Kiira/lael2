@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 // use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasTenant;
+
 
 class Department extends Model
 {
     /** @use HasFactory<\Database\Factories\DepartmentFactory> */
-    use HasFactory;
+    use HasFactory, HasTenant;
     protected $fillable = ['name', 'isActive', 'created_by', 'manager_id', 'tenant_id', 'location_id','department_type', 'default_inventory_strategy' ];
 
     public function departmentCreater()

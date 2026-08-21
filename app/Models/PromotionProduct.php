@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasTenant;
+
 
 class PromotionProduct extends Model
 {
     /** @use HasFactory<\Database\Factories\PromotionProductFactory> */
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $fillable = [
         'promotion_id',

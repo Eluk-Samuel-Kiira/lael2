@@ -102,6 +102,19 @@ class SyncObserver
         // Taxes (Transactional)
         'tax_product',
         
+
+        
+        // Advanced Variants
+        'batch_logs',
+        'invoices',
+        'invoice_payments',
+        'invoice_payment_webhooks',
+        'invoice_sends',
+        'recipes',
+        'recipe_ingredients',
+        'serial_numbers',
+
+
         // POS specific
         'pos_cart_items',
         'pos_cart_sessions',

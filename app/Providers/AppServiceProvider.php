@@ -333,6 +333,16 @@ class AppServiceProvider extends ServiceProvider
             // Departments & Locations
             \App\Models\Department::class,
             \App\Models\Location::class,
+
+            \App\Models\BatchLog::class,
+            \App\Models\Invoice::class,
+            \App\Models\InvoicePayment::class,
+            \App\Models\InvoicePaymentWebhook::class,
+            \App\Models\InvoiceSend::class,
+            \App\Models\Recipe::class,
+            \App\Models\RecipeIngredient::class,
+            \App\Models\SerialNumber::class,
+
         ];
     }
 }

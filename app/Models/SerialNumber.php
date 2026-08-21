@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use App\Traits\HasTenant;
+
 
 class SerialNumber extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     const STATUS_AVAILABLE = 'available';
     const STATUS_SOLD = 'sold';

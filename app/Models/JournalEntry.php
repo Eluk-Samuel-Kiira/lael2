@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Traits\HasTenant;
+
 
 class JournalEntry extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $table = 'journal_entries';
 
