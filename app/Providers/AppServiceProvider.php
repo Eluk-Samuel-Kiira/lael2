@@ -323,8 +323,6 @@ class AppServiceProvider extends ServiceProvider
             // Users & Roles
             \App\Models\User::class,
             
-            // Billing
-            \App\Models\BillingPlan::class,
             
             // Settings
             \App\Models\Setting::class,
