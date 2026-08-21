@@ -223,9 +223,12 @@ class SyncController extends Controller
 
             // ✅ Use the SAME master_tables list from config/sync.php
             $masterTables = config('sync.master_tables', [
-                'categories', 'product_categories', 'products',
-                'taxes', 'promotions', 'unit_of_measures',
-                'locations', 'departments',
+                'categories', 'product_categories', 'products', 'product_variants',
+                'variant_taxes', 'unit_of_measures', 'taxes', 'tax_product',
+                'promotions', 'promotion_products', 'currencies', 'payment_methods',
+                'expense_categories', 'customer_groups', 'billing_plans', 'locations',
+                'departments', 'financial_report_templates', 'report_sections',
+                'roles', 'permissions', 'role_has_permissions',
             ]);
 
             $data = [];

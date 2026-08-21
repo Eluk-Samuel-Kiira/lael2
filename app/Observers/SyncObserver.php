@@ -134,7 +134,7 @@ class SyncObserver
         'permissions',
         'role_has_permissions',
 
-                // Sales & Orders
+        // Sales & Orders
         'orders',
         'order_items',
         'order_payments',
