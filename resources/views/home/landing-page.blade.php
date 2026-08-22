@@ -1,145 +1,397 @@
 @extends('home.layout')
 
-@php
-    $allowedDomains = ['starpos.stardena.org', '127.0.0.1', 'localhost'];
-@endphp
+@section('title', 'STARDENA SUITE – Global Point of Sale System')
 
-@if(!in_array(request()->getHost(), $allowedDomains))
-    <script>
-        window.location.href = '/login';
-    </script>
-@endif
+@section('content')
 
-<!-- ═══════════════════════════════════════
-     HERO
-═══════════════════════════════════════ -->
-<section class="hero" id="home">
-    <div class="hero-bg-grid"></div>
-    <div class="hero-glow-1"></div>
-    <div class="hero-glow-2"></div>
-
-    <div class="container position-relative">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <div class="hero-badge">
-                    <span class="pulse-dot"></span>
-                    Now live &amp; trusted worldwide
+<!-- Hero Section -->
+<section id="hero" class="hero section accent-background">
+    <div class="container">
+        <div class="row gy-4">
+            <div class="col-lg-6 order-2 order-lg-1 d-flex flex-column justify-content-center">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="badge" style="background: #fb7339; color: #fff; padding: 0.4rem 1rem; border-radius: 50px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px;">
+                        <i class="bi bi-rocket-takeoff me-1"></i> POWERED BY AI
+                    </span>
+                    <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 1rem; border-radius: 50px; font-size: 0.7rem; font-weight: 500;">
+                        <i class="bi bi-globe2 me-1"></i> 30+ COUNTRIES
+                    </span>
                 </div>
 
-                <h1 class="hero-title">
-                    The <span class="highlight">Fastest</span> Point of Sale for Every Business on Earth
+                <h1 style="font-size: clamp(2.2rem, 4.5vw, 3.8rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.2rem;">
+                    Manage <span style="color: #fb7339;">Multiple Businesses</span><br>
+                    From <span style="color: #fb7339;">One Platform</span>
                 </h1>
 
-                <p class="hero-sub">
-                    STARPOSS powers retail shops, restaurants, hotels, and multi-chain enterprises across East Africa and beyond — with lightning-fast checkout, multi-currency, and multi-language support built in.
+                <p style="font-size: 1.1rem; color: #8899AA; line-height: 1.7; max-width: 560px; margin-bottom: 1.8rem;">
+                    The all-in-one business management system that powers restaurants, bars, supermarkets, 
+                    hardware stores, pharmacies, manufacturing, and retail — with lightning-fast checkout, 
+                    AI-driven insights, and seamless multi-location control.
                 </p>
 
-                <div class="hero-cta-group">
-                    <a href="#pricing" class="btn-hero-primary">
-                        <i class="fas fa-rocket"></i> Start Free Trial
+                <div class="d-flex flex-wrap gap-3 mb-4">
+                    <a href="#pricing" class="btn btn-danger px-5 py-3 rounded-pill fw-bold" style="background: #fb7339; border: none; box-shadow: 0 8px 25px rgba(251, 115, 57, 0.35);">
+                        <i class="bi bi-calendar-check me-2"></i> Book A Demo
                     </a>
-                    <a href="{{ route('login') }}" class="btn-hero-ghost">
-                        <i class="fas fa-desktop"></i> View Live Demo
+                    <a href="{{ route('login') }}" target="_blank" class="btn btn-outline-light px-5 py-3 rounded-pill fw-bold">
+                        <i class="bi bi-play-circle me-2"></i> Live Demo
                     </a>
                 </div>
 
-                <div class="hero-stats">
-                    <div class="hero-stat-item">
-                        <div class="hero-stat-num">5,000+</div>
-                        <div class="hero-stat-label">Active Businesses</div>
+                <!-- Trust Badges -->
+                <div class="d-flex flex-wrap align-items-center gap-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-check-circle-fill" style="color: #fb7339;"></i>
+                        <span style="font-size: 0.8rem; color: #B0C4D8;">AI-Powered Insights</span>
                     </div>
-                    <div class="hero-stat-item">
-                        <div class="hero-stat-num">30+</div>
-                        <div class="hero-stat-label">Countries</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-check-circle-fill" style="color: #fb7339;"></i>
+                        <span style="font-size: 0.8rem; color: #B0C4D8;">Free E-Commerce Listing</span>
                     </div>
-                    <div class="hero-stat-item">
-                        <div class="hero-stat-num">99.9%</div>
-                        <div class="hero-stat-label">Uptime SLA</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-check-circle-fill" style="color: #fb7339;"></i>
+                        <span style="font-size: 0.8rem; color: #B0C4D8;">Offline Mode</span>
                     </div>
-                    <div class="hero-stat-item">
-                        <div class="hero-stat-num">3s</div>
-                        <div class="hero-stat-label">Avg Checkout</div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 order-1 order-lg-2 hero-img">
+                <img src="{{ asset('front/img/hero-img.png') }}" class="img-fluid animated" alt="STARDENA SUITE POS Dashboard">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- About Section -->
+<section id="about" class="about section">
+    <div class="container">
+        <div class="row gy-4">
+            <div class="col-lg-6 order-1 order-lg-2" data-aos="fade-up" data-aos-delay="100">
+                <img src="{{ asset('front/img/about.jpg') }}" class="img-fluid" alt="About STARDENA SUITE">
+            </div>
+            <div class="col-lg-6 order-2 order-lg-1 content" data-aos="fade-up" data-aos-delay="200">
+                <h3>Built for Real-World Business</h3>
+                <p class="fst-italic">
+                    STARDENA SUITE was engineered to handle the challenges of modern business — unreliable internet, multiple currencies, diverse payment methods, and growing teams.
+                </p>
+                <ul>
+                    <li><i class="bi bi-check-circle"></i> <span>Works offline — keep selling even without internet</span></li>
+                    <li><i class="bi bi-check-circle"></i> <span>Multi-currency support — USD, KES, UGX, TZS, EUR & more</span></li>
+                    <li><i class="bi bi-check-circle"></i> <span>Multi-language — English, Français, Español, Kiswahili</span></li>
+                    <li><i class="bi bi-check-circle"></i> <span>Complete accounting — no separate software needed</span></li>
+                </ul>
+                <a href="#features" class="read-more"><span>Explore Features</span><i class="bi bi-arrow-right"></i></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Stats Section -->
+<section id="stats" class="stats section accent-background">
+    <div class="container position-relative" data-aos="fade-up" data-aos-delay="100">
+        <div class="row gy-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-item text-center w-100 h-100">
+                    <span data-purecounter-start="0" data-purecounter-end="5000" data-purecounter-duration="2" class="purecounter"></span>
+                    <p>Active Businesses</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-item text-center w-100 h-100">
+                    <span data-purecounter-start="0" data-purecounter-end="30" data-purecounter-duration="2" class="purecounter"></span>
+                    <p>Countries</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-item text-center w-100 h-100">
+                    <span data-purecounter-start="0" data-purecounter-end="15" data-purecounter-duration="2" class="purecounter"></span>
+                    <p>Currencies Supported</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-item text-center w-100 h-100">
+                    <span data-purecounter-start="0" data-purecounter-end="4" data-purecounter-duration="2" class="purecounter"></span>
+                    <p>Languages Available</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Services / Features Section -->
+<section id="services" class="services section">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>What's Included</h2>
+        <p>Everything you need to run your business efficiently</p>
+    </div>
+
+    <div class="container">
+        <div class="row gy-4">
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-briefcase"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">Complete Accounting</a></h4>
+                        <p class="description">Full double-entry accounting — Chart of Accounts, General Ledger, Trial Balance, Income Statement.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-people"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">HR & Employee Management</a></h4>
+                        <p class="description">Staff profiles, role-based access, shift scheduling, attendance, and payroll management.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="300">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-bar-chart"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">Advanced Analytics</a></h4>
+                        <p class="description">Visual dashboards, custom reports, profit analysis, and exportable financials for smart decisions.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="400">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-shop"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">Multi-Location Management</a></h4>
+                        <p class="description">Control unlimited branches, warehouses, and departments from one central dashboard.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="500">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-truck"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">Purchases & Suppliers</a></h4>
+                        <p class="description">Issue purchase orders, track supplier invoices, manage balances, and receive stock with automated accounting.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="600">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-palette"></i></div>
+                    <div>
+                        <h4 class="title"><a href="##" class="stretched-link">Custom Branding</a></h4>
+                        <p class="description">White-label receipts, custom logo, business colors, and branded reports that represent your identity.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="features section">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>Core Features</h2>
+        <p>Powerful tools that make STARDENA SUITE the best POS for your business</p>
+    </div>
+
+    <div class="container">
+        <div class="row gy-4 justify-content-between">
+            <div class="features-image col-lg-5 order-lg-2 d-flex align-items-center" data-aos="fade-up" data-aos-delay="100">
+                <img src="{{ asset('front/img/features.svg') }}" class="img-fluid" alt="Features">
+            </div>
+            <div class="col-lg-6 d-flex flex-column justify-content-center">
+                <div class="features-item d-flex ps-0 ps-lg-3 pt-4 pt-lg-0" data-aos="fade-up" data-aos-delay="200">
+                    <i class="bi bi-bolt flex-shrink-0"></i>
+                    <div>
+                        <h4>Lightning-Fast Checkout</h4>
+                        <p>Close sales in under 3 seconds with barcode scanning and one-tap payments.</p>
+                    </div>
+                </div>
+
+                <div class="features-item d-flex mt-5 ps-0 ps-lg-3" data-aos="fade-up" data-aos-delay="300">
+                    <i class="bi bi-boxes flex-shrink-0"></i>
+                    <div>
+                        <h4>Smart Inventory Management</h4>
+                        <p>Real-time stock tracking, low-stock alerts, batch management, and supplier integration.</p>
+                    </div>
+                </div>
+
+                <div class="features-item d-flex mt-5 ps-0 ps-lg-3" data-aos="fade-up" data-aos-delay="400">
+                    <i class="bi bi-coins flex-shrink-0"></i>
+                    <div>
+                        <h4>Multi-Currency & Payments</h4>
+                        <p>Accept USD, KES, UGX, TZS, EUR. Support for Cash, M-Pesa, Card, and more.</p>
+                    </div>
+                </div>
+
+                <div class="features-item d-flex mt-5 ps-0 ps-lg-3" data-aos="fade-up" data-aos-delay="500">
+                    <i class="bi bi-globe flex-shrink-0"></i>
+                    <div>
+                        <h4>Multi-Language & Offline Mode</h4>
+                        <p>Interface in English, French, Spanish, Swahili. Works offline — syncs automatically.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Industries Section -->
+<section id="industries" class="industries section">
+    <div class="container" data-aos="fade-up">
+        <div class="section-title">
+            <h2>Built for Every Business Type</h2>
+            <p>From hospitality to retail, manufacturing to healthcare — one platform, unlimited possibilities</p>
+        </div>
+
+        <div class="row gy-4">
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-shop" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Retail Stores</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-building" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Hotels & Lodges</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-cup-straw" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Bars & Restaurants</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-basket" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Supermarkets</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-capsule" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Pharmacies</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-tools" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Hardware Stores</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-gear-wide-connected" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Manufacturing</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-bag" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Boutiques & Fashion</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-heart-pulse" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Clinics & Healthcare</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-book" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Schools & Institutions</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-car-front" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Auto & Spare Parts</p>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-3 col-6">
+                <div class="industry-item text-center p-3" style="background: var(--brand-card); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                    <i class="bi bi-box-seam" style="font-size: 2rem; color: #fb7339;"></i>
+                    <p style="font-size: 0.75rem; margin-top: 0.5rem; color: #B0C4D8; font-weight: 600;">Warehousing & Distribution</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- Key Benefits Section -->
+<section id="benefits" class="benefits section accent-background">
+    <div class="container" data-aos="fade-up">
+        <div class="row gy-5">
+            <div class="col-lg-6">
+                <div class="d-flex flex-column gap-4">
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-diagram-3"></i>
+                        </div>
+                        <div>
+                            <h4 style="color: #fff; font-weight: 700;">Multiple Businesses, One Platform</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">Run your restaurant, bar, supermarket, hardware store, and pharmacy from a single dashboard. No more juggling multiple systems.</p>
+                        </div>
+                    </div>
+
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div>
+                            <h4 style="color: #fff; font-weight: 700;">AI-Powered Insights</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">Get intelligent recommendations on stock levels, pricing strategies, customer behavior, and growth opportunities — powered by machine learning.</p>
+                        </div>
+                    </div>
+
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-cart4"></i>
+                        </div>
+                        <div>
+                            <h4 style="color: #fff; font-weight: 700;">Free E-Commerce Listing</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">Every enrolled business gets a free listing on our integrated e-commerce platform. Increase visibility and sales to the public domain via our API.</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-lg-6">
-                <div class="hero-visual">
-                    <div class="floating-tag tag-1">
-                        <div class="tag-icon" style="background:rgba(6,214,160,0.15); color:var(--brand-green);">
-                            <i class="fas fa-check-circle"></i>
+                <div class="d-flex flex-column gap-4">
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-file-earmark-text"></i>
                         </div>
                         <div>
-                            <div style="font-size:0.75rem;color:#E2EAF4;font-weight:600;">Sale Complete</div>
-                            <div style="font-size:0.7rem;color:var(--brand-green);">KES 4,500 received</div>
+                            <h4 style="color: #fff; font-weight: 700;">Detailed Business Intelligence</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">Make informed decisions with comprehensive reports — sales trends, profit margins, customer analytics, inventory forecasts, and AI-driven recommendations.</p>
                         </div>
                     </div>
 
-                    <div class="hero-screen">
-                        <div class="hero-screen-bar">
-                            <span class="screen-dot red"></span>
-                            <span class="screen-dot yellow"></span>
-                            <span class="screen-dot green"></span>
-                            <span style="font-size:0.7rem;color:#4A5568;margin-left:8px;">STARPOSS — Cashier View</span>
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-lightning-charge"></i>
                         </div>
-                        <div class="pos-interface">
-                            <div class="pos-top-bar">
-                                <div>
-                                    <div class="pos-greeting">Today's Sales</div>
-                                    <div style="font-size:0.7rem;color:var(--brand-green);">↑ 24% from yesterday</div>
-                                </div>
-                                <span class="pos-currency-tag">USD / KES / UGX</span>
-                            </div>
-
-                            <div class="pos-amount">$1,248.00</div>
-
-                            <div class="pos-items">
-                                <div class="pos-item">
-                                    <span class="pos-item-name">Samsung Galaxy A25 × 2</span>
-                                    <span class="pos-item-price">$380.00</span>
-                                </div>
-                                <div class="pos-item">
-                                    <span class="pos-item-name">Phone Case × 5</span>
-                                    <span class="pos-item-price">$25.00</span>
-                                </div>
-                                <div class="pos-item">
-                                    <span class="pos-item-name">Screen Protector × 3</span>
-                                    <span class="pos-item-price">$18.00</span>
-                                </div>
-                                <div class="pos-item" style="border:none;">
-                                    <span style="color:var(--brand-orange);font-weight:600;font-size:0.8rem;">Discount 5%</span>
-                                    <span style="color:var(--brand-orange);font-weight:600;font-size:0.8rem;">-$21.15</span>
-                                </div>
-                            </div>
-
-                            <div class="pos-payment-methods">
-                                <div class="payment-badge active">
-                                    <i class="fas fa-mobile-alt"></i> M-Pesa
-                                </div>
-                                <div class="payment-badge">
-                                    <i class="fas fa-credit-card"></i> Card
-                                </div>
-                                <div class="payment-badge">
-                                    <i class="fas fa-money-bill"></i> Cash
-                                </div>
-                                <div class="payment-badge">
-                                    <i class="fas fa-university"></i> Bank
-                                </div>
-                            </div>
-
-                            <button class="pos-checkout-btn">
-                                <i class="fas fa-bolt"></i> Lightning Checkout
-                            </button>
+                        <div>
+                            <h4 style="color: #fff; font-weight: 700;">Lightning-Fast Checkout</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">Process sales in under 3 seconds with barcode scanning, one-tap payments, and intelligent product search. Keep your customers happy and lines moving.</p>
                         </div>
                     </div>
 
-                    <div class="floating-tag tag-2">
-                        <div class="tag-icon" style="background:rgba(255,209,102,0.15); color:var(--brand-accent);">
-                            <i class="fas fa-globe"></i>
+                    <div class="benefit-item d-flex gap-3">
+                        <div class="benefit-icon" style="flex-shrink: 0; width: 50px; height: 50px; background: rgba(251, 115, 57, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fb7339; font-size: 1.5rem;">
+                            <i class="bi bi-wifi-off"></i>
                         </div>
                         <div>
-                            <div style="font-size:0.75rem;color:#E2EAF4;font-weight:600;">Multi-Language Active</div>
-                            <div style="font-size:0.7rem;color:var(--text-muted-custom);">EN · FR · ES · SW</div>
+                            <h4 style="color: #fff; font-weight: 700;">Works Offline</h4>
+                            <p style="color: #8899AA; font-size: 0.9rem; line-height: 1.6;">No internet? No problem. Process sales, print receipts, and manage inventory offline. Auto-syncs when you're back online. Perfect for African markets.</p>
                         </div>
                     </div>
                 </div>
@@ -148,428 +400,316 @@
     </div>
 </section>
 
-<!-- TRUST BAR -->
-<div class="trust-bar">
-    <div class="container">
-        <div class="row g-3">
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-shield-alt"></i> Bank-grade Security</div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-wifi-slash"></i> Works Offline</div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-globe-africa"></i> East Africa Ready</div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-bolt"></i> 3-Second Checkout</div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-headset"></i> 24/7 Support</div>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="trust-item"><i class="fas fa-sync-alt"></i> Free Updates</div>
-            </div>
-        </div>
+<!-- Pricing Section -->
+<section id="pricing" class="pricing section">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>Pricing</h2>
+        <p>Plans that grow with your business — no hidden fees, cancel anytime</p>
     </div>
-</div>
 
-<!-- ═══════════════════════════════════════
-     FEATURES
-═══════════════════════════════════════ -->
-<section id="features" class="features-section">
     <div class="container">
-        <div class="text-center mb-5 animate-on-scroll">
-            <span class="section-label">Powerful Features</span>
-            <h2 class="section-title">Everything Your Business Needs</h2>
-            <p class="section-sub mx-auto">From solo shop owners in Kampala to enterprise chains in Nairobi — STARPOSS scales with you.</p>
-        </div>
+        <div class="row gy-4">
+            <!-- Free Plan -->
+            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="100">
+                <div class="pricing-item">
+                    <h3>Free Trial</h3>
+                    <h4><sup>$</sup>0<span> / 65 days</span></h4>
+                    <ul>
+                        <li><i class="bi bi-check"></i> <span>1 Store Location</span></li>
+                        <li><i class="bi bi-check"></i> <span>3 Departments</span></li>
+                        <li><i class="bi bi-check"></i> <span>Up to 3 Users</span></li>
+                        <li><i class="bi bi-check"></i> <span>100 Products & Customers</span></li>
+                        <li class="na"><i class="bi bi-x"></i> <span>Advanced Reports</span></li>
+                        <li class="na"><i class="bi bi-x"></i> <span>Multi-Currency</span></li>
+                    </ul>
+                    <a href="#contact" class="buy-btn">Start Trial</a>
+                </div>
+            </div>
 
-        <div class="row g-4">
-            <!-- Feature 1 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h4>Lightning-Fast Checkout</h4>
-                    <p>Close sales in under 3 seconds with smart barcode scanning, quick product search, and one-tap payment selection. No lag, ever.</p>
+            <!-- Starter Plan -->
+            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="200">
+                <div class="pricing-item">
+                    <h3>Starter</h3>
+                    <h4><sup>$</sup>29.99<span> / month</span></h4>
+                    <ul>
+                        <li><i class="bi bi-check"></i> <span>1 Store Location</span></li>
+                        <li><i class="bi bi-check"></i> <span>2 Payment Methods</span></li>
+                        <li><i class="bi bi-check"></i> <span>Up to 2 Users</span></li>
+                        <li><i class="bi bi-check"></i> <span>500 Products & Customers</span></li>
+                        <li><i class="bi bi-check"></i> <span>Inventory Management</span></li>
+                        <li class="na"><i class="bi bi-x"></i> <span>Multi-Currency</span></li>
+                    </ul>
+                    <a href="#contact" class="buy-btn">Get Started</a>
                 </div>
             </div>
-            <!-- Feature 2 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
-                        <i class="fas fa-boxes"></i>
-                    </div>
-                    <h4>Smart Inventory Management</h4>
-                    <p>Real-time stock tracking, auto low-stock alerts, batch management, and supplier integration keep your shelves perfectly stocked.</p>
-                </div>
-            </div>
-            <!-- Feature 3 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
-                        <i class="fas fa-coins"></i>
-                    </div>
-                    <h4>Multi-Currency & Payments</h4>
-                    <p>Accept USD, KES, UGX, TZS, EUR and more. Support for Cash, M-Pesa, Airtel Money, Card, Bank Transfer — all in one terminal.</p>
-                </div>
-            </div>
-            <!-- Feature 4 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
-                        <i class="fas fa-globe"></i>
-                    </div>
-                    <h4>Multi-Language Support</h4>
-                    <p>Interface available in English, French, Spanish, Swahili and more. Your staff works in their language, your business speaks every language.</p>
-                </div>
-            </div>
-            <!-- Feature 5 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
-                        <i class="fas fa-store-alt"></i>
-                    </div>
-                    <h4>Multi-Location Management</h4>
-                    <p>Control unlimited branches, warehouses, and departments from one dashboard. Real-time inter-branch stock transfers included.</p>
-                </div>
-            </div>
-            <!-- Feature 6 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
-                        <i class="fas fa-calculator"></i>
-                    </div>
-                    <h4>Complete Accounting</h4>
-                    <p>Full double-entry accounting: General Ledger, Chart of Accounts, Trial Balance, Balance Sheet, Income Statement — no separate software needed.</p>
-                </div>
-            </div>
-            <!-- Feature 7 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <h4>Advanced Analytics & Reports</h4>
-                    <p>Visual dashboards, custom date-range reports, top-product analysis, profit margins, and exportable financials for informed decisions.</p>
-                </div>
-            </div>
-            <!-- Feature 8 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
-                        <i class="fas fa-users-cog"></i>
-                    </div>
-                    <h4>HR & Employee Management</h4>
-                    <p>Staff profiles, role-based access, shift scheduling, attendance tracking, commission calculation, and payroll management in one place.</p>
-                </div>
-            </div>
-            <!-- Feature 9 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,107,44,0.12); color:var(--brand-orange);">
-                        <i class="fas fa-percentage"></i>
-                    </div>
-                    <h4>Promotions, Taxes & Discounts</h4>
-                    <p>Flexible tax rates per country, discount campaigns, tiered pricing, loyalty programs, and promotional codes to drive sales legally and strategically.</p>
-                </div>
-            </div>
-            <!-- Feature 10 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(6,214,160,0.12); color:var(--brand-green);">
-                        <i class="fas fa-truck-loading"></i>
-                    </div>
-                    <h4>Purchases & Supplier Portal</h4>
-                    <p>Issue purchase orders, track supplier invoices, manage balances, and receive stock directly to any location with automated accounting entries.</p>
-                </div>
-            </div>
-            <!-- Feature 11 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(255,209,102,0.12); color:var(--brand-accent);">
-                        <i class="fas fa-palette"></i>
-                    </div>
-                    <h4>Custom Branding</h4>
-                    <p>White-label receipts, custom logo, business colors, and branded reports that represent your identity to every customer and stakeholder.</p>
-                </div>
-            </div>
-            <!-- Feature 12 -->
-            <div class="col-sm-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="feature-card">
-                    <div class="feature-icon-wrap" style="background:rgba(17,138,178,0.12); color:var(--brand-blue);">
-                        <i class="fas fa-wifi"></i>
-                    </div>
-                    <h4>Offline Mode</h4>
-                    <p>Keep selling when the internet goes down. All transactions are queued and auto-synced the moment connectivity resumes. Perfect for Uganda's network reality.</p>
-                </div>
-            </div>
-        </div>
 
-        <!-- Hotel Coming Soon -->
-        <div class="row mt-5 animate-on-scroll">
-            <div class="col-12">
-                <div class="hotel-card">
-                    <div class="coming-soon-badge">
-                        <i class="fas fa-clock"></i> Coming Soon
-                    </div>
-                    <h3 style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.8rem;color:#E2EAF4;margin-bottom:0.75rem;">
-                        🏨 Hotel Management Suite
-                    </h3>
-                    <p style="color:var(--text-muted-custom);max-width:600px;margin:0 auto 1.5rem;font-size:0.95rem;">
-                        Front Desk, Housekeeping, Room Management, Reservations, Guest History, Night Audit, Channel Manager, and Booking Engine — fully integrated with your POS.
-                    </p>
-                    <div class="d-flex flex-wrap gap-2 justify-content-center">
-                        <span class="lang-badge"><i class="fas fa-concierge-bell"></i> Front Desk</span>
-                        <span class="lang-badge"><i class="fas fa-bed"></i> Reservations</span>
-                        <span class="lang-badge"><i class="fas fa-calendar-alt"></i> Events & Banqueting</span>
-                        <span class="lang-badge"><i class="fas fa-broom"></i> Housekeeping</span>
-                        <span class="lang-badge"><i class="fas fa-user-friends"></i> Guest Management</span>
-                    </div>
+            <!-- Business Plan (Popular) -->
+            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="300">
+                <div class="pricing-item featured">
+                    <h3>Business</h3>
+                    <h4><sup>$</sup>79.99<span> / month</span></h4>
+                    <ul>
+                        <li><i class="bi bi-check"></i> <span>Up to 3 Store Locations</span></li>
+                        <li><i class="bi bi-check"></i> <span>10 Payment Methods</span></li>
+                        <li><i class="bi bi-check"></i> <span>Up to 10 Users</span></li>
+                        <li><i class="bi bi-check"></i> <span>5,000 Products & Customers</span></li>
+                        <li><i class="bi bi-check"></i> <span>Full Accounting Suite</span></li>
+                        <li><i class="bi bi-check"></i> <span>Multi-Currency</span></li>
+                    </ul>
+                    <a href="#contact" class="buy-btn">Get Started</a>
+                </div>
+            </div>
+
+            <!-- Enterprise Plan -->
+            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="400">
+                <div class="pricing-item">
+                    <h3>Enterprise</h3>
+                    <h4><sup>$</sup>199.99<span> / month</span></h4>
+                    <ul>
+                        <li><i class="bi bi-check"></i> <span>Unlimited Locations</span></li>
+                        <li><i class="bi bi-check"></i> <span>Unlimited Users</span></li>
+                        <li><i class="bi bi-check"></i> <span>Unlimited Products</span></li>
+                        <li><i class="bi bi-check"></i> <span>Full HR & Payroll</span></li>
+                        <li><i class="bi bi-check"></i> <span>API Access</span></li>
+                        <li><i class="bi bi-check"></i> <span>Priority 24/7 Support</span></li>
+                    </ul>
+                    <a href="#contact" class="buy-btn">Contact Us</a>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ═══════════════════════════════════════
-     GLOBAL REACH
-═══════════════════════════════════════ -->
-<section id="reach" class="reach-section">
-    <div class="container">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6 animate-on-scroll">
-                <span class="section-label">Global Presence</span>
-                <h2 class="section-title">Built in East Africa.<br>Deployed Worldwide.</h2>
-                <p class="section-sub mb-4">
-                    STARPOSS was engineered in Uganda to handle real-world African business challenges — unreliable internet, multiple currencies, and diverse payment methods. Then we made it work everywhere else too.
-                </p>
+<!-- Partners Section -->
+<section id="partners" class="partners section light-background">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>Trusted By Businesses Worldwide</h2>
+        <p>Join 5,000+ companies across 30+ countries using STARDENA SUITE</p>
+    </div>
 
-                <div class="mb-4">
-                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">East Africa Focus</p>
-                    <span class="country-chip">🇺🇬 Uganda</span>
-                    <span class="country-chip">🇰🇪 Kenya</span>
-                    <span class="country-chip">🇹🇿 Tanzania</span>
-                    <span class="country-chip">🇷🇼 Rwanda</span>
-                    <span class="country-chip">🇧🇮 Burundi</span>
-                    <span class="country-chip">🇸🇸 South Sudan</span>
-                    <span class="country-chip">🇪🇹 Ethiopia</span>
+    <div class="container" data-aos="fade-up" data-aos-delay="100">
+        <div class="swiper init-swiper" data-speed="600" data-delay="3000" data-breakpoints='{"320":{"slidesPerView":2,"spaceBetween":20},"768":{"slidesPerView":3,"spaceBetween":30},"992":{"slidesPerView":4,"spaceBetween":30},"1200":{"slidesPerView":5,"spaceBetween":40}}'>
+            <script type="application/json" class="swiper-config">
+                {
+                    "loop": true,
+                    "speed": 600,
+                    "autoplay": { "delay": 3000 },
+                    "slidesPerView": "auto",
+                    "pagination": { "el": ".swiper-pagination", "type": "bullets", "clickable": true },
+                    "breakpoints": {
+                        "320": { "slidesPerView": 2, "spaceBetween": 20 },
+                        "768": { "slidesPerView": 3, "spaceBetween": 30 },
+                        "992": { "slidesPerView": 4, "spaceBetween": 30 },
+                        "1200": { "slidesPerView": 5, "spaceBetween": 40 }
+                    }
+                }
+            </script>
+            <div class="swiper-wrapper">
+                <!-- Partner 1 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s ease; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('partners/gwt.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3); transition: all 0.3s ease;">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">GWT (U) LIMITED</p>
+                    </div>
                 </div>
 
-                <div class="mb-4">
-                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">Also Supported Globally</p>
-                    <span class="country-chip">🇬🇧 United Kingdom</span>
-                    <span class="country-chip">🇫🇷 France</span>
-                    <span class="country-chip">🇺🇸 USA</span>
-                    <span class="country-chip">🇦🇪 UAE</span>
-                    <span class="country-chip">🇮🇳 India</span>
-                    <span class="country-chip">🇿🇦 South Africa</span>
-                    <span class="country-chip">🌍 + More</span>
+                <!-- Partner 2 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-2.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
                 </div>
 
-                <div>
-                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand-orange);margin-bottom:0.75rem;">Interface Languages</p>
-                    <span class="lang-badge"><i class="fas fa-language"></i> English</span>
-                    <span class="lang-badge"><i class="fas fa-language"></i> Français</span>
-                    <span class="lang-badge"><i class="fas fa-language"></i> Español</span>
-                    <span class="lang-badge"><i class="fas fa-language"></i> Kiswahili</span>
-                    <span class="lang-badge"><i class="fas fa-language"></i> + Adding More</span>
+                <!-- Partner 3 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-3.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
+                </div>
+
+                <!-- Partner 4 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-4.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
+                </div>
+
+                <!-- Partner 5 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-5.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
+                </div>
+
+                <!-- Partner 6 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-6.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
+                </div>
+
+                <!-- Partner 7 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-7.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
+                </div>
+
+                <!-- Partner 8 -->
+                <div class="swiper-slide">
+                    <div class="partner-item text-center p-4" style="background: var(--brand-card); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="{{ asset('front/img/partners/partner-8.png') }}" alt="Partner Logo" style="max-height: 60px; width: auto; max-width: 120px; object-fit: contain; filter: brightness(0.8) grayscale(0.3);">
+                        <p style="font-size: 0.7rem; color: #8899AA; margin-top: 8px; font-weight: 500;">Company Name</p>
+                    </div>
                 </div>
             </div>
-
-            <div class="col-lg-6 animate-on-scroll delay-2">
-                <div class="row g-3">
-                    <div class="col-6">
-                        <div class="feature-card text-center">
-                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-orange);">30+</div>
-                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Countries Active</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="feature-card text-center">
-                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-green);">15+</div>
-                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Currencies Supported</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="feature-card text-center">
-                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-accent);">4+</div>
-                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Languages Available</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="feature-card text-center">
-                            <div style="font-size:2.5rem;font-family:'Sora',sans-serif;font-weight:800;color:var(--brand-blue);">10+</div>
-                            <div style="font-size:0.85rem;color:var(--text-muted-custom);">Payment Methods</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div class="swiper-pagination"></div>
         </div>
     </div>
 </section>
 
-<!-- ═══════════════════════════════════════
-     PRICING
-═══════════════════════════════════════ -->
-<section id="pricing" class="pricing-section">
-    <div class="container">
-        <div class="text-center mb-2 animate-on-scroll">
-            <span class="section-label">Transparent Pricing</span>
-            <h2 class="section-title">Plans That Grow With You</h2>
-            <p class="section-sub mx-auto">No hidden fees. Cancel anytime. All plans include a free trial period.</p>
-        </div>
-
-        <div class="text-center mt-4 mb-2 animate-on-scroll">
-            <div class="billing-tabs" id="billingTabs">
-                <button class="billing-tab active" data-tab="onetime">One-Time</button>
-                <button class="billing-tab" data-tab="monthly">Monthly</button>
-                <button class="billing-tab" data-tab="yearly">Yearly <span style="background:rgba(6,214,160,0.2);color:var(--brand-green);padding:1px 6px;border-radius:4px;font-size:0.7rem;">Save 15%</span></button>
-            </div>
-        </div>
-
-        <!-- Pricing Plans will be rendered by JS from data -->
-        <div id="pricingContainer" class="row g-4 mt-2"></div>
-
-        <p class="text-center mt-4 animate-on-scroll" style="font-size:0.875rem;color:var(--text-muted-custom);">
-            All plans include free updates and basic email support. Need a custom enterprise solution?
-            <a href="#contact" style="color:var(--brand-orange);">Contact our team</a>
-        </p>
+<!-- FAQ Section -->
+<section id="faq" class="faq section">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>Frequently Asked Questions</h2>
+        <p>Everything you need to know before getting started</p>
     </div>
-</section>
 
-<!-- ═══════════════════════════════════════
-     TESTIMONIALS
-═══════════════════════════════════════ -->
-<section id="testimonials" class="testimonials-section">
     <div class="container">
-        <div class="text-center mb-5 animate-on-scroll">
-            <span class="section-label">Customer Stories</span>
-            <h2 class="section-title">Businesses Love STARPOSS</h2>
-            <p class="section-sub mx-auto">From Kampala markets to Nairobi chains — here's what our customers say.</p>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"We switched from a basic cashbook to STARPOSS and in 3 months our stock losses dropped by 40%. The inventory alerts alone are worth every penny."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#FF6B2C,#E8541A);">AO</div>
-                        <div>
-                            <div class="author-name">Akello Olivia</div>
-                            <div class="author-role">Owner, Akello General Store — Kampala, Uganda</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"Running 4 restaurant branches in Nairobi used to mean endless spreadsheets. STARPOSS gives me one live dashboard for all locations. Game changer."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#118AB2,#06D6A0);">CK</div>
-                        <div>
-                            <div class="author-name">Chidi Kamau</div>
-                            <div class="author-role">Director, Savanna Eats — Nairobi, Kenya</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"The M-Pesa and Airtel Money integration is seamless. Our customers pay how they want and everything reconciles automatically. Perfect for Tanzania."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#FFD166,#FF6B2C);">MA</div>
-                        <div>
-                            <div class="author-name">Mohammed Ally</div>
-                            <div class="author-role">Manager, TechHub Electronics — Dar es Salaam, Tanzania</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-1">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"We're a French-speaking pharmacy in Burundi. The French interface and multi-currency made STARPOSS the only POS that actually works for us here."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#06D6A0,#118AB2);">JN</div>
-                        <div>
-                            <div class="author-name">Jean Niyongabo</div>
-                            <div class="author-role">Pharmacist — Bujumbura, Burundi</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-2">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"The accounting module replaced our separate software entirely. Trial balance, income statement — all auto-generated from sales. Accountant approved."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#FF6B2C,#FFD166);">RM</div>
-                        <div>
-                            <div class="author-name">Rachel Mugisha</div>
-                            <div class="author-role">CFO, Mugisha Group — Kigali, Rwanda</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4 animate-on-scroll delay-3">
-                <div class="testimonial-card">
-                    <div class="stars">★★★★★</div>
-                    <p class="testimonial-text">"We were skeptical about moving to cloud POS but the offline mode convinced us. Our shop in Gulu has patchy internet — STARPOSS never misses a sale."</p>
-                    <div class="testimonial-author">
-                        <div class="author-avatar" style="background:linear-gradient(135deg,#118AB2,#1A2535);">PO</div>
-                        <div>
-                            <div class="author-name">Patrick Okello</div>
-                            <div class="author-role">Retailer — Gulu, Northern Uganda</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ═══════════════════════════════════════
-     FAQ
-═══════════════════════════════════════ -->
-<section id="faq" class="faq-section">
-    <div class="container">
-        <div class="text-center mb-5 animate-on-scroll">
-            <span class="section-label">FAQ</span>
-            <h2 class="section-title">Got Questions? We Have Answers.</h2>
-            <p class="section-sub mx-auto">Everything you need to know before getting started with STARPOSS.</p>
-        </div>
-
         <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div id="faqList"></div>
+            <div class="col-lg-10" data-aos="fade-up" data-aos-delay="100">
+                <div class="faq-container">
+                    <div class="faq-item faq-active">
+                        <h3>What types of businesses can use STARDENA SUITE?</h3>
+                        <div class="faq-content">
+                            <p>STARDENA SUITE is designed for virtually any business: retail shops, supermarkets, restaurants, cafés, pharmacies, electronics stores, clothing boutiques, beauty salons, schools, and more. Our flexible module system means you only activate what your business needs.</p>
+                        </div>
+                        <i class="faq-toggle bi bi-chevron-right"></i>
+                    </div>
+
+                    <div class="faq-item">
+                        <h3>Does STARDENA SUITE work without internet connection?</h3>
+                        <div class="faq-content">
+                            <p>Yes! STARDENA SUITE has a robust offline mode. You can process sales, print receipts, and manage inventory even when internet connectivity is lost. Once your connection is restored, all data syncs automatically to the cloud.</p>
+                        </div>
+                        <i class="faq-toggle bi bi-chevron-right"></i>
+                    </div>
+
+                    <div class="faq-item">
+                        <h3>Which payment methods does STARDENA SUITE support?</h3>
+                        <div class="faq-content">
+                            <p>STARDENA SUITE supports Cash, Card (Visa/Mastercard), Mobile Money (M-Pesa, Airtel Money, MTN MoMo, Tigopesa), Bank Transfers, Cheque, and multiple custom payment accounts.</p>
+                        </div>
+                        <i class="faq-toggle bi bi-chevron-right"></i>
+                    </div>
+
+                    <div class="faq-item">
+                        <h3>Can I manage multiple shops or branches?</h3>
+                        <div class="faq-content">
+                            <p>Absolutely. The Business and Enterprise plans support multiple locations. You can transfer stock between branches, view consolidated reports, set location-specific pricing, and manage all staff from a single account.</p>
+                        </div>
+                        <i class="faq-toggle bi bi-chevron-right"></i>
+                    </div>
+
+                    <div class="faq-item">
+                        <h3>Is STARDENA SUITE available in multiple languages?</h3>
+                        <div class="faq-content">
+                            <p>Yes. The interface is available in English, French (Français), Spanish (Español), and Swahili (Kiswahili), with more languages being added. Each staff member can choose their preferred language independently.</p>
+                        </div>
+                        <i class="faq-toggle bi bi-chevron-right"></i>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ═══════════════════════════════════════
-     CTA
-═══════════════════════════════════════ -->
-<section class="cta-section" id="contact">
-    <div class="container position-relative">
-        <div class="row align-items-center g-4">
-            <div class="col-lg-8">
-                <div style="font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:0.75rem;">Ready to Get Started?</div>
-                <h2 style="font-family:'Sora',sans-serif;font-weight:800;font-size:clamp(1.8rem,3vw,2.8rem);color:#fff;margin-bottom:1rem;">Transform Your Business with STARPOSS Today</h2>
-                <p style="color:rgba(255,255,255,0.8);font-size:1rem;margin:0;">Join 5,000+ businesses across Africa and the world already running smarter with STARPOSS.</p>
+<!-- Contact Section -->
+<section id="contact" class="contact section">
+    <div class="container section-title" data-aos="fade-up">
+        <h2>Contact Us</h2>
+        <p>Get in touch with our team — we're here to help</p>
+    </div>
+
+    <div class="container" data-aos="fade-up" data-aos-delay="100">
+        <div class="row gy-4">
+            <div class="col-lg-6">
+                <div class="row gy-4">
+                    <div class="col-md-6">
+                        <div class="info-item" data-aos="fade" data-aos-delay="200">
+                            <i class="bi bi-geo-alt"></i>
+                            <h3>Location</h3>
+                            <p>Kampala, Uganda</p>
+                            <p>East Africa</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="info-item" data-aos="fade" data-aos-delay="300">
+                            <i class="bi bi-envelope"></i>
+                            <h3>Email</h3>
+                            <p>pos@stardena.org</p>
+                            <p>support@stardena.org</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="info-item" data-aos="fade" data-aos-delay="400">
+                            <i class="bi bi-clock"></i>
+                            <h3>Support Hours</h3>
+                            <p>Monday - Friday</p>
+                            <p>8:00 AM - 6:00 PM (EAT)</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="info-item" data-aos="fade" data-aos-delay="500">
+                            <i class="bi bi-globe"></i>
+                            <h3>Website</h3>
+                            <p>suite.stardena.org</p>
+                            <p>stardena.org</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="col-lg-4 text-lg-end">
-                <a href="#pricing" class="btn btn-light btn-lg px-4 py-3 fw-bold" style="border-radius:12px;font-family:'Sora',sans-serif;">
-                    <i class="fas fa-rocket me-2"></i> Start Free Trial
-                </a>
+
+            <div class="col-lg-6">
+                <form action="{{ route('inquiry.send') }}" method="post" class="php-email-form" data-aos="fade-up" data-aos-delay="200">
+                    @csrf
+                    <div class="row gy-4">
+                        <div class="col-md-6">
+                            <input type="text" name="name" class="form-control" placeholder="Your Name" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <input type="email" class="form-control" name="email" placeholder="Your Email" required>
+                        </div>
+
+                        <div class="col-12">
+                            <input type="text" class="form-control" name="subject" placeholder="Subject" required>
+                        </div>
+
+                        <div class="col-12">
+                            <textarea class="form-control" name="message" rows="6" placeholder="Message" required></textarea>
+                        </div>
+
+                        <div class="col-12 text-center">
+                            <div class="loading d-none">Loading</div>
+                            <div class="error-message d-none"></div>
+                            <div class="sent-message d-none">Your message has been sent. Thank you!</div>
+                            <button type="submit">Send Message</button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </section>
 
+@endsection
