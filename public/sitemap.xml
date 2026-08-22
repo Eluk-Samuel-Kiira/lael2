@@ -2,7 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
 
-    <!-- Homepage with Alternate Languages -->
     <url>
         <loc>https://suite.stardena.org/</loc>
         <lastmod>2025-01-01</lastmod>
@@ -14,7 +13,6 @@
         <xhtml:link rel="alternate" hreflang="sw" href="https://suite.stardena.org/sw/"/>
     </url>
 
-    <!-- Core Pages -->
     <url>
         <loc>https://suite.stardena.org/blog</loc>
         <lastmod>2025-01-01</lastmod>
@@ -50,7 +48,6 @@
         <priority>0.4</priority>
     </url>
 
-    <!-- Industry Landing Pages -->
     <url>
         <loc>https://suite.stardena.org/pos-for-retail</loc>
         <lastmod>2025-01-01</lastmod>
@@ -86,7 +83,6 @@
         <priority>0.8</priority>
     </url>
 
-    <!-- Location-Based SEO Pages -->
     <url>
         <loc>https://suite.stardena.org/pos-system-uganda</loc>
         <lastmod>2025-01-01</lastmod>
