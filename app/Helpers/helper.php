@@ -299,7 +299,7 @@ if (!function_exists('getFaviconImage')) {
         if (!$faviconUrl) {
             $faviconUrl = asset('assets/media/logos/favicon.png');
         }
-        \Log::info($faviconUrl);
+        // \Log::info($faviconUrl);
         
         // Cache the result for 1 hour
         Cache::put($cacheKey, $faviconUrl, 3600);
