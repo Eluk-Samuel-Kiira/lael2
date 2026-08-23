@@ -406,7 +406,17 @@
                 <i class="mobile-nav-toggle d-xl-none bi bi-list"></i>
             </nav>
 
-            <a class="btn-getstarted" href="{{ route('login') }}" target="_blank">Live Demo</a>
+            <style>
+                @media (max-width: 768px) {
+                    .btn-getstarted.mobile-small {
+                        padding: 0.3rem 0.8rem !important;
+                        font-size: 0.65rem !important;
+                        border-radius: 30px !important;
+                    }
+                }
+            </style>
+
+            <a class="btn-getstarted mobile-small" href="{{ route('login') }}" target="_blank">Live Demo</a>
 
         </div>
     </header>
