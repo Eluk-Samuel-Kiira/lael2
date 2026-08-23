@@ -17,13 +17,13 @@ class SyncController extends Controller
         $this->tenantTokens = config('sync.tenant_tokens', []);
         
         // ─── LOG ALL AVAILABLE TOKENS FOR DEBUGGING ──────────────────
-        Log::info('SyncController initialized', [
-            'tenant_tokens_count' => count($this->tenantTokens),
-            'tenant_ids' => array_keys($this->tenantTokens),
-            'tokens' => array_map(function($token) {
-                return substr($token, 0, 10) . '...';
-            }, $this->tenantTokens),
-        ]);
+        // Log::info('SyncController initialized', [
+        //     'tenant_tokens_count' => count($this->tenantTokens),
+        //     'tenant_ids' => array_keys($this->tenantTokens),
+        //     'tokens' => array_map(function($token) {
+        //         return substr($token, 0, 10) . '...';
+        //     }, $this->tenantTokens),
+        // ]);
     }
 
     private function validateToken(Request $request): ?\Illuminate\Http\JsonResponse
@@ -31,12 +31,12 @@ class SyncController extends Controller
         $token    = $request->header('X-Sync-Token');
         $tenantId = $request->header('X-Tenant-Id');
     
-        Log::info('Token validation attempt', [
-            'tenant_id' => $tenantId,
-            'token' => substr($token ?? '', 0, 10) . '...',
-            'token_length' => strlen($token ?? ''),
-            'available_tokens' => array_keys($this->tenantTokens),
-        ]);
+        // Log::info('Token validation attempt', [
+        //     'tenant_id' => $tenantId,
+        //     'token' => substr($token ?? '', 0, 10) . '...',
+        //     'token_length' => strlen($token ?? ''),
+        //     'available_tokens' => array_keys($this->tenantTokens),
+        // ]);
     
         if (!$token || !$tenantId) {
             Log::warning('Missing authentication headers', [
@@ -48,12 +48,12 @@ class SyncController extends Controller
     
         $expected = $this->tenantTokens[(string) $tenantId] ?? null;
     
-        Log::info('Token comparison', [
-            'tenant_id' => $tenantId,
-            'expected' => $expected ? substr($expected, 0, 10) . '...' : 'null',
-            'provided' => substr($token, 0, 10) . '...',
-            'match' => $expected && hash_equals($expected, $token),
-        ]);
+        // Log::info('Token comparison', [
+        //     'tenant_id' => $tenantId,
+        //     'expected' => $expected ? substr($expected, 0, 10) . '...' : 'null',
+        //     'provided' => substr($token, 0, 10) . '...',
+        //     'match' => $expected && hash_equals($expected, $token),
+        // ]);
     
         if (!$expected || !hash_equals($expected, $token)) {
             Log::warning('SyncController: Invalid token', [
@@ -249,14 +249,14 @@ class SyncController extends Controller
                     if ($rows->isNotEmpty()) {
                         $data[$table] = $rows;
                         $totalRows += $rows->count();
-                        Log::info("SyncController@pull: Found {$rows->count()} updated rows in {$table}");
+                        // Log::info("SyncController@pull: Found {$rows->count()} updated rows in {$table}");
                     }
                 } catch (\Exception $e) {
                     Log::warning("SyncController@pull table {$table}: " . $e->getMessage());
                 }
             }
 
-            Log::info("SyncController@pull: Returning {$totalRows} total rows for tenant #{$tenantId}");
+            // Log::info("SyncController@pull: Returning {$totalRows} total rows for tenant #{$tenantId}");
 
             return response()->json([
                 'success'     => true,

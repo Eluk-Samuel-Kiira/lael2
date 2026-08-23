@@ -238,7 +238,7 @@ if (!function_exists('getLogoImage')) {
         }
         
         // Final fallback: return default logo
-        return asset('assets/media/logos/default-dark.svg');
+        return asset('assets/media/logos/default-logo.png');
     }
 }
 
@@ -299,6 +299,7 @@ if (!function_exists('getFaviconImage')) {
         if (!$faviconUrl) {
             $faviconUrl = asset('assets/media/logos/favicon.png');
         }
+        \Log::info($faviconUrl);
         
         // Cache the result for 1 hour
         Cache::put($cacheKey, $faviconUrl, 3600);

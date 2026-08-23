@@ -65,6 +65,7 @@ class POSController extends Controller
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->whereHas('variants')
+            ->limit(10)
             ->latest()
             ->get();
 
@@ -179,6 +180,7 @@ class POSController extends Controller
                             ->where('location_id', $userLocationId);
                     });
             })
+            ->limit(10)
             ->latest()
             ->get();
 
@@ -367,7 +369,7 @@ class POSController extends Controller
                         ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
                 });
             })
-            ->limit(15)
+            ->limit(10)
             ->get();
 
             // Prepare variant data with batches and serials
@@ -488,7 +490,7 @@ class POSController extends Controller
                         ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
                 });
             })
-            ->limit(15)
+            ->limit(10)
             ->get();
 
             // Calculate quantities per department and prepare batch/serial data

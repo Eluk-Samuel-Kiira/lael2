@@ -1,6 +1,11 @@
 @extends('home.layout')
 
-@section('title', 'STARDENA SUITE – Global Point of Sale System')
+@section('title', 'STARDENA SUITE – Complete Business Management Platform | POS, Inventory, Manufacturing, HR')
+@section('description', 'STARDENA SUITE is the all-in-one business management platform with POS, inventory management, manufacturing, HR & payroll, multi-currency, and offline mode. Trusted by 5,000+ businesses in 30+ countries.')
+@section('og_title', 'STARDENA SUITE – All-in-One Business Management & POS Platform')
+@section('og_description', 'Manage your entire business with STARDENA SUITE: POS, inventory, manufacturing, HR, payroll, multi-currency, and offline mode. Used by 5,000+ businesses worldwide.')
+@section('twitter_title', 'STARDENA SUITE – POS, Inventory, Manufacturing, HR & Payroll')
+@section('twitter_description', 'The complete business management platform with POS, inventory, manufacturing, HR, payroll, and offline mode. Start your free trial today.')
 
 @section('content')
 
@@ -11,10 +16,10 @@
             <div class="col-lg-6 order-2 order-lg-1 d-flex flex-column justify-content-center">
                 <div class="d-flex align-items-center gap-2 mb-3">
                     <span class="badge" style="background: #fb7339; color: #fff; padding: 0.4rem 1rem; border-radius: 50px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px;">
-                        <i class="bi bi-rocket-takeoff me-1"></i> POWERED BY AI
+                        <i class="bi bi-rocket-takeoff me-1"></i> INSIGHTS BY AI
                     </span>
                     <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 1rem; border-radius: 50px; font-size: 0.7rem; font-weight: 500;">
-                        <i class="bi bi-globe2 me-1"></i> 30+ COUNTRIES
+                        <i class="bi bi-globe2 me-1"></i> 4+ COUNTRIES
                     </span>
                 </div>
 
@@ -30,7 +35,7 @@
                 </p>
 
                 <div class="d-flex flex-wrap gap-3 mb-4">
-                    <a href="#pricing" class="btn btn-danger px-5 py-3 rounded-pill fw-bold" style="background: #fb7339; border: none; box-shadow: 0 8px 25px rgba(251, 115, 57, 0.35);">
+                    <a href="#contact" class="btn btn-danger px-5 py-3 rounded-pill fw-bold" style="background: #fb7339; border: none; box-shadow: 0 8px 25px rgba(251, 115, 57, 0.35);">
                         <i class="bi bi-calendar-check me-2"></i> Book A Demo
                     </a>
                     <a href="{{ route('login') }}" target="_blank" class="btn btn-outline-light px-5 py-3 rounded-pill fw-bold">
@@ -92,26 +97,26 @@
         <div class="row gy-4">
             <div class="col-lg-3 col-md-6">
                 <div class="stats-item text-center w-100 h-100">
-                    <span data-purecounter-start="0" data-purecounter-end="5000" data-purecounter-duration="2" class="purecounter"></span>
+                    <span data-purecounter-start="0" data-purecounter-end="200" data-purecounter-duration="2" class="purecounter"></span>
                     <p>Active Businesses</p>
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
                 <div class="stats-item text-center w-100 h-100">
-                    <span data-purecounter-start="0" data-purecounter-end="30" data-purecounter-duration="2" class="purecounter"></span>
+                    <span data-purecounter-start="0" data-purecounter-end="5" data-purecounter-duration="2" class="purecounter"></span>
                     <p>Countries</p>
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
                 <div class="stats-item text-center w-100 h-100">
                     <span data-purecounter-start="0" data-purecounter-end="15" data-purecounter-duration="2" class="purecounter"></span>
-                    <p>Currencies Supported</p>
+                    <p>Currencies Supported (Flexible)</p>
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
                 <div class="stats-item text-center w-100 h-100">
                     <span data-purecounter-start="0" data-purecounter-end="4" data-purecounter-duration="2" class="purecounter"></span>
-                    <p>Languages Available</p>
+                    <p>Languages Available (Flexible)</p>
                 </div>
             </div>
         </div>
@@ -121,68 +126,383 @@
 <!-- Services / Features Section -->
 <section id="services" class="services section">
     <div class="container section-title" data-aos="fade-up">
-        <h2>What's Included</h2>
-        <p>Everything you need to run your business efficiently</p>
+        <h2>Complete Business Management Platform</h2>
+        <p>Everything you need to run your business from raw materials to finished sales</p>
     </div>
 
     <div class="container">
-        <div class="row gy-4">
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+        
+        <!-- ─── MANUFACTURING & PRODUCTION ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #fb7339; border-bottom: 2px solid rgba(251, 115, 57, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-building-factory me-2"></i> Manufacturing & Production
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-briefcase"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-box-seam"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">Complete Accounting</a></h4>
-                        <p class="description">Full double-entry accounting — Chart of Accounts, General Ledger, Trial Balance, Income Statement.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Raw Materials Management</a></h4>
+                        <p class="description">Track raw material inventory, usage, reorder levels, and supplier management.</p>
                     </div>
                 </div>
             </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-diagram-3"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Bill of Materials (BOM)</a></h4>
+                        <p class="description">Multi-level product structures, component management, and material requirements planning.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-calculator"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Production Costing</a></h4>
+                        <p class="description">Accurate cost tracking with labor, overhead allocation, and real-time cost analysis.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-box"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Finished Goods Tracking</a></h4>
+                        <p class="description">Track completed products, production yield, and quality assurance metrics.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+        <!-- ─── INVENTORY MANAGEMENT ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #06D6A0; border-bottom: 2px solid rgba(6, 214, 160, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-boxes me-2"></i> Advanced Inventory Management
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-bucket"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Batch Sales & Tracking</a></h4>
+                        <p class="description">Track inventory by batch numbers, expiry dates, and full traceability for recalls.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-qr-code"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Serial Number Tracking</a></h4>
+                        <p class="description">Individual tracking of high-value items with unique serials and lifecycle history.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-cup-hot"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Recipes & Formulations</a></h4>
+                        <p class="description">Create and manage product recipes, ingredient lists, and production formulas.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-arrows-exchange"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Stock Movement & Transfers</a></h4>
+                        <p class="description">Complete visibility of stock movement with audit trail. Transfer stock between locations and departments.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── POS & ORDER MANAGEMENT ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #FFD166; border-bottom: 2px solid rgba(255, 209, 102, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-cart-check me-2"></i> POS & Order Management
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-lightning-charge"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Lightning-Fast POS</a></h4>
+                        <p class="description">3-second checkout with barcode scanning, one-tap payments, and intelligent product search.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-pause-circle"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Pause & Resume Orders</a></h4>
+                        <p class="description">Pause a pending order, save it, and resume exactly where the customer left off — never lose a sale.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-list-check"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Order Management</a></h4>
+                        <p class="description">Complete order lifecycle management from creation to fulfillment, with real-time status tracking.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-receipt"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Quotations & Invoicing</a></h4>
+                        <p class="description">Generate professional quotes, convert to invoices, track payments, and automated billing reminders.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── PURCHASING & SUPPLIERS ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #118AB2; border-bottom: 2px solid rgba(17, 138, 178, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-truck me-2"></i> Purchasing & Supplier Management
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-file-earmark-text"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Purchase Orders</a></h4>
+                        <p class="description">Create and manage purchase orders, track order status, and receive stock with automated accounting.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
                 <div class="service-item d-flex">
                     <div class="icon flex-shrink-0"><i class="bi bi-people"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">HR & Employee Management</a></h4>
-                        <p class="description">Staff profiles, role-based access, shift scheduling, attendance, and payroll management.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Supplier Management</a></h4>
+                        <p class="description">Manage supplier profiles, track supplier invoices, balances, and purchase history.</p>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="300">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-bar-chart"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-receipt-cutoff"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">Advanced Analytics</a></h4>
-                        <p class="description">Visual dashboards, custom reports, profit analysis, and exportable financials for smart decisions.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Purchase Receipts</a></h4>
+                        <p class="description">Record goods received, quality checks, and update inventory automatically with full traceability.</p>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="400">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-shop"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-cash-stack"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">Multi-Location Management</a></h4>
-                        <p class="description">Control unlimited branches, warehouses, and departments from one central dashboard.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Supplier Payments</a></h4>
+                        <p class="description">Track supplier payments, manage credit limits, and reconcile supplier accounts.</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="500">
+        <!-- ─── HUMAN RESOURCE MANAGEMENT ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #FF6B8A; border-bottom: 2px solid rgba(255, 107, 138, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-people-circle me-2"></i> Human Resource Management
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-truck"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-person-badge"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">Purchases & Suppliers</a></h4>
-                        <p class="description">Issue purchase orders, track supplier invoices, manage balances, and receive stock with automated accounting.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Employee Management</a></h4>
+                        <p class="description">Staff profiles, document management, role assignments, and performance tracking.</p>
                     </div>
                 </div>
             </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-cash"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Payroll Management</a></h4>
+                        <p class="description">Automated payroll processing with deductions, benefits, and direct deposit or cash payments.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-wallet2"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Advances & Loans</a></h4>
+                        <p class="description">Manage employee advances, loans, and deductions with automated repayment tracking.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-calendar-week"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Leave & Attendance</a></h4>
+                        <p class="description">Manage leave requests, attendance tracking, shift scheduling, and overtime calculations.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-            <div class="col-xl-4 col-lg-6" data-aos="fade-up" data-aos-delay="600">
+        <!-- ─── EXPENSES & FINANCIALS ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #F1416C; border-bottom: 2px solid rgba(241, 65, 108, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-wallet me-2"></i> Expenses & Financial Management
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-receipt"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Expense Tracking</a></h4>
+                        <p class="description">Track all business expenses, categorize by type, and attach receipts for audit trails.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-bar-chart-line"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Expense Reports</a></h4>
+                        <p class="description">Visual expense reports, budget tracking, and cost analysis for better financial decisions.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-diagram-2"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Chart of Accounts</a></h4>
+                        <p class="description">Full double-entry accounting with customizable chart of accounts and general ledger.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-file-spreadsheet"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Financial Reports</a></h4>
+                        <p class="description">Income statements, balance sheets, trial balance, and customizable financial reports.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── SYSTEM SETTINGS & CONFIGURATION ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #7239EA; border-bottom: 2px solid rgba(114, 57, 234, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-gear me-2"></i> System Settings & Configuration
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4 mb-5">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-person-lock"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Roles & Permissions</a></h4>
+                        <p class="description">Customizable user roles with granular permissions — Admin, Manager, Cashier, Viewer.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
                 <div class="service-item d-flex">
                     <div class="icon flex-shrink-0"><i class="bi bi-palette"></i></div>
                     <div>
-                        <h4 class="title"><a href="##" class="stretched-link">Custom Branding</a></h4>
-                        <p class="description">White-label receipts, custom logo, business colors, and branded reports that represent your identity.</p>
+                        <h4 class="title"><a href="#" class="stretched-link">Custom Branding</a></h4>
+                        <p class="description">White-label receipts, custom logo, business colors, and branded reports.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-sliders2"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">General Settings</a></h4>
+                        <p class="description">Business preferences, currency settings, language options, and system configurations.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-shield-lock"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Security & Audit Logs</a></h4>
+                        <p class="description">Complete audit trails, user activity logs, and security monitoring for compliance.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── TAXES & PROMOTIONS ─── -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="fw-bold" style="color: #FFC700; border-bottom: 2px solid rgba(255, 199, 0, 0.2); padding-bottom: 0.5rem;">
+                    <i class="bi bi-percent me-2"></i> Taxes & Promotions
+                </h3>
+            </div>
+        </div>
+        <div class="row gy-4">
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-receipt-tax"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Tax Management</a></h4>
+                        <p class="description">Multiple tax rates, tax categories, VAT/GST handling, and automated tax calculations.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="150">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-gift"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Promotions & Discounts</a></h4>
+                        <p class="description">Create promotional campaigns, discount codes, loyalty programs, and seasonal offers.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="200">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-tags"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Loyalty Programs</a></h4>
+                        <p class="description">Customer loyalty points, rewards, and personalized offers to drive repeat business.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
+                <div class="service-item d-flex">
+                    <div class="icon flex-shrink-0"><i class="bi bi-currency-exchange"></i></div>
+                    <div>
+                        <h4 class="title"><a href="#" class="stretched-link">Multi-Currency</a></h4>
+                        <p class="description">Accept payments in multiple currencies with automatic conversion and reporting.</p>
                     </div>
                 </div>
             </div>
@@ -403,82 +723,124 @@
 <!-- Pricing Section -->
 <section id="pricing" class="pricing section">
     <div class="container section-title" data-aos="fade-up">
-        <h2>Pricing</h2>
-        <p>Plans that grow with your business — no hidden fees, cancel anytime</p>
+        <h2>Choose Your Plan</h2>
+        <p>Flexible pricing for every business — from startups to enterprises</p>
     </div>
 
     <div class="container">
-        <div class="row gy-4">
-            <!-- Free Plan -->
-            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="100">
-                <div class="pricing-item">
-                    <h3>Free Trial</h3>
-                    <h4><sup>$</sup>0<span> / 65 days</span></h4>
-                    <ul>
-                        <li><i class="bi bi-check"></i> <span>1 Store Location</span></li>
-                        <li><i class="bi bi-check"></i> <span>3 Departments</span></li>
-                        <li><i class="bi bi-check"></i> <span>Up to 3 Users</span></li>
-                        <li><i class="bi bi-check"></i> <span>100 Products & Customers</span></li>
-                        <li class="na"><i class="bi bi-x"></i> <span>Advanced Reports</span></li>
-                        <li class="na"><i class="bi bi-x"></i> <span>Multi-Currency</span></li>
-                    </ul>
-                    <a href="#contact" class="buy-btn">Start Trial</a>
-                </div>
+        <!-- Billing Tabs -->
+        <div class="text-center mt-4 mb-5" data-aos="fade-up">
+            <div class="billing-tabs" id="billingTabs">
+                <button class="billing-tab active" data-tab="monthly">Monthly</button>
+                <button class="billing-tab" data-tab="yearly">Yearly <span style="background: rgba(6,214,160,0.2); color: #06D6A0; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">Save 20%</span></button>
+                <button class="billing-tab" data-tab="onetime">One-Time <span style="background: rgba(251, 115, 57, 0.15); color: #14427a; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">Lifetime</span></button>
             </div>
+        </div>
 
-            <!-- Starter Plan -->
-            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="200">
-                <div class="pricing-item">
-                    <h3>Starter</h3>
-                    <h4><sup>$</sup>29.99<span> / month</span></h4>
-                    <ul>
-                        <li><i class="bi bi-check"></i> <span>1 Store Location</span></li>
-                        <li><i class="bi bi-check"></i> <span>2 Payment Methods</span></li>
-                        <li><i class="bi bi-check"></i> <span>Up to 2 Users</span></li>
-                        <li><i class="bi bi-check"></i> <span>500 Products & Customers</span></li>
-                        <li><i class="bi bi-check"></i> <span>Inventory Management</span></li>
-                        <li class="na"><i class="bi bi-x"></i> <span>Multi-Currency</span></li>
-                    </ul>
-                    <a href="#contact" class="buy-btn">Get Started</a>
+        <!-- Pricing Plans Container -->
+        <div id="pricingContainer" class="row g-4"></div>
+
+        <p class="text-center mt-4" style="color: var(--text-muted-custom); font-size: 0.85rem;">
+            All plans include free updates and basic email support. 
+            <a href="#contact" style="color: #fb7339; text-decoration: none; font-weight: 500;">Contact our team</a> for custom enterprise solutions.
+        </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+        CONTACT / GET STARTED MODAL
+    ═══════════════════════════════════════ -->
+    <div class="modal fade" id="contactModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content" style="background: var(--brand-card); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; color: #E2EAF4;">
+                <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding: 1.5rem 2rem;">
+                    <h5 class="modal-title d-flex align-items-center gap-2" style="font-weight: 700;">
+                        <span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: rgba(251, 115, 57, 0.12); border-radius: 50%; color: #fb7339;">
+                            <i class="bi bi-envelope-paper"></i>
+                        </span>
+                        Get Started with STARDENA SUITE
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1); opacity: 0.6;"></button>
                 </div>
-            </div>
+                <div class="modal-body" style="padding: 2rem;">
+                    <p style="font-size: 0.9rem; color: #8899AA; margin-bottom: 1.5rem; line-height: 1.7;">
+                        Tell us about your business and our team will get in touch within 24 hours.
+                    </p>
+                    <div id="modalFormArea">
+                        <form id="contactForm" onsubmit="sendInquiry(event)">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Your Name <span style="color: #fb7339;">*</span></label>
+                                    <input type="text" class="form-control" id="contactName" placeholder="e.g. John Mukasa" required style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Email Address <span style="color: #fb7339;">*</span></label>
+                                    <input type="email" class="form-control" id="contactEmail" placeholder="you@company.com" required style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Phone / WhatsApp</label>
+                                    <input type="tel" class="form-control" id="contactPhone" placeholder="+256 700 000 000" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Business Name</label>
+                                    <input type="text" class="form-control" id="contactBusinessName" placeholder="Your business name" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Business Type</label>
+                                    <select class="form-select" id="contactBusiness" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                        <option value="" style="background: var(--brand-card);">Select your business type</option>
+                                        <option value="retail" style="background: var(--brand-card);">Retail Shop</option>
+                                        <option value="restaurant" style="background: var(--brand-card);">Restaurant / Café</option>
+                                        <option value="supermarket" style="background: var(--brand-card);">Supermarket / Grocery</option>
+                                        <option value="hotel" style="background: var(--brand-card);">Hotel / Lodge</option>
+                                        <option value="pharmacy" style="background: var(--brand-card);">Pharmacy</option>
+                                        <option value="electronics" style="background: var(--brand-card);">Electronics Store</option>
+                                        <option value="fashion" style="background: var(--brand-card);">Clothing / Fashion</option>
+                                        <option value="hardware" style="background: var(--brand-card);">Hardware Store</option>
+                                        <option value="manufacturing" style="background: var(--brand-card);">Manufacturing</option>
+                                        <option value="school" style="background: var(--brand-card);">School / Institution</option>
+                                        <option value="healthcare" style="background: var(--brand-card);">Healthcare</option>
+                                        <option value="other" style="background: var(--brand-card);">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Interested Plan</label>
+                                    <select class="form-select" id="contactPlan" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;">
+                                        <option value="" style="background: var(--brand-card);">Select a plan</option>
+                                        <option value="free_trial" style="background: var(--brand-card);">Free Trial</option>
+                                        <option value="starter" style="background: var(--brand-card);">Starter Plan</option>
+                                        <option value="business" style="background: var(--brand-card);">Business Plan</option>
+                                        <option value="enterprise" style="background: var(--brand-card);">Enterprise Plan</option>
+                                        <option value="lifetime" style="background: var(--brand-card);">Lifetime License</option>
+                                        <option value="not_sure" style="background: var(--brand-card);">Not sure — need advice</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #B0C4D8;">Message</label>
+                                    <textarea class="form-control" id="contactMessage" rows="4" placeholder="Tell us more about your needs..." style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: #E2EAF4; padding: 0.75rem 1rem;"></textarea>
+                                </div>
+                            </div>
 
-            <!-- Business Plan (Popular) -->
-            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="300">
-                <div class="pricing-item featured">
-                    <h3>Business</h3>
-                    <h4><sup>$</sup>79.99<span> / month</span></h4>
-                    <ul>
-                        <li><i class="bi bi-check"></i> <span>Up to 3 Store Locations</span></li>
-                        <li><i class="bi bi-check"></i> <span>10 Payment Methods</span></li>
-                        <li><i class="bi bi-check"></i> <span>Up to 10 Users</span></li>
-                        <li><i class="bi bi-check"></i> <span>5,000 Products & Customers</span></li>
-                        <li><i class="bi bi-check"></i> <span>Full Accounting Suite</span></li>
-                        <li><i class="bi bi-check"></i> <span>Multi-Currency</span></li>
-                    </ul>
-                    <a href="#contact" class="buy-btn">Get Started</a>
-                </div>
-            </div>
+                            <div id="modalAlert" class="d-none mt-3"></div>
 
-            <!-- Enterprise Plan -->
-            <div class="col-lg-3" data-aos="zoom-in" data-aos-delay="400">
-                <div class="pricing-item">
-                    <h3>Enterprise</h3>
-                    <h4><sup>$</sup>199.99<span> / month</span></h4>
-                    <ul>
-                        <li><i class="bi bi-check"></i> <span>Unlimited Locations</span></li>
-                        <li><i class="bi bi-check"></i> <span>Unlimited Users</span></li>
-                        <li><i class="bi bi-check"></i> <span>Unlimited Products</span></li>
-                        <li><i class="bi bi-check"></i> <span>Full HR & Payroll</span></li>
-                        <li><i class="bi bi-check"></i> <span>API Access</span></li>
-                        <li><i class="bi bi-check"></i> <span>Priority 24/7 Support</span></li>
-                    </ul>
-                    <a href="#contact" class="buy-btn">Contact Us</a>
+                            <div class="mt-4 d-flex gap-3">
+                                <button type="submit" class="btn-plan btn-plan-primary" id="sendInquiryBtn" 
+                                    style="flex: 1; width: auto; padding: 0.8rem 2rem; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <i class="bi bi-send"></i> Send Inquiry
+                                </button>
+                                <button type="button" class="btn-plan btn-plan-outline" data-bs-dismiss="modal" 
+                                    style="flex: 1; width: auto; padding: 0.8rem 2rem; font-size: 0.95rem; display: flex; align-items: center; justify-content: center;">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
 </section>
+
 
 <!-- Partners Section -->
 <section id="partners" class="partners section light-background">
