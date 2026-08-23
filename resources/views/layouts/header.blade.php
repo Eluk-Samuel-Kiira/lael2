@@ -15,20 +15,6 @@
             <div class="app-header-menu app-header-mobile-drawer align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="app-header-menu" data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true" data-kt-drawer-width="250px" data-kt-drawer-direction="end" data-kt-drawer-toggle="#kt_app_header_menu_toggle" data-kt-swapper="true" data-kt-swapper-mode="{default: 'append', lg: 'prepend'}" data-kt-swapper-parent="{default: '#kt_app_body', lg: '#kt_app_header_wrapper'}">
                 <!-- header -->
             </div>
-            {{--
-                resources/views/partials/sync-badge.blade.php
-                Include once in your main layout header, e.g.:
-                    @include('partials.sync-badge')
-
-                On LOCAL machine  (IS_LOCAL_POS=true in .env):
-                    - Badge polls /sync/frontend-status every 15 s
-                    - Manual sync button fires /sync/trigger → artisan pos:sync
-                    - Shows pending count + last synced time
-
-                On REMOTE/cPanel (IS_LOCAL_POS=false or absent):
-                    - Badge is hidden completely — no polling, no button
-                    - The remote app has no local sync_status to display
-            --}}
 
             @php
                 $isLocal = filter_var(env('IS_LOCAL_POS', false), FILTER_VALIDATE_BOOLEAN);
