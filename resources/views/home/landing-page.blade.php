@@ -217,7 +217,7 @@
             </div>
             <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="250">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-arrows-exchange"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-arrow-left-right"></i></div>
                     <div>
                         <h4 class="title"><a href="#" class="stretched-link">Stock Movement & Transfers</a></h4>
                         <p class="description">Complete visibility of stock movement with audit trail. Transfer stock between locations and departments.</p>
@@ -472,7 +472,7 @@
         <div class="row gy-4">
             <div class="col-xl-3 col-lg-6" data-aos="fade-up" data-aos-delay="100">
                 <div class="service-item d-flex">
-                    <div class="icon flex-shrink-0"><i class="bi bi-receipt-tax"></i></div>
+                    <div class="icon flex-shrink-0"><i class="bi bi-file-earmark-check"></i></div>
                     <div>
                         <h4 class="title"><a href="#" class="stretched-link">Tax Management</a></h4>
                         <p class="description">Multiple tax rates, tax categories, VAT/GST handling, and automated tax calculations.</p>
@@ -728,14 +728,20 @@
     </div>
 
     <div class="container">
-        <!-- Billing Tabs -->
-        <div class="text-center mt-4 mb-5" data-aos="fade-up">
-            <div class="billing-tabs" id="billingTabs">
-                <button class="billing-tab active" data-tab="monthly">Monthly</button>
-                <button class="billing-tab" data-tab="yearly">Yearly <span style="background: rgba(6,214,160,0.2); color: #06D6A0; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">Save 20%</span></button>
-                <button class="billing-tab" data-tab="onetime">One-Time <span style="background: rgba(251, 115, 57, 0.15); color: #14427a; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700;">Lifetime</span></button>
-            </div>
+    <!-- Billing Tabs -->
+    <div class="text-center mt-4 mb-5" data-aos="fade-up">
+        <div class="billing-tabs" id="billingTabs" style="display: inline-flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+            <button class="billing-tab active" data-tab="monthly" style="white-space: nowrap; font-size: clamp(0.65rem, 1.2vw, 0.85rem); padding: 0.4rem 1rem;">Monthly</button>
+            <button class="billing-tab" data-tab="yearly" style="white-space: nowrap; font-size: clamp(0.65rem, 1.2vw, 0.85rem); padding: 0.4rem 1rem;">
+                Yearly 
+                <span style="background: rgba(6,214,160,0.2); color: #06D6A0; padding: 1px 6px; border-radius: 4px; font-size: clamp(0.45rem, 0.7vw, 0.6rem); font-weight: 700; white-space: nowrap; display: inline-block; vertical-align: middle;">Save 20%</span>
+            </button>
+            <button class="billing-tab" data-tab="onetime" style="white-space: nowrap; font-size: clamp(0.65rem, 1.2vw, 0.85rem); padding: 0.4rem 1rem;">
+                One-Time 
+                <span style="background: rgba(251, 115, 57, 0.15); color: #06D6A0; padding: 1px 6px; border-radius: 4px; font-size: clamp(0.45rem, 0.7vw, 0.6rem); font-weight: 700; white-space: nowrap; display: inline-block; vertical-align: middle;">Lifetime</span>
+            </button>
         </div>
+    </div>
 
         <!-- Pricing Plans Container -->
         <div id="pricingContainer" class="row g-4"></div>

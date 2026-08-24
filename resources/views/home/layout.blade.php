@@ -687,8 +687,8 @@
                 maintenance_yearly: 0,
                 popular: false,
                 features: [
-                    { yes: true, label: '1 Store / Branch Location' },
-                    { yes: true, label: '3 Departments' },
+                    { yes: true, label: '1 Location' },
+                    { yes: true, label: '3 Departments/stores' },
                     { yes: true, label: 'Up to 3 Users' },
                     { yes: true, label: '100 Products & Customers' },
                     { yes: true, label: 'POS Selling Interface' },
@@ -722,8 +722,8 @@
                 maintenance_yearly: 49.99,
                 popular: false,
                 features: [
-                    { yes: true, label: '1 Store / Branch Location' },
-                    { yes: true, label: '5 Departments' },
+                    { yes: true, label: '1 Location' },
+                    { yes: true, label: '5 Departments/store' },
                     { yes: true, label: 'Up to 5 Users' },
                     { yes: true, label: '500 Products & Customers' },
                     { yes: true, label: 'POS Selling Interface' },
@@ -759,8 +759,8 @@
                 maintenance_yearly: 99.99,
                 popular: true,
                 features: [
-                    { yes: true, label: 'Up to 5 Store / Branch Locations' },
-                    { yes: true, label: 'Unlimited Departments' },
+                    { yes: true, label: 'Up to 5 Locations' },
+                    { yes: true, label: 'Unlimited Departments/Stores' },
                     { yes: true, label: 'Up to 20 Users' },
                     { yes: true, label: '5,000 Products & Customers' },
                     { yes: true, label: 'POS Selling Interface' },
@@ -797,7 +797,7 @@
                 popular: false,
                 features: [
                     { yes: true, label: 'Unlimited Locations' },
-                    { yes: true, label: 'Unlimited Departments' },
+                    { yes: true, label: 'Unlimited Departments/stores' },
                     { yes: true, label: 'Unlimited Users' },
                     { yes: true, label: 'Unlimited Products & Customers' },
                     { yes: true, label: 'POS Selling Interface' },
