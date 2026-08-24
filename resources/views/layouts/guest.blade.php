@@ -19,7 +19,7 @@
         <meta property="og:description" content="@yield('og_description', 'Manage your entire business with STARDENA SUITE: POS, inventory, manufacturing, HR, payroll, multi-currency, and offline mode. Start your free trial today.')" />
         <meta property="og:url" content="{{ url()->current() }}" />
         <meta property="og:site_name" content="STARDENA SUITE" />
-        <meta property="og:image" content="{{ asset('front/img/og-image.jpg') }}" />
+        <meta property="og:image" content="{{ getFaviconImage() }}" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
 
