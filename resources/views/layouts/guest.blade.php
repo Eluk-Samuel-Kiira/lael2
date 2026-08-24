@@ -5,28 +5,50 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>@yield('title')</title>
+        <title>@yield('title', 'STARDENA SUITE – Complete Business Management Platform | POS, Inventory, Manufacturing, HR')</title>
         <meta charset="utf-8" />
-        <meta name="description" content="The most advanced POS System in the world" />
-        <meta name="keywords" content="Top 10 most used POS System in the world now" />
+        <meta name="description" content="@yield('description', 'STARDENA SUITE is the all-in-one business management platform with POS, inventory, manufacturing, HR & payroll, multi-currency, and offline mode. Trusted by 5,000+ businesses in 30+ countries.')" />
+        <meta name="keywords" content="STARDENA SUITE, POS system, business management platform, inventory management, manufacturing software, HR management, payroll system, multi-currency POS, offline POS, Uganda POS, Kenya POS, East Africa POS, restaurant POS, retail POS, pharmacy POS, hotel management system, supermarket POS, batch tracking, serial number tracking, production management, BOM software, supplier management, expense tracking, employee management, leave management, payroll software, accounting software, invoicing system, quotations software, multi-location POS, cloud POS, mobile POS" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="csrf-token" content="{{ csrf_token() }}" />
+
+        <!-- Open Graph -->
         <meta property="og:locale" content="en_US" />
-        <meta property="og:type" content="STARPOS SYSTEM" />
-        <meta property="og:type" content="{{ __('auth.pos_service') }}" />
-        <meta property="og:title" content="{{ __('auth.most_advanced_pos') }}" />
-        <meta property="og:url" content="https://starpos.stardena.com" />
-        <meta property="og:url" content="https://starpos.stardena.org" />
-        <meta property="og:site_name" content="Starpos by Stardena" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="@yield('og_title', 'STARDENA SUITE – All-in-One Business Management & POS Platform')" />
+        <meta property="og:description" content="@yield('og_description', 'Manage your entire business with STARDENA SUITE: POS, inventory, manufacturing, HR, payroll, multi-currency, and offline mode. Start your free trial today.')" />
+        <meta property="og:url" content="{{ url()->current() }}" />
+        <meta property="og:site_name" content="STARDENA SUITE" />
+        <meta property="og:image" content="{{ asset('front/img/og-image.jpg') }}" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
 
-        
-		<link rel="icon" type="image/png" sizes="512x512" href="{{ getFaviconImage() }}">
-		<link rel="icon" type="image/png" sizes="192x192" href="{{ getFaviconImage() }}">
-		<link rel="icon" type="image/png" sizes="32x32" href="{{ getFaviconImage() }}">
-		<link rel="icon" type="image/png" sizes="16x16" href="{{ getFaviconImage() }}">
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="@yield('twitter_title', 'STARDENA SUITE – POS, Inventory, Manufacturing, HR & Payroll')" />
+        <meta name="twitter:description" content="@yield('twitter_description', 'The complete business management platform with POS, inventory, manufacturing, HR, payroll, and offline mode. Start your free trial today.')" />
+        <meta name="twitter:image" content="{{ asset('front/img/twitter-card.jpg') }}" />
 
-        <link rel="canonical" href="https://starpos.stardena.com" />
-        <link rel="canonical" href="https://starpos.stardena.org" />
-		<link rel="shortcut icon" href="{{ asset('assets/media/logos/favicon.ico') }}" />
+        <!-- Favicon -->
+        <link rel="icon" type="image/png" sizes="512x512" href="{{ getFaviconImage() }}" />
+        <link rel="icon" type="image/png" sizes="192x192" href="{{ getFaviconImage() }}" />
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ getFaviconImage() }}" />
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ getFaviconImage() }}" />
+        <link rel="shortcut icon" href="{{ getFaviconImage() }}" />
+
+        <!-- Canonical -->
+        <link rel="canonical" href="{{ url()->current() }}" />
+
+        <!-- Author & Publisher -->
+        <meta name="author" content="STARDENA SUITE" />
+        <meta name="publisher" content="Stardena" />
+        <meta name="robots" content="index, follow" />
+
+        <!-- Geo Tags -->
+        <meta name="geo.region" content="UG" />
+        <meta name="geo.placename" content="Uganda, East Africa" />
+
+
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700" />
 		<link href="{{ asset('assets/plugins/global/plugins.bundle.css') }}" rel="stylesheet" type="text/css" />
 		<link href="{{ asset('assets/css/style.bundle.css') }}" rel="stylesheet" type="text/css" />
