@@ -504,13 +504,12 @@
     <a href="https://wa.me/256754428612?text={{ urlencode('Hello! I would like to inquire about STARDENA SUITE.') }}" 
         target="_blank" 
         class="whatsapp-float" 
-        style="position: fixed; bottom: 30px; left: 30px; z-index: 9999; display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; background: #25D366; color: #fff; border-radius: 50%; text-decoration: none; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4); transition: all 0.3s ease;"
+        style="position: fixed; bottom: 30px; left: 30px; z-index: 9999; display: flex; align-items: center; justify-content: center; width: 50px; height: 50px; background: #25D366; color: #fff; border-radius: 50%; text-decoration: none; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4); transition: all 0.3s ease;"
         onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 6px 25px rgba(37, 211, 102, 0.6)'"
         onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 15px rgba(37, 211, 102, 0.4)'">
-        <i class="bi bi-whatsapp" style="font-size: 2rem;"></i>
+        <i class="bi bi-whatsapp" style="font-size: 1.6rem;"></i>
     </a>
 
-    <!-- Optional: Small label next to icon -->
     <style>
         .whatsapp-float {
             animation: pulse-whatsapp 2s infinite;
