@@ -15,6 +15,7 @@ class Recipe extends Model
 
     protected $fillable = [
         'product_id',
+        'tenant_id',
     ];
 
     /**

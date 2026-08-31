@@ -25,6 +25,7 @@ class PurchaseOrderItem extends Model
         'payment_status',
         'payment_date',
         'received_quantity',
+        'tenant_id',
     ];
 
     protected $casts = [

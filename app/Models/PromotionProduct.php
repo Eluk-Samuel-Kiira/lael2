@@ -17,6 +17,7 @@ class PromotionProduct extends Model
         'product_id',
         'variant_id',
         'applies_to',
+        'tenant_id',
     ];
 
     // Relationships

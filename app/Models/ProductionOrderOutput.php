@@ -27,6 +27,7 @@ class ProductionOrderOutput extends Model
         'inventory_strategy',
         'quality_status',
         'notes',
+        'tenant_id',
     ];
 
     protected $casts = [

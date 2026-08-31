@@ -21,6 +21,7 @@ class PurchaseReceiptItem extends Model
         'department_id',
         'batch_number',
         'expiry_date',
+        'tenant_id',
     ];
 
     protected $casts = [

@@ -29,6 +29,7 @@ class OrderItem extends Model
         'inventory_data',
         'tax_data',
         'promotion_data',
+        'tenant_id',
     ];
 
     /**

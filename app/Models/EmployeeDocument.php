@@ -25,6 +25,7 @@ class EmployeeDocument extends Model
         'description',
         'is_verified',
         'verified_at',
+        'tenant_id',
     ];
 
     protected $casts = [

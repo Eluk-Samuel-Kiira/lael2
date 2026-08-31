@@ -21,6 +21,7 @@ class InvoiceSend extends Model
         'sent_by',
         'sent_at',
         'delivered_at',
+        'tenant_id',
     ];
 
     protected $casts = [
