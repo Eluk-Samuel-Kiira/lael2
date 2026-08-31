@@ -28,6 +28,7 @@ class InvoicePayment extends Model
         'notes',
         'metadata',
         'gateway_response',
+        'tenant_id',
     ];
 
     protected $casts = [

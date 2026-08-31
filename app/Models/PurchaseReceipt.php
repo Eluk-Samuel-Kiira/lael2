@@ -21,6 +21,7 @@ class PurchaseReceipt extends Model
         'subtotal',
         'tax_total',
         'total',
+        'tenant_id',
     ];
 
     protected $casts = [

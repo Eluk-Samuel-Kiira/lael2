@@ -176,7 +176,7 @@ class OrderController extends Controller
                 ->limit(20)
                 ->get();
 
-            \Log::info('[PauseBuy] found ' . $orders->count());
+            // \Log::info('[PauseBuy] found ' . $orders->count());
 
             $result = $orders->map(function ($order) use ($selectedDepartmentId, $locationId) {
                 $items = $order->orderItems->map(function ($item) use ($selectedDepartmentId, $locationId, $order) { // ✅ Pass $order here

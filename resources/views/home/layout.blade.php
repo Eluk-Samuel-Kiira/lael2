@@ -430,11 +430,11 @@
             <div class="row gy-4">
                 <div class="col-lg-4 col-md-12 footer-about">
                     <a href="/" class="logo d-flex align-items-center" style="text-decoration: none;">
-    <img src="{{ asset('suite.png') }}" alt="STARDENA SUITE" style="height: clamp(24px, 2.5vw, 32px); width: auto; flex-shrink: 0;">
-    <span class="sitename" style="font-size: clamp(1rem, 2vw, 1.5rem); font-weight: 700; margin-left: 8px; white-space: nowrap; line-height: 1.2;">
-        <span style="color: #E2EAF4;">STARDENA</span> <span style="color: #fb7339;">SUITE</span>
-    </span>
-</a>
+                        <img src="{{ asset('suite.png') }}" alt="STARDENA SUITE" style="height: clamp(24px, 2.5vw, 32px); width: auto; flex-shrink: 0;">
+                        <span class="sitename" style="font-size: clamp(1rem, 2vw, 1.5rem); font-weight: 700; margin-left: 8px; white-space: nowrap; line-height: 1.2;">
+                            <span style="color: #E2EAF4;">STARDENA</span> <span style="color: #fb7339;">SUITE</span>
+                        </span>
+                    </a>
                     <p style="margin-top: 1rem; font-size: 0.9rem; line-height: 1.7;">The global point-of-sale platform for modern businesses. Built in East Africa. Used worldwide.</p>
                     {{-- <div class="social-links d-flex mt-4">
                         <a href="#" class="me-2" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: rgba(255,255,255,0.05); border-radius: 50%; transition: all 0.3s ease; color: #B0C4D8; text-decoration: none;">

@@ -28,6 +28,7 @@ class OrderPayment extends Model
         'notes',
         'processed_at',
         'processed_by',
+        'tenant_id',
     ];
 
     protected $casts = [

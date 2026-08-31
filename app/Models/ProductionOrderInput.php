@@ -26,6 +26,7 @@ class ProductionOrderInput extends Model
         'actual_cost',
         'quality_status',
         'quality_notes',
+        'tenant_id',
     ];
 
     protected $casts = [

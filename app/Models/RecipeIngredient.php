@@ -17,6 +17,7 @@ class RecipeIngredient extends Model
         'ingredient_variant_id',
         'quantity_required',
         'unit_id',
+        'tenant_id',
     ];
 
     protected $casts = [
