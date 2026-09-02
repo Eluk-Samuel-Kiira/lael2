@@ -46,7 +46,7 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                         <span class="required">{{__('auth._phone')}}</span>
                                 </label>
-                                <input type="number" id="telephone_number" class="form-control form-control-solid" name="telephone_number" />
+                                <input type="tel" id="telephone_number" class="form-control form-control-solid" name="telephone_number" />
                                 <div id="telephone_number"></div>
                             </div>
                         </div>

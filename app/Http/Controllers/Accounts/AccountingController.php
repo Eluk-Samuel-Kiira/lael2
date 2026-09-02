@@ -20,9 +20,31 @@ class AccountingController extends Controller
             abort(403, __('payments.not_authorized'));
         }
         
-        $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
-            ->with(['currency'])
-            ->get()
+        // Get location filter from request
+        $locationId = $request->get('location_id');
+        $userLocationId = $user->location_id ?? null;
+        
+        // Build query
+        $query = PaymentMethod::where('tenant_id', $tenantId)
+            ->with(['currency']);
+        
+        // Apply location filter if provided
+        if ($locationId) {
+            // Filter by specific location
+            $query->where(function($q) use ($locationId) {
+                $q->whereNull('location_id')
+                ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+            });
+        } elseif ($userLocationId) {
+            // Auto-filter by user's location if no filter specified
+            $query->where(function($q) use ($userLocationId) {
+                $q->whereNull('location_id')
+                ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+            });
+        }
+        // If no location filter and user has no location, return all
+        
+        $paymentMethods = $query->get()
             ->map(function($method) {
                 // Convert balances from cents to base currency
                 $method->current_balance_display = from_base_currency($method->current_balance);
@@ -39,7 +61,10 @@ class AccountingController extends Controller
             'inactive_methods' => $paymentMethods->where('is_active', false)->count(),
         ];
         
-        return view('basic-accounting.payment-methods', compact('paymentMethods', 'stats'));
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        return view('basic-accounting.payment-methods', compact('paymentMethods', 'stats', 'locations', 'locationId'));
     }
     
     // 2. Account Balances Report
@@ -47,18 +72,40 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
-        // Get all payment methods with balances
-        $accounts = PaymentMethod::where('tenant_id', $tenantId)
+        // Get location filter from request
+        $locationId = $request->get('location_id');
+        $userLocationId = $user->location_id ?? null;
+        
+        // Build query with location filter
+        $query = PaymentMethod::where('tenant_id', $tenantId)
             ->select([
                 'id', 'name', 'type', 'current_balance', 'available_balance', 
-                'pending_balance', 'currency_id', 'is_active', 'last_transaction_at'
+                'pending_balance', 'currency_id', 'is_active', 'last_transaction_at',
+                'account_number', 'location_id'
             ])
-            ->with(['currency'])
-            ->get()
+            ->with(['currency']);
+        
+        // Apply location filter if provided
+        if ($locationId) {
+            $query->where(function($q) use ($locationId) {
+                $q->whereNull('location_id')
+                ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+            });
+        } elseif ($userLocationId) {
+            // Auto-filter by user's location if no filter specified
+            $query->where(function($q) use ($userLocationId) {
+                $q->whereNull('location_id')
+                ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+            });
+        }
+        // If no location filter and user has no location, return all
+        
+        $accounts = $query->get()
             ->map(function($account) {
                 // Convert balances from cents to base currency
                 $account->current_balance_display = from_base_currency($account->current_balance);
@@ -90,7 +137,10 @@ class AccountingController extends Controller
                 return $transaction;
             });
         
-        return view('basic-accounting.account-balances', compact('accounts', 'summary', 'recentTransactions'));
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        return view('basic-accounting.account-balances', compact('accounts', 'summary', 'recentTransactions', 'locations', 'locationId'));
     }
     
     // 3. Transaction Ledger Report
@@ -98,6 +148,7 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
@@ -108,16 +159,17 @@ class AccountingController extends Controller
             'transaction_type' => $request->get('transaction_type'),
             'payment_method_id' => $request->get('payment_method_id'),
             'status' => $request->get('status', 'COMPLETED'),
+            'location_id' => $request->get('location_id'),
+            'user_id' => $request->get('user_id'),
         ];
         
-        // Convert to proper datetime ranges for full day inclusion
         $startDateTime = $filters['start_date'] . ' 00:00:00';
         $endDateTime = $filters['end_date'] . ' 23:59:59';
         
         $query = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->with(['paymentMethod', 'currency', 'customer']);
+            ->with(['paymentMethod', 'currency', 'customer', 'user']);
         
-        // Apply filters
+        // Apply date filters
         if ($filters['start_date']) {
             $query->where('transaction_date', '>=', $startDateTime);
         }
@@ -138,11 +190,24 @@ class AccountingController extends Controller
             $query->where('status', $filters['status']);
         }
         
-        // Get paginated transactions
+        // Apply location filter
+        if ($filters['location_id']) {
+            $query->whereHas('paymentMethod', function($q) use ($filters) {
+                $q->where(function($sub) use ($filters) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$filters['location_id'])]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($filters['user_id']) {
+            $query->where('user_id', $filters['user_id']);
+        }
+        
         $transactions = $query->orderBy('transaction_date', 'desc')
-            ->paginate(15) // Changed to 15 per page for better usability
+            ->paginate(15)
             ->through(function($transaction) {
-                // Convert amounts from cents to base currency
                 $transaction->amount_display = from_base_currency($transaction->amount);
                 $transaction->fee_display = from_base_currency($transaction->transaction_fee);
                 $transaction->net_amount_display = from_base_currency($transaction->net_amount);
@@ -151,11 +216,9 @@ class AccountingController extends Controller
                 return $transaction;
             });
         
-        // Calculate summary stats using the paginated data
-        $totalAmount = $transactions->sum('amount_display');
+        $totalAmount = $transactions->sum('amount');
         $averageAmount = $transactions->count() > 0 ? $totalAmount / $transactions->count() : 0;
         
-        // Get recent transactions (last 5 for quick view)
         $recentTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->where('status', 'COMPLETED')
             ->orderBy('transaction_date', 'desc')
@@ -167,9 +230,21 @@ class AccountingController extends Controller
                 return $transaction;
             });
         
-        // Get filter options
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
+            ->get(['id', 'name']);
+        
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // FIXED: Get users who have processed transactions - Using DB Builder
+        $userIds = \DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
             ->get(['id', 'name']);
         
         $transactionTypes = PaymentTransactionLog::distinct('transaction_type')
@@ -178,16 +253,17 @@ class AccountingController extends Controller
         $categories = PaymentTransactionLog::distinct('transaction_category')
             ->pluck('transaction_category');
         
-        // For display in the form
         $displayStartDate = $filters['start_date'];
         $displayEndDate = $filters['end_date'];
         
         return view('basic-accounting.transaction-ledger', compact(
             'transactions', 'filters', 'paymentMethods', 
             'transactionTypes', 'categories', 'displayStartDate', 'displayEndDate',
-            'totalAmount', 'averageAmount', 'recentTransactions'
+            'totalAmount', 'averageAmount', 'recentTransactions',
+            'locations', 'users'
         ));
     }
+
 
     public function getTransactionDetails($id)
     {
@@ -232,13 +308,16 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $period = $request->get('period', 'month');
+        $locationId = $request->get('location_id'); // Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
-        // Set dates based on period - ensure we include current date
+        // Set dates based on period
         switch ($period) {
             case 'month':
                 $startDate = now()->startOfMonth()->format('Y-m-d');
@@ -261,34 +340,46 @@ class AccountingController extends Controller
                 $endDate = now()->endOfDay()->format('Y-m-d H:i:s');
         }
         
-        // For display purposes (show date only without time)
         $displayStartDate = date('Y-m-d', strtotime($startDate));
         $displayEndDate = date('Y-m-d', strtotime($endDate));
         
-        // Get revenue (deposits) - using RAW DB values (cents)
-        $revenueCents = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Base query for transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Get revenue (deposits)
+        $revenueCents = (clone $baseQuery)
             ->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
             ->sum('amount');
         
-        // Get expenses (withdrawals) - using RAW DB values (cents)
-        $expensesCents = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Get expenses (withdrawals)
+        $expensesCents = (clone $baseQuery)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
             ->sum('amount');
         
-        // Convert to base currency using helper
         $revenue = from_base_currency($revenueCents);
         $expenses = from_base_currency($expensesCents);
         $netIncome = $revenue - $expenses;
         
-        // Get revenue by category - using RAW DB values (cents)
-        $revenueByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Get revenue by category
+        $revenueByCategory = (clone $baseQuery)
             ->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
             ->select('transaction_category', DB::raw('SUM(amount) as total_cents'))
             ->groupBy('transaction_category')
             ->get()
@@ -297,37 +388,83 @@ class AccountingController extends Controller
                 return $item;
             });
         
-        // Get expenses by category - using RAW DB values (cents)
-        $expensesByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Get expenses by category
+        $expensesByCategory = (clone $baseQuery)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
             ->select('transaction_category', DB::raw('SUM(amount) as total_cents'))
             ->groupBy('transaction_category')
             ->get()
             ->map(function($item) {
                 $item->total = from_base_currency($item->total_cents);
+                return $item;
+            });
+        
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
+        // Get monthly trends for chart
+        $monthlyTrends = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED')
+            ->when($locationId, function($q) use ($locationId) {
+                $q->whereHas('paymentMethod', function($sub) use ($locationId) {
+                    $sub->where(function($inner) use ($locationId) {
+                        $inner->whereNull('location_id')
+                            ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                    });
+                });
+            })
+            ->when($userId, function($q) use ($userId) {
+                $q->where('user_id', $userId);
+            })
+            ->select(
+                DB::raw('DATE_FORMAT(transaction_date, "%Y-%m") as month'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as revenue_cents'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as expenses_cents')
+            )
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get()
+            ->map(function($item) {
+                $item->revenue = from_base_currency($item->revenue_cents);
+                $item->expenses = from_base_currency($item->expenses_cents);
                 return $item;
             });
         
         return view('basic-accounting.income-statement', compact(
             'revenue', 'expenses', 'netIncome', 
             'revenueByCategory', 'expensesByCategory',
-            'displayStartDate', 'displayEndDate', 'period'
+            'displayStartDate', 'displayEndDate', 'period',
+            'locations', 'locationId', 'monthlyTrends',
+            'users', 'userId' // NEW: Pass users and userId
         ));
     }
-    
+        
     // 5. Cash Flow Report
     public function cashFlow(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
         // For display (show date only)
         $displayStartDate = date('Y-m-d', strtotime($startDate));
@@ -338,10 +475,28 @@ class AccountingController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
         
-        // Get daily cash flow - using RAW DB values (cents)
-        $dailyCashFlow = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Base query for transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Get daily cash flow
+        $dailyCashFlow = (clone $baseQuery)
             ->select(
                 DB::raw('DATE(transaction_date) as date'),
                 DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as cash_in_cents'),
@@ -352,16 +507,13 @@ class AccountingController extends Controller
             ->orderBy('date', 'desc')
             ->get()
             ->map(function($item) {
-                // Convert cents to base currency using helper
                 $item->cash_in = from_base_currency($item->cash_in_cents);
                 $item->cash_out = from_base_currency($item->cash_out_cents);
                 return $item;
             });
         
-        // Get cash flow by payment method - using RAW DB values (cents)
-        $cashFlowByMethod = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        // Get cash flow by payment method
+        $cashFlowByMethod = (clone $baseQuery)
             ->with('paymentMethod')
             ->select(
                 'payment_method_id',
@@ -372,13 +524,12 @@ class AccountingController extends Controller
             ->groupBy('payment_method_id')
             ->get()
             ->map(function($item) {
-                // Convert cents to base currency using helper
                 $item->cash_in = from_base_currency($item->cash_in_cents);
                 $item->cash_out = from_base_currency($item->cash_out_cents);
                 return $item;
             });
         
-        // Summary - using helpers
+        // Summary
         $totalCashIn = from_base_currency($dailyCashFlow->sum('cash_in_cents'));
         $totalCashOut = from_base_currency($dailyCashFlow->sum('cash_out_cents'));
         
@@ -389,23 +540,41 @@ class AccountingController extends Controller
             'total_transactions' => $dailyCashFlow->sum('transaction_count'),
         ];
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         return view('basic-accounting.cash-flow', compact(
             'dailyCashFlow', 'cashFlowByMethod', 'summary',
-            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate',
+            'locations', 'locationId', 'users', 'userId' // NEW: Pass locations and users
         ));
     }
-        
+            
     // 6. Transaction Analysis Report
     public function transactionAnalysis(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
         // For display (show date only)
         $displayStartDate = date('Y-m-d', strtotime($startDate));
@@ -416,10 +585,28 @@ class AccountingController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
         
-        // Transaction volume by type - using RAW DB values (cents)
-        $volumeByType = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Base query for transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Transaction volume by type
+        $volumeByType = (clone $baseQuery)
             ->select(
                 'transaction_type',
                 DB::raw('COUNT(*) as count'),
@@ -429,16 +616,13 @@ class AccountingController extends Controller
             ->groupBy('transaction_type')
             ->get()
             ->map(function($item) {
-                // Convert cents to base currency using helper
                 $item->total_amount = from_base_currency($item->total_cents);
                 $item->average_amount = from_base_currency($item->avg_cents);
                 return $item;
             });
         
-        // Transaction volume by category - using RAW DB values (cents)
-        $volumeByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        // Transaction volume by category
+        $volumeByCategory = (clone $baseQuery)
             ->select(
                 'transaction_category',
                 DB::raw('COUNT(*) as count'),
@@ -449,16 +633,13 @@ class AccountingController extends Controller
             ->orderBy('total_cents', 'desc')
             ->get()
             ->map(function($item) {
-                // Convert cents to base currency using helper
                 $item->total_amount = from_base_currency($item->total_cents);
                 $item->average_amount = from_base_currency($item->avg_cents);
                 return $item;
             });
         
-        // Daily transaction trends - using RAW DB values (cents)
-        $dailyTrends = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        // Daily transaction trends
+        $dailyTrends = (clone $baseQuery)
             ->select(
                 DB::raw('DATE(transaction_date) as date'),
                 DB::raw('COUNT(*) as transaction_count'),
@@ -468,22 +649,34 @@ class AccountingController extends Controller
             ->orderBy('date')
             ->get()
             ->map(function($item) {
-                // Convert cents to base currency using helper
                 $item->daily_total = from_base_currency($item->daily_total_cents);
                 return $item;
             });
         
-        // Top transactions - using pagination (amount is already converted by accessor)
-        $topTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        // Top transactions
+        $topTransactions = (clone $baseQuery)
             ->with(['paymentMethod'])
             ->orderBy('amount', 'desc')
             ->paginate(15);
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         return view('basic-accounting.transaction-analysis', compact(
             'volumeByType', 'volumeByCategory', 'dailyTrends', 'topTransactions',
-            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate',
+            'locations', 'locationId', 'users', 'userId' // NEW: Pass locations and users
         ));
     }
         
@@ -492,12 +685,15 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
         // For display (show date only)
         $displayStartDate = date('Y-m-d', strtotime($startDate));
@@ -508,11 +704,29 @@ class AccountingController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
         
-        // Calculate summary using RAW DB values (cents) then convert
-        $summaryRaw = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Base query for expense transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
             ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Calculate summary
+        $summaryRaw = (clone $baseQuery)
             ->select(
                 DB::raw('SUM(amount) as total_cents'),
                 DB::raw('COUNT(*) as count'),
@@ -521,7 +735,6 @@ class AccountingController extends Controller
             )
             ->first();
         
-        // Convert cents to base currency using helper
         $summary = [
             'total_expenses' => from_base_currency($summaryRaw->total_cents ?? 0),
             'expense_count' => $summaryRaw->count ?? 0,
@@ -529,11 +742,8 @@ class AccountingController extends Controller
             'largest_expense' => from_base_currency($summaryRaw->max_cents ?? 0),
         ];
         
-        // Expenses by category using RAW DB values (cents)
-        $expensesByCategory = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        // Expenses by category
+        $expensesByCategory = (clone $baseQuery)
             ->select(
                 'transaction_category',
                 DB::raw('COUNT(*) as count'),
@@ -545,25 +755,36 @@ class AccountingController extends Controller
             ->orderBy('total_cents', 'desc')
             ->get()
             ->map(function($category) {
-                // Convert cents to base currency using helper
                 $category->total_amount = from_base_currency($category->total_cents);
                 $category->average_amount = from_base_currency($category->avg_cents);
                 $category->max_amount = from_base_currency($category->max_cents);
                 return $category;
             });
         
-        // Top expenses - use pagination
-        $topExpenses = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
-            ->with(['paymentMethod'])
+        // Top expenses with pagination
+        $topExpenses = (clone $baseQuery)
+            ->with(['paymentMethod', 'user'])
             ->orderBy('amount', 'desc')
             ->paginate(10);
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         return view('basic-accounting.expense-analysis', compact(
             'summary', 'expensesByCategory', 'topExpenses',
-            'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate',
+            'locations', 'locationId', 'users', 'userId' // NEW: Pass locations and users
         ));
     }
             
@@ -572,28 +793,48 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
         // Convert to proper datetime ranges to include full days
         $startDateTime = $startDate . ' 00:00:00';
         $endDateTime = $endDate . ' 23:59:59';
         
+        // Build payment methods query with location filter
+        $paymentMethodsQuery = PaymentMethod::where('tenant_id', $tenantId)
+            ->with(['currency']);
+        
+        // Apply location filter
+        if ($locationId) {
+            $paymentMethodsQuery->where(function($q) use ($locationId) {
+                $q->whereNull('location_id')
+                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+            });
+        }
+        
         // Get payment methods with transaction stats
-        $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
-            ->with(['currency'])
-            ->get()
-            ->map(function ($method) use ($tenantId, $startDateTime, $endDateTime) {
-                $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+        $paymentMethods = $paymentMethodsQuery->get()
+            ->map(function ($method) use ($tenantId, $startDateTime, $endDateTime, $userId) {
+                // Build transaction query
+                $transactionQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
                     ->where('payment_method_id', $method->id)
                     ->whereBetween('transaction_date', [$startDateTime, $endDateTime])
-                    ->where('status', 'COMPLETED')
-                    ->get();
-                    
+                    ->where('status', 'COMPLETED');
+                
+                // Apply user filter to transactions
+                if ($userId) {
+                    $transactionQuery->where('user_id', $userId);
+                }
+                
+                $transactions = $transactionQuery->get();
+                
                 $method->transaction_stats = [
                     'total_transactions' => $transactions->count(),
                     'total_amount' => $transactions->sum('amount'),
@@ -617,12 +858,27 @@ class AccountingController extends Controller
             'highest_balance_method' => $paymentMethods->sortByDesc('current_balance')->first(),
         ];
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         // For display in the form
         $displayStartDate = $startDate;
         $displayEndDate = $endDate;
         
         return view('basic-accounting.payment-method-analysis', compact(
-            'paymentMethods', 'stats', 'startDate', 'endDate', 'displayStartDate', 'displayEndDate'
+            'paymentMethods', 'stats', 'startDate', 'endDate', 'displayStartDate', 'displayEndDate',
+            'locations', 'locationId', 'users', 'userId' 
         ));
     }
 
@@ -631,27 +887,45 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $date = $request->get('date', now()->format('Y-m-d'));
         $perPage = (int)$request->get('per_page', 15);
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
+        
+        // Build base query with filters
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereDate('transaction_date', $date)
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
         
         // Get transactions for the day with pagination
-        $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereDate('transaction_date', $date)
-            ->where('status', 'COMPLETED')
-            ->with(['paymentMethod'])
+        $transactions = (clone $baseQuery)
+            ->with(['paymentMethod', 'user'])
             ->orderBy('transaction_date', 'desc')
             ->paginate($perPage);
         
         // Get ALL transactions for summary calculations (unpaginated)
-        $allTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereDate('transaction_date', $date)
-            ->where('status', 'COMPLETED')
-            ->get();
-            
+        $allTransactions = (clone $baseQuery)->get();
+        
         // Summary
         $summary = [
             'total_transactions' => $allTransactions->count(),
@@ -662,7 +936,7 @@ class AccountingController extends Controller
                             - $allTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
         ];
         
-        // Transactions by type (from all transactions)
+        // Transactions by type
         $byType = $allTransactions->groupBy('transaction_type')
             ->map(function ($group, $type) {
                 return [
@@ -671,8 +945,8 @@ class AccountingController extends Controller
                     'average' => $group->avg('amount'),
                 ];
             });
-            
-        // Transactions by category (from all transactions)
+        
+        // Transactions by category
         $byCategory = $allTransactions->groupBy('transaction_category')
             ->map(function ($group, $category) {
                 return [
@@ -680,8 +954,8 @@ class AccountingController extends Controller
                     'total' => $group->sum('amount'),
                 ];
             });
-            
-        // Balance changes (from all transactions)
+        
+        // Balance changes
         $balanceChanges = [];
         foreach ($allTransactions as $transaction) {
             if (!isset($balanceChanges[$transaction->payment_method_id])) {
@@ -694,9 +968,24 @@ class AccountingController extends Controller
             }
         }
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         return view('basic-accounting.daily-summary', compact(
             'transactions', 'summary', 'byType', 'byCategory', 
-            'balanceChanges', 'date', 'perPage'
+            'balanceChanges', 'date', 'perPage',
+            'locations', 'locationId', 'users', 'userId' // NEW: Pass locations and users
         ));
     }
     
@@ -705,32 +994,25 @@ class AccountingController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
-        // Get month and year from request with proper defaults
-        $month = $request->input('month', date('m')); // Use input() instead of get()
+        // Get month and year from request
+        $month = $request->input('month', date('m'));
         $year = $request->input('year', date('Y'));
-        
-        // DEBUG: Uncomment to see what you're receiving
-        // \Log::info('Monthly Report Params:', [
-        //     'month_received' => $month,
-        //     'year_received' => $year,
-        //     'month_type' => gettype($month),
-        //     'year_type' => gettype($year)
-        // ]);
+        $locationId = $request->get('location_id'); // NEW: Location filter
+        $userId = $request->get('user_id'); // NEW: User filter
         
         // Clean and validate month
-        $month = strval($month); // Ensure it's a string
-        $month = preg_replace('/[^0-9]/', '', $month); // Remove non-numeric characters
+        $month = strval($month);
+        $month = preg_replace('/[^0-9]/', '', $month);
         
-        // If month is empty or looks like a year (4 digits), use current month
         if (empty($month) || strlen($month) > 2 || intval($month) > 12 || intval($month) < 1) {
             $month = date('m');
         }
         
-        // Ensure month is 2 digits
         $month = str_pad($month, 2, '0', STR_PAD_LEFT);
         
         // Validate year
@@ -743,12 +1025,29 @@ class AccountingController extends Controller
         $startDate = "{$year}-{$month}-01";
         $endDate = date('Y-m-t', strtotime($startDate));
         
-        // Monthly transactions
-        $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Base query for transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
-            ->get();
-            
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Monthly transactions
+        $transactions = (clone $baseQuery)->get();
+        
         // Summary
         $summary = [
             'total_transactions' => $transactions->count(),
@@ -760,9 +1059,7 @@ class AccountingController extends Controller
         ];
         
         // Daily breakdown
-        $dailyBreakdown = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        $dailyBreakdown = (clone $baseQuery)
             ->select(
                 DB::raw('DATE(transaction_date) as date'),
                 DB::raw('COUNT(*) as transaction_count'),
@@ -773,11 +1070,9 @@ class AccountingController extends Controller
             ->groupBy(DB::raw('DATE(transaction_date)'))
             ->orderBy('date')
             ->get();
-            
+        
         // Category breakdown
-        $categoryBreakdown = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        $categoryBreakdown = (clone $baseQuery)
             ->select(
                 'transaction_category',
                 DB::raw('COUNT(*) as count'),
@@ -787,11 +1082,9 @@ class AccountingController extends Controller
             ->groupBy('transaction_category')
             ->orderBy('total', 'desc')
             ->get();
-            
+        
         // Payment method breakdown
-        $methodBreakdown = PaymentTransactionLog::where('tenant_id', $tenantId)
-            ->whereBetween('transaction_date', [$startDate, $endDate])
-            ->where('status', 'COMPLETED')
+        $methodBreakdown = (clone $baseQuery)
             ->with('paymentMethod')
             ->select(
                 'payment_method_id',
@@ -802,40 +1095,361 @@ class AccountingController extends Controller
             ->orderBy('total_amount', 'desc')
             ->get();
         
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
+        // Month name for display
+        $monthNames = [
+            1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+            5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+            9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+        ];
+        $monthName = $monthNames[(int)$month] ?? 'Unknown';
+        
         return view('basic-accounting.monthly-report', compact(
             'transactions', 'summary', 'dailyBreakdown', 
             'categoryBreakdown', 'methodBreakdown',
-            'month', 'year', 'startDate', 'endDate'
+            'month', 'year', 'startDate', 'endDate', 'monthName',
+            'locations', 'locationId', 'users', 'userId' // NEW: Pass locations and users
         ));
     }
-    
-    // 11. Reconciliation Report
+
+    // 11. Weekly Report with 6-Month Comparison
+    public function weeklyReport(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+        
+        // Get week and year from request
+        $week = $request->input('week', date('W'));
+        $year = $request->input('year', date('Y'));
+        $locationId = $request->get('location_id');
+        $userId = $request->get('user_id');
+        $perPage = (int)$request->get('per_page', 15);
+        
+        // Clean and validate week
+        $week = intval($week);
+        if ($week < 1 || $week > 53) {
+            $week = date('W');
+        }
+        
+        // Validate year
+        $year = intval($year);
+        if ($year < 2000 || $year > 2100) {
+            $year = date('Y');
+        }
+        
+        // Get start and end dates for the week
+        $startDate = date('Y-m-d', strtotime($year . 'W' . str_pad($week, 2, '0', STR_PAD_LEFT) . '1'));
+        $endDate = date('Y-m-d 23:59:59', strtotime($startDate . ' +6 days'));
+        
+        // Base query for transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter
+        if ($userId) {
+            $baseQuery->where('user_id', $userId);
+        }
+        
+        // Get weekly transactions with pagination
+        $transactions = (clone $baseQuery)
+            ->with(['paymentMethod', 'user'])
+            ->orderBy('transaction_date', 'desc')
+            ->paginate($perPage);
+        
+        // Get ALL transactions for summary calculations (unpaginated)
+        $allTransactions = (clone $baseQuery)->get();
+        
+        // Weekly summary
+        $summary = [
+            'total_transactions' => $allTransactions->count(),
+            'total_amount' => $allTransactions->sum('amount'),
+            'deposit_total' => $allTransactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount'),
+            'withdrawal_total' => $allTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
+            'net_cash_flow' => $allTransactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount') 
+                            - $allTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount'),
+        ];
+        
+        // Daily breakdown for the week
+        $dailyBreakdown = (clone $baseQuery)
+            ->select(
+                DB::raw('DATE(transaction_date) as date'),
+                DB::raw('COUNT(*) as transaction_count'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as deposits'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as withdrawals'),
+                DB::raw('SUM(amount) as daily_total')
+            )
+            ->groupBy(DB::raw('DATE(transaction_date)'))
+            ->orderBy('date')
+            ->get();
+        
+        // Get last 6 months comparison data
+        $sixMonthsData = [];
+        $monthNames = [
+            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr',
+            5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Aug',
+            9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dec'
+        ];
+        
+        for ($i = 5; $i >= 0; $i--) {
+            $month = date('m', strtotime("-$i months"));
+            $yearMonth = date('Y', strtotime("-$i months"));
+            $monthStart = date('Y-m-01', strtotime("-$i months"));
+            $monthEnd = date('Y-m-t 23:59:59', strtotime("-$i months"));
+            
+            // Query for monthly totals
+            $monthQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
+                ->whereBetween('transaction_date', [$monthStart, $monthEnd])
+                ->where('status', 'COMPLETED');
+            
+            // Apply location filter for monthly data
+            if ($locationId) {
+                $monthQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                    $q->where(function($sub) use ($locationId) {
+                        $sub->whereNull('location_id')
+                            ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                    });
+                });
+            }
+            
+            if ($userId) {
+                $monthQuery->where('user_id', $userId);
+            }
+            
+            $monthTransactions = $monthQuery->get();
+            
+            $monthLabel = $monthNames[(int)$month] . ' ' . substr($yearMonth, -2);
+            $deposits = $monthTransactions->whereIn('transaction_type', ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])->sum('amount');
+            $withdrawals = $monthTransactions->whereIn('transaction_type', ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'])->sum('amount');
+            $net = $deposits - $withdrawals;
+            
+            $sixMonthsData[] = [
+                'month' => $monthLabel,
+                'deposits' => $deposits,
+                'withdrawals' => $withdrawals,
+                'net' => $net,
+                'transactions' => $monthTransactions->count(),
+            ];
+        }
+        
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
+        // Week range for display
+        $weekStartDisplay = date('M d', strtotime($startDate));
+        $weekEndDisplay = date('M d, Y', strtotime($endDate));
+        
+        return view('basic-accounting.weekly-report', compact(
+            'transactions', 'summary', 'dailyBreakdown', 'sixMonthsData',
+            'week', 'year', 'startDate', 'endDate', 'weekStartDisplay', 'weekEndDisplay',
+            'locations', 'locationId', 'users', 'userId', 'perPage'
+        ));
+    }
+
+    // 12. User Performance Report - Top Profit/Loss Makers
+    public function userPerformanceReport(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+        
+        if (!$user->hasPermissionTo('financial reports')) {
+            abort(403, __('payments.not_authorized'));
+        }
+        
+        $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
+        $locationId = $request->get('location_id');
+        $limit = $request->get('limit', 10);
+        $perPage = (int)$request->get('per_page', 15);
+        
+        // Validate date range
+        if (strtotime($startDate) > strtotime($endDate)) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+        
+        $displayStartDate = date('Y-m-d', strtotime($startDate));
+        $displayEndDate = date('Y-m-d', strtotime($endDate));
+        
+        // Build base query for user transactions
+        $baseQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED')
+            ->whereNotNull('user_id');
+        
+        // Apply location filter
+        if ($locationId) {
+            $baseQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Get user performance data
+        $userPerformance = (clone $baseQuery)
+            ->select(
+                'user_id',
+                DB::raw('COUNT(*) as total_transactions'),
+                DB::raw('SUM(amount) as total_amount'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("DEPOSIT", "TRANSFER_IN", "REFUND") THEN amount ELSE 0 END) as total_deposits'),
+                DB::raw('SUM(CASE WHEN transaction_type IN ("WITHDRAWAL", "TRANSFER_OUT", "FEE") THEN amount ELSE 0 END) as total_withdrawals'),
+                DB::raw('AVG(amount) as average_transaction'),
+                DB::raw('MAX(amount) as largest_transaction'),
+                DB::raw('MIN(amount) as smallest_transaction')
+            )
+            ->groupBy('user_id')
+            ->get()
+            ->map(function($item) {
+                $item->net_amount = $item->total_deposits - $item->total_withdrawals;
+                $item->total_amount_display = from_base_currency($item->total_amount);
+                $item->total_deposits_display = from_base_currency($item->total_deposits);
+                $item->total_withdrawals_display = from_base_currency($item->total_withdrawals);
+                $item->net_amount_display = from_base_currency($item->net_amount);
+                $item->average_transaction_display = from_base_currency($item->average_transaction);
+                $item->largest_transaction_display = from_base_currency($item->largest_transaction);
+                $item->smallest_transaction_display = from_base_currency($item->smallest_transaction);
+                return $item;
+            });
+        
+        // Get user details
+        $userIds = $userPerformance->pluck('user_id')->toArray();
+        $users = \App\Models\User::whereIn('id', $userIds)
+            ->get(['id', 'name', 'email'])
+            ->keyBy('id');
+        
+        // Attach user data to performance
+        $userPerformance = $userPerformance->map(function($item) use ($users) {
+            $user = $users[$item->user_id] ?? null;
+            $item->user_name = $user->name ?? 'Unknown User';
+            $item->user_email = $user->email ?? '';
+            return $item;
+        });
+        
+        // Sort by net amount (profit/loss)
+        $topProfitMakers = $userPerformance->sortByDesc('net_amount')->values()->take($limit);
+        $topLossMakers = $userPerformance->sortBy('net_amount')->values()->take($limit);
+        
+        // Get recent transactions for top users with pagination
+        $topUserIds = $topProfitMakers->pluck('user_id')->merge($topLossMakers->pluck('user_id'))->unique()->toArray();
+        
+        $recentTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->where('status', 'COMPLETED')
+            ->whereIn('user_id', $topUserIds)
+            ->with(['paymentMethod', 'user'])
+            ->orderBy('transaction_date', 'desc')
+            ->paginate($perPage)
+            ->through(function($transaction) {
+                $transaction->amount_display = from_base_currency($transaction->amount);
+                return $transaction;
+            });
+        
+        // Summary statistics
+        $summary = [
+            'total_users' => $userPerformance->count(),
+            'total_transactions' => $userPerformance->sum('total_transactions'),
+            'total_volume' => from_base_currency($userPerformance->sum('total_amount')),
+            'average_per_user' => $userPerformance->count() > 0 
+                ? from_base_currency($userPerformance->sum('total_amount') / $userPerformance->count()) 
+                : 0,
+            'total_profit' => from_base_currency($userPerformance->sum('net_amount')),
+            'best_user' => $topProfitMakers->first(),
+            'worst_user' => $topLossMakers->first(),
+        ];
+        
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        return view('basic-accounting.user-performance-report', compact(
+            'topProfitMakers', 'topLossMakers', 'recentTransactions', 'summary',
+            'startDate', 'endDate', 'displayStartDate', 'displayEndDate',
+            'locations', 'locationId', 'limit', 'userPerformance', 'perPage'
+        ));
+    }
+        
+    // 13. Reconciliation Report
     public function reconciliation(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
         
         $date = $request->get('date', now()->format('Y-m-d'));
+        $locationId = $request->get('location_id');
+        $userId = $request->get('user_id');
         
-        // Get all payment methods
-        $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
+        // Get all payment methods with location filter
+        $paymentMethodsQuery = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->with(['currency'])
-            ->get()
-            ->map(function ($method) use ($tenantId, $date) {
-                // Get expected balance based on transactions
-                $transactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+            ->with(['currency']);
+        
+        // Apply location filter
+        if ($locationId) {
+            $paymentMethodsQuery->where(function($q) use ($locationId) {
+                $q->whereNull('location_id')
+                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+            });
+        }
+        
+        $paymentMethods = $paymentMethodsQuery->get()
+            ->map(function ($method) use ($tenantId, $date, $userId) {
+                // Build transaction query for the day
+                $transactionQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
                     ->where('payment_method_id', $method->id)
                     ->whereDate('transaction_date', $date)
-                    ->where('status', 'COMPLETED')
-                    ->get();
-                    
-                $calculatedBalance = $method->current_balance;
-                $netChange = 0;
+                    ->where('status', 'COMPLETED');
                 
+                // Apply user filter to transactions
+                if ($userId) {
+                    $transactionQuery->where('user_id', $userId);
+                }
+                
+                $transactions = $transactionQuery->get();
+                
+                // Calculate net change for the day
+                $netChange = 0;
                 foreach ($transactions as $transaction) {
                     if (in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND'])) {
                         $netChange += $transaction->amount;
@@ -844,20 +1458,29 @@ class AccountingController extends Controller
                     }
                 }
                 
+                // FIXED: Calculate expected balance correctly
+                // Expected Balance = Current Balance - Net Change
+                // Because the current balance already includes all transactions
+                // If we subtract the net change, we get what the balance should be
                 $expectedBalance = $method->current_balance - $netChange;
+                
+                // FIXED: Calculate starting balance (balance at beginning of day)
+                // Starting Balance = Current Balance - Net Change
+                $startingBalance = $method->current_balance - $netChange;
                 
                 $method->reconciliation_data = [
                     'current_balance' => $method->current_balance,
+                    'starting_balance' => $startingBalance,
                     'expected_balance' => $expectedBalance,
                     'net_change' => $netChange,
                     'transaction_count' => $transactions->count(),
                     'discrepancy' => abs($method->current_balance - $expectedBalance),
-                    'is_reconciled' => abs($method->current_balance - $expectedBalance) < 0.01, // Tolerance for rounding
+                    'is_reconciled' => abs($method->current_balance - $expectedBalance) < 0.01,
                 ];
                 
                 return $method;
             });
-            
+        
         // Summary
         $summary = [
             'total_methods' => $paymentMethods->count(),
@@ -866,15 +1489,47 @@ class AccountingController extends Controller
             'total_discrepancy' => $paymentMethods->sum('reconciliation_data.discrepancy'),
         ];
         
-        // Get unreconciled transactions
-        $unreconciledTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
+        // Get unreconciled transactions with location and user filters
+        $unreconciledQuery = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->whereDate('transaction_date', $date)
             ->where('status', 'PENDING')
-            ->with(['paymentMethod'])
-            ->get();
-            
+            ->with(['paymentMethod', 'user']);
+        
+        // Apply location filter to unreconciled transactions
+        if ($locationId) {
+            $unreconciledQuery->whereHas('paymentMethod', function($q) use ($locationId) {
+                $q->where(function($sub) use ($locationId) {
+                    $sub->whereNull('location_id')
+                        ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            });
+        }
+        
+        // Apply user filter to unreconciled transactions
+        if ($userId) {
+            $unreconciledQuery->where('user_id', $userId);
+        }
+        
+        $unreconciledTransactions = $unreconciledQuery->get();
+        
+        // Get locations for filter dropdown
+        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
+        
+        // Get users who have processed transactions
+        $userIds = DB::table('payment_transaction_logs')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id');
+        
+        $users = \App\Models\User::where('tenant_id', $tenantId)
+            ->whereIn('id', $userIds)
+            ->get(['id', 'name']);
+        
         return view('basic-accounting.reconciliation', compact(
-            'paymentMethods', 'summary', 'unreconciledTransactions', 'date'
+            'paymentMethods', 'summary', 'unreconciledTransactions', 'date',
+            'locations', 'locationId', 'users', 'userId'
         ));
     }
+
 }

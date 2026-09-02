@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use App\Rules\ValidPhoneNumber;
 
 class StoreEmployeeRequest extends FormRequest
 {
@@ -28,8 +30,28 @@ class StoreEmployeeRequest extends FormRequest
             'role_id' => 'required|exists:roles,id',
             'department_id' => 'required|integer|exists:departments,id',
             'location_id' => 'required|integer|exists:locations,id',
-            'telephone_number' => 'required|string|max:20',
-            'job_title' => 'nullable',
+            'telephone_number' => [
+                'required',
+                'string',
+                'max:20',
+                new ValidPhoneNumber(),
+                Rule::unique('users', 'telephone_number'),
+            ],
+            'job_title' => 'nullable|string|max:255',
+        ];
+    }
+
+    /**
+     * Get custom messages for validator errors.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'telephone_number.required' => 'The phone number is required.',
+            'telephone_number.unique' => 'This phone number is already registered.',
+            'telephone_number.max' => 'The phone number cannot exceed 20 characters.',
         ];
     }
 }

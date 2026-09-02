@@ -63,6 +63,22 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
 
+    /**
+     * Get the transaction logs for this user
+     */
+    public function paymentTransactionLogs()
+    {
+        return $this->hasMany(PaymentTransactionLog::class, 'user_id');
+    }
+
+    /**
+     * Get payment methods created by this user
+     */
+    public function paymentMethods()
+    {
+        return $this->hasMany(PaymentMethod::class, 'created_by');
+    }
+
 
     public function userRole()
     {

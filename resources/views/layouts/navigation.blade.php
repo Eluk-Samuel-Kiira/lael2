@@ -570,6 +570,26 @@
                                         <span class="menu-title-list">{{ __('accounting.monthly_report') }}</span>
                                     </a>
                                 </div>
+
+                                <!-- Weekly Report -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.weekly-report') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('accounting.weekly_report') }}</span>
+                                    </a>
+                                </div>
+
+                                <!-- User Performance Report -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.user-performance-report') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('accounting.user_performance_report') }}</span>
+                                    </a>
+                                </div>
                                 
                                 <!-- Reconciliation -->
                                 <div class="menu-item">
@@ -580,6 +600,7 @@
                                         <span class="menu-title-list">{{ __('accounting.reconciliation') }}</span>
                                     </a>
                                 </div>
+
                             </div>
                         </div>
                         @endcan
