@@ -422,6 +422,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('/monthly-report', [AccountingController::class, 'monthlyReport'])->name('monthly-report');
             Route::get('/reconciliation', [AccountingController::class, 'reconciliation'])->name('reconciliation');
             Route::get('/transaction-ledger/details/{id}', [AccountingController::class, 'getTransactionDetails'])->name('transaction-details');
+            Route::get('/weekly-report', [AccountingController::class, 'weeklyReport'])->name('weekly-report');
+            Route::get('/user-performance-report', [AccountingController::class, 'userPerformanceReport'])->name('user-performance-report');
         });
 
 

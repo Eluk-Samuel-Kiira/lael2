@@ -45,7 +45,7 @@
                                 <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                         <span class="required">{{__('auth._phone')}}</span>
                                 </label>
-                                <input type="number" class="form-control form-control-solid" name="telephone_number" value="{{ $employee->telephone_number }}" />
+                                <input type="tel" class="form-control form-control-solid" name="telephone_number" value="{{ $employee->telephone_number }}" />
                                 <div id="telephone_number{{ $employee->id }}"></div>
                             </div>
                         </div>
