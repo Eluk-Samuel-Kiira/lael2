@@ -9,6 +9,9 @@ use App\Models\{ Supplier, PurchaseOrder, ProductVariant, PurchaseOrderItem, Inv
         Location, Department, SupplierTaxLiability, Tax, ReceivedProductVariant, Tenant, BatchLog };
 use Illuminate\Support\Facades\{ Auth, DB };
 use Illuminate\Support\Str;
+use App\Mail\PurchaseOrderDocumentMail;
+use App\Services\MessagingService;
+use Illuminate\Support\Facades\Mail;
 
 
 class PurchaseOrderController extends Controller
@@ -393,7 +396,72 @@ class PurchaseOrderController extends Controller
         return $prefix . '-' . $year . '-' . substr(time(), -6);
     }
 
+    
 
+    public function sendDocument(Request $request, $id, MessagingService $messaging)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        $purchase = PurchaseOrder::with(['items', 'supplier'])
+            ->where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$purchase) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $validated = $request->validate([
+            'channel' => 'required|in:email,whatsapp',
+            'email'   => 'nullable|email',
+            'phone'   => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
+            'subject' => 'nullable|string|max:255',
+            'message' => 'nullable|string',
+        ], [
+            'phone.regex' => __('payments.invalid_phone_format'),
+        ]);
+
+        $channel = $validated['channel'];
+
+        try {
+            if ($channel === 'email') {
+                $emailToUse = $validated['email'] ?? $purchase->supplier->email ?? null;
+                if (!$emailToUse) {
+                    return response()->json(['success' => false, 'message' => __('payments.customer_email_required')], 422);
+                }
+
+                $subject = $validated['subject'] ?? __('passwords.purchase_order_subject', ['number' => $purchase->po_number]);
+
+                Mail::to($emailToUse)->send(
+                    new PurchaseOrderDocumentMail($purchase, $subject, $validated['message'] ?? null)
+                );
+
+                return response()->json(['success' => true, 'message' => __('passwords.purchase_order_sent')]);
+            }
+
+            if ($channel === 'whatsapp') {
+                $phoneToUse = $validated['phone'] ?? $purchase->supplier->phone ?? null;
+                if (!$phoneToUse) {
+                    return response()->json(['success' => false, 'message' => __('payments.customer_phone_required')], 422);
+                }
+
+                $result = $messaging->sendWhatsApp($phoneToUse, [
+                    'ref'  => $purchase->po_number,
+                    'date' => $purchase->created_at->format('d M Y'),
+                ]);
+
+                if (!$result['success']) {
+                    return response()->json(['success' => false, 'message' => $result['error']], 500);
+                }
+
+                return response()->json(['success' => true, 'message' => __('passwords.purchase_order_sent')]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Purchase order document send failed: ' . $e->getMessage(), ['purchase_order_id' => $id]);
+            return response()->json(['success' => false, 'message' => __('passwords.purchase_order_send_failed')], 500);
+        }
+    }
 
 
     // purchase status 
@@ -726,7 +794,7 @@ class PurchaseOrderController extends Controller
                 $emailToUse = $validated['supplier_email'] ?? $purchase->supplier->email;
                 if ($emailToUse) {
                     try {
-                        $this->sendPurchaseOrderEmail($purchase, $emailToUse);
+                        $this->sendPurchaseOrderEmail($purchase);
                     } catch (\Exception $e) {
                         \Log::error('Failed to send PO email: ' . $e->getMessage());
                     }
@@ -774,26 +842,43 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Send purchase order email to supplier
+     * Send purchase order email to supplier with PDF attachment
      */
     private function sendPurchaseOrderEmail(PurchaseOrder $purchaseOrder)
     {
         try {
             $supplier = $purchaseOrder->supplier;
             
-            \Mail::send('emails.purchase-order', [
-                'purchaseOrder' => $purchaseOrder,
-                'supplier' => $supplier,
-            ], function ($message) use ($purchaseOrder, $supplier) {
-                $message->to($supplier->email)
-                    ->subject('Purchase Order #' . $purchaseOrder->po_number)
-                    ->from(config('mail.from.address'), config('mail.from.name'));
-            });
+            if (!$supplier || !$supplier->email) {
+                \Log::warning('Cannot send purchase order email - supplier email not found', [
+                    'purchase_order_id' => $purchaseOrder->id,
+                    'supplier_id' => $purchaseOrder->supplier_id
+                ]);
+                return;
+            }
             
-            \Log::info('Purchase order email sent to supplier: ' . $supplier->email);
+            $subject = 'Purchase Order #' . $purchaseOrder->po_number;
+            
+            // Use the PurchaseOrderDocumentMail class
+            Mail::to($supplier->email)->send(
+                new PurchaseOrderDocumentMail(
+                    $purchaseOrder,
+                    $subject,
+                    null // custom message (optional)
+                )
+            );
+            
+            // \Log::info('Purchase order email sent to supplier with PDF', [
+            //     'purchase_order_id' => $purchaseOrder->id,
+            //     'po_number' => $purchaseOrder->po_number,
+            //     'supplier_email' => $supplier->email
+            // ]);
             
         } catch (\Exception $e) {
-            \Log::error('Failed to send purchase order email: ' . $e->getMessage());
+            \Log::error('Failed to send purchase order email: ' . $e->getMessage(), [
+                'purchase_order_id' => $purchaseOrder->id,
+                'trace' => $e->getTraceAsString()
+            ]);
             // Don't throw error - email failure shouldn't prevent status update
         }
     }

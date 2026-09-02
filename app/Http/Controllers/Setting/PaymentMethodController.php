@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Setting;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ PaymentMethod };
+use App\Models\{ PaymentMethod, Location };
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\{ Auth, Log, Storage };
 use Illuminate\Validation\Rule;
@@ -54,11 +54,23 @@ class PaymentMethodController extends Controller
             });
         }
         
+        // Filter by location if provided
+        if ($request->filled('location_id')) {
+            $locationId = $request->location_id;
+            $query->where(function($q) use ($locationId) {
+                $q->whereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)])
+                  ->orWhereNull('location_id');
+            });
+        }
+        
         // Paginate with dynamic per_page
         $paymentMethods = $query->latest()->paginate($perPage);
         
         // Preserve per_page and search in pagination links
         $paymentMethods->appends(['per_page' => $perPage, 'search' => $request->search]);
+        
+        // Get locations for the filter dropdown
+        $locations = Location::where('tenant_id', $tenantId)->get();
         
         $bladeToReload = $request->query('bladeFileToReload');
         
@@ -66,12 +78,14 @@ class PaymentMethodController extends Controller
         if ($request->ajax() && $bladeToReload === 'paymentMethodIndexTable') {
             return view('settings.payment-method.component', [
                 'all_payment_methods' => $paymentMethods,
+                'locations' => $locations,
             ])->render();
         }
         
         // Regular page load
         return view('settings.payment-method-index', [
             'all_payment_methods' => $paymentMethods,
+            'locations' => $locations,
         ]);
     }
 
@@ -90,6 +104,7 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('create payment method')) {
             return response()->json([
                 'success' => false,
@@ -97,11 +112,8 @@ class PaymentMethodController extends Controller
             ]);
         }
 
-        // Clear cache to ensure fresh data
-        // tenant_clear_settings_cache($tenantId);
-
         // Get the actual max_payment_methods limit from tenant settings
-        $maxPaymentMethods = tenant_limit('payment_methods', 1, $tenantId); // Default to 1 if not set
+        $maxPaymentMethods = tenant_limit('payment_methods', 1, $tenantId);
 
         // Count current payment methods
         $currentPaymentMethodCount = PaymentMethod::where('tenant_id', $tenantId)->count();
@@ -149,6 +161,9 @@ class PaymentMethodController extends Controller
             'is_default' => 'boolean',
             'is_online' => 'boolean',
             'is_verified' => 'boolean',
+            // NEW: Location validation
+            'location_id' => 'nullable|array',
+            'location_id.*' => 'exists:locations,id',
         ]);
 
         // If setting as default, unset other defaults
@@ -166,7 +181,6 @@ class PaymentMethodController extends Controller
             'provider' => $request->provider,
             'account_name' => $request->account_name,
             'account_number' => $request->account_number,
-            'account_number' => $request->account_number,
             'current_balance' => $request->current_balance,
             'transaction_fee_percentage' => $request->transaction_fee_percentage ?? 0,
             'transaction_fee_fixed' => $request->transaction_fee_fixed ?? 0,
@@ -178,6 +192,7 @@ class PaymentMethodController extends Controller
             'is_default' => $request->is_default ?? false,
             'is_online' => $request->is_online ?? true,
             'is_verified' => $request->is_verified ?? false,
+            'location_id' => $request->location_id, // Store as array
             'created_by' => $user->id,
             'tenant_id' => $tenantId,
         ]);
@@ -211,10 +226,11 @@ class PaymentMethodController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request,  $id)
+    public function update(Request $request, $id)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('edit payment method')) {
             return response()->json([
                 'success' => false,
@@ -267,6 +283,9 @@ class PaymentMethodController extends Controller
             'is_default' => 'boolean',
             'is_online' => 'boolean',
             'is_verified' => 'boolean',
+            // NEW: Location validation
+            'location_id' => 'nullable|array',
+            'location_id.*' => 'exists:locations,id',
         ]);
 
         // If setting as default, unset other defaults
@@ -296,6 +315,7 @@ class PaymentMethodController extends Controller
             'is_default' => $request->is_default ?? false,
             'is_online' => $request->is_online ?? true,
             'is_verified' => $request->is_verified ?? false,
+            'location_id' => $request->location_id, // Update as array
         ]);
 
         return response()->json([
@@ -315,6 +335,7 @@ class PaymentMethodController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
+        
         if (!$user->hasPermissionTo('delete payment method')) {
             return response()->json([
                 'success' => false,
@@ -444,53 +465,27 @@ class PaymentMethodController extends Controller
     }
 
     /**
-     * Set default payment method
+     * Get locations for a payment method
      */
-    // public function setDefaultPaymentMethod(Request $request, $id)
-    // {
-    //     $user = Auth::user();
-    //     $tenantId = $user->tenant_id;
+    public function getLocations($id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
 
-    //     $paymentMethod = PaymentMethod::find($id);
+        $paymentMethod = PaymentMethod::where('id', $id)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
 
-    //     if (!$paymentMethod) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => __('payments._not_found'),
-    //         ]);
-    //     }
+        if (!$paymentMethod) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments._not_found'),
+            ]);
+        }
 
-    //     // Check if payment method belongs to current tenant
-    //     if ($paymentMethod->tenant_id !== $tenantId) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => __('payments.unauthorized_access'),
-    //         ]);
-    //     }
-
-    //     // Check if payment method is active
-    //     if (!$paymentMethod->is_active) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => __('payments.inactive_payment_method_cannot_be_default'),
-    //         ]);
-    //     }
-
-    //     // Unset other defaults
-    //     PaymentMethod::where('tenant_id', $tenantId)
-    //         ->where('is_default', true)
-    //         ->update(['is_default' => false]);
-
-    //     // Set new default
-    //     $paymentMethod->update(['is_default' => true]);
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'reload' => true,
-    //         'refresh' => false,
-    //         'componentId' => 'paymentMethodIndexTable',
-    //         'message' => __('payments.default_payment_method_updated'),
-    //         'redirect' => route('payment-methods.index'),
-    //     ]);
-    // }
+        return response()->json([
+            'success' => true,
+            'locations' => $paymentMethod->location_id ?? [],
+        ]);
+    }
 }

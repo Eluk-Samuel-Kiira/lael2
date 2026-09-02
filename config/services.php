@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'provider' => env('WHATSAPP_PROVIDER', 'messagebird'),
+        'from' => env('WHATSAPP_FROM'),
+        
+        // MessageBird Configuration
+        'messagebird' => [
+            'api_key' => env('MESSAGEBIRD_API_KEY'),
+            'channel_id' => env('MESSAGEBIRD_CHANNEL_ID'),
+            'default_template' => env('MESSAGEBIRD_DEFAULT_TEMPLATE', 'invoice_template'),
+        ],
+    ],
+
 ];

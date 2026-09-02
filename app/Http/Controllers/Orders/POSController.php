@@ -2666,5 +2666,81 @@ class POSController extends Controller
         $variant->save();
     }
 
+
+    public function cancel(Request $request, $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+                  
+        if (!$user->hasPermissionTo('cancel order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required', 
+        ]);
+        
+        $order = Order::where('id', $id)
+                    ->where('tenant_id', $tenantId)
+                    ->first();
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        // Check if status is already cancelled
+        if ($order->status === 'cancelled') {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.already_cancelled'),
+            ], 400);
+        }
+        
+        // Validate that the requested status is cancelled
+        if ($validated['status'] !== 'cancelled') {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.invalid_status_transition'),
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Update purchase order status
+            $order->status = $validated['status'];
+            $order->created_by = auth()->id();
+            
+            if ($order->save()) {  
+                DB::commit();
+
+                // Return JSON success - don't redirect here
+                return response()->json([
+                    'success' => true,
+                    'message' => __('passwords.cancel_success'),
+                    'redirect' => route('orders.index') // Optional: send redirect URL if needed
+                ]);
+            }
+
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.status_update_failed'),
+            ], 500);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.error_occurred') . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 }
 

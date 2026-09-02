@@ -34,13 +34,29 @@
 
                     <div class="mb-4">
                         <label class="form-label fw-semibold">{{ __('payments.send_via') }}</label>
-                        <div class="d-flex gap-4">
+                        <div class="d-flex flex-wrap gap-4">
                             <div class="form-check form-check-custom form-check-solid">
                                 <input class="form-check-input" type="radio" name="channel" value="email"
                                        id="channel-email{{ $invoice->id }}" checked
                                        onchange="toggleSendChannel({{ $invoice->id }})">
                                 <label class="form-check-label fw-semibold" for="channel-email{{ $invoice->id }}">
                                     <i class="bi bi-envelope-at me-1"></i>{{ __('payments.email') }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel" value="whatsapp"
+                                       id="channel-whatsapp{{ $invoice->id }}"
+                                       onchange="toggleSendChannel({{ $invoice->id }})">
+                                <label class="form-check-label fw-semibold" for="channel-whatsapp{{ $invoice->id }}">
+                                    <i class="bi bi-whatsapp me-1"></i>{{ __('payments.whatsapp') }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel" value="sms"
+                                       id="channel-sms{{ $invoice->id }}"
+                                       onchange="toggleSendChannel({{ $invoice->id }})">
+                                <label class="form-check-label fw-semibold" for="channel-sms{{ $invoice->id }}">
+                                    <i class="bi bi-chat-dots me-1"></i>{{ __('payments.sms') }}
                                 </label>
                             </div>
                             <div class="form-check form-check-custom form-check-solid">
@@ -63,6 +79,19 @@
                         @if(! $invoice->billing_email)
                         <div class="form-text text-danger">
                             <i class="bi bi-exclamation-circle me-1"></i>{{ __('payments.no_email_on_file_please_add') }}
+                        </div>
+                        @endif
+                    </div>
+
+                    <div id="phone-field-wrap{{ $invoice->id }}" class="d-none">
+                        <label class="form-label fw-semibold required">{{ __('payments.customer_phone') }}</label>
+                        <input type="tel" name="phone" class="form-control"
+                               value="{{ $invoice->billing_phone }}"
+                               placeholder="{{ __('payments.enter_customer_phone') }}">
+                        <div id="phone-error{{ $invoice->id }}" class="form-text text-danger d-none"></div>
+                        @if(! $invoice->billing_phone)
+                        <div class="form-text text-warning">
+                            <i class="bi bi-exclamation-circle me-1"></i>{{ __('payments.no_phone_on_file_please_add') }}
                         </div>
                         @endif
                     </div>

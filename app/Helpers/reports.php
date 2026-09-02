@@ -37,17 +37,34 @@ if (!function_exists('getOrderTypeColor')) {
 
 if (!function_exists('getPaymentMethodsByType')) {
     function getPaymentMethodsByType($type = null) {
-        $tenantId = auth()->user()->tenant_id ?? null;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id ?? null;
+        $userLocationId = $user->location_id ?? null;
         
         if (!$tenantId) {
             return $type ? collect([]) : [];
         }
         
-        $methods = Cache::remember("tenant_{$tenantId}_payment_methods_grouped", 3600, function () use ($tenantId) {
-            return PaymentMethod::where('tenant_id', $tenantId)
-                ->where('is_active', true)
-                ->get()
-                ->groupBy('type');
+        $cacheKey = "tenant_{$tenantId}_payment_methods_grouped";
+        
+        // Add location to cache key if user has a location
+        if ($userLocationId) {
+            $cacheKey .= "_location_{$userLocationId}";
+        }
+        
+        $methods = Cache::remember($cacheKey, 3600, function () use ($tenantId, $userLocationId) {
+            $query = PaymentMethod::where('tenant_id', $tenantId)
+                ->where('is_active', true);
+            
+            // Filter by location if user has one
+            if ($userLocationId) {
+                $query->where(function($q) use ($userLocationId) {
+                    $q->whereNull('location_id')
+                      ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+                });
+            }
+            
+            return $query->get()->groupBy('type');
         });
         
         if ($type) {
@@ -58,18 +75,37 @@ if (!function_exists('getPaymentMethodsByType')) {
     }
 }
 
+
 if (!function_exists('getUniquePaymentTypes')) {
     function getUniquePaymentTypes() {
-        $tenantId = auth()->user()->tenant_id ?? null;
+        $user = auth()->user();
+        $tenantId = $user->tenant_id ?? null;
+        $userLocationId = $user->location_id ?? null;
         
         if (!$tenantId) {
             return [];
         }
         
-        return Cache::remember("tenant_{$tenantId}_payment_types", 3600, function () use ($tenantId) {
-            return PaymentMethod::where('tenant_id', $tenantId)
-                ->where('is_active', true)
-                ->select('type')
+        $cacheKey = "tenant_{$tenantId}_payment_types";
+        
+        // Add location to cache key if user has a location
+        if ($userLocationId) {
+            $cacheKey .= "_location_{$userLocationId}";
+        }
+        
+        return Cache::remember($cacheKey, 3600, function () use ($tenantId, $userLocationId) {
+            $query = PaymentMethod::where('tenant_id', $tenantId)
+                ->where('is_active', true);
+            
+            // Filter by location if user has one
+            if ($userLocationId) {
+                $query->where(function($q) use ($userLocationId) {
+                    $q->whereNull('location_id')
+                      ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+                });
+            }
+            
+            return $query->select('type')
                 ->distinct()
                 ->pluck('type')
                 ->toArray();

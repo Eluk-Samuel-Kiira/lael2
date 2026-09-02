@@ -10,6 +10,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\{ Auth, DB, Log, Mail };
 
 class InvoiceMail extends Mailable
 {
@@ -17,7 +18,7 @@ class InvoiceMail extends Mailable
 
     public Invoice $invoice;
     public string $customMessage;
-    public string $emailSubject; // Changed from $subject to $emailSubject
+    public string $emailSubject;
 
     /**
      * Create a new message instance.
@@ -27,7 +28,7 @@ class InvoiceMail extends Mailable
         $this->invoice = $invoice;
         $this->emailSubject = $subject ?? __('payments.invoice_subject', [
             'number' => $invoice->invoice_number,
-            'app_name' => config('app.name'),
+            'app_name' => getUIOptions('app_name', $tenantId),
         ]);
         $this->customMessage = $customMessage ?? __('payments.invoice_email_body', [
             'name' => $invoice->billing_name,
@@ -56,7 +57,7 @@ class InvoiceMail extends Mailable
             with: [
                 'invoice' => $this->invoice,
                 'customMessage' => $this->customMessage,
-                'appName' => config('app.name'),
+                'appName' => getUIOptions('app_name', Auth::user()->tenant_id),
             ],
         );
     }

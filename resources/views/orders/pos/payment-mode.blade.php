@@ -812,6 +812,10 @@
                     </div>
                 </div>
                 <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light-success fw-bold px-4" id="rcpt-send-btn">
+                        <i class="ki-duotone ki-sms fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                        {{ __('pagination.send') }}
+                    </button>
                     <button type="button" class="btn btn-sm btn-light fw-bold px-4" id="rcpt-print-btn">
                         <i class="ki-duotone ki-printer fs-4 me-1">
                             <span class="path1"></span>
@@ -978,6 +982,67 @@
     </div>
 </div>
 
+
+{{-- ── POS SEND RECEIPT MODAL (single reusable instance) ──── --}}
+<div class="modal fade" id="posSendReceiptModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white fw-bold mb-0">
+                    <i class="bi bi-envelope me-2"></i>{{ __('passwords.send_receipt') }}
+                    <span id="pos-send-order-ref" class="opacity-75"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="posSendReceiptForm">
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">{{ __('payments.send_via') }}</label>
+                        <div class="d-flex gap-4">
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel" value="email"
+                                       id="pos-channel-email" checked onchange="togglePosSendChannel()">
+                                <label class="form-check-label fw-semibold" for="pos-channel-email">
+                                    <i class="bi bi-envelope-at me-1"></i>{{ __('payments.email') }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel" value="whatsapp"
+                                       id="pos-channel-whatsapp" onchange="togglePosSendChannel()">
+                                <label class="form-check-label fw-semibold" for="pos-channel-whatsapp">
+                                    <i class="bi bi-whatsapp me-1"></i>{{ __('payments.whatsapp') }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="pos-email-field-wrap">
+                        <label class="form-label fw-semibold required">{{ __('payments.customer_email') }}</label>
+                        <input type="email" name="email" class="form-control" id="pos-send-email"
+                               placeholder="{{ __('payments.enter_customer_email') }}" required>
+                    </div>
+
+                    <div id="pos-phone-field-wrap" class="d-none">
+                        <label class="form-label fw-semibold required">{{ __('payments.customer_phone') }}</label>
+                        <input type="tel" name="phone" class="form-control" id="pos-send-phone"
+                               placeholder="{{ __('payments.enter_customer_phone') }}">
+                        <div id="pos-phone-error" class="form-text text-danger d-none"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('payments.cancel') }}</button>
+                    <button type="button" id="posSendReceiptButton" class="btn btn-primary" onclick="sendPosReceipt()">
+                        <span class="indicator-label"><i class="bi bi-send me-1"></i>{{ __('payments.confirm_send') }}</span>
+                        <span class="indicator-progress">
+                            {{ __('payments.processing') }} <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     (function() {
         // Print button handler
@@ -994,6 +1059,7 @@
         window.generateMultiPaymentReceipt = function(order) {
             // console.log('Generating receipt:', order);
 
+            window.currentReceiptOrder = order;
             const SYM = '{{ currency_symbol() }}';
             
             function fmt(n) {
@@ -1120,5 +1186,107 @@
             // Show modal
             bootstrap.Modal.getOrCreateInstance(document.getElementById('receiptModal')).show();
         };
+
+
     })();
+</script>
+
+<script>
+    
+    document.getElementById('rcpt-send-btn')?.addEventListener('click', function () {
+        const order = window.currentReceiptOrder;
+
+        if (!order || !order.id) {
+            toastr.error('{{ __("passwords.order_id_missing_cannot_send") }}');
+            return;
+        }
+
+        document.getElementById('pos-send-order-ref').textContent =
+            order.order_number ? '#' + order.order_number : '';
+
+        // Prefill if the completed order carried customer contact info
+        document.getElementById('pos-send-email').value =
+            order.customer_email || order.customer?.email || '';
+        document.getElementById('pos-send-phone').value =
+            order.customer_phone || order.customer?.phone || '';
+
+        // Reset to email tab by default each time
+        document.getElementById('pos-channel-email').checked = true;
+        togglePosSendChannel();
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('posSendReceiptModal')).show();
+    });
+
+    function togglePosSendChannel() {
+        const channel = document.querySelector('#posSendReceiptForm input[name="channel"]:checked').value;
+        const isEmail = channel === 'email';
+        const isPhone = channel === 'whatsapp';
+
+        document.getElementById('pos-email-field-wrap').classList.toggle('d-none', !isEmail);
+        document.getElementById('pos-phone-field-wrap').classList.toggle('d-none', !isPhone);
+        document.getElementById('pos-send-email').required = isEmail;
+        document.getElementById('pos-send-phone').required = isPhone;
+    }
+
+    function sendPosReceipt() {
+        const order = window.currentReceiptOrder;
+        if (!order || !order.id) {
+            toastr.error('{{ __("passwords.order_id_missing_cannot_send") }}');
+            return;
+        }
+
+        const submitButton = document.getElementById('posSendReceiptButton');
+        if (submitButton.disabled) return;
+
+        const form = document.getElementById('posSendReceiptForm');
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        if (payload.channel === 'whatsapp') {
+            const result = validateE164Phone(payload.phone);
+            const errorEl = document.getElementById('pos-phone-error');
+            if (!result.valid) {
+                errorEl.textContent = result.error;
+                errorEl.classList.remove('d-none');
+                document.getElementById('pos-send-phone').focus();
+                return;
+            }
+            errorEl.classList.add('d-none');
+            payload.phone = result.formatted;
+        }
+
+        if (payload.channel === 'email' && !payload.email) {
+            document.getElementById('pos-send-email').classList.add('is-invalid');
+            return;
+        }
+
+        LiveBlade.toggleButtonLoading(submitButton, true);
+        submitButton.disabled = true;
+
+        fetch('/orders/' + order.id + '/send', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
+            if (ok && body.success) {
+                toastr.success(body.message);
+                bootstrap.Modal.getInstance(document.getElementById('posSendReceiptModal'))?.hide();
+            } else {
+                toastr.error(body.message || '{{ __("passwords.receipt_send_failed") }}');
+            }
+        })
+        .catch(() => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
+            toastr.error('{{ __("passwords.receipt_send_failed") }}');
+        });
+    }
+
 </script>

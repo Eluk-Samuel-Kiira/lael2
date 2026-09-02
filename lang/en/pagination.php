@@ -36,6 +36,7 @@ return [
     'add_payment' => 'Add Payment',
     'payment_type' => 'Payment Type',
     'totals' => 'Totals',
+    'send' => 'Send',
     'no_order_found' => 'No Order Found',
     'account' => 'Account',
     'payments' => 'Payments',

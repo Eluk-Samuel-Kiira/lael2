@@ -5,10 +5,88 @@ namespace App\Http\Controllers\Orders;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
-use Illuminate\Support\Facades\{ Auth, DB };
+use App\Mail\OrderReceiptMail;
+use App\Services\MessagingService;
+use Illuminate\Support\Facades\{ Auth, DB, Mail, Log };
 
 class OrderController extends Controller
 {
+    public function send(Request $request, $id, MessagingService $messaging)
+    {
+        $user = Auth::user();
+        $order = Order::where('tenant_id', $user->tenant_id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'channel' => 'required|in:email,whatsapp',
+            'email'   => 'nullable|email',
+            'phone'   => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
+            'subject' => 'nullable|string|max:255',
+            'message' => 'nullable|string',
+        ], [
+            'phone.regex' => __('payments.invalid_phone_format'),
+        ]);
+
+        $channel = $validated['channel'];
+
+        try {
+            if ($channel === 'email') {
+                $emailToUse = $validated['email'] ?? $order->customer_email;
+                if (!$emailToUse) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('payments.customer_email_required'),
+                    ], 422);
+                }
+
+                $subject = $validated['subject'] ?? __('passwords.order_receipt_subject', [
+                    'number' => $order->order_number,
+                ]);
+
+                Mail::to($emailToUse)->send(
+                    new OrderReceiptMail($order, $subject, $validated['message'] ?? null)
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => __('passwords.receipt_sent'),
+                ]);
+            }
+
+            if ($channel === 'whatsapp') {
+                $phoneToUse = $validated['phone'] ?? $order->customer_phone;
+                if (!$phoneToUse) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('payments.customer_phone_required'),
+                    ], 422);
+                }
+
+                $result = $messaging->sendWhatsApp($phoneToUse, [
+                    'ref'  => $order->order_number,
+                    'date' => $order->created_at->format('d M Y'),
+                ]);
+
+                if (!$result['success']) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $result['error'],
+                    ], 500);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => __('passwords.receipt_sent'),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Order receipt send failed: ' . $e->getMessage(), ['order_id' => $id]);
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.receipt_send_failed'),
+            ], 500);
+        }
+    }
+
     /**
      * Display a listing of the resource.
      */
