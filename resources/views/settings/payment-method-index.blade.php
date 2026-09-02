@@ -31,6 +31,21 @@
 
             <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
+                <!-- Add this near the search/filter section -->
+                <div class="col-md-3">
+                    {{-- <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                        {{__('payments.filter_by_location')}}
+                    </label> --}}
+                    <select class="form-select form-select-solid" id="locationFilter" onchange="applyLocationFilter()">
+                        <option value="">{{__('payments.all_locations')}}</option>
+                        @if(isset($locations) && $locations->count() > 0)
+                            @foreach($locations as $location)
+                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                            @endforeach
+                        @endif
+                    </select>
+                </div>
+                
                 <!-- Search Bar -->
                 <div class="w-100 w-sm-250px">
                     <x-liveblade-search 

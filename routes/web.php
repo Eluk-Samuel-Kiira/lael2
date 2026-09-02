@@ -376,9 +376,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/purchase-orders/{purchaseOrder}/receive-items', [PurchaseOrderController::class, 'receiveItems'])->name('purchase-orders.receive-items');
         Route::post('/purchase-cancel/{id}', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
         Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('purchase-orders.destroy');
-
+        Route::post('/purchase-orders/{id}/send-document', [PurchaseOrderController::class, 'sendDocument'])->name('purchase_order.send_document');
         Route::post('/purchase-orders/calculate-tax-preview', [PurchaseOrderController::class, 'calculateTaxPreview'])
             ->name('purchase_order.calculate_tax_preview');
+        Route::post('/orders/{id}/send', [OrderController::class, 'send'])->name('orders.send');
 
         // Expenses
         Route::resource('expense-category', ExpenseCategoryController::class);

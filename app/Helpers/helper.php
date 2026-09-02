@@ -824,7 +824,7 @@ if (!function_exists('getUIOptions')) {
         
         // Default values for UI settings
         $defaults = [
-            'app_name' => 'STAR POS',
+            'app_name' => 'STARDENA SUITE',
             'font_family' => 'Inter, sans-serif',
             'font_size' => '1',
             'menu_nav_color' => '#1e1e2d',

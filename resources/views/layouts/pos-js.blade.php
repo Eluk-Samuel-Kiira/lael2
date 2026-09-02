@@ -1633,16 +1633,24 @@ function formatPaymentType(type) {
         handleEditResponse(data, updateUrl, invoiceId, submitButton);
     }
 
-    // Toggle the send modal between "email" and "download PDF" modes
     function toggleSendChannel(invoiceId) {
-        const isDownload  = document.getElementById('channel-download' + invoiceId).checked;
-        const emailWrap    = document.getElementById('email-field-wrap' + invoiceId);
-        const downloadNote = document.getElementById('download-note' + invoiceId);
-        const emailInput   = emailWrap.querySelector('input[name="email"]');
+        const form = document.getElementById('sendInvoiceForm' + invoiceId);
+        const channel = form.querySelector('input[name="channel"]:checked').value;
 
-        emailWrap.classList.toggle('d-none', isDownload);
+        const isEmail    = channel === 'email';
+        const isPhone    = channel === 'whatsapp' || channel === 'sms';
+        const isDownload = channel === 'print';
+
+        const emailWrap = document.getElementById('email-field-wrap' + invoiceId);
+        const phoneWrap = document.getElementById('phone-field-wrap' + invoiceId);
+        const downloadNote = document.getElementById('download-note' + invoiceId);
+
+        emailWrap.classList.toggle('d-none', !isEmail);
+        phoneWrap.classList.toggle('d-none', !isPhone);
         downloadNote.classList.toggle('d-none', !isDownload);
-        emailInput.required = !isDownload;
+
+        emailWrap.querySelector('input[name="email"]').required = isEmail;
+        phoneWrap.querySelector('input[name="phone"]').required  = isPhone;
     }
 
     // Send invoice — posts channel (+ email if provided). On success, if the
@@ -1650,10 +1658,41 @@ function formatPaymentType(type) {
     // in a new tab immediately.
     function sendInvoice(invoiceId) {
         const submitButton = document.getElementById('sendInvoiceButton' + invoiceId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
+        if (submitButton.disabled) return; // already in flight
 
         const form    = document.getElementById('sendInvoiceForm' + invoiceId);
         const payload = Object.fromEntries(new FormData(form).entries());
+
+        if (!payload.channel) {
+            toastr.error('{{ __("payments.select_a_channel") }}');
+            return;
+        }
+
+        if (payload.channel === 'whatsapp' || payload.channel === 'sms') {
+            const result = validateE164Phone(payload.phone);
+            const phoneInput = form.querySelector('input[name="phone"]');
+            const errorEl = document.getElementById('phone-error' + invoiceId);
+
+            if (!result.valid) {
+                errorEl.textContent = result.error;
+                errorEl.classList.remove('d-none');
+                phoneInput.focus();
+                return;
+            }
+
+            errorEl.classList.add('d-none');
+            payload.phone = result.formatted;
+        }
+
+        if (payload.channel === 'email' && !payload.email) {
+            const emailInput = form.querySelector('input[name="email"]');
+            emailInput.classList.add('is-invalid');
+            emailInput.focus();
+            return;
+        }
+
+        LiveBlade.toggleButtonLoading(submitButton, true);
+        submitButton.disabled = true; // belt and suspenders — don't rely solely on toggleButtonLoading
 
         fetch('/invoices/' + invoiceId + '/send', {
             method: 'POST',
@@ -1667,6 +1706,7 @@ function formatPaymentType(type) {
         .then(r => r.json().then(body => ({ ok: r.ok, body })))
         .then(({ ok, body }) => {
             LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
             if (ok && body.success) {
                 toastr.success(body.message);
                 bootstrap.Modal.getInstance(document.getElementById('sendInvoiceModal' + invoiceId))?.hide();
@@ -1680,9 +1720,46 @@ function formatPaymentType(type) {
         })
         .catch(err => {
             LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
             toastr.error('{{ __("payments.invoice_send_failed") }}');
             console.error('[sendInvoice] error:', err);
         });
+    }
+
+    /**
+     * Normalizes a phone number toward E.164 and validates it.
+     * Strips spaces, dashes, parens, dots. Requires a leading + and 8-15 digits after it.
+     * Returns { valid: true, formatted: '+2547...' } or { valid: false, error: '...' }
+     */
+    function validateE164Phone(rawValue) {
+        if (!rawValue || !rawValue.trim()) {
+            return { valid: false, error: '{{ __("payments.phone_required") }}' };
+        }
+
+        // Strip everything except digits and a leading +
+        let cleaned = rawValue.trim().replace(/[\s\-\.\(\)]/g, '');
+
+        // Allow users to type 00 instead of + (common in many regions)
+        if (cleaned.startsWith('00')) {
+            cleaned = '+' + cleaned.slice(2);
+        }
+
+        // Add + if missing but looks like digits only
+        if (!cleaned.startsWith('+')) {
+            cleaned = '+' + cleaned;
+        }
+
+        // E.164: + followed by 8 to 15 digits, first digit after + can't be 0
+        const e164Pattern = /^\+[1-9]\d{7,14}$/;
+
+        if (!e164Pattern.test(cleaned)) {
+            return {
+                valid: false,
+                error: '{{ __("payments.invalid_phone_format") }}'
+            };
+        }
+
+        return { valid: true, formatted: cleaned };
     }
 
     // Record a manual payment against an invoice — full or partial.

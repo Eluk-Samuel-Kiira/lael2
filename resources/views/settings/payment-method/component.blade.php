@@ -14,6 +14,7 @@
                     <th class="min-w-125px">{{__('payments._provider')}}</th>
                     <th class="min-w-125px">{{__('payments.account_number')}}</th>
                     <th class="min-w-125px">{{__('accounting.current_balance')}}</th>
+                    <th class="min-w-125px">{{__('payments.locations')}}</th>
                     <th class="min-w-125px">{{__('auth._creater')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
                     <th class="min-w-125px">{{__('auth._status')}}</th>
@@ -52,6 +53,26 @@
                                 @endif
                             </td>
                             <td>{{ $paymentMethod->current_balance }}</td>
+                            <td>
+                                @if(!empty($paymentMethod->location_id))
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @php
+                                            $locationIds = $paymentMethod->location_id;
+                                            $locationNames = App\Models\Location::whereIn('id', $locationIds)->pluck('name', 'id');
+                                        @endphp
+                                        @foreach($locationIds as $locationId)
+                                            <span class="badge badge-light-info fs-8">
+                                                {{ $locationNames[$locationId] ?? 'Location #' . $locationId }}
+                                            </span>
+                                        @endforeach
+                                        @if($paymentMethod->getLocationsCount() > 3)
+                                            <span class="badge badge-light-secondary">+{{ $paymentMethod->getLocationsCount() - 3 }}</span>
+                                        @endif
+                                    </div>
+                                @else
+                                    <span class="badge badge-light-secondary">{{__('payments.all_locations')}}</span>
+                                @endif
+                            </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $paymentMethod->creator->name ?? 'N/A' }}</div>
                             </td>

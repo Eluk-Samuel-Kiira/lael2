@@ -38,6 +38,9 @@
                                 <button type="button" class="btn btn-sm btn-light-success" onclick="downloadPurchaseOrder({{ $order->id }})">
                                     <i class="bi bi-download me-2"></i>{{ __('passwords.download_pdf') }}
                                 </button>
+                                <button type="button" class="btn btn-sm btn-light-info" data-bs-toggle="modal" data-bs-target="#sendPODocumentModal{{ $order->id }}">
+                                    <i class="bi bi-send me-2"></i>{{ __('passwords.send_to_supplier') }}
+                                </button>
                             </div>
                             <div class="text-muted fs-7">
                                 <i class="bi bi-clock me-1"></i>

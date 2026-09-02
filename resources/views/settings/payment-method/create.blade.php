@@ -95,6 +95,24 @@
                     </div>
 
                     <div class="row g-9 mb-8">
+                        <div class="col-md-12">
+                            <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
+                                {{__('payments.available_locations')}}
+                                <span class="ms-2 text-muted fs-7 fw-normal">{{__('payments.leave_empty_for_all_locations')}}</span>
+                            </label>
+                            <select class="form-select form-select-solid" name="location_id[]" id="locationSelect" multiple data-control="select2" data-close-on-select="false" data-placeholder="{{__('payments.select_locations')}}" data-allow-clear="true">
+                                @if(isset($locations) && $locations->count() > 0)
+                                    @foreach($locations as $location)
+                                        <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                    @endforeach
+                                @endif
+                            </select>
+                            <div id="location_id"></div>
+                            <span class="form-text text-muted">{{__('payments.select_one_or_more_locations_where_this_payment_method_is_available')}}</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-9 mb-8">
                         <div class="col-md-6">
                             <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                                 {{__('payments.transaction_fee_percentage')}} (%)

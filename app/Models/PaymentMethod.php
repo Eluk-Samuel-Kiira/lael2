@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\HasTenant;
 
-
 class PaymentMethod extends Model
 {
     use HasFactory, SoftDeletes, HasTenant;
@@ -34,8 +33,8 @@ class PaymentMethod extends Model
         'max_transaction_amount',
         'daily_limit',
         'monthly_limit',
-    
-        // NEW: Balance fields
+        
+        // Balance fields
         'current_balance',
         'available_balance',
         'pending_balance',
@@ -46,7 +45,10 @@ class PaymentMethod extends Model
         'last_transaction_at',
         'last_transaction_amount',
         'last_transaction_type',
-    
+        
+        // NEW: Location ID (array of locations)
+        'location_id',
+        
         'is_active',
         'is_default',
         'is_online',
@@ -97,6 +99,9 @@ class PaymentMethod extends Model
         // Array casts
         'settings' => 'array',
         'supported_currencies' => 'array',
+        
+        // NEW: Location ID cast to array
+        'location_id' => 'array',
     ];
 
     protected $attributes = [
@@ -142,7 +147,7 @@ class PaymentMethod extends Model
         return $this->hasMany(PurchaseOrderItem::class);
     }
 
-    // NEW: Transaction logs relationship
+    // Transaction logs relationship
     public function transactionLogs()
     {
         return $this->hasMany(PaymentTransactionLog::class);
@@ -162,7 +167,7 @@ class PaymentMethod extends Model
         ]);
     }
 
-    // NEW: Counterparty relationships (for transfers)
+    // Counterparty relationships (for transfers)
     public function outgoingTransfers()
     {
         return $this->hasMany(PaymentTransactionLog::class, 'counterparty_id');
@@ -200,7 +205,33 @@ class PaymentMethod extends Model
         return $query->where('type', $type);
     }
 
-    // NEW: Balance-related scopes
+    // NEW: Location scopes
+    public function scopeAvailableAtLocation($query, $locationId)
+    {
+        return $query->whereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)])
+            ->orWhereNull('location_id');
+    }
+
+    public function scopeAvailableAtLocations($query, array $locationIds)
+    {
+        return $query->where(function ($q) use ($locationIds) {
+            foreach ($locationIds as $locationId) {
+                $q->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)]);
+            }
+        })->orWhereNull('location_id');
+    }
+
+    public function scopeWithNoLocationRestriction($query)
+    {
+        return $query->whereNull('location_id');
+    }
+
+    public function scopeOnlyAtLocation($query, $locationId)
+    {
+        return $query->whereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)]);
+    }
+
+    // Balance-related scopes
     public function scopePositiveBalance($query)
     {
         return $query->where('current_balance', '>', 0);
@@ -272,7 +303,74 @@ class PaymentMethod extends Model
         return $this->name;
     }
 
-    // NEW: Balance-related methods
+    // NEW: Location helper methods
+    public function getLocationsAttribute(): array
+    {
+        return $this->location_id ?? [];
+    }
+
+    public function isAvailableAtLocation($locationId): bool
+    {
+        if (empty($this->location_id)) {
+            return true; // No restriction, available everywhere
+        }
+        
+        return in_array($locationId, $this->location_id);
+    }
+
+    public function isAvailableAtAnyLocation(array $locationIds): bool
+    {
+        if (empty($this->location_id)) {
+            return true; // No restriction, available everywhere
+        }
+        
+        return !empty(array_intersect($this->location_id, $locationIds));
+    }
+
+    public function addLocation($locationId): self
+    {
+        $locations = $this->location_id ?? [];
+        
+        if (!in_array($locationId, $locations)) {
+            $locations[] = $locationId;
+            $this->location_id = $locations;
+            $this->save();
+        }
+        
+        return $this;
+    }
+
+    public function removeLocation($locationId): self
+    {
+        $locations = $this->location_id ?? [];
+        $this->location_id = array_values(array_diff($locations, [$locationId]));
+        $this->save();
+        
+        return $this;
+    }
+
+    public function setLocations(array $locationIds): self
+    {
+        $this->location_id = $locationIds;
+        $this->save();
+        
+        return $this;
+    }
+
+    public function clearLocations(): self
+    {
+        $this->location_id = null;
+        $this->save();
+        
+        return $this;
+    }
+
+    public function getLocationsCount(): int
+    {
+        return count($this->location_id ?? []);
+    }
+
+    // Balance-related methods
     public function getFormattedCurrentBalanceAttribute()
     {
         $currencyCode = $this->currency?->code ?? 'USD';
@@ -352,7 +450,7 @@ class PaymentMethod extends Model
         return true;
     }
 
-    // NEW: Transaction methods
+    // Transaction methods
     public function recordTransaction(array $transactionData)
     {
         return app('payment-transaction')->recordTransaction(
@@ -476,7 +574,7 @@ class PaymentMethod extends Model
             ->first();
     }
 
-    // NEW: Balance statistics
+    // Balance statistics
     public function getMonthlyStats($year = null, $month = null)
     {
         $year = $year ?? date('Y');
@@ -501,7 +599,7 @@ class PaymentMethod extends Model
         ];
     }
 
-    // NEW: Validation methods
+    // Validation methods
     public function validateTransaction($amount, $includeFees = false)
     {
         if (!$this->is_active) {
@@ -539,7 +637,6 @@ class PaymentMethod extends Model
             ->first();
     }
 
-    // Add this method to your PaymentMethod model
     /**
      * Get human-readable type label
      */

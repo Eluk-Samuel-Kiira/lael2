@@ -493,6 +493,73 @@
     function downloadPurchaseOrder(orderId) {
         printPurchaseOrder(orderId);
     }
+
+    function togglePOSendChannel(orderId) {
+        const form = document.getElementById('sendPODocumentForm' + orderId);
+        const channel = form.querySelector('input[name="channel"]:checked').value;
+        const isEmail = channel === 'email';
+        const isPhone = channel === 'whatsapp';
+
+        document.getElementById('po-email-field-wrap' + orderId).classList.toggle('d-none', !isEmail);
+        document.getElementById('po-phone-field-wrap' + orderId).classList.toggle('d-none', !isPhone);
+        document.querySelector('#po-email-field-wrap' + orderId + ' input').required = isEmail;
+        document.querySelector('#po-phone-field-wrap' + orderId + ' input').required = isPhone;
+    }
+
+    function sendPODocument(orderId) {
+        const submitButton = document.getElementById('sendPODocumentButton' + orderId);
+        if (submitButton.disabled) return;
+
+        const form = document.getElementById('sendPODocumentForm' + orderId);
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        if (payload.channel === 'whatsapp') {
+            const result = validateE164Phone(payload.phone);
+            const errorEl = document.getElementById('po-phone-error' + orderId);
+            if (!result.valid) {
+                errorEl.textContent = result.error;
+                errorEl.classList.remove('d-none');
+                return;
+            }
+            errorEl.classList.add('d-none');
+            payload.phone = result.formatted;
+        }
+
+        if (payload.channel === 'email' && !payload.email) {
+            form.querySelector('input[name="email"]').classList.add('is-invalid');
+            return;
+        }
+
+        LiveBlade.toggleButtonLoading(submitButton, true);
+        submitButton.disabled = true;
+
+        fetch('/purchase-orders/' + orderId + '/send-document', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
+            if (ok && body.success) {
+                toastr.success(body.message);
+                bootstrap.Modal.getInstance(document.getElementById('sendPODocumentModal' + orderId))?.hide();
+            } else {
+                toastr.error(body.message || '{{ __("passwords.purchase_order_send_failed") }}');
+            }
+        })
+        .catch(() => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
+            toastr.error('{{ __("passwords.purchase_order_send_failed") }}');
+        });
+    }
+
 </script>
 
 
@@ -1878,7 +1945,7 @@ function cancelProduction(orderId) {
         formData.routeName = url;
 
         // Debug log
-        console.log('Form data being sent:', formData);
+        // console.log('Form data being sent:', formData);
 
         // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
@@ -3263,6 +3330,21 @@ function cancelProduction(orderId) {
 
 
 <script>
+    
+    function applyLocationFilter() {
+        const locationId = document.getElementById('locationFilter').value;
+        const currentUrl = new URL(window.location.href);
+        
+        if (locationId) {
+            currentUrl.searchParams.set('location_id', locationId);
+        } else {
+            currentUrl.searchParams.delete('location_id');
+        }
+        
+        window.location.href = currentUrl.toString();
+    }
+
+
     function togglePaymentMethodFields() {
         const type = document.getElementById('paymentTypeSelect').value;
         const bankFields = document.getElementById('bankFields');
@@ -3301,6 +3383,13 @@ function cancelProduction(orderId) {
         formData._method = method;
         formData.routeName = url;
 
+        // Handle location_id array properly
+        const locationSelect = form.querySelector('select[name="location_id[]"]');
+        if (locationSelect) {
+            const selectedOptions = Array.from(locationSelect.selectedOptions);
+            formData.location_id = selectedOptions.map(option => option.value);
+        }
+
         // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
 
@@ -3330,14 +3419,19 @@ function cancelProduction(orderId) {
         var formData = new FormData(form);
 
         var data = Object.fromEntries(formData.entries());
-        // console.log(data);
+        
+        // Handle location_id array properly
+        const locationSelect = form.querySelector('select[name="location_id[]"]');
+        if (locationSelect) {
+            const selectedOptions = Array.from(locationSelect.selectedOptions);
+            data.location_id = selectedOptions.map(option => option.value);
+        }
 
         // Set up the URL dynamically
         var updateUrl = '{{ route('paymentmethod.update', ['paymentmethod' => ':id']) }}'.replace(':id', uniqueId);
         
         // Submit form data asynchronously
         handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
     }
 
     function updatePaymentMethodStatus(uniqueId, selectedStatus) {
@@ -3345,6 +3439,44 @@ function cancelProduction(orderId) {
         const updateRoute = '/payment-methods-status/' + uniqueId;
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
+
+    // Initialize Select2 for location selects when modal opens
+    document.addEventListener('DOMContentLoaded', function() {
+        // For create modal
+        const createModal = document.getElementById('kt_modal_add_payment_method');
+        if (createModal) {
+            createModal.addEventListener('shown.bs.modal', function() {
+                if (typeof $ !== 'undefined' && $.fn.select2) {
+                    $('#locationSelect').select2({
+                        dropdownParent: createModal,
+                        placeholder: "{{__('payments.select_locations')}}",
+                        allowClear: true,
+                        closeOnSelect: false,
+                        tags: false,
+                        width: '100%'
+                    });
+                }
+            });
+        }
+
+        // For edit modals
+        document.querySelectorAll('[id^="editPaymentMethod"]').forEach(function(modal) {
+            modal.addEventListener('shown.bs.modal', function() {
+                const modalId = this.id;
+                const locationSelectId = 'locationSelect' + modalId.replace('editPaymentMethod', '');
+                if (typeof $ !== 'undefined' && $.fn.select2) {
+                    $('#' + locationSelectId).select2({
+                        dropdownParent: this,
+                        placeholder: "{{__('payments.select_locations')}}",
+                        allowClear: true,
+                        closeOnSelect: false,
+                        tags: false,
+                        width: '100%'
+                    });
+                }
+            });
+        });
+    });
 </script>
 
 
