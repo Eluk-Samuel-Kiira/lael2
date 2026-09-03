@@ -247,6 +247,9 @@
                                                             {{ count($variant->available_batches) }} {{ __('passwords.batches') }}
                                                         </span>
                                                     @endif
+                                                    <span class="text-secondary text-muted d-block fs-8">
+                                                        {{ __('passwords.sell_per') }} {{ $variant->unitMeasure->name }} 
+                                                    </span>
                                                 </div>
                                             </div>
 

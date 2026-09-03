@@ -68,15 +68,13 @@
                             </a>
                         </div>
                         @endcan
-
-
                     </div>
                 </div>
                 @endif
 
                 <!-- POS -->
                 @if (tenant_can('pos'))
-                @can('view order')
+                @canany(['view order', 'view pos', 'view invoices'])
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -126,12 +124,12 @@
                         </div>
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
 
                 <!-- Product Catalog -->
                 @if (tenant_can('product_catalog'))
-                @can('view product')
+                @canany(['view category', 'view subcategory', 'view product'])
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -182,13 +180,13 @@
 
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
                 
 
                 <!-- Inventory Items -->
                 @if (tenant_can('inventory'))
-                @can('view inventory')
+                @canany(['view inventory', 'view production_orders'])
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -255,13 +253,13 @@
 
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
 
 
                 <!-- Suppliers & Purchasing -->
                 @if (tenant_can('procurement'))
-                @can('view procurement')
+                @canany(['view supplier', 'view purchase_orders', 'view category-expense', 'view expense'])
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -328,13 +326,13 @@
 
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
 
                 
                 <!-- Human Reource -->
                 @if (tenant_can('users'))
-                @can('view user')
+                @canany(['view user', 'view employee', 'view employee advance', 'view employee payment', 'view leave', 'admin only'])
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -431,12 +429,12 @@
 
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
 
 
                 <!-- Updated Reports Menu -->
-                @can('view reports')
+                @canany(['view reports', 'view production_orders', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
                 <div data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-placement="right-start" class="menu-item here menu-lg-down-accordion">
                     <!--begin:Menu link-->
                     <span class="menu-link">
@@ -1294,11 +1292,11 @@
                     </div>
                     <!--end:Menu sub-->
                 </div>
-                @endcan
+                @endcanany
 
                 <!-- Settings -->
                 @if (tenant_can('settings'))
-                @can('view settings')
+                @canany(['update settings', 'view uom', 'view currency', 'view payment method', 'view location', 'view department', 'view tax', 'view promotion'])
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -1421,7 +1419,7 @@
 
                     </div>
                 </div>
-                @endcan
+                @endcanany
                 @endif
 
 
