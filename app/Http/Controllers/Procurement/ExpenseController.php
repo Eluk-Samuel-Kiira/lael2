@@ -18,7 +18,7 @@ class ExpenseController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        
+        $tenantId = $user->tenant_id;
         
         if (!$user->hasPermissionTo('view expense')) {
             if ($request->ajax() || $request->wantsJson()) {
@@ -66,18 +66,32 @@ class ExpenseController extends Controller
         // Preserve per_page and search in pagination links
         $expenses->appends(['per_page' => $perPage, 'search' => $request->search]);
         
+        // ✅ Get active payment methods with location filtering
+        $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->when($user->location_id, function($query, $locationId) {
+                return $query->where(function($q) use ($locationId) {
+                    $q->whereNull('location_id')
+                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+        
         $bladeToReload = $request->query('bladeFileToReload');
         
         // For AJAX requests - return just the component HTML
         if ($request->ajax() && $bladeToReload === 'reloadExpenseComponent') {
             return view('procurement.expense.component', [
                 'expenses' => $expenses,
+                'PaymentMethods' => $activePaymentMethods,
             ])->render();
         }
         
         // Regular page load
         return view('procurement.expense-index', [
             'expenses' => $expenses,
+            'PaymentMethods' => $activePaymentMethods,
         ]);
     }
 
