@@ -157,7 +157,7 @@ class SupplierController extends Controller
             ],
             'is_vat_registered' => 'sometimes|boolean',
             'vat_number' => 'nullable|string|max:50|required_if:is_vat_registered,1',
-            'withholding_tax_applicable' => 'sometimes|boolean',
+            'withholding_tax_applicable' => 'required|boolean',
             'withholding_tax_rate' => 'nullable|numeric|min:0|max:100|required_if:withholding_tax_applicable,1',
             'withholding_tax_exemption_ref' => 'nullable|string|max:100',
             'withholding_tax_exemption_expiry' => 'nullable|date|after:today',
