@@ -67,7 +67,21 @@ class AppServiceProvider extends ServiceProvider
 
             // Only query if user is authenticated
             if (Auth::check()) {
-                $tenantId = Auth::user()->tenant_id;
+                $user = Auth::user();
+                $tenantId = $user->tenant_id;
+                $userLocationId = $user->location_id ?? null;
+                
+                // ✅ FIXED: Get active payment methods with location filtering
+                $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
+                    ->where('is_active', 1)
+                    ->when($userLocationId, function($query) use ($userLocationId) {
+                        return $query->where(function($q) use ($userLocationId) {
+                            $q->whereNull('location_id')
+                              ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+                        });
+                    })
+                    ->orderBy('name')
+                    ->get();
                 
                 $data = [
                     'users' => User::where('tenant_id', $tenantId)
@@ -90,19 +104,11 @@ class AppServiceProvider extends ServiceProvider
                     'taxes' => Tax::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'globalPaymentMethods' => PaymentMethod::where('tenant_id', $tenantId)
                         ->where('is_active', true)
-                        ->where(function($query) {
-                            $user = auth()->user();
-                            $userLocationId = $user->location_id ?? null;
-                            
+                        ->where(function($query) use ($userLocationId) {
                             if ($userLocationId) {
-                                // \Log::info($userLocationId);
-                                // Return payment methods that:
-                                // 1. Have no location restriction (null), OR
-                                // 2. Have the user's location in their location_id array
                                 $query->whereNull('location_id')
                                     ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
                             }
-                            // If user has no location, return all active payment methods
                         })
                         ->orderBy('type')
                         ->orderBy('name')
@@ -112,24 +118,15 @@ class AppServiceProvider extends ServiceProvider
                     'suppliers' => Supplier::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'expenseCategories' => ExpenseCategory::where('tenant_id', $tenantId)->where('is_active', 1)->orderBy('name')->get(),
                     'active_employees' => Employee::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
-                    'active_payment_methods' => PaymentMethod::where('tenant_id', $tenantId)
-                        ->where('is_active', 1)
-                        ->when(auth()->user()->location_id, function($query, $locationId) {
-                            return $query->where(function($q) use ($locationId) {
-                                $q->whereNull('location_id')
-                                ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)]);
-                            });
-                        })
-                        ->get(),
-                    'chartOfAccounts' => ChartOfAccount::where('tenant_id', $tenantId)
-                                        ->where('is_active', true)
-                                        ->orderBy('account_code')
-                                        ->get(),
+                    'active_payment_methods' => $activePaymentMethods,
                 ];
             }
 
+            // Share data with all views
             $view->with($data);
         });
+    
+
 
         // Configure mail settings - only once per request
         $this->configureMailSettings();

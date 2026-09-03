@@ -179,7 +179,7 @@
                             <label class="fs-6 fw-semibold mb-2">{{__('pagination.payment_method')}}</label>
                             <select name="payment_method_id" class="form-select">
                                 <option value="">{{ __('payments.select_payment_method') }}</option>
-                                @foreach($active_payment_methods as $method)
+                                @foreach($PaymentMethods as $method)
                                     <option value="{{ $method->id }}" {{ $method->is_default ? 'selected' : '' }}>
                                         {{ $method->name }}
                                         @if($method->is_default)
