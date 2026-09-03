@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Procurement;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\{ Supplier, PurchaseOrder, Product };
-use Illuminate\Support\Facades\{ Mail, Auth, DB };
+use Illuminate\Support\Facades\{ Mail, Auth, DB, Log };
 use Illuminate\Validation\Rule;
 
 

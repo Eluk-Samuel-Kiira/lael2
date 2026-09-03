@@ -27,6 +27,7 @@ return [
     'hello'                          => 'Hello',
     'sell_per'                          => 'Sell Per',
     'customer'                       => 'Customer',
+    'trading_name'                       => 'Trading Name',
     'order_receipt_intro'            => 'Thank you for your order. Please find your receipt for order :number attached to this email.',
     'order_receipt_attached_note'    => 'Your full receipt is attached as a PDF to this email.',
     
