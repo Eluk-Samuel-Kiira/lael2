@@ -144,7 +144,7 @@ class SupplierController extends Controller
             'city' => 'nullable|string|max:100',
             'state' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:20',
-            'country_code' => 'nullable|string|size:2',
+            'country_code' => 'required|string|size:2',
 
             // Tax & Compliance
             'tax_number' => [
