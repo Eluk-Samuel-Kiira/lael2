@@ -29,7 +29,7 @@ return new class extends Migration
 
         Schema::table('billing_plans', function (Blueprint $table) {
             // 🔥 Reports Modules
-            $table->boolean('includes_financial_reports')->default(false)->after('includes_advanced_accounting');
+            // $table->boolean('includes_financial_reports')->default(false)->after('includes_advanced_accounting');
             $table->boolean('includes_expense_reports')->default(false)->after('includes_financial_reports');
             $table->boolean('includes_order_reports')->default(false)->after('includes_expense_reports');
             $table->boolean('includes_product_reports')->default(false)->after('includes_order_reports');
@@ -74,7 +74,7 @@ return new class extends Migration
         Schema::table('billing_plans', function (Blueprint $table) {
             // Drop all new columns
             $columns = [
-                'includes_financial_reports',
+                // 'includes_financial_reports',
                 'includes_expense_reports',
                 'includes_order_reports',
                 'includes_product_reports',
