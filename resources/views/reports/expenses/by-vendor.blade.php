@@ -4,6 +4,7 @@
 @section('title', __('accounting.expenses_by_vendor'))
 
 @section('content')
+@if (tenant_can('advanced_reports'))
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
@@ -512,6 +513,7 @@
         </div>
     </div>
 </div>
+@endif
 {{-- END Main Content --}}
 
 @push('scripts')

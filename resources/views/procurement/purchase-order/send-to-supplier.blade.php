@@ -14,21 +14,16 @@
             <div class="modal-body px-5 my-7">
                 <form id="sendToSupplierForm{{ $order->id }}">
                     @csrf
-                    
-                    {{-- ✅ Define variables before using them --}}
+
                     @php
-                        $totalAmount = $order->total ?? 0;
-                        $totalPaid = $order->total_paid ?? 0;
-                        $balance = $totalAmount - $totalPaid;
-                        $isFullyPaid = $balance <= 0;
+                        // Sending is purely a notification/status step now.
+                        // Money only moves later, at receiving, against the
+                        // actual quantities and actual costs invoiced.
                         $isSent = $order->status === 'sent';
-                        $isReceived = $order->status === 'received' || $order->status === 'partially_received';
+                        $isReceived = in_array($order->status, ['received', 'partially_received']);
+                        $canSend = $order->status === 'approved';
                     @endphp
-                    
-                    {{-- ✅ Hidden fields for tracking --}}
-                    <input type="hidden" id="total_amount_{{ $order->id }}" value="{{ $totalAmount }}">
-                    <input type="hidden" id="total_paid_{{ $order->id }}" value="{{ $totalPaid }}">
-                    
+
                     <div class="alert alert-info d-flex align-items-center mb-5">
                         <i class="bi bi-info-circle fs-2 me-3"></i>
                         <div>
@@ -69,27 +64,17 @@
                                 <div class="col-md-6">
                                     <div class="d-flex justify-content-between">
                                         <span class="text-muted">{{ __('passwords.total_amount') }}:</span>
-                                        <span class="fw-bold text-primary fs-5">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
+                                        <span class="fw-bold text-primary fs-5">{{ number_format($order->total ?? 0, 2) }} {{ currency_symbol() }}</span>
                                     </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span class="text-muted">{{ __('passwords.total_paid') }}:</span>
-                                        <span class="fw-bold text-success">{{ number_format($totalPaid, 2) }} {{ currency_symbol() }}</span>
+                                    <div class="form-text text-muted mt-2">
+                                        {{ __('passwords.estimated_total_note') }}
                                     </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span class="text-muted">{{ __('passwords.balance_remaining') }}:</span>
-                                        <span class="fw-bold text-warning">{{ number_format($balance, 2) }} {{ currency_symbol() }}</span>
-                                    </div>
-                                    @if($isFullyPaid)
-                                        <div class="mt-2">
-                                            <span class="badge badge-success">✅ {{ __('passwords.fully_paid') }}</span>
-                                        </div>
-                                    @endif
                                 </div>
                             </div>
-                            @if($isSent && $isFullyPaid)
+                            @if($isSent)
                                 <div class="mt-3 alert alert-success">
                                     <i class="bi bi-check-circle me-2"></i>
-                                    {{ __('passwords.po_fully_paid_and_sent') }}
+                                    {{ __('passwords.po_already_sent_message') }}
                                 </div>
                             @endif
                             @if($isReceived)
@@ -102,111 +87,61 @@
                     </div>
                     {{-- ════════════════ END OF ORDER SUMMARY ════════════════ --}}
 
-                    <!-- Supplier Email -->
+                    <!-- Channel Selection -->
                     <div class="mb-4">
+                        <label class="form-label required d-block">{{ __('passwords.send_via') }}</label>
+                        <div class="d-flex gap-6">
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel"
+                                       id="sendChannelEmail{{ $order->id }}" value="email" checked
+                                       onchange="toggleSendToSupplierChannel({{ $order->id }})"
+                                       {{ $canSend ? '' : 'disabled' }}>
+                                <label class="form-check-label" for="sendChannelEmail{{ $order->id }}">
+                                    <i class="bi bi-envelope me-1"></i>{{ __('passwords.email') }}
+                                </label>
+                            </div>
+                            <div class="form-check form-check-custom form-check-solid">
+                                <input class="form-check-input" type="radio" name="channel"
+                                       id="sendChannelWhatsapp{{ $order->id }}" value="whatsapp"
+                                       onchange="toggleSendToSupplierChannel({{ $order->id }})"
+                                       {{ $canSend ? '' : 'disabled' }}>
+                                <label class="form-check-label" for="sendChannelWhatsapp{{ $order->id }}">
+                                    <i class="bi bi-whatsapp me-1"></i>{{ __('passwords.whatsapp') }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Supplier Email -->
+                    <div class="mb-4" id="send-email-field-wrap{{ $order->id }}">
                         <label class="form-label required">{{ __('passwords.supplier_email') }}</label>
-                        <input type="email" 
-                               name="supplier_email" 
-                               class="form-control" 
+                        <input type="email"
+                               name="supplier_email"
+                               class="form-control"
                                value="{{ $order->supplier->email ?? '' }}"
                                placeholder="{{ __('passwords.enter_supplier_email') }}"
-                               {{ $isReceived ? 'disabled' : '' }}
+                               {{ $canSend ? '' : 'disabled' }}
                                required>
                         <div class="form-text text-muted">{{ __('passwords.supplier_email_hint') }}</div>
                     </div>
 
-                    <!-- Payment Information -->
-                    <div class="card card-flush bg-light-warning mb-4">
-                        <div class="card-header">
-                            <h3 class="card-title">
-                                <i class="bi bi-credit-card me-2"></i>
-                                {{ __('payments.payment_information') }}
-                            </h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label class="form-label required">{{ __('payments.payment_method') }}</label>
-                                <select name="payment_method_id" class="form-select" {{ $isReceived ? 'disabled' : '' }} required>
-                                    <option value="">{{ __('payments.select_payment_method') }}</option>
-                                    @foreach($active_payment_methods as $method)
-                                        <option value="{{ $method->id }}">{{ $method->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <!-- Payment Amount -->
-                            <div class="mb-3">
-                                <label class="form-label required">{{ __('passwords.payment_amount') }}</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">{{ currency_symbol() }}</span>
-                                    <input type="number" 
-                                           name="payment_amount" 
-                                           id="payment_amount_{{ $order->id }}"
-                                           class="form-control" 
-                                           step="0.01" 
-                                           min="0.01"
-                                           max="{{ $balance }}"
-                                           value="{{ $balance > 0 ? $balance : 0 }}"
-                                           oninput="updatePaymentSummary({{ $order->id }})"
-                                           {{ $isFullyPaid || $isReceived ? 'disabled' : '' }}
-                                           required>
-                                </div>
-                                <div class="form-text text-muted">
-                                    {{ __('passwords.max_payment') }}: {{ number_format($balance, 2) }} {{ currency_symbol() }}
-                                </div>
-                            </div>
-
-                            <!-- Payment Summary -->
-                            <div id="payment_summary_{{ $order->id }}" class="alert alert-info">
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ __('passwords.total_amount') }}:</span>
-                                    <span class="fw-bold">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mt-1">
-                                    <span>{{ __('passwords.total_paid') }}:</span>
-                                    <span class="fw-bold text-success">{{ number_format($totalPaid, 2) }} {{ currency_symbol() }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mt-1">
-                                    <span>{{ __('passwords.amount_paying') }}:</span>
-                                    <span class="fw-bold text-primary" id="amount_paying_display_{{ $order->id }}">{{ number_format($balance > 0 ? $balance : 0, 2) }} {{ currency_symbol() }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mt-1 border-top pt-1">
-                                    <span>{{ __('passwords.new_balance') }}:</span>
-                                    <span class="fw-bold text-success" id="new_balance_display_{{ $order->id }}">{{ number_format($balance > 0 ? 0 : $balance, 2) }} {{ currency_symbol() }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mt-1">
-                                    <span>{{ __('passwords.payment_status') }}:</span>
-                                    <span class="fw-bold" id="payment_status_display_{{ $order->id }}">{{ $isFullyPaid ? 'Fully Paid' : 'Partial Payment' }}</span>
-                                </div>
-                            </div>
-
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">{{ __('payments.payment_status') }}</label>
-                                    <select name="payment_status" id="payment_status_{{ $order->id }}" class="form-select" {{ $isReceived ? 'disabled' : '' }}>
-                                        <option value="paid" {{ $isFullyPaid ? 'selected' : '' }}>{{ __('payments.paid') }}</option>
-                                        <option value="partial" {{ !$isFullyPaid ? 'selected' : '' }}>{{ __('payments.partial') }}</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">{{ __('payments.payment_date') }}</label>
-                                    <input type="date" name="payment_date" class="form-control" value="{{ date('Y-m-d') }}" {{ $isReceived ? 'disabled' : '' }}>
-                                </div>
-                            </div>
-
-                            <div class="mt-3">
-                                <div class="alert alert-success">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    {{ __('passwords.payment_will_be_processed') }}
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Supplier Phone (WhatsApp) -->
+                    <div class="mb-4 d-none" id="send-phone-field-wrap{{ $order->id }}">
+                        <label class="form-label required">{{ __('passwords.supplier_phone') }}</label>
+                        <input type="text"
+                               name="supplier_phone"
+                               class="form-control"
+                               value="{{ $order->supplier->phone ?? '' }}"
+                               placeholder="+256700000000"
+                               {{ $canSend ? '' : 'disabled' }}>
+                        <div class="form-text text-muted">{{ __('passwords.supplier_phone_hint') }}</div>
+                        <div class="invalid-feedback d-block d-none" id="send-phone-error{{ $order->id }}"></div>
                     </div>
 
                     <!-- Notes -->
                     <div class="mb-4">
                         <label class="form-label">{{ __('passwords.notes') }}</label>
-                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.optional_notes') }}" {{ $isReceived ? 'disabled' : '' }}></textarea>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.optional_notes') }}" {{ $canSend ? '' : 'disabled' }}></textarea>
                     </div>
 
                     <!-- Action Buttons -->
@@ -214,10 +149,19 @@
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
                         </button>
-                        <button type="button" class="btn btn-primary" onclick="sendToSupplierWithPayment({{ $order->id }})" 
-                                {{ $isFullyPaid || $isReceived ? 'disabled' : '' }}>
+                        <button type="button" class="btn btn-primary" id="sendToSupplierButton{{ $order->id }}"
+                                onclick="sendToSupplier({{ $order->id }})"
+                                {{ $canSend ? '' : 'disabled' }}>
                             <i class="bi bi-send me-2"></i>
-                            <span class="indicator-label">{{ $isFullyPaid ? __('passwords.fully_paid') : __('passwords.send_and_pay') }}</span>
+                            <span class="indicator-label">
+                                @if($isSent)
+                                    {{ __('passwords.already_sent') }}
+                                @elseif($isReceived)
+                                    {{ __('passwords.po_already_received') }}
+                                @else
+                                    {{ __('passwords.send_to_supplier') }}
+                                @endif
+                            </span>
                             <span class="indicator-progress">{{ __('passwords.please_wait') }}
                                 <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                             </span>

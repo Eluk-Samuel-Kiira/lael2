@@ -50,8 +50,14 @@ Schedule::command('stock:check-low')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/stock-low-check.log'));
 
+// ── Check Tenant Billing Daily at Midnight ──────────────────────────────
+Schedule::command('billing:check')
+    ->dailyAt('00:00')
+    ->timezone('Africa/Nairobi')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/billing-check.log'));
 
-
+    
 
 // ── Send Report on Demand (Optional) ─────────────────────────────────────
 // You can also run these manually with:

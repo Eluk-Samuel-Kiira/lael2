@@ -309,7 +309,7 @@ class PurchaseOrderController extends Controller
                         'sku' => $variant->sku ?? null,
                         'quantity' => $item['quantity'],
                         'unit_cost' => $item['unit_cost'],
-                        'tax_amount' => 0, // Set tax amount to 0
+                        'tax_amount' => 0,
                         'total_cost' => $totalCost,
                         'received_quantity' => 0,
                     ]);
@@ -638,27 +638,24 @@ class PurchaseOrderController extends Controller
         }
     }
 
-    public function sendToSupplier(Request $request, $id)
+    /**
+     * Send the purchase order to the supplier (email or WhatsApp).
+     * Pure status transition (approved -> sent) + notification.
+     * No money moves here — payment is recorded later at receiveItems(),
+     * against the actual quantities and actual unit costs invoiced.
+     */
+    public function sendToSupplier(Request $request, $id, MessagingService $messaging)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('send purchase_orders')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
             ]);
         }
-        
-        $validated = $request->validate([
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'payment_amount' => 'required|numeric|min:0.01',
-            'payment_status' => 'nullable|in:pending,partial,paid,overdue',
-            'payment_date' => 'nullable|date',
-            'supplier_email' => 'nullable|email',
-            'notes' => 'nullable|string|max:500',
-        ]);
-        
+
         $purchase = PurchaseOrder::with(['supplier', 'items'])
             ->where('id', $id)
             ->where('tenant_id', $tenantId)
@@ -671,175 +668,101 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        // ✅ Allow payments even if already sent
-        // Only prevent sending if already sent (but still allow payments)
-        $isAlreadySent = $purchase->status === 'sent';
-        
-        // For first-time send, status must be 'approved'
-        if (!$isAlreadySent && $purchase->status !== 'approved') {
+        if ($purchase->status !== 'approved') {
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.can_only_send_from_approved'),
             ]);
         }
 
-        // ✅ Calculate remaining balance
-        $totalAmount = $purchase->total ?? 0;
-        $totalPaid = $purchase->total_paid ?? 0;
-        $remainingBalance = $totalAmount - $totalPaid;
-        
-        // ✅ Validate payment amount
-        $paymentAmount = (float) $validated['payment_amount'];
-        
-        if ($paymentAmount > $remainingBalance) {
+        $validated = $request->validate([
+            'channel' => 'required|in:email,whatsapp',
+            'supplier_email' => 'nullable|email',
+            'supplier_phone' => ['nullable', 'regex:/^\+[1-9]\d{7,14}$/'],
+            'notes' => 'nullable|string|max:500',
+        ], [
+            'supplier_phone.regex' => __('payments.invalid_phone_format'),
+        ]);
+
+        $channel = $validated['channel'];
+
+        if ($channel === 'email' && empty($validated['supplier_email']) && empty($purchase->supplier->email)) {
             return response()->json([
                 'success' => false,
-                'message' => __('payments.payment_exceeds_balance') . ' ' . __('payments.balance') . ': ' . number_format($remainingBalance, 2),
-            ]);
+                'message' => __('payments.customer_email_required'),
+            ], 422);
+        }
+
+        if ($channel === 'whatsapp' && empty($validated['supplier_phone']) && empty($purchase->supplier->phone)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.customer_phone_required'),
+            ], 422);
         }
 
         DB::beginTransaction();
-
         try {
-            $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
-            
-            if (!$paymentMethod) {
-                throw new \Exception(__('pagination.payment_method_not_found'));
+            $purchase->status = 'sent';
+            $purchase->sent_at = now();
+            $purchase->sent_by = $user->id;
+            if (!empty($validated['notes'])) {
+                $purchase->notes = $validated['notes'];
             }
-
-            // ── Determine payment status ──────────────────────────────────────────
-            $newTotalPaid = $totalPaid + $paymentAmount;
-            $newRemainingBalance = $totalAmount - $newTotalPaid;
-            
-            if ($newRemainingBalance <= 0) {
-                $paymentStatus = 'paid';
-            } elseif ($paymentAmount > 0 && $paymentAmount < $remainingBalance) {
-                $paymentStatus = 'partial';
-            } else {
-                $paymentStatus = $validated['payment_status'] ?? 'partial';
-            }
-
-            // ── Record payment transaction ──────────────────────────────────────────
-            $transactionData = [
-                'user_id' => $user->id,
-                'tenant_id' => $tenantId,
-                'payment_method_id' => $paymentMethod->id,
-                'transaction_type' => 'WITHDRAWAL',
-                'transaction_category' => 'PURCHASE_ORDER',
-                'amount' => $paymentAmount,
-                'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                'reference_table' => 'purchase_orders',
-                'reference_id' => $purchase->id,
-                'description' => 'Purchase Order Payment - PO #' . $purchase->po_number . ' (' . $paymentStatus . ')',
-                'notes' => 'Payment of ' . number_format($paymentAmount, 2) . ' sent to supplier for PO #' . $purchase->po_number . 
-                        ($validated['notes'] ? ' - ' . $validated['notes'] : ''),
-                'metadata' => [
-                    'purchase_order_number' => $purchase->po_number,
-                    'supplier_id' => $purchase->supplier_id,
-                    'supplier_name' => $purchase->supplier->name,
-                    'payment_status' => $paymentStatus,
-                    'payment_date' => $validated['payment_date'] ?? now()->toDateString(),
-                    'total_amount' => $totalAmount,
-                    'payment_amount' => $paymentAmount,
-                    'total_paid_before' => $totalPaid,
-                    'total_paid_after' => $newTotalPaid,
-                    'balance_before' => $remainingBalance,
-                    'balance_after' => $newRemainingBalance,
-                    'transaction_nature' => 'PURCHASE_PAYMENT',
-                    'sent_by_id' => $user->id,
-                    'sent_by_name' => $user->name,
-                    'is_additional_payment' => $isAlreadySent,
-                ],
-            ];
-
-            if (isset($validated['payment_date'])) {
-                $transactionData['effective_date'] = $validated['payment_date'];
-            }
-
-            $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
-
-            // ── Update purchase order items with payment info ─────────────────────
-            $updateData = [];
-            if (isset($validated['payment_method_id'])) {
-                $updateData['payment_method_id'] = $validated['payment_method_id'];
-            }
-            if ($paymentStatus) {
-                $updateData['payment_status'] = $paymentStatus;
-            }
-            if (isset($validated['payment_date'])) {
-                $updateData['payment_date'] = $validated['payment_date'];
-            }
-            
-            if (!empty($updateData)) {
-                $purchase->items()->update($updateData);
-            }
-
-            // ── Update purchase order ──────────────────────────────────────────────
-            $purchase->total_paid = $newTotalPaid;
-            $purchase->payment_status = $paymentStatus;
-            
-            // ✅ Only set status to 'sent' if it's the first send
-            if (!$isAlreadySent) {
-                $purchase->status = 'sent';
-                $purchase->sent_at = now();
-                $purchase->sent_by = $user->id;
-            }
-            
             $purchase->save();
 
             DB::commit();
-
-            // ── Send email to supplier (only on first send) ──────────────────────────
-            if (!$isAlreadySent) {
-                $emailToUse = $validated['supplier_email'] ?? $purchase->supplier->email;
-                if ($emailToUse) {
-                    try {
-                        $this->sendPurchaseOrderEmail($purchase);
-                    } catch (\Exception $e) {
-                        \Log::error('Failed to send PO email: ' . $e->getMessage());
-                    }
-                }
-            }
-
-            // ── Build response message ──────────────────────────────────────────────
-            $message = '';
-            if ($isAlreadySent) {
-                $message = __('passwords.payment_recorded_success') . ' ' . number_format($paymentAmount, 2) . '. ';
-                if ($newRemainingBalance <= 0) {
-                    $message .= __('passwords.po_fully_paid');
-                } else {
-                    $message .= __('passwords.balance_remaining') . ': ' . number_format($newRemainingBalance, 2);
-                }
-            } else {
-                $message = $paymentStatus === 'paid' 
-                    ? __('passwords.send_supplier_success_paid')
-                    : __('passwords.send_supplier_success_partial') . ' ' . number_format($paymentAmount, 2) . '. ' . __('passwords.balance_remaining') . ': ' . number_format($newRemainingBalance, 2);
-            }
-
-            return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
-                'componentId' => 'reloadPurchasesComponent',
-                'message' => $message,
-                'redirect' => route('purchase_order.index'),
-                'transaction_ref' => $transactionLog->transaction_ref ?? null,
-                'payment_status' => $paymentStatus,
-                'balance_remaining' => $newRemainingBalance,
-                'total_paid' => $newTotalPaid,
-            ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Send to supplier failed: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
+            \Log::error('Send to supplier failed: ' . $e->getMessage(), ['purchase_order_id' => $id]);
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.error_occurred') . $e->getMessage(),
             ], 500);
         }
+
+        // Status has already committed at this point — a notification
+        // hiccup shouldn't roll back the status change, but we do log it
+        // and let the user know so they can follow up manually.
+        $notifyWarning = null;
+
+        try {
+            if ($channel === 'email') {
+                $emailToUse = $validated['supplier_email'] ?? $purchase->supplier->email;
+                $subject = __('passwords.purchase_order_subject', ['number' => $purchase->po_number]);
+
+                Mail::to($emailToUse)->send(
+                    new PurchaseOrderDocumentMail($purchase, $subject, $validated['notes'] ?? null)
+                );
+            } else {
+                $phoneToUse = $validated['supplier_phone'] ?? $purchase->supplier->phone;
+
+                $result = $messaging->sendWhatsApp($phoneToUse, [
+                    'ref'  => $purchase->po_number,
+                    'date' => $purchase->created_at->format('d M Y'),
+                ]);
+
+                if (!($result['success'] ?? false)) {
+                    $notifyWarning = $result['error'] ?? __('passwords.purchase_order_send_failed');
+                    \Log::error('Failed to send PO via WhatsApp: ' . $notifyWarning, ['purchase_order_id' => $id]);
+                }
+            }
+        } catch (\Exception $e) {
+            $notifyWarning = $e->getMessage();
+            \Log::error('Failed to notify supplier: ' . $e->getMessage(), ['purchase_order_id' => $id]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'reload' => true,
+            'refresh' => false,
+            'componentId' => 'reloadPurchasesComponent',
+            'message' => $notifyWarning
+                ? __('passwords.status_updated_but_notify_failed')
+                : __('passwords.send_supplier_success'),
+            'redirect' => route('purchase_order.index'),
+        ]);
     }
+
 
     /**
      * Send purchase order email to supplier with PDF attachment
@@ -933,19 +856,6 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        // ✅ Check if PO is fully paid before allowing receipt
-        $totalAmount = $purchaseOrder->total ?? 0;
-        $totalPaid = $purchaseOrder->total_paid ?? 0;
-        $balance = $totalAmount - $totalPaid;
-        
-        if ($balance > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.cannot_receive_unpaid_items') . ' ' . __('passwords.balance_remaining') . ': ' . number_format($balance, 2),
-                'balance' => $balance,
-            ], 422);
-        }
-
         $items = $request->input('items', []);
         
         // If items is empty or missing, get all purchase order items and set quantity to 0
@@ -968,14 +878,15 @@ class PurchaseOrderController extends Controller
             'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity_received' => 'required|integer|min:0',
+            'items.*.actual_unit_cost' => 'nullable|numeric|min:0', // The actual cost from supplier
             'expiry_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
             'selected_taxes' => 'nullable|array',
             'selected_taxes.*' => 'exists:taxes,id',
-            'total_tax_amount' => 'nullable|numeric|min:0',
-            'net_amount' => 'nullable|numeric|min:0',
-            'taxable_amount' => 'nullable|numeric|min:0',
-            'batch_number' => 'required|string|max:100', 
+            'batch_number' => 'required|string|max:100',
+            'payment_method_id' => 'nullable|exists:payment_methods,id',
+            'payment_amount' => 'nullable|numeric|min:0',
+            'payment_date' => 'nullable|date',
         ]);
 
         // Generate batch number with incoming value + date + random
@@ -1016,7 +927,15 @@ class PurchaseOrderController extends Controller
                 
                 if ($quantityReceived > 0) {
                     $purchaseOrderItem = PurchaseOrderItem::find($itemData['purchase_order_item_id']);
-                    $variant = ProductVariant::with('product')->find($itemData['product_variant_id']);
+                    
+                    // Get the actual unit cost from the request, or fallback to the PO unit cost
+                    $actualUnitCost = isset($itemData['actual_unit_cost']) && $itemData['actual_unit_cost'] > 0
+                        ? $itemData['actual_unit_cost']
+                        : $purchaseOrderItem->unit_cost;
+
+                    // Calculate item cost using the ACTUAL unit cost
+                    $itemCost = $actualUnitCost * $quantityReceived;
+                    $currentReceiptSubtotal += $itemCost;
                     
                     // Validate quantity doesn't exceed ordered quantity
                     $newReceivedQuantity = $purchaseOrderItem->received_quantity + $quantityReceived;
@@ -1024,14 +943,46 @@ class PurchaseOrderController extends Controller
                         throw new \Exception(__('passwords.cannot_receive_more_than_ordered'));
                     }
 
-                    // Calculate item cost for this receipt
-                    $itemCost = $purchaseOrderItem->unit_cost * $quantityReceived;
-                    $currentReceiptSubtotal += $itemCost;
+                    // Get the variant from the purchase order item
+                    $variant = ProductVariant::find($itemData['product_variant_id']);
+                    
+                    if (!$variant) {
+                        throw new \Exception("Product variant not found: {$itemData['product_variant_id']}");
+                    }
 
-                    // ── Determine inventory strategy for THIS variant's product ─────
-                    // Only 'quantity' and 'batch' are handled here. Anything else
-                    // ('serial', 'recipe') is out of scope for PO receiving and
-                    // is resolved/consumed elsewhere in the app.
+                    // ── UPDATE VARIANT COST PRICE ─────────────────────────────
+                    // When receiving items at a different cost, update the variant's
+                    // supplier_cost_price. This ensures the cost reflects the actual
+                    // price paid to the supplier.
+                    if ($actualUnitCost != $variant->supplier_cost_price) {
+                        $variant->supplier_cost_price = $actualUnitCost;
+                        
+                        // Recalculate grand_total_cost_price if there are other costs
+                        // This depends on your business logic - you might want to
+                        // recalculate based on other cost components
+                        if ($variant->total_shipping_cost || $variant->ura_taxes_applied || $variant->additional_expenses) {
+                            $variant->grand_total_cost_price = $actualUnitCost 
+                                + ($variant->total_shipping_cost ?? 0) 
+                                + ($variant->ura_taxes_applied ?? 0) 
+                                + ($variant->additional_expenses ?? 0);
+                        } else {
+                            $variant->grand_total_cost_price = $actualUnitCost;
+                        }
+                        
+                        $variant->save();
+                        
+                        // Log the cost change for audit
+                        // \Log::info('Variant cost updated from PO receipt', [
+                        //     'variant_id' => $variant->id,
+                        //     'variant_sku' => $variant->sku,
+                        //     'old_cost' => $variant->supplier_cost_price,
+                        //     'new_cost' => $actualUnitCost,
+                        //     'purchase_order_id' => $purchaseOrder->id,
+                        //     'purchase_receipt_id' => $purchaseReceipt->id,
+                        // ]);
+                    }
+
+                    // Determine inventory strategy for THIS variant's product
                     $strategy = $variant->product
                         ? $variant->product->resolvedInventoryStrategy()
                         : 'quantity';
@@ -1040,71 +991,56 @@ class PurchaseOrderController extends Controller
                     $quantityRemainingForBatch = null;
 
                     if ($strategy === 'batch') {
-                        // ── BATCH STRATEGY ────────────────────────────────────
-                        // Do NOT touch overal_quantity_at_hand. The batch itself
-                        // (this PurchaseReceiptItem row) is the sellable stock
-                        // ledger — quantity_remaining starts at the full amount
-                        // received and gets depleted at sale time by whatever
-                        // FIFO/allocation logic runs at the POS layer.
-                        //
-                        // location_id / department_id are left null on the
-                        // batch — it isn't assigned to a specific department
-                        // yet. That allocation is a separate step, not part of
-                        // receiving.
-                        $quantityAfter = $quantityBefore; // unchanged, by design
+                        // BATCH STRATEGY - don't touch overall quantity
+                        $quantityAfter = $quantityBefore;
                         $quantityRemainingForBatch = $quantityReceived;
                     } else {
-                        // ── QUANTITY STRATEGY (default / unchanged behaviour) ──
+                        // QUANTITY STRATEGY - update overall quantity
                         $variant->overal_quantity_at_hand += $quantityReceived;
                         $variant->save();
                         $quantityAfter = $variant->overal_quantity_at_hand;
                     }
 
-                    // Update purchase order item received quantity — this
-                    // tracks PO fulfilment regardless of inventory strategy,
-                    // so it's unaffected by the branch above.
+                    // Update purchase order item received quantity
                     $purchaseOrderItem->received_quantity = $newReceivedQuantity;
                     $purchaseOrderItem->save();
 
                     $totalReceived += $quantityReceived;
                     
-                    // Create receipt item — quantity_remaining is only
-                    // meaningful for batch-strategy variants; left null for
-                    // quantity-strategy ones since overal_quantity_at_hand is
-                    // their source of truth instead.
+                    // ✅ Create receipt item with unit_cost field
                     $receiptItem = PurchaseReceiptItem::create([
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'purchase_order_item_id' => $purchaseOrderItem->id,
                         'quantity_received' => $quantityReceived,
                         'quantity_remaining' => $quantityRemainingForBatch,
-                        'unit_cost' => $purchaseOrderItem->unit_cost,
+                        'unit_cost' => $actualUnitCost, // ✅ Now this field exists
                         'batch_number' => $validated['batch_number'] ?? null,
                         'expiry_date' => $validated['expiry_date'] ?? null,
+                        'tenant_id' => $tenantId,
                     ]);
 
-                    // ✅ Log batch receipt for batch-strategy items
+                    // Log batch receipt for batch-strategy items
                     if ($strategy === 'batch' && $quantityReceived > 0) {
                         $this->logBatchReceipt(
-                            $receiptItem,        // batchItem
-                            $variant,            // variant
-                            $purchaseOrder,      // purchaseOrder
-                            $purchaseReceipt,    // purchaseReceipt
-                            $quantityReceived,   // ✅ quantityReceived (the integer)
-                            $user,               // user
-                            $tenantId            // tenantId
+                            $receiptItem,
+                            $variant,
+                            $purchaseOrder,
+                            $purchaseReceipt,
+                            $quantityReceived,
+                            $actualUnitCost, // Pass the actual unit cost
+                            $user,
+                            $tenantId
                         );
                     }
 
-                    // Log received product variant — always recorded for audit,
-                    // regardless of strategy. Metadata notes which strategy
-                    // applied so the trail is self-explanatory later.
+                    // Log received product variant
                     ReceivedProductVariant::create([
                         'purchase_order_id' => $purchaseOrder->id,
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'purchase_order_item_id' => $purchaseOrderItem->id,
                         'product_variant_id' => $variant->id,
                         'quantity_received' => $quantityReceived,
-                        'unit_cost' => $purchaseOrderItem->unit_cost,
+                        'unit_cost' => $actualUnitCost, // Use actual cost
                         'total_cost' => $itemCost,
                         'batch_number' => $validated['batch_number'] ?? null,
                         'expiry_date' => $validated['expiry_date'] ?? null,
@@ -1115,10 +1051,7 @@ class PurchaseOrderController extends Controller
                         'tenant_id' => $tenantId,
                     ]);
 
-                    // LOG TO SINGLE SHOP INVENTORY LOG — only for quantity-strategy
-                    // items. This log specifically tracks overal_quantity_at_hand
-                    // movements; batch-strategy items didn't move that field, so
-                    // logging a zero-change entry here would be misleading noise.
+                    // LOG TO SINGLE SHOP INVENTORY LOG
                     if ($isSingleShop && $strategy === 'quantity') {
                         SingleShopInventoryLog::create([
                             'variant_id' => $variant->id,
@@ -1138,9 +1071,10 @@ class PurchaseOrderController extends Controller
                                 'purchase_order_item_id' => $purchaseOrderItem->id,
                                 'batch_number' => $validated['batch_number'] ?? null,
                                 'expiry_date' => $validated['expiry_date'] ?? null,
-                                'unit_cost' => $purchaseOrderItem->unit_cost,
+                                'unit_cost' => $actualUnitCost,
                                 'total_cost' => $itemCost,
                                 'inventory_strategy' => $strategy,
+                                'supplier_cost_updated' => true,
                             ],
                         ]);
                     }
@@ -1166,7 +1100,6 @@ class PurchaseOrderController extends Controller
                     ->get();
                 
                 foreach ($taxes as $tax) {
-                    // Calculate tax amount based on taxable amount (subtotal)
                     if ($tax->type === Tax::TYPE_PERCENTAGE) {
                         $taxAmount = $taxableAmount * ($tax->rate / 100);
                     } else {
@@ -1191,7 +1124,6 @@ class PurchaseOrderController extends Controller
                         'is_withholding_tax' => $tax->is_withholding_tax ?? false,
                     ];
                     
-                    // Create tax liability record for this receipt
                     $taxLiabilities[] = SupplierTaxLiability::create([
                         'tenant_id' => $tenantId,
                         'supplier_id' => $purchaseOrder->supplier_id,
@@ -1222,7 +1154,7 @@ class PurchaseOrderController extends Controller
                 }
             }
             
-            // Calculate current receipt total payable (for tracking only, no payment)
+            // Calculate current receipt total payable
             $currentReceiptPayable = $currentReceiptSubtotal + $currentReceiptAdditiveTax - $currentReceiptWithholdingTax;
             
             // Get current cumulative totals from the purchase order
@@ -1234,25 +1166,36 @@ class PurchaseOrderController extends Controller
             $newCumulativeSubtotal = $cumulativeSubtotal + $currentReceiptSubtotal;
             $newCumulativeTaxTotal = $cumulativeTaxTotal + $currentReceiptTaxAmount;
             $newCumulativeTotal = $cumulativeTotal + $currentReceiptPayable;
-            
-            // Log the calculation for debugging
-            // \Log::info('Receipt calculation (no payment)', [
-            //     'receipt_subtotal' => $currentReceiptSubtotal,
-            //     'receipt_additive_tax' => $currentReceiptAdditiveTax,
-            //     'receipt_withholding_tax' => $currentReceiptWithholdingTax,
-            //     'receipt_tax' => $currentReceiptTaxAmount,
-            //     'receipt_payable' => $currentReceiptPayable,
-            //     'cumulative_subtotal_before' => $cumulativeSubtotal,
-            //     'cumulative_subtotal_after' => $newCumulativeSubtotal,
-            //     'cumulative_tax_before' => $cumulativeTaxTotal,
-            //     'cumulative_tax_after' => $newCumulativeTaxTotal,
-            //     'cumulative_total_before' => $cumulativeTotal,
-            //     'cumulative_total_after' => $newCumulativeTotal,
-            // ]);
 
-            // ✅ REMOVED: Payment transaction - payment already happened when sending to supplier
+            // Process optional payment
+            if (!empty($validated['payment_amount']) && $validated['payment_amount'] > 0) {
+                $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
+                if (!$paymentMethod) {
+                    throw new \Exception(__('pagination.payment_method_not_found'));
+                }
 
-            // ✅ REMOVED: Payment method update on items - handled when sending
+                $paymentAmount = min((float) $validated['payment_amount'], $currentReceiptPayable);
+
+                $transactionLog = app('payment-transaction')->recordTransaction([
+                    'user_id' => $user->id,
+                    'tenant_id' => $tenantId,
+                    'payment_method_id' => $paymentMethod->id,
+                    'transaction_type' => 'WITHDRAWAL',
+                    'transaction_category' => 'PURCHASE_ORDER',
+                    'amount' => $paymentAmount,
+                    'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+                    'reference_table' => 'purchase_orders',
+                    'reference_id' => $purchaseOrder->id,
+                    'description' => 'Purchase Order Payment - PO #' . $purchaseOrder->po_number . ' (Receipt #' . $purchaseReceipt->id . ')',
+                    'notes' => 'Payment against goods actually received, not original PO estimate.',
+                    'metadata' => [
+                        'purchase_receipt_id' => $purchaseReceipt->id,
+                        'receipt_payable' => $currentReceiptPayable,
+                    ],
+                ]);
+
+                $purchaseOrder->total_paid = ($purchaseOrder->total_paid ?? 0) + $paymentAmount;
+            }
 
             // Update purchase order with CUMULATIVE totals
             $purchaseOrder->received_subtotal = $newCumulativeSubtotal;
@@ -1320,13 +1263,13 @@ class PurchaseOrderController extends Controller
         }
     }
 
+
     /**
     * Log a batch receipt event
     */
-    private function logBatchReceipt($batchItem, $variant, $purchaseOrder, $purchaseReceipt, $quantityReceived, $user, $tenantId)
+    private function logBatchReceipt($batchItem, $variant, $purchaseOrder, $purchaseReceipt, $quantityReceived, $actualUnitCost, $user, $tenantId)
     {
         try {
-            // Ensure quantityReceived is a number
             $quantityReceived = (int) $quantityReceived;
             
             if ($quantityReceived <= 0) {
@@ -1334,14 +1277,12 @@ class PurchaseOrderController extends Controller
                     'batch_id' => $batchItem->id ?? null,
                     'quantity' => $quantityReceived
                 ]);
-                return; // Don't log zero or negative quantities
+                return;
             }
 
-            // Get unit cost from batch item
-            $unitCost = (float) ($batchItem->unit_cost ?? 0);
+            $unitCost = (float) ($actualUnitCost ?? $batchItem->unit_cost ?? 0);
             $totalCost = $unitCost * $quantityReceived;
 
-            // Ensure we have a valid batch number
             $batchNumber = $batchItem->batch_number ?? 'BATCH-' . $batchItem->id;
 
             BatchLog::create([
@@ -1370,19 +1311,11 @@ class PurchaseOrderController extends Controller
                     'department_id' => $purchaseOrder->department_id ?? null,
                     'inventory_strategy' => 'batch',
                     'receipt_notes' => $purchaseReceipt->notes,
+                    'actual_unit_cost' => $unitCost,
                 ],
             ]);
 
-            // \Log::info('[Batch Receipt] Logged successfully', [
-            //     'batch_id' => $batchItem->id,
-            //     'batch_number' => $batchNumber,
-            //     'quantity' => $quantityReceived,
-            //     'total_cost' => $totalCost,
-            //     'variant' => $variant->name
-            // ]);
-
         } catch (\Exception $e) {
-            // Log error but don't break the receipt process
             \Log::error('Failed to log batch receipt: ' . $e->getMessage(), [
                 'batch_id' => $batchItem->id ?? null,
                 'variant_id' => $variant->id ?? null,
@@ -1390,6 +1323,7 @@ class PurchaseOrderController extends Controller
             ]);
         }
     }
+
 
     /**
      * Calculate tax due date (15th of following month)

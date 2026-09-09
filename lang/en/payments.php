@@ -12,6 +12,7 @@ return [
     'employee' => 'Employee',
     'all_status' => 'Select All',
     'leave_requests' => 'Leave Requests',
+    'billing_settings'   => 'Billing Settings',
     'payment_type' => 'Type',
     'description' => 'Description',
     'amount' => 'Amount',

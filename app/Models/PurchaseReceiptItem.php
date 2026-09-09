@@ -19,6 +19,7 @@ class PurchaseReceiptItem extends Model
         'quantity_remaining',
         'location_id',
         'department_id',
+        'unit_cost',
         'batch_number',
         'expiry_date',
         'tenant_id',

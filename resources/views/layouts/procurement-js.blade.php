@@ -1099,36 +1099,63 @@
         }
     }
 
-    // Send to Supplier with Payment
-    function sendToSupplierWithPayment(orderId) {
+    // Toggle between email and WhatsApp fields on the Send to Supplier modal
+    function toggleSendToSupplierChannel(orderId) {
         const form = document.getElementById(`sendToSupplierForm${orderId}`);
-        const submitButton = form.querySelector('button[type="button"]:last-child');
-        
+        const channel = form.querySelector('input[name="channel"]:checked').value;
+        const isEmail = channel === 'email';
+        const isPhone = channel === 'whatsapp';
+
+        document.getElementById(`send-email-field-wrap${orderId}`).classList.toggle('d-none', !isEmail);
+        document.getElementById(`send-phone-field-wrap${orderId}`).classList.toggle('d-none', !isPhone);
+
+        const emailInput = document.querySelector(`#send-email-field-wrap${orderId} input`);
+        const phoneInput = document.querySelector(`#send-phone-field-wrap${orderId} input`);
+        if (emailInput) emailInput.required = isEmail;
+        if (phoneInput) phoneInput.required = isPhone;
+
+        // Clear any stale phone error when switching away from WhatsApp
+        if (!isPhone) {
+            const errorEl = document.getElementById(`send-phone-error${orderId}`);
+            if (errorEl) errorEl.classList.add('d-none');
+        }
+    }
+
+    // Send to Supplier — notifies the supplier (email or WhatsApp) and moves
+    // status to "sent". No money moves here; payment is recorded later at
+    // receiving, against the actual quantities and actual costs invoiced.
+    function sendToSupplier(orderId) {
+        const submitButton = document.getElementById(`sendToSupplierButton${orderId}`);
+        if (submitButton.disabled) return;
+
+        const form = document.getElementById(`sendToSupplierForm${orderId}`);
         if (!form) {
             toastr.error('Form not found');
             return;
         }
 
-        // Collect form data
-        const formData = new FormData(form);
-        const data = Object.fromEntries(formData.entries());
+        const payload = Object.fromEntries(new FormData(form).entries());
 
-        // Validate payment amount
-        const paymentAmount = parseFloat(data.payment_amount) || 0;
-        const totalAmount = parseFloat(document.getElementById(`payment_amount_${orderId}`)?.getAttribute('max')) || 0;
-        
-        if (paymentAmount <= 0) {
-            toastr.error('Please enter a valid payment amount');
-            return;
-        }
-        
-        if (paymentAmount > totalAmount) {
-            toastr.error('Payment amount cannot exceed the total amount');
-            return;
+        if (payload.channel === 'whatsapp') {
+            const result = validateE164Phone(payload.supplier_phone);
+            const errorEl = document.getElementById(`send-phone-error${orderId}`);
+            if (!result.valid) {
+                errorEl.textContent = result.error;
+                errorEl.classList.remove('d-none');
+                return;
+            }
+            errorEl.classList.add('d-none');
+            payload.supplier_phone = result.formatted;
         }
 
-        // Show loading
+        if (payload.channel === 'email' && !payload.supplier_email) {
+            form.querySelector('input[name="supplier_email"]').classList.add('is-invalid');
+            toastr.error('{{ __("payments.customer_email_required") }}');
+            return;
+        }
+
         LiveBlade.toggleButtonLoading(submitButton, true);
+        submitButton.disabled = true;
 
         fetch(`/purchase-send/${orderId}`, {
             method: 'POST',
@@ -1137,31 +1164,33 @@
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(payload)
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
             LiveBlade.toggleButtonLoading(submitButton, false);
-            
-            if (data.success) {
-                toastr.success(data.message);
+            submitButton.disabled = false;
+
+            if (ok && body.success) {
+                toastr.success(body.message);
                 const modal = bootstrap.Modal.getInstance(document.getElementById(`sendToSupplierModal${orderId}`));
                 if (modal) modal.hide();
-                
-                // Refresh the page
+
                 setTimeout(() => {
                     location.reload();
                 }, 1500);
             } else {
-                toastr.error(data.message);
+                toastr.error(body.message || '{{ __("passwords.purchase_order_send_failed") }}');
             }
         })
         .catch(error => {
             LiveBlade.toggleButtonLoading(submitButton, false);
+            submitButton.disabled = false;
             console.error('Error:', error);
-            toastr.error('An error occurred while sending the order');
+            toastr.error('{{ __("passwords.purchase_order_send_failed") }}');
         });
     }
+
 
     function showPaymentRequired(orderId, balanceRemaining) {
         Swal.fire({
@@ -1202,80 +1231,6 @@
         });
     }
 
-    // Submit receiving form
-    function submitReceiving(orderId, status) {
-        const form = document.getElementById(`receiveItemsForm${orderId}`);
-        const formData = new FormData(form);
-        formData.append('status', status);
-        
-        // Validate that at least one item has quantity > 0
-        let hasQuantity = false;
-        const receivingInputs = document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`);
-        receivingInputs.forEach(input => {
-            if (parseInt(input.value) > 0) {
-                hasQuantity = true;
-            }
-        });
-        
-        if (!hasQuantity) {
-            Swal.fire({
-                title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("passwords.enter_quantity_for_at_least_one_item") }}',
-                icon: 'warning',
-                confirmButtonColor: '#0d6efd'
-            });
-            return;
-        }
-        
-        Swal.fire({
-            title: status === 'received' ? '{{ __("passwords.mark_fully_received_title") }}' : '{{ __("passwords.mark_partially_received_title") }}',
-            text: status === 'received' ? '{{ __("passwords.mark_fully_received_confirmation") }}' : '{{ __("passwords.mark_partially_received_confirmation") }}',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: status === 'received' ? '#198754' : '#ffc107',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: status === 'received' ? '{{ __("passwords.mark_received") }}' : '{{ __("passwords.mark_partial") }}',
-            cancelButtonText: '{{ __("passwords.cancel") }}',
-            showLoaderOnConfirm: true,
-            preConfirm: () => {
-                return fetch(`/purchase-orders/${orderId}/receive-items`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json',
-                    },
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        throw new Error(data.message);
-                    }
-                    return data;
-                });
-            }
-        })// In your submitReceiving function
-        .then((result) => {
-            if (result.isConfirmed) {
-                Swal.fire({
-                    title: '{{ __("passwords.success") }}',
-                    text: result.value.message,
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    window.location.reload();
-                });
-            }
-            }).catch(error => {
-                Swal.fire({
-                    title: '{{ __("passwords.error") }}',
-                    text: error.message,
-                    icon: 'error',
-                    confirmButtonColor: '#0d6efd'
-                });
-            });
-    }
 
     function cancelPurchaseOrder(orderId) {
         const selectedStatus = 'cancelled';
@@ -1385,455 +1340,455 @@
 
 
 <script>
-// ── START PRODUCTION WITH PAYMENT ─────────────────────────────────────────────
-function startProductionWithPayment(orderId) {
-    // ✅ Find the form (it should always exist now)
-    const form = document.getElementById(`startProductionForm${orderId}`);
-    
-    if (!form) {
-        console.error('Form not found for order:', orderId);
+    // ── START PRODUCTION WITH PAYMENT ─────────────────────────────────────────────
+    function startProductionWithPayment(orderId) {
+        // ✅ Find the form (it should always exist now)
+        const form = document.getElementById(`startProductionForm${orderId}`);
+        
+        if (!form) {
+            console.error('Form not found for order:', orderId);
+            Swal.fire({
+                title: '{{ __("passwords.error") }}',
+                text: 'Could not find production form. Please refresh the page and try again.',
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
+            });
+            return;
+        }
+
+        // Get the submit button
+        const submitButton = form.closest('.modal-body').querySelector('.btn-warning');
+        
+        // Show loading
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
+        }
+
+        const formData = new FormData(form);
+        const data = {
+            order_id: formData.get('order_id'),
+            payment_method_id: formData.get('payment_method_id'),
+            withdrawal_amount: formData.get('withdrawal_amount'),
+            notes: formData.get('notes') || null,
+            estimated_cost: formData.get('estimated_cost'),
+            _token: document.querySelector('meta[name="csrf-token"]').content
+        };
+
+        // ✅ Check if payment is required (estimated_cost > 0)
+        const estimatedCost = parseFloat(data.estimated_cost) || 0;
+        const isPaymentRequired = estimatedCost > 0;
+
+        // ✅ If payment is required, validate payment method
+        if (isPaymentRequired) {
+            if (!data.payment_method_id) {
+                Swal.fire({
+                    title: '{{ __("passwords.validation_error") }}',
+                    text: '{{ __("payments.select_payment_method") }}',
+                    icon: 'warning',
+                    confirmButtonColor: '#0d6efd'
+                });
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+                }
+                return;
+            }
+
+            // Validate amount
+            const amount = parseFloat(data.withdrawal_amount);
+            if (!amount || amount <= 0) {
+                Swal.fire({
+                    title: '{{ __("passwords.validation_error") }}',
+                    text: '{{ __("passwords.please_enter_valid_amount") }}',
+                    icon: 'warning',
+                    confirmButtonColor: '#0d6efd'
+                });
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+                }
+                return;
+            }
+        }
+
+        // Get payment method name for display (if payment is required)
+        let paymentMethodName = 'N/A';
+        if (isPaymentRequired) {
+            const paymentMethodSelect = form.querySelector('select[name="payment_method_id"]');
+            paymentMethodName = paymentMethodSelect.options[paymentMethodSelect.selectedIndex]?.text || 'N/A';
+        }
+
+        // Build confirmation message
+        let confirmationHtml = `{{ __("passwords.start_production_confirmation") }}<br><br>`;
+        if (isPaymentRequired) {
+            confirmationHtml += `
+                <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}${parseFloat(data.withdrawal_amount).toFixed(2)}<br>
+                <strong>{{ __("payments.payment_method") }}:</strong> ${paymentMethodName}
+            `;
+        } else {
+            confirmationHtml += `
+                <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}0.00<br>
+                <strong>{{ __("passwords.payment_status") }}:</strong> {{ __("passwords.no_payment_required") }}
+            `;
+        }
+
+        // Show confirmation
         Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: 'Could not find production form. Please refresh the page and try again.',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
+            title: '{{ __("passwords.start_production") }}',
+            html: confirmationHtml,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '{{ __("passwords.start") }}',
+            cancelButtonText: '{{ __("passwords.cancel") }}',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch(`/production-orders/${orderId}/start-with-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.message);
+                    }
+                    return data;
+                })
+                .catch(error => {
+                    throw new Error(error.message);
+                });
+            }
+        })
+        .then((result) => {
+            if (result.isConfirmed && result.value) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById(`startProductionModal${orderId}`));
+                if (modal) modal.hide();
+
+                Swal.fire({
+                    title: '{{ __("passwords.success") }}',
+                    text: result.value.message,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    if (result.value.redirect) {
+                        window.location.href = result.value.redirect;
+                    } else {
+                        location.reload();
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            Swal.fire({
+                title: '{{ __("passwords.error") }}',
+                text: error.message || '{{ __("passwords.production_start_failed") }}',
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
+            });
+        })
+        .finally(() => {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+            }
         });
-        return;
     }
 
-    // Get the submit button
-    const submitButton = form.closest('.modal-body').querySelector('.btn-warning');
-    
-    // Show loading
-    if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
-    }
 
-    const formData = new FormData(form);
-    const data = {
-        order_id: formData.get('order_id'),
-        payment_method_id: formData.get('payment_method_id'),
-        withdrawal_amount: formData.get('withdrawal_amount'),
-        notes: formData.get('notes') || null,
-        estimated_cost: formData.get('estimated_cost'),
-        _token: document.querySelector('meta[name="csrf-token"]').content
-    };
 
-    // ✅ Check if payment is required (estimated_cost > 0)
-    const estimatedCost = parseFloat(data.estimated_cost) || 0;
-    const isPaymentRequired = estimatedCost > 0;
+    // ── COMPLETE PRODUCTION WITH OUTPUTS ──────────────────────────────────────────
+    function completeProductionWithOutputs(orderId) {
+        const form = document.getElementById(`completeProductionForm${orderId}`);
+        if (!form) {
+            console.error('Form not found for order:', orderId);
+            Swal.fire({
+                title: '{{ __("passwords.error") }}',
+                text: 'Could not find production form. Please refresh the page and try again.',
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
+            });
+            return;
+        }
 
-    // ✅ If payment is required, validate payment method
-    if (isPaymentRequired) {
-        if (!data.payment_method_id) {
+        const submitButton = form.querySelector('button.btn-success');
+        
+        // Show loading
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
+        }
+
+        // ✅ Get form data including batch and expiry
+        const formData = new FormData(form);
+        
+        const data = {
+            outputs: [],
+            complete: true,
+            batch_number: formData.get('batch_number') || null,
+            expiry_date: formData.get('expiry_date') || null,
+            notes: formData.get('notes') || null
+        };
+
+        // ✅ Collect output data - allow some to be 0
+        let hasQuantity = false;
+        const errors = [];
+        let outputCount = 0;
+
+        document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
+            outputCount++;
+            const outputId = input.dataset.outputId;
+            const actualQuantity = parseFloat(input.value) || 0;
+            
+            // ✅ Get defective quantity from the same row
+            const row = input.closest('.card-dashed');
+            const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
+            const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
+
+            // ✅ Get product name for error messages
+            const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
+            const productName = nameEl ? nameEl.textContent : 'Product';
+
+            // ✅ Track if any output has quantity > 0
+            if (actualQuantity > 0) {
+                hasQuantity = true;
+            }
+
+            // ✅ Validate: Actual quantity cannot be negative
+            if (actualQuantity < 0) {
+                errors.push(`"${productName}" - Actual quantity cannot be negative`);
+            }
+
+            // ✅ Validate: Defective quantity cannot exceed actual quantity
+            if (defectiveQuantity > actualQuantity) {
+                errors.push(`"${productName}" - Defective quantity (${defectiveQuantity}) cannot exceed actual quantity (${actualQuantity})`);
+            }
+
+            data.outputs.push({
+                output_id: outputId,
+                actual_quantity: actualQuantity,
+                defective_quantity: defectiveQuantity
+            });
+        });
+
+        // ✅ Show specific validation errors
+        if (errors.length > 0) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("payments.select_payment_method") }}',
+                html: errors.join('<br>'),
                 icon: 'warning',
                 confirmButtonColor: '#0d6efd'
             });
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
             }
             return;
         }
 
-        // Validate amount
-        const amount = parseFloat(data.withdrawal_amount);
-        if (!amount || amount <= 0) {
+        // ✅ Validate: At least one output must have quantity > 0
+        if (!hasQuantity) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("passwords.please_enter_valid_amount") }}',
+                text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
                 icon: 'warning',
                 confirmButtonColor: '#0d6efd'
             });
             if (submitButton) {
                 submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
+                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
             }
             return;
         }
-    }
 
-    // Get payment method name for display (if payment is required)
-    let paymentMethodName = 'N/A';
-    if (isPaymentRequired) {
-        const paymentMethodSelect = form.querySelector('select[name="payment_method_id"]');
-        paymentMethodName = paymentMethodSelect.options[paymentMethodSelect.selectedIndex]?.text || 'N/A';
-    }
-
-    // Build confirmation message
-    let confirmationHtml = `{{ __("passwords.start_production_confirmation") }}<br><br>`;
-    if (isPaymentRequired) {
-        confirmationHtml += `
-            <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}${parseFloat(data.withdrawal_amount).toFixed(2)}<br>
-            <strong>{{ __("payments.payment_method") }}:</strong> ${paymentMethodName}
-        `;
-    } else {
-        confirmationHtml += `
-            <strong>{{ __("passwords.production_cost") }}:</strong> {{ currency_symbol() }}0.00<br>
-            <strong>{{ __("passwords.payment_status") }}:</strong> {{ __("passwords.no_payment_required") }}
-        `;
-    }
-
-    // Show confirmation
-    Swal.fire({
-        title: '{{ __("passwords.start_production") }}',
-        html: confirmationHtml,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#ffc107',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '{{ __("passwords.start") }}',
-        cancelButtonText: '{{ __("passwords.cancel") }}',
-        showLoaderOnConfirm: true,
-        preConfirm: () => {
-            return fetch(`/production-orders/${orderId}/start-with-payment`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.message);
+        // ✅ Show confirmation with summary including batch info
+        let summaryHtml = '{{ __("passwords.complete_production_confirmation") }}<br><br>';
+        
+        document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
+            const actualQuantity = parseFloat(input.value) || 0;
+            
+            const row = input.closest('.card-dashed');
+            const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
+            const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
+            const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
+            const productName = nameEl ? nameEl.textContent : 'Product';
+            
+            if (actualQuantity > 0) {
+                summaryHtml += `<strong>${productName}:</strong> ${actualQuantity} units`;
+                if (defectiveQuantity > 0) {
+                    summaryHtml += ` (${defectiveQuantity} defective)`;
                 }
-                return data;
-            })
-            .catch(error => {
-                throw new Error(error.message);
-            });
-        }
-    })
-    .then((result) => {
-        if (result.isConfirmed && result.value) {
-            const modal = bootstrap.Modal.getInstance(document.getElementById(`startProductionModal${orderId}`));
-            if (modal) modal.hide();
-
-            Swal.fire({
-                title: '{{ __("passwords.success") }}',
-                text: result.value.message,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                if (result.value.redirect) {
-                    window.location.href = result.value.redirect;
-                } else {
-                    location.reload();
-                }
-            });
-        }
-    })
-    .catch(error => {
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: error.message || '{{ __("passwords.production_start_failed") }}',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
-        });
-    })
-    .finally(() => {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-play-fill me-2"></i> {{ __("passwords.start_production") }}';
-        }
-    });
-}
-
-
-
-// ── COMPLETE PRODUCTION WITH OUTPUTS ──────────────────────────────────────────
-function completeProductionWithOutputs(orderId) {
-    const form = document.getElementById(`completeProductionForm${orderId}`);
-    if (!form) {
-        console.error('Form not found for order:', orderId);
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: 'Could not find production form. Please refresh the page and try again.',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
-        });
-        return;
-    }
-
-    const submitButton = form.querySelector('button.btn-success');
-    
-    // Show loading
-    if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
-    }
-
-    // ✅ Get form data including batch and expiry
-    const formData = new FormData(form);
-    
-    const data = {
-        outputs: [],
-        complete: true,
-        batch_number: formData.get('batch_number') || null,
-        expiry_date: formData.get('expiry_date') || null,
-        notes: formData.get('notes') || null
-    };
-
-    // ✅ Collect output data - allow some to be 0
-    let hasQuantity = false;
-    const errors = [];
-    let outputCount = 0;
-
-    document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
-        outputCount++;
-        const outputId = input.dataset.outputId;
-        const actualQuantity = parseFloat(input.value) || 0;
-        
-        // ✅ Get defective quantity from the same row
-        const row = input.closest('.card-dashed');
-        const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
-        const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
-
-        // ✅ Get product name for error messages
-        const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
-        const productName = nameEl ? nameEl.textContent : 'Product';
-
-        // ✅ Track if any output has quantity > 0
-        if (actualQuantity > 0) {
-            hasQuantity = true;
-        }
-
-        // ✅ Validate: Actual quantity cannot be negative
-        if (actualQuantity < 0) {
-            errors.push(`"${productName}" - Actual quantity cannot be negative`);
-        }
-
-        // ✅ Validate: Defective quantity cannot exceed actual quantity
-        if (defectiveQuantity > actualQuantity) {
-            errors.push(`"${productName}" - Defective quantity (${defectiveQuantity}) cannot exceed actual quantity (${actualQuantity})`);
-        }
-
-        data.outputs.push({
-            output_id: outputId,
-            actual_quantity: actualQuantity,
-            defective_quantity: defectiveQuantity
-        });
-    });
-
-    // ✅ Show specific validation errors
-    if (errors.length > 0) {
-        Swal.fire({
-            title: '{{ __("passwords.validation_error") }}',
-            html: errors.join('<br>'),
-            icon: 'warning',
-            confirmButtonColor: '#0d6efd'
-        });
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-        }
-        return;
-    }
-
-    // ✅ Validate: At least one output must have quantity > 0
-    if (!hasQuantity) {
-        Swal.fire({
-            title: '{{ __("passwords.validation_error") }}',
-            text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
-            icon: 'warning',
-            confirmButtonColor: '#0d6efd'
-        });
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-        }
-        return;
-    }
-
-    // ✅ Show confirmation with summary including batch info
-    let summaryHtml = '{{ __("passwords.complete_production_confirmation") }}<br><br>';
-    
-    document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
-        const actualQuantity = parseFloat(input.value) || 0;
-        
-        const row = input.closest('.card-dashed');
-        const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
-        const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
-        const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
-        const productName = nameEl ? nameEl.textContent : 'Product';
-        
-        if (actualQuantity > 0) {
-            summaryHtml += `<strong>${productName}:</strong> ${actualQuantity} units`;
-            if (defectiveQuantity > 0) {
-                summaryHtml += ` (${defectiveQuantity} defective)`;
+                summaryHtml += `<br>`;
             }
-            summaryHtml += `<br>`;
+        });
+
+        // ✅ Add batch and expiry info to confirmation
+        if (data.batch_number) {
+            summaryHtml += `<br><strong>{{ __("passwords.batch_number") }}:</strong> ${data.batch_number}`;
         }
+        if (data.expiry_date) {
+            summaryHtml += `<br><strong>{{ __("passwords.expiry_date") }}:</strong> ${data.expiry_date}`;
+        }
+        if (data.notes) {
+            summaryHtml += `<br><strong>{{ __("passwords.notes") }}:</strong> ${data.notes}`;
+        }
+
+        Swal.fire({
+            title: '{{ __("passwords.complete_production") }}',
+            html: summaryHtml,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '{{ __("passwords.complete") }}',
+            cancelButtonText: '{{ __("passwords.cancel") }}',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch(`/production-orders/${orderId}/complete-with-outputs`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.message);
+                    }
+                    return data;
+                })
+                .catch(error => {
+                    throw new Error(error.message);
+                });
+            }
+        })
+        .then((result) => {
+            if (result.isConfirmed && result.value) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById(`completeProductionModal${orderId}`));
+                if (modal) modal.hide();
+
+                Swal.fire({
+                    title: '{{ __("passwords.success") }}',
+                    text: result.value.message,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    if (result.value.redirect) {
+                        window.location.href = result.value.redirect;
+                    } else {
+                        location.reload();
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            Swal.fire({
+                title: '{{ __("passwords.error") }}',
+                text: error.message || '{{ __("passwords.production_complete_failed") }}',
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
+            });
+        })
+        .finally(() => {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
+            }
+        });
+    }
+
+    // ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('input', function(e) {
+            const target = e.target;
+            if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
+                updateProductionSummary();
+            }
+        });
     });
 
-    // ✅ Add batch and expiry info to confirmation
-    if (data.batch_number) {
-        summaryHtml += `<br><strong>{{ __("passwords.batch_number") }}:</strong> ${data.batch_number}`;
-    }
-    if (data.expiry_date) {
-        summaryHtml += `<br><strong>{{ __("passwords.expiry_date") }}:</strong> ${data.expiry_date}`;
-    }
-    if (data.notes) {
-        summaryHtml += `<br><strong>{{ __("passwords.notes") }}:</strong> ${data.notes}`;
+    function updateProductionSummary() {
+        let totalProduced = 0;
+        let totalDefective = 0;
+        
+        document.querySelectorAll('.actual-quantity-input').forEach(input => {
+            totalProduced += parseFloat(input.value) || 0;
+        });
+        
+        document.querySelectorAll('.defective-quantity-input').forEach(input => {
+            totalDefective += parseFloat(input.value) || 0;
+        });
+        
+        // Update displays if they exist
+        const producedDisplay = document.getElementById('total_produced_display');
+        const defectiveDisplay = document.getElementById('total_defective_display');
+        
+        if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
+        if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
     }
 
-    Swal.fire({
-        title: '{{ __("passwords.complete_production") }}',
-        html: summaryHtml,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#198754',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '{{ __("passwords.complete") }}',
-        cancelButtonText: '{{ __("passwords.cancel") }}',
-        showLoaderOnConfirm: true,
-        preConfirm: () => {
-            return fetch(`/production-orders/${orderId}/complete-with-outputs`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.message);
-                }
-                return data;
-            })
-            .catch(error => {
-                throw new Error(error.message);
-            });
-        }
-    })
-    .then((result) => {
-        if (result.isConfirmed && result.value) {
-            const modal = bootstrap.Modal.getInstance(document.getElementById(`completeProductionModal${orderId}`));
-            if (modal) modal.hide();
-
-            Swal.fire({
-                title: '{{ __("passwords.success") }}',
-                text: result.value.message,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                if (result.value.redirect) {
-                    window.location.href = result.value.redirect;
-                } else {
+    // ── CANCEL PRODUCTION ────────────────────────────────────────────────────────
+    function cancelProduction(orderId) {
+        Swal.fire({
+            title: '{{ __("passwords.cancel_production") }}',
+            text: '{{ __("passwords.cancel_production_confirmation") }}',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '{{ __("passwords.cancel") }}',
+            cancelButtonText: '{{ __("passwords.keep") }}',
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                return fetch(`/production-orders/${orderId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.message);
+                    }
+                    return data;
+                });
+            }
+        })
+        .then((result) => {
+            if (result.isConfirmed && result.value) {
+                Swal.fire({
+                    title: '{{ __("passwords.success") }}',
+                    text: result.value.message,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
                     location.reload();
-                }
-            });
-        }
-    })
-    .catch(error => {
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: error.message || '{{ __("passwords.production_complete_failed") }}',
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
-        });
-    })
-    .finally(() => {
-        if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-        }
-    });
-}
-
-// ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-    document.addEventListener('input', function(e) {
-        const target = e.target;
-        if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
-            updateProductionSummary();
-        }
-    });
-});
-
-function updateProductionSummary() {
-    let totalProduced = 0;
-    let totalDefective = 0;
-    
-    document.querySelectorAll('.actual-quantity-input').forEach(input => {
-        totalProduced += parseFloat(input.value) || 0;
-    });
-    
-    document.querySelectorAll('.defective-quantity-input').forEach(input => {
-        totalDefective += parseFloat(input.value) || 0;
-    });
-    
-    // Update displays if they exist
-    const producedDisplay = document.getElementById('total_produced_display');
-    const defectiveDisplay = document.getElementById('total_defective_display');
-    
-    if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
-    if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
-}
-
-// ── CANCEL PRODUCTION ────────────────────────────────────────────────────────
-function cancelProduction(orderId) {
-    Swal.fire({
-        title: '{{ __("passwords.cancel_production") }}',
-        text: '{{ __("passwords.cancel_production_confirmation") }}',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '{{ __("passwords.cancel") }}',
-        cancelButtonText: '{{ __("passwords.keep") }}',
-        showLoaderOnConfirm: true,
-        preConfirm: () => {
-            return fetch(`/production-orders/${orderId}/cancel`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    throw new Error(data.message);
-                }
-                return data;
-            });
-        }
-    })
-    .then((result) => {
-        if (result.isConfirmed && result.value) {
+                });
+            }
+        })
+        .catch(error => {
             Swal.fire({
-                title: '{{ __("passwords.success") }}',
-                text: result.value.message,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                location.reload();
+                title: '{{ __("passwords.error") }}',
+                text: error.message,
+                icon: 'error',
+                confirmButtonColor: '#0d6efd'
             });
-        }
-    })
-    .catch(error => {
-        Swal.fire({
-            title: '{{ __("passwords.error") }}',
-            text: error.message,
-            icon: 'error',
-            confirmButtonColor: '#0d6efd'
         });
-    });
-}
+    }
 </script>
 
 

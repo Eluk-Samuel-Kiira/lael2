@@ -52,7 +52,28 @@ class BillingPlan extends Model
         'includes_hr_payroll',
         'includes_multicurrency',
         'includes_financial_reports',
-        'includes_advanced_reports',
+        'includes_expense_reports',
+        'includes_order_reports',
+        'includes_product_reports',
+        'includes_inventory_reports',
+        'includes_purchasing_reports',
+        'includes_production_reports',
+        'includes_restaurant_reports',
+        'includes_sales_reports',
+        'includes_customer_reports',
+        'includes_supplier_reports',
+        
+        // Production Modules
+        'includes_production_orders',
+        'includes_bill_of_materials',
+        'includes_work_orders',
+        
+        // Restaurant Modules
+        'includes_restaurant_management',
+        'includes_table_management',
+        'includes_menu_management',
+        'includes_kitchen_display',
+
         'includes_api_access',
         'includes_ecommerce',
         'includes_crm',
@@ -178,6 +199,32 @@ class BillingPlan extends Model
         'is_active' => 'boolean',
         'features_list' => 'array',
         'limitations' => 'array',
+
+        // 🔥 REPORTS MODULES
+        'includes_financial_reports' => 'boolean',
+        'includes_expense_reports' => 'boolean',
+        'includes_order_reports' => 'boolean',
+        'includes_product_reports' => 'boolean',
+        'includes_inventory_reports' => 'boolean',
+        'includes_purchasing_reports' => 'boolean',
+        'includes_production_reports' => 'boolean',
+        'includes_restaurant_reports' => 'boolean',
+        'includes_sales_reports' => 'boolean',
+        'includes_customer_reports' => 'boolean',
+        'includes_supplier_reports' => 'boolean',
+        
+        // Production Modules
+        'includes_production_orders' => 'boolean',
+        'includes_bill_of_materials' => 'boolean',
+        'includes_work_orders' => 'boolean',
+        
+        // Restaurant Modules
+        'includes_restaurant_management' => 'boolean',
+        'includes_table_management' => 'boolean',
+        'includes_menu_management' => 'boolean',
+        'includes_kitchen_display' => 'boolean',
+
+
     ];
 
 
@@ -469,6 +516,87 @@ class BillingPlan extends Model
                 'setting_value' => $value ? '1' : '0',
                 'data_type' => 'boolean',
                 'category' => 'features',
+                'updated_by' => $updatedBy,
+            ];
+        }
+
+            $reportModules = [
+            // Financial Reports
+            'module_financial_reports' => $this->includes_financial_reports ?? false,
+            'includes_financial_reports' => $this->includes_financial_reports ?? false,
+            
+            // Expense Reports
+            'module_expense_reports' => $this->includes_expense_reports ?? false,
+            
+            // Order Reports
+            'module_order_reports' => $this->includes_order_reports ?? false,
+            
+            // Product Reports
+            'module_product_reports' => $this->includes_product_reports ?? false,
+            
+            // Inventory Reports
+            'module_inventory_reports' => $this->includes_inventory_reports ?? false,
+            
+            // Purchasing Reports
+            'module_purchasing_reports' => $this->includes_purchasing_reports ?? false,
+            
+            // Production Reports
+            'module_production_reports' => $this->includes_production_reports ?? false,
+            
+            // Restaurant Reports
+            'module_restaurant_reports' => $this->includes_restaurant_reports ?? false,
+            
+            // Sales Reports
+            'module_sales_reports' => $this->includes_sales_reports ?? false,
+            
+            // Customer Reports
+            'module_customer_reports' => $this->includes_customer_reports ?? false,
+            
+            // Supplier Reports
+            'module_supplier_reports' => $this->includes_supplier_reports ?? false,
+        ];
+
+        foreach ($reportModules as $key => $value) {
+            $settings[] = [
+                'setting_key' => $key,
+                'setting_value' => $value ? '1' : '0',
+                'data_type' => 'boolean',
+                'category' => 'reports',
+                'updated_by' => $updatedBy,
+            ];
+        }
+
+        // ==================== PRODUCTION MODULES ====================
+        $productionModules = [
+            'module_production_orders' => $this->includes_production_orders ?? false,
+            'module_bill_of_materials' => $this->includes_bill_of_materials ?? false,
+            'module_work_orders' => $this->includes_work_orders ?? false,
+        ];
+
+        foreach ($productionModules as $key => $value) {
+            $settings[] = [
+                'setting_key' => $key,
+                'setting_value' => $value ? '1' : '0',
+                'data_type' => 'boolean',
+                'category' => 'production',
+                'updated_by' => $updatedBy,
+            ];
+        }
+
+        // ==================== RESTAURANT MODULES ====================
+        $restaurantModules = [
+            'module_restaurant_management' => $this->includes_restaurant_management ?? false,
+            'module_table_management' => $this->includes_table_management ?? false,
+            'module_menu_management' => $this->includes_menu_management ?? false,
+            'module_kitchen_display' => $this->includes_kitchen_display ?? false,
+        ];
+
+        foreach ($restaurantModules as $key => $value) {
+            $settings[] = [
+                'setting_key' => $key,
+                'setting_value' => $value ? '1' : '0',
+                'data_type' => 'boolean',
+                'category' => 'restaurant',
                 'updated_by' => $updatedBy,
             ];
         }

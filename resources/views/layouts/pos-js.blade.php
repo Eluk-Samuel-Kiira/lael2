@@ -877,222 +877,326 @@ document.addEventListener('DOMContentLoaded', () => calculateCartSummary());
      and by clearCart() as a safety net.
 ════════════════════════════════════════════════ --}}
 <script>
+    function processPayment() {
+        const submitButton = document.getElementById('processBill');
 
-function processPayment() {
-    const submitButton = document.getElementById('processBill');
-
-    if (cart.length === 0) { toastr['warning']('{{ __("pagination.cart_empty") }}'); return; }
-
-    // ✅ Check if department is selected (for multi-shop)
-    @if(!$isSingleShop)
-        if (!isDepartmentSelected()) {
-            showDepartmentWarning();
-            return;
+        if (cart.length === 0) { 
+            toastr['warning']('{{ __("pagination.cart_empty") }}'); 
+            return; 
         }
-    @endif
 
-    const radioExisting   = document.getElementById('cust-mode-existing');
-    const radioNew        = document.getElementById('cust-mode-new');
-    const custExistSelect = document.getElementById('cust-existing-select');
-    const custNewInput    = document.getElementById('cust-new-input');
-    let customerData = null;
-
-    if (!radioExisting.checked && !radioNew.checked) { toastr['warning']('{{ __("pagination.please_select_customer_type") }}'); return; }
-    if (radioExisting.checked) {
-        if (!custExistSelect.value) { toastr['warning']('{{ __("pagination.please_select_existing_customer") }}'); return; }
-        customerData = { type: 'existing', id: custExistSelect.value };
-    } else {
-        if (!custNewInput.value.trim()) { toastr['warning']('{{ __("pagination.please_enter_customer") }}'); return; }
-        customerData = { type: 'new', name: custNewInput.value.trim() };
-    }
-
-    const cartData = {
-        items: cart.map(item => {
-            const itemSubtotal = item.price * item.quantity;
-            const itemTaxes = (item.taxes || []).map(tax => {
-                const rate = parseFloat(tax.rate || 0);
-                const amt  = tax.type === 'percentage' ? itemSubtotal * (rate / 100) : rate * item.quantity;
-                return { id: tax.id, name: tax.name, type: tax.type, rate: tax.rate, amount: amt };
-            });
-            const itemTaxTotal = itemTaxes.reduce((s, t) => s + t.amount, 0);
-            let discountTotal  = 0;
-            const appliedPromotions = [];
-            (item.promotions || []).forEach(promo => {
-                let d = 0;
-                if (promo.type === 'percentage')   d = itemSubtotal * (promo.value / 100);
-                if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
-                if (d > 0) { discountTotal += d; appliedPromotions.push({ id: promo.id, name: promo.name, type: promo.type, value: promo.value, discount: d }); }
-            });
-            return { 
-                variant_id: item.id, 
-                quantity: item.quantity, 
-                price: item.price, 
-                name: item.name,
-                subtotal: itemSubtotal, 
-                taxes: itemTaxes, 
-                tax_total: itemTaxTotal,
-                discount: discountTotal, 
-                promotions: appliedPromotions,
-                total: itemSubtotal - discountTotal + itemTaxTotal,
-                inventory_id: item.inventory_id || null,
-                department_id: item.department_id || null,
-                batch_id: item.batch_id || null,     
-                batch_number: item.batch_number || null, 
-                serial_id: item.serial_id || null,
-                serial_number: item.serial_number || null
-            };
-        }),
-        customer: customerData,
-        subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
-        discount: cart.reduce((s, i) => s + computeItemDiscount(i), 0),
-        tax:      cart.reduce((s, i) => s + computeItemTax(i), 0),
-        total:    0,
-    };
-    cartData.total = cartData.subtotal - cartData.discount + cartData.tax;
-
-    const formData = new FormData();
-    formData.append('cart_data', JSON.stringify(cartData));
-    if (window.resumedOrderId) {
-        formData.append('resumed_order_id', window.resumedOrderId);
-    }
-
-    LiveBlade.toggleButtonLoading(submitButton, true);
-
-    fetch('{{ route("orders.process-payment") }}', {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-        body: formData,
-    })
-    .then(r => { if (!r.ok) { toastr['error']('{{ __("pagination.network_error") }}'); throw new Error('Not ok'); } return r.json(); })
-    .then(data => {
-        LiveBlade.toggleButtonLoading(submitButton, false);
-        if (data.success) {
-            toastr['success'](data.message);
-            const enrichedCart       = JSON.parse(formData.get('cart_data'));
-            enrichedCart.order_number = data.order_number;
-            enrichedCart.customerName = data.customerName;
-            enrichedCart.order_id     = data.order_id;
-
-            if (typeof window.openPaymentModal === 'function') {
-                window.openPaymentModal(enrichedCart);
-            } else {
-                console.error('openPaymentModal not found');
+        // ✅ Check if department is selected (for multi-shop)
+        @if(!$isSingleShop)
+            if (!isDepartmentSelected()) {
+                showDepartmentWarning();
+                return;
             }
-        } else {
-            toastr['error'](data.message || '{{ __("pagination.order_failed") }}');
+        @endif
+
+        const radioExisting   = document.getElementById('cust-mode-existing');
+        const radioNew        = document.getElementById('cust-mode-new');
+        const custExistSelect = document.getElementById('cust-existing-select');
+        const custNewInput    = document.getElementById('cust-new-input');
+        let customerData = null;
+
+        if (!radioExisting.checked && !radioNew.checked) { 
+            toastr['warning']('{{ __("pagination.please_select_customer_type") }}'); 
+            return; 
         }
-    })
-    .catch(err => {
-        LiveBlade.toggleButtonLoading(submitButton, false);
-        console.error('Payment error:', err);
-        toastr['error']('{{ __("pagination.payment_error") }}');
-    });
-}
+        
+        if (radioExisting.checked) {
+            if (!custExistSelect.value) { 
+                toastr['warning']('{{ __("pagination.please_select_existing_customer") }}'); 
+                return; 
+            }
+            customerData = { type: 'existing', id: custExistSelect.value };
+        } else {
+            if (!custNewInput.value.trim()) { 
+                toastr['warning']('{{ __("pagination.please_enter_customer") }}'); 
+                return; 
+            }
+            customerData = { type: 'new', name: custNewInput.value.trim() };
+        }
+
+        const cartData = {
+            items: cart.map(item => {
+                const itemSubtotal = item.price * item.quantity;
+                const itemTaxes = (item.taxes || []).map(tax => {
+                    const rate = parseFloat(tax.rate || 0);
+                    const amt  = tax.type === 'percentage' ? itemSubtotal * (rate / 100) : rate * item.quantity;
+                    return { id: tax.id, name: tax.name, type: tax.type, rate: tax.rate, amount: amt };
+                });
+                const itemTaxTotal = itemTaxes.reduce((s, t) => s + t.amount, 0);
+                let discountTotal  = 0;
+                const appliedPromotions = [];
+                (item.promotions || []).forEach(promo => {
+                    let d = 0;
+                    if (promo.type === 'percentage')   d = itemSubtotal * (promo.value / 100);
+                    if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
+                    if (d > 0) { 
+                        discountTotal += d; 
+                        appliedPromotions.push({ 
+                            id: promo.id, 
+                            name: promo.name, 
+                            type: promo.type, 
+                            value: promo.value, 
+                            discount: d 
+                        }); 
+                    }
+                });
+                return { 
+                    variant_id: item.id, 
+                    quantity: item.quantity, 
+                    price: item.price, 
+                    name: item.name,
+                    subtotal: itemSubtotal, 
+                    taxes: itemTaxes, 
+                    tax_total: itemTaxTotal,
+                    discount: discountTotal, 
+                    promotions: appliedPromotions,
+                    total: itemSubtotal - discountTotal + itemTaxTotal,
+                    inventory_id: item.inventory_id || null,
+                    department_id: item.department_id || null,
+                    batch_id: item.batch_id || null,     
+                    batch_number: item.batch_number || null, 
+                    serial_id: item.serial_id || null,
+                    serial_number: item.serial_number || null
+                };
+            }),
+            customer: customerData,
+            subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
+            discount: cart.reduce((s, i) => s + computeItemDiscount(i), 0),
+            tax:      cart.reduce((s, i) => s + computeItemTax(i), 0),
+            total:    0,
+        };
+        cartData.total = cartData.subtotal - cartData.discount + cartData.tax;
+
+        const formData = new FormData();
+        formData.append('cart_data', JSON.stringify(cartData));
+        if (window.resumedOrderId) {
+            formData.append('resumed_order_id', window.resumedOrderId);
+        }
+
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        fetch('{{ route("orders.process-payment") }}', {
+            method: 'POST',
+            headers: { 
+                'X-CSRF-TOKEN': '{{ csrf_token() }}', 
+                'Accept': 'application/json' 
+            },
+            body: formData,
+        })
+        .then(response => {
+            if (!response.ok) {
+                // Try to parse error response
+                return response.json().then(data => {
+                    throw data;
+                }).catch(() => {
+                    // If response is not JSON, throw generic error
+                    throw { 
+                        success: false, 
+                        message: '{{ __("pagination.network_error") }}' 
+                    };
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            
+            if (data.success) {
+                toastr['success'](data.message);
+                const enrichedCart = JSON.parse(formData.get('cart_data'));
+                enrichedCart.order_number = data.order_number;
+                enrichedCart.customerName = data.customerName;
+                enrichedCart.order_id = data.order_id;
+
+                if (typeof window.openPaymentModal === 'function') {
+                    window.openPaymentModal(enrichedCart);
+                } else {
+                    console.error('openPaymentModal not found');
+                }
+            } else {
+                // ✅ Show exact error message from server
+                const errorMessage = data.message || '{{ __("pagination.order_failed") }}';
+                toastr['error'](errorMessage);
+                
+                // ✅ If there's debug info, show it in console
+                if (data.debug) {
+                    console.error('Debug info:', data.debug);
+                }
+            }
+        })
+        .catch(error => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.error('Payment error:', error);
+            
+            // ✅ Display the exact error message
+            const errorMessage = error.message || '{{ __("pagination.payment_error") }}';
+            toastr['error'](errorMessage);
+            
+            // ✅ If there's debug info, show it
+            if (error.debug) {
+                console.error('Debug info:', error.debug);
+            }
+        });
+    }
 </script>
 
 <script>
-function generateInvoice() {
-    const submitButton = document.getElementById('generateInvoiceBtn');
+    function generateInvoice() {
+        const submitButton = document.getElementById('generateInvoiceBtn');
 
-    if (cart.length === 0) { toastr['warning']('{{ __("pagination.cart_empty") }}'); return; }
-
-    // ✅ Check if department is selected (for multi-shop)
-    @if(!$isSingleShop)
-        if (!isDepartmentSelected()) {
-            showDepartmentWarning();
-            return;
+        if (cart.length === 0) { 
+            toastr['warning']('{{ __("pagination.cart_empty") }}'); 
+            return; 
         }
-    @endif
 
-    const radioExisting   = document.getElementById('cust-mode-existing');
-    const radioNew        = document.getElementById('cust-mode-new');
-    const custExistSelect = document.getElementById('cust-existing-select');
-    const custNewInput    = document.getElementById('cust-new-input');
-    let customerData = null;
+        // ✅ Check if department is selected (for multi-shop)
+        @if(!$isSingleShop)
+            if (!isDepartmentSelected()) {
+                showDepartmentWarning();
+                return;
+            }
+        @endif
 
-    if (!radioExisting.checked && !radioNew.checked) { toastr['warning']('{{ __("pagination.please_select_customer_type") }}'); return; }
-    if (radioExisting.checked) {
-        if (!custExistSelect.value) { toastr['warning']('{{ __("pagination.please_select_existing_customer") }}'); return; }
-        customerData = { type: 'existing', id: custExistSelect.value };
-    } else {
-        if (!custNewInput.value.trim()) { toastr['warning']('{{ __("pagination.please_enter_customer") }}'); return; }
-        customerData = { type: 'new', name: custNewInput.value.trim() };
-    }
+        const radioExisting   = document.getElementById('cust-mode-existing');
+        const radioNew        = document.getElementById('cust-mode-new');
+        const custExistSelect = document.getElementById('cust-existing-select');
+        const custNewInput    = document.getElementById('cust-new-input');
+        let customerData = null;
 
-    const cartData = {
-        items: cart.map(item => {
-            const itemSubtotal = item.price * item.quantity;
-            const itemTaxes = (item.taxes || []).map(tax => {
-                const rate = parseFloat(tax.rate || 0);
-                const amt  = tax.type === 'percentage' ? itemSubtotal * (rate / 100) : rate * item.quantity;
-                return { id: tax.id, name: tax.name, type: tax.type, rate: tax.rate, amount: amt };
-            });
-            const itemTaxTotal = itemTaxes.reduce((s, t) => s + t.amount, 0);
-            let discountTotal  = 0;
-            const appliedPromotions = [];
-            (item.promotions || []).forEach(promo => {
-                let d = 0;
-                if (promo.type === 'percentage')   d = itemSubtotal * (promo.value / 100);
-                if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
-                if (d > 0) { discountTotal += d; appliedPromotions.push({ id: promo.id, name: promo.name, type: promo.type, value: promo.value, discount: d }); }
-            });
-            return { 
-                variant_id: item.id, 
-                quantity: item.quantity, 
-                price: item.price, 
-                name: item.name,
-                subtotal: itemSubtotal, 
-                taxes: itemTaxes, 
-                tax_total: itemTaxTotal,
-                discount: discountTotal, 
-                promotions: appliedPromotions,
-                total: itemSubtotal - discountTotal + itemTaxTotal,
-                inventory_id: item.inventory_id || null,
-                department_id: item.department_id || null,
-                batch_id: item.batch_id || null,     
-                batch_number: item.batch_number || null,
-            };
-        }),
-        customer: customerData,
-        subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
-        discount: cart.reduce((s, i) => s + computeItemDiscount(i), 0),
-        tax:      cart.reduce((s, i) => s + computeItemTax(i), 0),
-        total:    0,
-    };
-    cartData.total = cartData.subtotal - cartData.discount + cartData.tax;
-
-    const formData = new FormData();
-    formData.append('cart_data', JSON.stringify(cartData));
-
-    LiveBlade.toggleButtonLoading(submitButton, true);
-
-    fetch('{{ route("orders.generate-invoice") }}', {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-        body: formData,
-    })
-    .then(r => { if (!r.ok) { toastr['error']('{{ __("pagination.network_error") }}'); throw new Error('Not ok'); } return r.json(); })
-    .then(data => {
-        LiveBlade.toggleButtonLoading(submitButton, false);
-        if (data.success) {
-            toastr['success'](data.message);
-            Swal.fire({
-                icon: 'success',
-                title: '{{ __("pagination.invoice_generated") }}',
-                html: '{{ __("pagination.invoice_number") }}: <strong>' + data.invoice_number + '</strong>',
-                confirmButtonText: 'OK',
-            });
-            if (typeof clearCart === 'function') clearCart();
+        if (!radioExisting.checked && !radioNew.checked) { 
+            toastr['warning']('{{ __("pagination.please_select_customer_type") }}'); 
+            return; 
+        }
+        
+        if (radioExisting.checked) {
+            if (!custExistSelect.value) { 
+                toastr['warning']('{{ __("pagination.please_select_existing_customer") }}'); 
+                return; 
+            }
+            customerData = { type: 'existing', id: custExistSelect.value };
         } else {
-            toastr['error'](data.message || '{{ __("pagination.invoice_generation_failed") }}');
+            if (!custNewInput.value.trim()) { 
+                toastr['warning']('{{ __("pagination.please_enter_customer") }}'); 
+                return; 
+            }
+            customerData = { type: 'new', name: custNewInput.value.trim() };
         }
-    })
-    .catch(err => {
-        LiveBlade.toggleButtonLoading(submitButton, false);
-        console.error('Invoice error:', err);
-        toastr['error']('{{ __("pagination.invoice_generation_failed") }}');
-    });
-}
+
+        const cartData = {
+            items: cart.map(item => {
+                const itemSubtotal = item.price * item.quantity;
+                const itemTaxes = (item.taxes || []).map(tax => {
+                    const rate = parseFloat(tax.rate || 0);
+                    const amt  = tax.type === 'percentage' ? itemSubtotal * (rate / 100) : rate * item.quantity;
+                    return { id: tax.id, name: tax.name, type: tax.type, rate: tax.rate, amount: amt };
+                });
+                const itemTaxTotal = itemTaxes.reduce((s, t) => s + t.amount, 0);
+                let discountTotal  = 0;
+                const appliedPromotions = [];
+                (item.promotions || []).forEach(promo => {
+                    let d = 0;
+                    if (promo.type === 'percentage')   d = itemSubtotal * (promo.value / 100);
+                    if (promo.type === 'fixed_amount') d = promo.value * item.quantity;
+                    if (d > 0) { 
+                        discountTotal += d; 
+                        appliedPromotions.push({ 
+                            id: promo.id, 
+                            name: promo.name, 
+                            type: promo.type, 
+                            value: promo.value, 
+                            discount: d 
+                        }); 
+                    }
+                });
+                return { 
+                    variant_id: item.id, 
+                    quantity: item.quantity, 
+                    price: item.price, 
+                    name: item.name,
+                    subtotal: itemSubtotal, 
+                    taxes: itemTaxes, 
+                    tax_total: itemTaxTotal,
+                    discount: discountTotal, 
+                    promotions: appliedPromotions,
+                    total: itemSubtotal - discountTotal + itemTaxTotal,
+                    inventory_id: item.inventory_id || null,
+                    department_id: item.department_id || null,
+                    batch_id: item.batch_id || null,     
+                    batch_number: item.batch_number || null,
+                };
+            }),
+            customer: customerData,
+            subtotal: cart.reduce((s, i) => s + i.price * i.quantity, 0),
+            discount: cart.reduce((s, i) => s + computeItemDiscount(i), 0),
+            tax:      cart.reduce((s, i) => s + computeItemTax(i), 0),
+            total:    0,
+        };
+        cartData.total = cartData.subtotal - cartData.discount + cartData.tax;
+
+        const formData = new FormData();
+        formData.append('cart_data', JSON.stringify(cartData));
+
+        LiveBlade.toggleButtonLoading(submitButton, true);
+
+        fetch('{{ route("orders.generate-invoice") }}', {
+            method: 'POST',
+            headers: { 
+                'X-CSRF-TOKEN': '{{ csrf_token() }}', 
+                'Accept': 'application/json' 
+            },
+            body: formData,
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw data;
+                }).catch(() => {
+                    throw { 
+                        success: false, 
+                        message: '{{ __("pagination.network_error") }}' 
+                    };
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            
+            if (data.success) {
+                toastr['success'](data.message);
+                Swal.fire({
+                    icon: 'success',
+                    title: '{{ __("pagination.invoice_generated") }}',
+                    html: '{{ __("pagination.invoice_number") }}: <strong>' + data.invoice_number + '</strong>',
+                    confirmButtonText: 'OK',
+                });
+                if (typeof clearCart === 'function') clearCart();
+            } else {
+                // ✅ Show exact error message from server
+                const errorMessage = data.message || '{{ __("pagination.invoice_generation_failed") }}';
+                toastr['error'](errorMessage);
+                
+                if (data.debug) {
+                    console.error('Debug info:', data.debug);
+                }
+            }
+        })
+        .catch(error => {
+            LiveBlade.toggleButtonLoading(submitButton, false);
+            console.error('Invoice error:', error);
+            
+            const errorMessage = error.message || '{{ __("pagination.invoice_generation_failed") }}';
+            toastr['error'](errorMessage);
+            
+            if (error.debug) {
+                console.error('Debug info:', error.debug);
+            }
+        });
+    }
 </script>
 
 
@@ -1424,8 +1528,15 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
 
     // ── processSplitPayments ──────────────────────────────────
     window.processSplitPayments = function () {
-        if (!currentOrder)         { toastr.error('{{ __("pagination.no_order_found") }}');      return; }
-        if (!splitPayments.length) { toastr.warning('{{ __("pagination.no_payments_added") }}'); return; }
+        if (!currentOrder) { 
+            toastr.error('{{ __("pagination.no_order_found") }}');      
+            return; 
+        }
+        
+        if (!splitPayments.length) { 
+            toastr.warning('{{ __("pagination.no_payments_added") }}'); 
+            return; 
+        }
 
         var totalApplied = splitPayments.reduce((s,p) => s+p.amount, 0);
         if (Math.abs(currentOrder.total - totalApplied) > 0.01) {
@@ -1434,7 +1545,8 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
         }
 
         var btn = g('pm-process-btn');
-        btn.setAttribute('data-kt-indicator','on'); btn.disabled=true;
+        btn.setAttribute('data-kt-indicator','on'); 
+        btn.disabled = true;
 
         // ── Build cart snapshot for resumed orders ────────────
         var isResumed    = !! window.resumedOrderId;
@@ -1450,12 +1562,22 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
                         return { id:tax.id, name:tax.name, type:tax.type, rate:tax.rate, amount:amt };
                     });
                     var taxTotal  = itemTaxes.reduce((s,t) => s+t.amount, 0);
-                    var discTotal = 0; var promos = [];
+                    var discTotal = 0; 
+                    var promos = [];
                     (item.promotions||[]).forEach(promo => {
                         var d = 0;
                         if (promo.type==='percentage')   d = itemSubtotal*(promo.value/100);
                         if (promo.type==='fixed_amount') d = promo.value*item.quantity;
-                        if (d>0) { discTotal+=d; promos.push({id:promo.id,name:promo.name,type:promo.type,value:promo.value,discount:d}); }
+                        if (d>0) { 
+                            discTotal += d; 
+                            promos.push({
+                                id: promo.id, 
+                                name: promo.name, 
+                                type: promo.type, 
+                                value: promo.value, 
+                                discount: d
+                            }); 
+                        }
                     });
                     return { 
                         variant_id: item.id, 
@@ -1467,10 +1589,13 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
                         tax_total: taxTotal,
                         discount: discTotal, 
                         promotions: promos,
-                        total: parseFloat((itemSubtotal-discTotal+taxTotal).toFixed(2)),
-                        // ✅ Include inventory_id and department_id
+                        total: parseFloat((itemSubtotal - discTotal + taxTotal).toFixed(2)),
                         inventory_id: item.inventory_id || null,
-                        department_id: item.department_id || null
+                        department_id: item.department_id || null,
+                        batch_id: item.batch_id || null,
+                        batch_number: item.batch_number || null,
+                        serial_id: item.serial_id || null,
+                        serial_number: item.serial_number || null
                     };
                 })
             };
@@ -1496,21 +1621,52 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
             })),
         };
 
+        // ✅ Log the payload for debugging (only in development)
         // console.log('[POS] processSplitPayments payload:', JSON.stringify({
-        //     order_id: payload.order_id, order_total: currentOrder.total,
-        //     total_applied: totalApplied, cart_updated: payload.cart_updated, payment_count: payload.payments.length,
+        //     order_id: payload.order_id, 
+        //     order_total: currentOrder.total,
+        //     total_applied: totalApplied, 
+        //     cart_updated: payload.cart_updated, 
+        //     payment_count: payload.payments.length,
         // }));
 
         fetch('/orders/process-split-payment', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', 'X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content },
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content 
+            },
             body: JSON.stringify(payload),
         })
-        .then(r => { if (!r.ok) return r.json().then(body => { throw new Error(body.message||'{{ __("pagination.payment_error") }}'); }); return r.json(); })
+        .then(response => {
+            // ✅ First check if response is ok
+            if (!response.ok) {
+                // ✅ Try to parse the error response
+                return response.json().then(errorData => {
+                    // ✅ Throw with the actual error message from server
+                    throw {
+                        success: false,
+                        message: errorData.message || '{{ __("pagination.payment_error") }}',
+                        debug: errorData.debug || null,
+                        errors: errorData.errors || null
+                    };
+                }).catch(() => {
+                    // ✅ If response is not JSON, throw generic error
+                    throw {
+                        success: false,
+                        message: '{{ __("pagination.payment_error") }}',
+                        debug: { status: response.status, statusText: response.statusText }
+                    };
+                });
+            }
+            return response.json();
+        })
         .then(data => {
-            btn.removeAttribute('data-kt-indicator'); btn.disabled=false;
+            btn.removeAttribute('data-kt-indicator'); 
+            btn.disabled = false;
+            
             if (data.success) {
-                toastr.success(data.message||'{{ __("pagination.payment_completed") }}');
+                toastr.success(data.message || '{{ __("pagination.payment_completed") }}');
 
                 // ── Clear resume state now that payment is done ───
                 window.resumedOrderId     = null;
@@ -1525,13 +1681,44 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
                 bootstrap.Modal.getInstance(payModalEl).hide();
                 if (typeof clearCart === 'function') clearCart();
             } else {
-                toastr.error(data.message||'{{ __("pagination.payment_failed") }}');
+                // ✅ Show the exact error message from server
+                var errorMessage = data.message || '{{ __("pagination.payment_failed") }}';
+                toastr.error(errorMessage);
+                
+                // ✅ If there's debug info, log it to console
+                if (data.debug) {
+                    console.error('[Debug Info]', data.debug);
+                }
+                
+                // ✅ If there are validation errors, show them
+                if (data.errors) {
+                    var errorList = Object.values(data.errors).flat().join('\n');
+                    console.error('[Validation Errors]', errorList);
+                }
             }
         })
-        .catch(err => {
-            btn.removeAttribute('data-kt-indicator'); btn.disabled=false;
-            toastr.error(err.message||'{{ __("pagination.payment_error") }}');
-            console.error('[processSplitPayments] error:', err);
+        .catch(error => {
+            btn.removeAttribute('data-kt-indicator'); 
+            btn.disabled = false;
+            
+            // ✅ Extract the error message
+            var errorMessage = error.message || '{{ __("pagination.payment_error") }}';
+            
+            // ✅ Show the exact error to the user
+            toastr.error(errorMessage);
+            
+            // ✅ Log detailed error to console
+            console.error('[processSplitPayments] error:', error);
+            
+            // ✅ If there's debug info, log it
+            if (error.debug) {
+                console.error('[Debug Info]', error.debug);
+            }
+            
+            // ✅ If there are validation errors, log them
+            if (error.errors) {
+                console.error('[Validation Errors]', error.errors);
+            }
         });
     };
 

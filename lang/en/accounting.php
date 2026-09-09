@@ -5,6 +5,7 @@ return [
     'financial_reports' => 'Financial Reports',
     'payment_methods' => 'Payment Methods',
     'account_balances' => 'Account Balances',
+    'no_expenses_found_for_employees' => 'No expenses found for employees',
     'transaction_ledger' => 'Transaction Ledger',
     'income_statement' => 'Income Statement',
     'cash_flow' => 'Cash Flow',

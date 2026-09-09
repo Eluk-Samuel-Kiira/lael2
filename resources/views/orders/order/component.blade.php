@@ -82,59 +82,142 @@
                         </td>
 
                         <td class="text-end">
-                            <div class="d-flex justify-content-end gap-2">
-                                @can('complete order')
-                                    @if ($order->status === 'confirmed' && $order->source === 'pos')
-                                        <button class="btn btn-sm btn-icon btn-light-primary"
-                                            onclick="openCompletePayment_{{ $order->id }}()"
-                                            data-bs-toggle="tooltip" data-bs-title="{{ __('pagination._complete') }}">
-                                            <i class="ki-duotone ki-dollar fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                                        </button>
-                                    @endif
-                                @endcan
-                                
-                                @can('refund order')
-                                    @if ($order->status === 'completed')
-                                        <button class="btn btn-sm btn-icon btn-light btn-active-light-primary"
-                                            onclick="printOrder({{ $order->id }})"
-                                            data-bs-toggle="tooltip" data-bs-title="{{ __('passwords._print') }}">
-                                            <i class="ki-duotone ki-printer fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-icon btn-light btn-active-light-primary"
-                                            data-bs-toggle="modal" data-bs-target="#sendOrderModal{{ $order->id }}"
-                                            data-bs-title="{{ __('passwords.send_receipt') }}">
-                                            <i class="ki-duotone ki-sms fs-4"><span class="path1"></span><span class="path2"></span></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-icon btn-light-success"
-                                            onclick="openRefund_{{ $order->id }}()"
-                                            data-bs-toggle="tooltip" data-bs-title="{{ __('payments.refund') }}">
-                                            <i class="ki-duotone ki-arrow-circle-left fs-4">
-                                                <span class="path1"></span><span class="path2"></span>
-                                            </i>
-                                        </button>
-                                    @endif
-                                @endcan
+                            <div class="d-flex justify-content-end">
+                                <!-- Desktop: Show all buttons -->
+                                <div class="d-none d-md-flex gap-2 flex-wrap">
+                                    @can('complete order')
+                                        @if ($order->status === 'confirmed' && $order->source === 'pos')
+                                            <button class="btn btn-sm btn-icon btn-light-primary flex-shrink-0"
+                                                onclick="openCompletePayment_{{ $order->id }}()"
+                                                data-bs-toggle="tooltip" data-bs-title="{{ __('pagination._complete') }}"
+                                                style="width: 32px; height: 32px; min-width: 32px;">
+                                                <i class="ki-duotone ki-dollar fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                            </button>
+                                        @endif
 
-                                @can('cancel order')
-                                    @if ($order->status === 'confirmed')
-                                        <button class="btn btn-sm btn-icon btn-light-danger"
-                                            onclick="cancelPOSOrder({{ $order->id }})"
-                                            data-bs-toggle="tooltip" data-bs-title="{{ __('passwords.cancel') }}">
-                                            <i class="ki-duotone ki-cross fs-4"><span class="path1"></span><span class="path2"></span></i>
-                                        </button>
-                                    @endif
-                                @endcan
+                                        @if ($order->status === 'completed')
+                                            <button class="btn btn-sm btn-icon btn-light btn-active-light-primary flex-shrink-0"
+                                                data-bs-toggle="modal" data-bs-target="#sendOrderModal{{ $order->id }}"
+                                                data-bs-title="{{ __('passwords.send_receipt') }}"
+                                                style="width: 32px; height: 32px; min-width: 32px;">
+                                                <i class="ki-duotone ki-sms fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-icon btn-light btn-active-light-primary flex-shrink-0"
+                                                onclick="printOrder({{ $order->id }})"
+                                                data-bs-toggle="tooltip" data-bs-title="{{ __('passwords._print') }}"
+                                                style="width: 32px; height: 32px; min-width: 32px;">
+                                                <i class="ki-duotone ki-printer fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                            </button>
+                                        @endif
+                                    @endcan
+                                    
+                                    @can('refund order')
+                                        @if ($order->status === 'completed')
+                                            <button class="btn btn-sm btn-icon btn-light-success flex-shrink-0"
+                                                onclick="openRefund_{{ $order->id }}()"
+                                                data-bs-toggle="tooltip" data-bs-title="{{ __('payments.refund') }}"
+                                                style="width: 32px; height: 32px; min-width: 32px;">
+                                                <i class="ki-duotone ki-arrow-circle-left fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                            </button>
+                                        @endif
+                                    @endcan
 
-                                {{-- Detail trigger icon --}}
-                                @can('view order')
-                                <button class="btn btn-sm btn-icon btn-light btn-active-light-info"
-                                    data-bs-toggle="offcanvas"
-                                    data-bs-target="#orderDetail{{ $order->id }}"
-                                    data-bs-title="{{ __('passwords.view_details') }}"
-                                    data-bs-toggle-tt="tooltip">
-                                    <i class="ki-duotone ki-information fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                                </button>
-                                @endcan
+                                    @can('cancel order')
+                                        @if ($order->status === 'confirmed')
+                                            <button class="btn btn-sm btn-icon btn-light-danger flex-shrink-0"
+                                                onclick="cancelPOSOrder({{ $order->id }})"
+                                                data-bs-toggle="tooltip" data-bs-title="{{ __('passwords.cancel') }}"
+                                                style="width: 32px; height: 32px; min-width: 32px;">
+                                                <i class="ki-duotone ki-cross fs-4"><span class="path1"></span><span class="path2"></span></i>
+                                            </button>
+                                        @endif
+                                    @endcan
+
+                                    @can('view order')
+                                    <button class="btn btn-sm btn-icon btn-light btn-active-light-info flex-shrink-0"
+                                        data-bs-toggle="offcanvas" data-bs-target="#orderDetail{{ $order->id }}"
+                                        data-bs-title="{{ __('passwords.view_details') }}"
+                                        style="width: 32px; height: 32px; min-width: 32px;">
+                                        <i class="ki-duotone ki-information fs-4"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                    </button>
+                                    @endcan
+                                </div>
+
+                                <!-- Mobile: Dropdown menu -->
+                                <div class="d-md-none">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-light btn-active-light-primary dropdown-toggle" 
+                                                type="button" 
+                                                data-bs-toggle="dropdown" 
+                                                aria-expanded="false">
+                                            <i class="ki-duotone ki-dots-vertical fs-3"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            @can('complete order')
+                                                @if ($order->status === 'confirmed' && $order->source === 'pos')
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)" 
+                                                        onclick="openCompletePayment_{{ $order->id }}()">
+                                                            <i class="ki-duotone ki-dollar fs-4 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                                            {{ __('pagination._complete') }}
+                                                        </a>
+                                                    </li>
+                                                @endif
+
+                                                @if ($order->status === 'completed')
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)" 
+                                                        data-bs-toggle="modal" data-bs-target="#sendOrderModal{{ $order->id }}">
+                                                            <i class="ki-duotone ki-sms fs-4 me-2"><span class="path1"></span><span class="path2"></span></i>
+                                                            {{ __('passwords.send_receipt') }}
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)" 
+                                                        onclick="printOrder({{ $order->id }})">
+                                                            <i class="ki-duotone ki-printer fs-4 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                                            {{ __('passwords._print') }}
+                                                        </a>
+                                                    </li>
+                                                @endif
+                                            @endcan
+                                            
+                                            @can('refund order')
+                                                @if ($order->status === 'completed')
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)" 
+                                                        onclick="openRefund_{{ $order->id }}()">
+                                                            <i class="ki-duotone ki-arrow-circle-left fs-4 me-2"><span class="path1"></span><span class="path2"></span></i>
+                                                            {{ __('payments.refund') }}
+                                                        </a>
+                                                    </li>
+                                                @endif
+                                            @endcan
+
+                                            @can('cancel order')
+                                                @if ($order->status === 'confirmed')
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="javascript:void(0)" 
+                                                        onclick="cancelPOSOrder({{ $order->id }})">
+                                                            <i class="ki-duotone ki-cross fs-4 me-2"><span class="path1"></span><span class="path2"></span></i>
+                                                            {{ __('passwords.cancel') }}
+                                                        </a>
+                                                    </li>
+                                                @endif
+                                            @endcan
+
+                                            @can('view order')
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0)" 
+                                                data-bs-toggle="offcanvas" data-bs-target="#orderDetail{{ $order->id }}">
+                                                    <i class="ki-duotone ki-information fs-4 me-2"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                                    {{ __('passwords.view_details') }}
+                                                </a>
+                                            </li>
+                                            @endcan
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
                             @include('orders.order.complete-payment')
                             @include('orders.order.send-receipt')

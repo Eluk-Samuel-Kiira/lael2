@@ -4,6 +4,7 @@
 @section('title', __('auth.sales_by_customer'))
 
 @section('content')
+@if (tenant_can('advanced_reports'))
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
@@ -690,6 +691,7 @@
         </div>
     </div>
 </div>
+@endif
 
 {{-- ============================================================ --}}
 {{-- JAVASCRIPT - Charts & Export --}}

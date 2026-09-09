@@ -97,14 +97,37 @@
                                             <i class="bi bi-app-indicator me-1 fs-5"></i> <span>{{ __('payments.app') }}</span>
                                         </button>
 
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modifyTenant{{$tenant->id}}">
+                                            <i class="bi bi-sliders2 me-1 fs-5"></i> <span>{{ __('Modify') }}</span>
+                                        </button>
+
                                         <!-- <button type="button" 
                                             class="btn btn-sm btn-light btn-active-color-danger d-flex align-items-center px-3 py-2" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#deleteTenantModal{{$tenant->id}}">
                                             <i class="bi bi-trash me-1 fs-5"></i> <span>{{ __('auth._delete') }}</span>
                                         </button> -->
+
+                                        <button 
+                                            class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#billingTenant{{$tenant->id}}">
+                                            <i class="bi bi-credit-card me-1 fs-5"></i> 
+                                            <span>{{ __('payments.billing') }}</span>
+                                            @php
+                                                $status = $tenant->settings->where('setting_key', 'subscription_status')->first();
+                                                $statusValue = $status ? $status->setting_value : 'inactive';
+                                            @endphp
+                                            <span class="badge badge-light-{{ $statusValue === 'active' ? 'success' : 'danger' }} ms-2">
+                                                {{ ucfirst($statusValue) }}
+                                            </span>
+                                        </button>
                                     @endrole
                                 </div>
+
 
                                 @include('tenant.partials.modals.configuration-modal')
                                 @include('tenant.partials.modals.admins-modal')
@@ -112,6 +135,8 @@
                                 @include('tenant.partials.modals.usage-modal')
                                 @include('tenant.partials.modals.app-settings-modal')
                                 @include('tenant.partials.modals.delete-modal')
+                                @include('tenant.partials.modify')
+                                @include('tenant.partials.modals.billing-modal')
 
                             </td>
                         </tr>

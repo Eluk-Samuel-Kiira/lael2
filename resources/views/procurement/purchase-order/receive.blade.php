@@ -15,10 +15,15 @@
             <div class="modal-body scroll-y mx-5 my-7" style="max-height: 70vh; overflow-y: auto;">
                 <form id="receiveItemsForm{{ $order->id }}" class="form">
                     @csrf
-                    
+
                     <div class="alert alert-info d-flex align-items-center mb-5">
                         <i class="bi bi-info-circle fs-2 me-3"></i>
                         <div>{{ __('passwords.receive_items_instruction') }}</div>
+                    </div>
+
+                    <div class="alert alert-light-warning d-flex align-items-center mb-5">
+                        <i class="bi bi-exclamation-triangle fs-2 me-3 text-warning"></i>
+                        <div>{{ __('passwords.actual_cost_may_differ_note') }}</div>
                     </div>
 
                     <!-- Tax Information Section -->
@@ -42,9 +47,9 @@
                                     @foreach($taxes as $tax)
                                     <div class="col-lg-3 col-md-4 col-sm-6">
                                         <div class="form-check form-check-custom form-check-solid">
-                                            <input class="form-check-input tax-checkbox" 
-                                                type="checkbox" 
-                                                name="selected_taxes[]" 
+                                            <input class="form-check-input tax-checkbox"
+                                                type="checkbox"
+                                                name="selected_taxes[]"
                                                 value="{{ $tax->id }}"
                                                 id="tax_{{ $tax->id }}_{{ $order->id }}">
                                             <label class="form-check-label" for="tax_{{ $tax->id }}_{{ $order->id }}">
@@ -77,7 +82,7 @@
                                     @endforeach
                                 </div>
                             </div>
-                            
+
                             <!-- Tax Preview Result -->
                             <div id="tax_preview_{{ $order->id }}" class="mt-4 p-4 bg-light rounded d-none">
                                 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -110,7 +115,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="table-responsive">
                                     <table class="table table-row-bordered table-row-gray-100 align-middle">
                                         <thead>
@@ -143,9 +148,10 @@
                                     <thead>
                                         <tr class="fw-bold text-muted bg-light">
                                             <th class="ps-4 min-w-200px">{{ __('passwords.product') }}</th>
-                                            <th class="min-w-100px">{{ __('passwords.unit_cost') }}</th>
+                                            <th class="min-w-90px">{{ __('passwords.po_unit_cost') }}</th>
                                             <th class="min-w-150px">{{ __('passwords.balance') }}</th>
-                                            <th class="min-w-150px text-primary">{{ __('passwords.receiving_now') }}</th>
+                                            <th class="min-w-130px text-primary">{{ __('passwords.receiving_now') }}</th>
+                                            <th class="min-w-150px text-warning">{{ __('passwords.actual_unit_cost') }}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -166,7 +172,7 @@
                                                 <input type="hidden" name="items[{{ $item->id }}][product_variant_id]" value="{{ $item->product_variant_id }}">
                                             </td>
                                             <td>
-                                                <span class="fw-bold">{{ number_format($item->unit_cost, 2) }}</span>
+                                                <span class="fw-bold text-muted">{{ number_format($item->unit_cost, 2) }}</span>
                                             </td>
                                             <td>
                                                 <div class="d-flex flex-column">
@@ -183,22 +189,35 @@
                                                         <span class="fw-bold text-warning">{{ $pending }}</span>
                                                     </div>
                                                     <div class="progress" style="height: 4px;">
-                                                        <div class="progress-bar bg-success" role="progressbar" 
+                                                        <div class="progress-bar bg-success" role="progressbar"
                                                             style="width: {{ $progress }}%"></div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td>
-                                                <input type="number" 
-                                                    name="items[{{ $item->id }}][quantity_received]" 
-                                                    class="form-control receiving-quantity" 
-                                                    min="0" 
+                                                <input type="number"
+                                                    name="items[{{ $item->id }}][quantity_received]"
+                                                    class="form-control receiving-quantity"
+                                                    min="0"
                                                     max="{{ $pending }}"
                                                     value="0"
                                                     data-unit-cost="{{ $item->unit_cost }}"
                                                     data-pending="{{ $pending }}"
-                                                    onchange="updateItemsTotal({{ $order->id }})">
+                                                    oninput="updateItemsTotal({{ $order->id }})">
                                                 <small class="text-muted fs-7">{{ __('passwords.max') }}: {{ $pending }}</small>
+                                            </td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text">{{ currency_symbol() }}</span>
+                                                    <input type="number"
+                                                        name="items[{{ $item->id }}][actual_unit_cost]"
+                                                        class="form-control receiving-actual-cost"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value="{{ number_format($item->unit_cost, 2, '.', '') }}"
+                                                        oninput="updateItemsTotal({{ $order->id }})">
+                                                </div>
+                                                <small class="text-muted fs-7">{{ __('passwords.defaults_to_po_price') }}</small>
                                             </td>
                                         </tr>
                                         @endforeach
@@ -208,10 +227,10 @@
                         </div>
                     </div>
 
-                    <!-- Batch Information -->
+                    <!-- Batch Information & Payment -->
                     <div class="row g-6 mb-6">
                         <div class="col-md-6">
-                            <div class="card card-flush bg-light">
+                            <div class="card card-flush bg-light h-100">
                                 <div class="card-header">
                                     <h3 class="card-title">
                                         <i class="bi bi-upc-scan me-2"></i>
@@ -230,46 +249,51 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Payment Status Summary -->
+
+                        <!-- Payment (optional, against the actual receipt total) -->
                         <div class="col-md-6">
-                            <div class="card card-flush bg-light-success">
+                            <div class="card card-flush bg-light-success h-100">
                                 <div class="card-header">
                                     <h3 class="card-title">
                                         <i class="bi bi-credit-card me-2"></i>
-                                        {{ __('payments.payment_status') }}
+                                        {{ __('payments.payment_information') }}
                                     </h3>
                                 </div>
                                 <div class="card-body">
-                                    @php
-                                        $totalAmount = $order->total ?? 0;
-                                        $totalPaid = $order->total_paid ?? 0;
-                                        $balance = $totalAmount - $totalPaid;
-                                        $isFullyPaid = $balance <= 0;
-                                    @endphp
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">{{ __('passwords.total_amount') }}:</span>
-                                        <span class="fw-bold">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
+                                    <div class="text-muted fs-7 mb-3">
+                                        {{ __('passwords.payment_optional_at_receipt_note') }}
                                     </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span class="text-muted">{{ __('passwords.total_paid') }}:</span>
-                                        <span class="fw-bold text-success">{{ number_format($totalPaid, 2) }} {{ currency_symbol() }}</span>
+                                    <div class="mb-3">
+                                        <label class="form-label">{{ __('payments.payment_method') }}</label>
+                                        <select name="payment_method_id" id="payment_method_{{ $order->id }}" class="form-select">
+                                            <option value="">{{ __('payments.select_payment_method') }}</option>
+                                            @foreach($active_payment_methods as $method)
+                                                <option value="{{ $method->id }}">{{ $method->name }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <span class="text-muted">{{ __('passwords.balance') }}:</span>
-                                        <span class="fw-bold {{ $isFullyPaid ? 'text-success' : 'text-warning' }}">
-                                            {{ number_format($balance, 2) }} {{ currency_symbol() }}
-                                        </span>
-                                    </div>
-                                    @if($isFullyPaid)
-                                        <div class="mt-2">
-                                            <span class="badge badge-success">✅ {{ __('passwords.fully_paid') }}</span>
+                                    <div class="mb-3">
+                                        <label class="form-label">{{ __('passwords.payment_amount') }}</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">{{ currency_symbol() }}</span>
+                                            <input type="number"
+                                                name="payment_amount"
+                                                id="payment_amount_{{ $order->id }}"
+                                                class="form-control"
+                                                step="0.01"
+                                                min="0"
+                                                max="0"
+                                                value="0">
                                         </div>
-                                    @else
-                                        <div class="mt-2">
-                                            <span class="badge badge-warning">⚠️ {{ __('passwords.payment_required') }}</span>
+                                        <div class="form-text text-muted">
+                                            {{ __('passwords.max_payment') }}: <span id="payment_max_display_{{ $order->id }}">0.00</span> {{ currency_symbol() }}
+                                            &mdash; {{ __('passwords.based_on_this_receipt') }}
                                         </div>
-                                    @endif
+                                    </div>
+                                    <div class="mb-0">
+                                        <label class="form-label">{{ __('payments.payment_date') }}</label>
+                                        <input type="date" name="payment_date" class="form-control" value="{{ date('Y-m-d') }}">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -330,10 +354,10 @@
                             <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
                         </button>
                         <div class="d-flex gap-3">
-                            <button type="button" class="btn btn-warning" onclick="submitReceiving({{ $order->id }}, 'partially_received')" {{ !$isFullyPaid ? 'disabled' : '' }}>
+                            <button type="button" class="btn btn-warning" onclick="submitReceiving({{ $order->id }}, 'partially_received')">
                                 <i class="bi bi-arrow-repeat me-2"></i>{{ __('passwords.mark_partially_received') }}
                             </button>
-                            <button type="button" class="btn btn-success" onclick="submitReceiving({{ $order->id }}, 'received')" {{ !$isFullyPaid ? 'disabled' : '' }}>
+                            <button type="button" class="btn btn-success" onclick="submitReceiving({{ $order->id }}, 'received')">
                                 <i class="bi bi-check-circle me-2"></i>{{ __('passwords.mark_fully_received') }}
                             </button>
                         </div>
@@ -360,25 +384,37 @@
     }
 
     // ── Update items total (debounced) ──
+    // Uses each row's ACTUAL unit cost (editable) rather than the fixed PO price,
+    // since that's what will really leave the account.
     const updateItemsTotal = debounce(function(orderId) {
         let itemsTotal = 0;
         let totalQuantity = 0;
         const inputs = document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`);
-        
+
         inputs.forEach(input => {
             const quantity = parseFloat(input.value) || 0;
-            const unitCost = parseFloat(input.dataset.unitCost) || 0;
-            itemsTotal += quantity * unitCost;
-            totalQuantity += quantity;
-            
-            // Highlight rows with quantity being received
             const row = input.closest('.receive-item-row');
+            const actualCostInput = row ? row.querySelector('.receiving-actual-cost') : null;
+            const fallbackCost = parseFloat(input.dataset.unitCost) || 0;
+            const actualCost = actualCostInput && actualCostInput.value !== ''
+                ? (parseFloat(actualCostInput.value) || 0)
+                : fallbackCost;
+
+            itemsTotal += quantity * actualCost;
+            totalQuantity += quantity;
+
+            // Highlight rows with quantity being received
             if (row) {
                 row.style.backgroundColor = quantity > 0 ? '#e8f5e9' : '';
                 row.style.borderLeft = quantity > 0 ? '3px solid #4caf50' : '';
             }
+
+            // Actual cost only matters once something is being received
+            if (actualCostInput) {
+                actualCostInput.disabled = quantity <= 0;
+            }
         });
-        
+
         // Update displays
         const displays = {
             gross: document.getElementById(`gross_amount_display_${orderId}`),
@@ -387,21 +423,41 @@
             totalTax: document.getElementById(`total_tax_display_${orderId}`),
             totalPayable: document.getElementById(`total_payable_display_${orderId}`)
         };
-        
+
         if (displays.gross) displays.gross.textContent = itemsTotal.toFixed(2);
         if (displays.taxable) displays.taxable.textContent = itemsTotal.toFixed(2);
         if (displays.taxableHidden) displays.taxableHidden.value = itemsTotal;
-        
+
         // Reset tax preview when items change
         const taxPreview = document.getElementById(`tax_preview_${orderId}`);
         if (taxPreview) taxPreview.classList.add('d-none');
-        
+
         if (displays.totalTax) displays.totalTax.textContent = '0.00';
         if (displays.totalPayable) displays.totalPayable.textContent = itemsTotal.toFixed(2);
-        
+
         document.getElementById(`total_tax_amount_${orderId}`).value = '0';
         document.getElementById(`net_amount_${orderId}`).value = itemsTotal;
+
+        // Keep the payment amount in sync with the current receipt total
+        updatePaymentMax(orderId, itemsTotal);
     }, 300);
+
+    // ── Keep payment amount bounded to (and defaulted at) the current receipt payable ──
+    function updatePaymentMax(orderId, payableAmount) {
+        const maxDisplay = document.getElementById(`payment_max_display_${orderId}`);
+        const paymentInput = document.getElementById(`payment_amount_${orderId}`);
+        if (!paymentInput) return;
+
+        const rounded = Math.max(0, payableAmount || 0);
+        paymentInput.setAttribute('max', rounded.toFixed(2));
+        if (maxDisplay) maxDisplay.textContent = rounded.toFixed(2);
+
+        // If the current payment amount exceeds the new max, clamp it down
+        const current = parseFloat(paymentInput.value) || 0;
+        if (current > rounded) {
+            paymentInput.value = rounded.toFixed(2);
+        }
+    }
 
     // ── Calculate tax preview ──
     function calculateTaxPreview(orderId) {
@@ -409,19 +465,19 @@
         const selectedTaxes = Array.from(
             document.querySelectorAll(`#receiveItemsForm${orderId} .tax-checkbox:checked`)
         ).map(cb => cb.value);
-        
+
         if (selectedTaxes.length === 0 || taxableAmount === 0) {
             Swal.fire('Info', 'Please select taxes and enter quantities first', 'info');
             return;
         }
-        
+
         Swal.fire({
             title: 'Calculating...',
             text: 'Please wait',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
-        
+
         fetch('/purchase-orders/calculate-tax-preview', {
             method: 'POST',
             headers: {
@@ -437,22 +493,25 @@
         .then(response => response.json())
         .then(data => {
             Swal.close();
-            
+
             if (data.success) {
                 const preview = document.getElementById(`tax_preview_${orderId}`);
                 if (preview) preview.classList.remove('d-none');
-                
+
                 // Update preview values
                 document.getElementById(`preview_taxable_${orderId}`).textContent = data.data.taxable_amount.toFixed(2);
                 document.getElementById(`preview_total_tax_${orderId}`).textContent = data.data.total_tax.toFixed(2);
                 document.getElementById(`preview_net_payable_${orderId}`).textContent = data.data.net_payable.toFixed(2);
-                
+
                 document.getElementById(`total_tax_display_${orderId}`).textContent = data.data.total_tax.toFixed(2);
                 document.getElementById(`total_payable_display_${orderId}`).textContent = data.data.net_payable.toFixed(2);
-                
+
                 document.getElementById(`total_tax_amount_${orderId}`).value = data.data.total_tax;
                 document.getElementById(`net_amount_${orderId}`).value = data.data.net_payable;
-                
+
+                // Net payable (incl. tax) becomes the real cap for payment against this receipt
+                updatePaymentMax(orderId, data.data.net_payable);
+
                 // Build breakdown
                 const tbody = document.getElementById(`tax_breakdown_body_${orderId}`);
                 if (tbody) {
@@ -469,7 +528,7 @@
                         </tr>
                     `).join('');
                 }
-                
+
                 Swal.fire('Success', 'Tax calculation completed', 'success');
             } else {
                 Swal.fire('Error', data.message || 'Calculation failed', 'error');
@@ -483,30 +542,17 @@
     }
 
     // ── Submit receiving ──
+    // Note: receiving no longer requires the PO balance to be settled first —
+    // payment here (if any) is recorded against the ACTUAL receipt total,
+    // computed from real quantities and real unit costs.
     function submitReceiving(orderId, status) {
         const form = document.getElementById(`receiveItemsForm${orderId}`);
         if (!form) return;
-        
-        // Check if fully paid before allowing receive
-        const balanceEl = document.querySelector(`#receiveItemsModal${orderId} .fw-bold.text-warning, #receiveItemsModal${orderId} .fw-bold.text-success`);
-        if (balanceEl) {
-            const balanceText = balanceEl.textContent.replace(/[^0-9.]/g, '');
-            const balance = parseFloat(balanceText) || 0;
-            if (balance > 0.01) {
-                Swal.fire({
-                    title: '{{ __("passwords.payment_required") }}',
-                    text: '{{ __("passwords.cannot_receive_unpaid_items") }}',
-                    icon: 'warning',
-                    confirmButtonText: 'OK'
-                });
-                return;
-            }
-        }
-        
+
         // Check if any items are being received
         const hasQuantity = Array.from(form.querySelectorAll('.receiving-quantity'))
             .some(input => parseFloat(input.value) > 0);
-        
+
         if (!hasQuantity) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
@@ -516,23 +562,43 @@
             });
             return;
         }
-        
+
+        // If a payment amount was entered, a payment method is required
+        const paymentAmount = parseFloat(document.getElementById(`payment_amount_${orderId}`)?.value) || 0;
+        const paymentMethodSelect = document.getElementById(`payment_method_${orderId}`);
+        if (paymentAmount > 0 && paymentMethodSelect && !paymentMethodSelect.value) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("payments.select_payment_method") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd'
+            });
+            return;
+        }
+
         const formData = new FormData(form);
         formData.append('status', status);
-        
+
+        // Don't submit a zero payment as if it were a real payment attempt
+        if (paymentAmount <= 0) {
+            formData.delete('payment_amount');
+            formData.delete('payment_method_id');
+            formData.delete('payment_date');
+        }
+
         Swal.fire({
-            title: status === 'received' 
-                ? '{{ __("passwords.mark_fully_received_title") }}' 
+            title: status === 'received'
+                ? '{{ __("passwords.mark_fully_received_title") }}'
                 : '{{ __("passwords.mark_partially_received_title") }}',
-            text: status === 'received' 
-                ? '{{ __("passwords.mark_fully_received_confirmation") }}' 
+            text: status === 'received'
+                ? '{{ __("passwords.mark_fully_received_confirmation") }}'
                 : '{{ __("passwords.mark_partially_received_confirmation") }}',
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: status === 'received' ? '#198754' : '#ffc107',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: status === 'received' 
-                ? '{{ __("passwords.mark_received") }}' 
+            confirmButtonText: status === 'received'
+                ? '{{ __("passwords.mark_received") }}'
                 : '{{ __("passwords.mark_partial") }}',
             cancelButtonText: '{{ __("passwords.cancel") }}',
             showLoaderOnConfirm: true,
@@ -582,10 +648,15 @@
         document.querySelectorAll('[id^="receiveItemsModal"]').forEach(modal => {
             modal.addEventListener('shown.bs.modal', function() {
                 const orderId = this.id.replace('receiveItemsModal', '');
-                // Reset all quantities to 0
+                // Reset all quantities to 0 and restore actual cost to PO price
                 document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`).forEach(input => {
                     input.value = 0;
                 });
+                document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-actual-cost`).forEach(input => {
+                    input.disabled = true;
+                });
+                const paymentAmount = document.getElementById(`payment_amount_${orderId}`);
+                if (paymentAmount) paymentAmount.value = 0;
                 updateItemsTotal(orderId);
             });
         });
