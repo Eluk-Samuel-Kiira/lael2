@@ -35,6 +35,7 @@ class ArtisanCommandController extends Controller
         'migrate',
         'migrate:fresh --seed',
         'db:seed',
+        'migrate:rollback --path=database/migrations/2026_09_03_223129_add_unit_cost_po_recipt_items.php',
     ];
 
     public function index()
