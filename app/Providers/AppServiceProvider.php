@@ -119,6 +119,11 @@ class AppServiceProvider extends ServiceProvider
                     'expenseCategories' => ExpenseCategory::where('tenant_id', $tenantId)->where('is_active', 1)->orderBy('name')->get(),
                     'active_employees' => Employee::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'active_payment_methods' => $activePaymentMethods,
+                    'chartOfAccounts' => ChartOfAccount::where('tenant_id', $tenantId)
+                        ->where('is_active', true)
+                        // ->where('account_type', 'like', '%expense%') // Filter for expense accounts
+                        ->orderBy('account_code')
+                        ->get(),
                 ];
             }
 

@@ -258,7 +258,6 @@
 
 
                 <!-- Suppliers & Purchasing -->
-                @if (tenant_can('procurement'))
                 @canany(['view supplier', 'view purchase_orders', 'view category-expense', 'view expense'])
                 <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
                     <span class="menu-link">
@@ -288,6 +287,8 @@
                         </div>
                         @endcan
 
+                        
+                        @if (tenant_can('procurement'))
                         @can('view purchase_orders')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('purchase_order.index') }}')">
@@ -298,6 +299,7 @@
                             </a>
                         </div>
                         @endcan
+                        @endif
 
                         
                         @if (tenant_can('expenses'))
@@ -327,7 +329,6 @@
                     </div>
                 </div>
                 @endcanany
-                @endif
 
                 
                 <!-- Human Reource -->
@@ -434,7 +435,7 @@
 
 
                 <!-- Updated Reports Menu -->
-                @canany(['view reports', 'view production_orders', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
+                @canany(['view reports', 'view production_orders reports', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
                 <div data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-placement="right-start" class="menu-item here menu-lg-down-accordion">
                     <!--begin:Menu link-->
                     <span class="menu-link">
@@ -1164,7 +1165,7 @@
                         @endcan
 
                         <!-- Production Orders Section -->
-                        @can('view production_orders')
+                        @can('view production_orders reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
                                 <span class="menu-bullet">

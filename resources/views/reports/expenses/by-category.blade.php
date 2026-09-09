@@ -4,7 +4,7 @@
 @section('title', __('accounting.expenses_by_category'))
 
 @section('content')
-
+@if (tenant_can('advanced_reports'))
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
@@ -424,7 +424,7 @@
         </div>
     </div>
 </div>
-
+@endif
 @push('scripts')
 @if(isset($monthlyTrendGrouped) && $monthlyTrendGrouped->count() > 0 && isset($uniqueMonths) && $uniqueMonths->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>

@@ -54,6 +54,7 @@
         </div>
     </div>
     
+    @if (tenant_can('hr_payroll'))
     <div class="d-flex flex-column flex-column-fluid">
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
@@ -64,6 +65,7 @@
             </div>
         </div>
     </div>  
+    @endif
         
     @endsection
 </x-app-layout>

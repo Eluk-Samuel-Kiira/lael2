@@ -397,15 +397,15 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         
 
-        // Tenant Mgt
         Route::resource('tenant', TenantController::class);
         Route::prefix('tenant')->name('tenant.')->group(function () {
             Route::post('/', [TenantController::class, 'store'])->name('store');
             Route::delete('/{tenant}', [TenantController::class, 'destroy'])->name('destroy');
             Route::post('/{tenant}/add-admin', [TenantController::class, 'addAdminUser'])->name('add-admin');
+            Route::put('/{tenant}/settings', [TenantController::class, 'updateSettings'])->name('update-settings');
+            Route::put('/{tenant}/billing', [TenantController::class, 'updateBilling'])->name('update-billing'); // ✅ Fixed: removed 'tenant.'
         });
         Route::post('/billing/refresh-plans', [TenantController::class, 'refreshPlans'])->name('billing.refresh-plans');
-
 
 
         // Basic Accounting Routes

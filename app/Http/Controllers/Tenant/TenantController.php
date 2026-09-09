@@ -245,6 +245,9 @@ class TenantController extends Controller
                 );
             }
             
+            // ✅ Add next billing date calculation
+            $this->calculateAndSetNextBillingDate($tenant->id);
+            
             DB::commit();
             
             return response()->json([
@@ -260,6 +263,80 @@ class TenantController extends Controller
                 'message' => 'Error creating tenant: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Calculate and set the next billing date for a tenant
+     */
+    private function calculateAndSetNextBillingDate(int $tenantId)
+    {
+        // Get billing settings
+        $settings = TenantSetting::where('tenant_id', $tenantId)
+            ->where('category', 'billing')
+            ->get()
+            ->keyBy('setting_key');
+        
+        // Check if lifetime license
+        $isLifetime = isset($settings['is_lifetime']) && (bool)$settings['is_lifetime']->setting_value;
+        
+        if ($isLifetime) {
+            // For lifetime licenses, set next billing date to null or far future
+            TenantSetting::updateOrCreate(
+                [
+                    'tenant_id' => $tenantId,
+                    'setting_key' => 'next_billing_date',
+                ],
+                [
+                    'setting_value' => null,
+                    'data_type' => 'datetime',
+                    'category' => 'billing',
+                ]
+            );
+            return;
+        }
+        
+        // Get trial ends at
+        $trialEndsAtSetting = $settings['trial_ends_at'] ?? null;
+        $trialEndsAt = $trialEndsAtSetting && $trialEndsAtSetting->setting_value 
+            ? \Carbon\Carbon::parse($trialEndsAtSetting->setting_value) 
+            : null;
+        
+        // Get billing cycle days
+        $cycleDaysSetting = $settings['billing_cycle_days'] ?? null;
+        $cycleDays = $cycleDaysSetting ? (int)$cycleDaysSetting->setting_value : 30;
+        
+        // Get billing plan
+        $billingPlan = $settings['billing_plan'] ?? null;
+        $planCode = $billingPlan ? $billingPlan->setting_value : 'free';
+        
+        $now = \Carbon\Carbon::now();
+        $nextBillingDate = null;
+        
+        if ($trialEndsAt && $now->lessThan($trialEndsAt)) {
+            // If still in trial, next billing is after trial ends
+            $nextBillingDate = $trialEndsAt->copy()->addDays($cycleDays);
+        } elseif ($trialEndsAt && $now->greaterThan($trialEndsAt)) {
+            // If trial ended, next billing is from now + cycle
+            $nextBillingDate = $now->copy()->addDays($cycleDays);
+        } else {
+            // No trial, start from now
+            $nextBillingDate = $now->copy()->addDays($cycleDays);
+        }
+        
+        // Set next billing date
+        TenantSetting::updateOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'setting_key' => 'next_billing_date',
+            ],
+            [
+                'setting_value' => $nextBillingDate->toDateTimeString(),
+                'data_type' => 'datetime',
+                'category' => 'billing',
+            ]
+        );
+        
+        return $nextBillingDate;
     }
 
 
@@ -634,8 +711,315 @@ class TenantController extends Controller
     }
 
 
+    /**
+     * Update tenant settings (all settings except billing)
+     */
+    public function updateSettings(Request $request, string $id)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
 
+        $tenant = Tenant::findOrFail($id);
 
+        // Get all existing settings except billing
+        $existingSettings = TenantSetting::where('tenant_id', $tenant->id)
+            ->where('category', '!=', 'billing')
+            ->get();
+
+        // Build validation rules dynamically based on data_type
+        $rules = [];
+        $settingValues = [];
+        
+        foreach ($existingSettings as $setting) {
+            $key = $setting->setting_key;
+            $dataType = $setting->data_type;
+            
+            // Skip billing settings
+            if ($setting->category === 'billing') {
+                continue;
+            }
+            
+            // Build validation rules based on data type
+            switch ($dataType) {
+                case 'boolean':
+                    $rules[$key] = 'sometimes|boolean';
+                    // Store current value for comparison
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+                case 'integer':
+                    $rules[$key] = 'sometimes|integer|min:0';
+                    $settingValues[$key] = (int)$setting->setting_value;
+                    break;
+                case 'decimal':
+                    $rules[$key] = 'sometimes|numeric|min:0';
+                    $settingValues[$key] = (float)$setting->setting_value;
+                    break;
+                case 'string':
+                    $rules[$key] = 'sometimes|string|max:255';
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+                case 'date':
+                    $rules[$key] = 'sometimes|date';
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+                case 'datetime':
+                    $rules[$key] = 'sometimes|date';
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+                case 'json':
+                    $rules[$key] = 'sometimes|json';
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+                default:
+                    $rules[$key] = 'sometimes|string';
+                    $settingValues[$key] = $setting->setting_value;
+                    break;
+            }
+        }
+
+        // Validate the request
+        $validated = $request->validate($rules);
+
+        // If no validated data, return error
+        if (empty($validated)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No settings to update.',
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $updatedCount = 0;
+            $updatedSettings = [];
+
+            foreach ($validated as $key => $value) {
+                // Find the existing setting
+                $setting = TenantSetting::where('tenant_id', $tenant->id)
+                    ->where('setting_key', $key)
+                    ->first();
+
+                if (!$setting) {
+                    continue;
+                }
+
+                $dataType = $setting->data_type;
+                
+                // Convert value based on data type
+                $convertedValue = $this->convertValueForDatabase($value, $dataType);
+
+                // Skip if value hasn't changed
+                if ($setting->setting_value == $convertedValue) {
+                    continue;
+                }
+
+                // Update the setting
+                $setting->update([
+                    'setting_value' => $convertedValue,
+                    'updated_by' => $user->id,
+                ]);
+
+                $updatedCount++;
+                $updatedSettings[] = [
+                    'key' => $key,
+                    'old_value' => $setting->getOriginal('setting_value'),
+                    'new_value' => $convertedValue,
+                    'data_type' => $dataType,
+                    'category' => $setting->category,
+                ];
+            }
+
+            // Clear cache
+            tenant_clear_settings_cache($tenant->id);
+
+            DB::commit();
+
+            $message = $updatedCount > 0 
+                ? "Settings updated successfully. {$updatedCount} settings updated."
+                : "No changes were made to any settings.";
+
+            session()->flash('toast', [
+                'type' => $updatedCount > 0 ? 'success' : 'info',
+                'message' => $message,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'reload' => true,
+                'updated_count' => $updatedCount,
+                'updated_settings' => $updatedSettings,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            session()->flash('toast', [
+                'type' => 'error',
+                'message' => 'Error updating settings: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error updating settings: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Convert value to appropriate database format based on data type
+     */
+    private function convertValueForDatabase($value, string $dataType): string
+    {
+        switch ($dataType) {
+            case 'boolean':
+                return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
+            case 'integer':
+                return (string)(int)$value;
+            case 'decimal':
+                return number_format((float)$value, 2, '.', '');
+            case 'date':
+            case 'datetime':
+                if (empty($value)) {
+                    return '';
+                }
+                return $value;
+            case 'json':
+                return is_array($value) ? json_encode($value) : $value;
+            default:
+                return (string)$value;
+        }
+    }
     
+
+    /**
+     * Update billing settings for a tenant
+     */
+    public function updateBilling(Request $request, string $id)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole('super_admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $tenant = Tenant::findOrFail($id);
+
+        $validated = $request->validate([
+            'plan_name' => 'nullable|string|max:255',
+            'subscription_status' => 'required|in:active,inactive,trial,expired,suspended',
+            'plan_currency' => 'nullable|string|size:3',
+            'billing_cycle' => 'required|in:30_days,90_days,365_days,one-time',
+            'billing_cycle_days' => 'required|integer|min:0',
+            'trial_days' => 'required|integer|min:0',
+            'is_lifetime' => 'sometimes|boolean',
+            'trial_ends_at' => 'nullable|date',
+            'next_billing_date' => 'nullable|date',
+            'lifetime_purchase_date' => 'nullable|date',
+            'plan_monthly_price' => 'nullable|numeric|min:0',
+            'plan_annual_price' => 'nullable|numeric|min:0',
+            'onetime_fee' => 'nullable|numeric|min:0',
+            'setup_fee' => 'nullable|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $updatedCount = 0;
+            $billingKeys = [
+                'plan_name', 'subscription_status', 'plan_currency', 'billing_cycle',
+                'billing_cycle_days', 'trial_days', 'is_lifetime', 'trial_ends_at',
+                'next_billing_date', 'lifetime_purchase_date', 'plan_monthly_price',
+                'plan_annual_price', 'onetime_fee', 'setup_fee'
+            ];
+
+            foreach ($billingKeys as $key) {
+                if ($request->has($key)) {
+                    $value = $request->input($key);
+                    
+                    // Handle boolean specially
+                    if ($key === 'is_lifetime') {
+                        $value = filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0';
+                        $dataType = 'boolean';
+                    } elseif (in_array($key, ['plan_monthly_price', 'plan_annual_price', 'onetime_fee', 'setup_fee'])) {
+                        $value = number_format((float)$value, 2, '.', '');
+                        $dataType = 'decimal';
+                    } elseif (in_array($key, ['billing_cycle_days', 'trial_days'])) {
+                        $value = (string)(int)$value;
+                        $dataType = 'integer';
+                    } elseif (in_array($key, ['trial_ends_at', 'next_billing_date', 'lifetime_purchase_date'])) {
+                        $value = $value ? date('Y-m-d H:i:s', strtotime($value)) : '';
+                        $dataType = 'datetime';
+                    } else {
+                        $dataType = 'string';
+                    }
+
+                    TenantSetting::updateOrCreate(
+                        [
+                            'tenant_id' => $tenant->id,
+                            'setting_key' => $key,
+                        ],
+                        [
+                            'setting_value' => $value,
+                            'data_type' => $dataType,
+                            'category' => 'billing',
+                            'updated_by' => $user->id,
+                        ]
+                    );
+                    $updatedCount++;
+                }
+            }
+
+            // If subscription_status is set to inactive or expired, also update tenant status
+            $status = $request->input('subscription_status');
+            if (in_array($status, ['inactive', 'expired', 'suspended'])) {
+                $tenant->status = $status === 'suspended' ? 'suspended' : 'inactive';
+                $tenant->save();
+            } elseif ($status === 'active') {
+                $tenant->status = 'active';
+                $tenant->save();
+            }
+
+            // Clear cache
+            tenant_clear_settings_cache($tenant->id);
+
+            DB::commit();
+
+            session()->flash('toast', [
+                'type' => 'success',
+                'message' => "Billing settings updated successfully. {$updatedCount} settings updated.",
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Billing settings updated successfully. {$updatedCount} settings updated.",
+                'reload' => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            session()->flash('toast', [
+                'type' => 'error',
+                'message' => 'Error updating billing settings: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error updating billing settings: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+
 }
 

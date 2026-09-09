@@ -103,33 +103,29 @@
                                         @endcan
                                     @endif
                                     
+                                    {{--
+                                        Receiving is no longer gated on payment. The PO's
+                                        estimated `total`/`total_paid` were provisional
+                                        figures from order time; actual cost is only known
+                                        once the supplier's goods/invoice arrive, and that's
+                                        exactly what receiveItems() now captures + pays
+                                        against. So: sent or partially_received => always
+                                        show "Receive Items".
+                                    --}}
                                     @if(in_array($order->status, ['sent', 'partially_received']))
-                                    @can('receive purchase_orders')
-                                        @php
-                                            $totalAmount = $order->total ?? 0;
-                                            $totalPaid = $order->total_paid ?? 0;
-                                            $balanceRemaining = $totalAmount - $totalPaid;
-                                            $isFullyPaid = $balanceRemaining <= 0;
-                                        @endphp
-                                        
-                                        @if($isFullyPaid)
-                                            <button class="btn btn-sm btn-info" 
-                                                    data-bs-toggle="modal" 
+                                        @can('receive purchase_orders')
+                                            @php
+                                                $totalPending = $order->items->sum('quantity') - $order->items->sum('received_quantity');
+                                            @endphp
+                                            <button class="btn btn-sm btn-info"
+                                                    data-bs-toggle="modal"
                                                     data-bs-target="#receiveItemsModal{{ $order->id }}"
-                                                    data-total-pending="{{ $order->items->sum('quantity') - $order->items->sum('received_quantity') }}">
+                                                    data-total-pending="{{ $totalPending }}">
                                                 <i class="bi bi-box-seam me-1"></i>
                                                 {{ __('passwords.receive_items') }}
                                             </button>
-                                        @else
-                                            <button class="btn btn-sm btn-warning" 
-                                                    onclick="showPaymentRequired({{ $order->id }}, {{ $balanceRemaining }})">
-                                                <i class="bi bi-credit-card me-1"></i>
-                                                {{ __('passwords.pay_balance_first') }}
-                                                ({{ number_format($balanceRemaining, 2) }})
-                                            </button>
-                                        @endif
-                                    @endcan
-                                @endif
+                                        @endcan
+                                    @endif
                                     
                                     @if(in_array($order->status, ['draft', 'pending_approval', 'approved']))
                                         @can('cancel purchase_orders')

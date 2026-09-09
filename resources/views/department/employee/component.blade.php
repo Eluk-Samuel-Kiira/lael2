@@ -43,7 +43,7 @@
                                     <a href="#" class="text-gray-800 text-hover-primary mb-1">{{ $employee->first_name . ' ' . $employee->last_name }}</a>
                                     <span>{{ $employee->email }}</span>
                                 </div>
-                        </td>
+                            </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $employee->department->name ?? __('payments.none') }}</div>
                             </td>
@@ -94,8 +94,8 @@
 
                                 @include('department.employee.edit')
                                 @include('department.employee.documents')
-                            </td
-                        </table>
+                            </td>
+                        </tr>
                     @endforeach
                 @else
                     <tr>
