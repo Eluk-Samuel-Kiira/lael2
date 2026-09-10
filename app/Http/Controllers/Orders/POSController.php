@@ -1004,42 +1004,34 @@ class POSController extends Controller
 
     public function processSplitPayment(Request $request)
     {
-                
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('complete order')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        // ✅ Start database transaction EARLY
+        DB::beginTransaction();
+
         try {
-            $user = Auth::user();
-            $tenantId = $user->tenant_id;
-
-            if (!$user->hasPermissionTo('complete order')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-
             $order = Order::lockForUpdate()->findOrFail($request->order_id);
             $payments = $request->payments ?? [];
             $isSingleShop = tenant_is_single_shop($tenantId);
             $bargainDiscount = (float) $request->input('bargain_discount', 0);
 
-            // \Log::info('[POS] Current order state', [
-            //     'order_id' => $order->id,
-            //     'subtotal' => $order->subtotal,
-            //     'tax_total' => $order->tax_total,
-            //     'total' => $order->total,
-            //     'discount_total' => $order->discount_total,
-            //     'subtotal_before_bargain' => $order->subtotal_before_bargain,
-            //     'bargain_discount_applied' => $order->bargain_discount_applied,
-            //     'bargain_discount_requested' => $bargainDiscount,
-            // ]);
-
             if (empty($payments)) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => __('pagination.no_payments_added'),
                 ]);
             }
 
-            // ── Was the cart modified after resuming? ──────────────────────
+            // ── Cart updated? ──────────────────────────────────────────────
             $cartWasUpdated = (bool) $request->input('cart_updated', false);
             $updatedCart = $request->input('updated_cart');
 
@@ -1054,6 +1046,7 @@ class POSController extends Controller
                     $variant = ProductVariant::find($item['variant_id']);
                     if (!$variant) continue;
 
+                    // Build inventory data
                     if ($isSingleShop) {
                         $inventoryData = [
                             'initial_stock' => $variant->overal_quantity_at_hand,
@@ -1061,7 +1054,6 @@ class POSController extends Controller
                             'shop_type' => 'single_shop',
                         ];
                     } else {
-                        // ✅ Use inventory_id and department_id from cart
                         $inventoryId = $item['inventory_id'] ?? null;
                         $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
                         $locationId = $user->location_id ?? 1;
@@ -1078,7 +1070,6 @@ class POSController extends Controller
                                     'shop_type'     => 'multi_shop',
                                 ];
                             } else {
-                                // Fallback: query inventory
                                 $inventory = $variant->inventory()
                                     ->where('location_id', $locationId)
                                     ->where('department_id', $departmentId)
@@ -1093,7 +1084,6 @@ class POSController extends Controller
                                 ];
                             }
                         } else {
-                            // Fallback: query inventory
                             $inventory = $variant->inventory()
                                 ->where('location_id', $locationId)
                                 ->where('department_id', $departmentId)
@@ -1119,7 +1109,7 @@ class POSController extends Controller
                         'tax_amount' => $item['tax_total'] ?? 0,
                         'discount' => $item['discount'] ?? 0,
                         'total_price' => $item['total'],
-                        'batch_id' => $item['batch_id'] ?? null,       
+                        'batch_id' => $item['batch_id'] ?? null,
                         'batch_number' => $item['batch_number'] ?? null,
                         'serial_id' => $item['serial_id'] ?? null,
                         'serial_number' => $item['serial_number'] ?? null,
@@ -1135,7 +1125,6 @@ class POSController extends Controller
 
                 $newTotal = $newSubtotal - $newDiscount + $newTax;
 
-                // When cart changes, reset the bargain anchor
                 $order->update([
                     'subtotal' => $newSubtotal,
                     'discount_total' => $newDiscount,
@@ -1146,79 +1135,45 @@ class POSController extends Controller
                 ]);
 
                 $order->refresh();
-
-                // \Log::info('[POS] Order totals updated after cart change', [
-                //     'order_id' => $order->id,
-                //     'new_total' => $newTotal,
-                // ]);
             }
 
-            // ── Apply negotiated/bargain discount (if any) ─────────────────
+            // ── Bargain discount ───────────────────────────────────────────
             if ($bargainDiscount > 0) {
-                // ✅ SIMPLE FIX: Check if the anchor is 0 (meaning not set yet)
-                // Since to_base_currency(null) returns 0, we check for 0
                 $anchor = $order->subtotal_before_bargain;
-                
+
                 if ($anchor == 0 || $anchor === null) {
-                    // ✅ First time applying a bargain discount
-                    // The base is the current subtotal + tax (before any bargain discount)
                     $baseTotal = $order->subtotal + $order->tax_total;
-                    
-                    // ✅ Store the anchor
                     $order->subtotal_before_bargain = $baseTotal;
                     $order->save();
                     $order->refresh();
-                    
-                    // \Log::info('[POS] Bargain anchor created', [
-                    //     'order_id' => $order->id,
-                    //     'base_total' => $baseTotal,
-                    // ]);
-                    
                     $anchor = $order->subtotal_before_bargain;
                 }
 
-                // ✅ Validate against the base total
                 if ($bargainDiscount > $anchor) {
+                    DB::rollBack();
                     return response()->json([
                         'success' => false,
                         'message' => __('pagination.discount_exceeds_total'),
                         'debug' => [
                             'bargain_discount' => $bargainDiscount,
                             'base_total' => $anchor,
-                            'order_subtotal' => $order->subtotal,
-                            'order_tax' => $order->tax_total,
-                            'current_total' => $order->total,
                         ]
                     ]);
                 }
 
-                // ✅ Remove any existing bargain discount from discount_total
-                // This prevents compounding
                 $otherDiscount = $order->discount_total - $order->bargain_discount_applied;
-
-                // ✅ Apply the new bargain discount
                 $order->bargain_discount_applied = $bargainDiscount;
                 $order->discount_total = $otherDiscount + $bargainDiscount;
-                
-                // ✅ Calculate total from the ANCHOR, not current values
                 $order->total = $anchor - $order->discount_total;
                 $order->save();
                 $order->refresh();
-
-                // \Log::info('[POS] Bargain discount applied', [
-                //     'order_id' => $order->id,
-                //     'bargain_discount' => $bargainDiscount,
-                //     'anchor_total' => $anchor,
-                //     'other_discount' => $otherDiscount,
-                //     'new_total' => $order->total,
-                //     'discount_total' => $order->discount_total,
-                // ]);
             }
 
-            // ── Validate payment total against (possibly updated) order ────
+            // ── Validate payment total ─────────────────────────────────────
             $totalPaid = array_sum(array_column($payments, 'amount'));
 
             if (abs($totalPaid - $order->total) > 0.01) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => __('pagination.payment_total_mismatch'),
@@ -1226,6 +1181,55 @@ class POSController extends Controller
                     'received' => $totalPaid,
                 ]);
             }
+
+            // ═══════════════════════════════════════════════════════════════
+            // ✅ STEP 1: VALIDATE INVENTORY FIRST (BEFORE ANY WRITES)
+            // ═══════════════════════════════════════════════════════════════
+            $order->load('orderItems');
+
+            foreach ($order->orderItems as $item) {
+                $variant = ProductVariant::find($item->variant_id);
+                if (!$variant) {
+                    throw new \Exception("Product variant not found for item: {$item->item_name}");
+                }
+
+                $product = $variant->product;
+                if (!$product) {
+                    throw new \Exception("Product not found for variant: {$variant->name}");
+                }
+
+                $strategy = $product->resolvedInventoryStrategy();
+
+                // Validate stock BEFORE any payment or inventory changes
+                if ($strategy === 'recipe') {
+                    $this->validateRecipeIngredients($product, $item->quantity);
+                } else {
+                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
+                }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // ✅ STEP 2: VALIDATE PAYMENT METHODS
+            // ═══════════════════════════════════════════════════════════════
+            foreach ($payments as $payment) {
+                $paymentMethod = PaymentMethod::findForTenant(
+                    $payment['payment_method_id'],
+                    $tenantId
+                );
+
+                if (!$paymentMethod) {
+                    throw new \Exception(__('pagination.payment_method_not_found'));
+                }
+
+                $validation = $paymentMethod->validateTransaction($payment['amount']);
+                if (!$validation['success']) {
+                    throw new \Exception(__('pagination.payment_validation_failed') . ': ' . $validation['message']);
+                }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // ✅ STEP 3: ALL VALIDATIONS PASSED — NOW PROCESS EVERYTHING
+            // ═══════════════════════════════════════════════════════════════
 
             // ── Process each payment split ─────────────────────────────────
             $processedPayments = [];
@@ -1235,21 +1239,6 @@ class POSController extends Controller
                     $payment['payment_method_id'],
                     $tenantId
                 );
-
-                if (!$paymentMethod) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => __('pagination.payment_method_not_found'),
-                    ]);
-                }
-
-                $validation = $paymentMethod->validateTransaction($payment['amount']);
-                if (!$validation['success']) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => __('pagination.payment_validation_failed') . ': ' . $validation['message'],
-                    ]);
-                }
 
                 $this->recordOrderPaymentTransaction(
                     $order,
@@ -1287,7 +1276,7 @@ class POSController extends Controller
                 ];
             }
 
-            // ── Record bargain discount (for reporting only) ───────────────
+            // ── Record bargain discount ────────────────────────────────────
             if ($order->bargain_discount_applied > 0) {
                 $primaryMethod = PaymentMethod::findForTenant($payments[0]['payment_method_id'], $tenantId);
                 if ($primaryMethod) {
@@ -1295,9 +1284,8 @@ class POSController extends Controller
                 }
             }
 
-            // ── Record promotion/discount (for reporting only) ─────────────
+            // ── Record promotion discount ──────────────────────────────────
             $nonBargainDiscount = $order->discount_total - $order->bargain_discount_applied;
-
             if ($nonBargainDiscount > 0) {
                 $order->load('orderItems');
                 $primaryMethod = PaymentMethod::findForTenant($payments[0]['payment_method_id'], $tenantId);
@@ -1310,7 +1298,6 @@ class POSController extends Controller
             $taxAmount = $order->tax_total ?: 0;
             if ($taxAmount > 0) {
                 $now = now();
-
                 OrderTax::updateOrCreate(
                     ['order_id' => $order->id],
                     [
@@ -1331,93 +1318,35 @@ class POSController extends Controller
                 );
             }
 
-            // ── Inventory ──────────────────────────────────────────────────
+            // ── DEPLETE INVENTORY (Second pass) ────────────────────────────
             $order->load('orderItems');
 
-            // First pass: Validate all items (check stock before depleting)
             foreach ($order->orderItems as $item) {
                 $variant = ProductVariant::find($item->variant_id);
                 if (!$variant) continue;
-                
-                $product = $variant->product;
-                if (!$product) continue;
-                
-                $strategy = $product->resolvedInventoryStrategy();
-                
-                // For recipes, validate ingredients first
-                if ($strategy === 'recipe') {
-                    $this->validateRecipeIngredients($product, $item->quantity);
-                } else {
-                    // For non-recipe, check stock
-                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
-                }
-            }
 
-            // Second pass: Actually deplete inventory
-            foreach ($order->orderItems as $item) {
-                $variant = ProductVariant::find($item->variant_id);
-                if (!$variant) continue;
-                
                 $product = $variant->product;
                 if (!$product) continue;
-                
+
                 $strategy = $product->resolvedInventoryStrategy();
-                
+
                 if ($strategy === 'recipe') {
-                    $this->depleteRecipeIngredients($variant, $item, $order);  // ← $item is OrderItem model
+                    $this->depleteRecipeIngredients($variant, $item, $order);
                 } else {
                     $this->depleteInventoryByStrategy($variant, $item, $order);
                 }
             }
 
-            // ── First pass: Validate all items (check stock before depleting) ──
-            // \Log::info('Validating order items', [
-            //     'order_id' => $order->id,
-            //     'items_count' => $order->orderItems->count()
-            // ]);
-
-            foreach ($order->orderItems as $item) {
-                $variant = ProductVariant::find($item->variant_id);
-                if (!$variant) {
-                    \Log::warning('Variant not found', ['variant_id' => $item->variant_id]);
-                    continue;
-                }
-                
-                $product = $variant->product;
-                if (!$product) {
-                    \Log::warning('Product not found for variant', ['variant_id' => $variant->id]);
-                    continue;
-                }
-                
-                $strategy = $product->resolvedInventoryStrategy();
-                
-                // \Log::info('Validating item', [
-                //     'item_name' => $item->item_name,
-                //     'variant_id' => $variant->id,
-                //     'strategy' => $strategy,
-                //     'quantity' => $item->quantity,
-                //     'batch_id' => $item->batch_id ?? null,  // ✅ Check if batch_id exists
-                //     'inventory_data' => $item->inventory_data
-                // ]);
-                
-                // For recipes, validate ingredients first
-                if ($strategy === 'recipe') {
-                    $this->validateRecipeIngredients($product, $item->quantity);
-                } else {
-                    // For non-recipe, check stock
-                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
-                }
-            }
-
-            //Log it here
-
-            // ── Complete the order ─────────────────────────────────────────
+            // ── NOW mark the order as completed ────────────────────────────
             $order->update([
                 'paid_amount' => $totalPaid,
                 'balance_due' => 0,
                 'status' => 'completed',
                 'payment_method_id' => null,
             ]);
+
+            // ✅ Commit everything
+            DB::commit();
 
             // ── Build receipt ──────────────────────────────────────────────
             $customerName = $order->customer_name;
@@ -1465,19 +1394,29 @@ class POSController extends Controller
                     'cashier' => $user->name,
                 ],
             ]);
+
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => __('pagination.order_not_found'),
             ], 404);
         } catch (\Exception $e) {
+            // ✅ Rollback EVERYTHING on any error
+            DB::rollBack();
+
             \Log::error('Split payment failed: ' . $e->getMessage(), [
                 'order_id' => $request->order_id ?? null,
                 'trace' => $e->getTraceAsString(),
             ]);
+
             return response()->json([
                 'success' => false,
-                'message' => __('pagination.payment_error'),
+                'message' => $e->getMessage(), // ✅ Show EXACT error
+                'debug' => [
+                    'order_id' => $request->order_id ?? null,
+                    'error_type' => get_class($e),
+                ]
             ], 500);
         }
     }

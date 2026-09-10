@@ -24,7 +24,7 @@ class ArtisanCommandController extends Controller
         'queue:restart'        => 'Restart queue workers',
         'migrate'              => 'Run database migrations (forced in production)',
         'migrate:status'       => 'Show migration status',
-        'migrate:rollback --path=database/migrations/2026_09_03_223129_add_unit_cost_po_recipt_items.php'       => 'Show migration status',
+        // 'migrate:rollback --path=database/migrations/2026_09_03_223129_add_unit_cost_po_recipt_items.php'       => 'Show migration status',
         'db:seed'              => 'Seed the database',
         'permissions:add-new'  => 'Add more permissions to the db',
         // 'migrate:fresh --seed' => '⚠️ DANGER: Migrate and Seed fresh (force required)',
@@ -35,7 +35,7 @@ class ArtisanCommandController extends Controller
         'migrate',
         'migrate:fresh --seed',
         'db:seed',
-        'migrate:rollback --path=database/migrations/2026_09_03_223129_add_unit_cost_po_recipt_items.php',
+        // 'migrate:rollback --path=database/migrations/2026_09_03_223129_add_unit_cost_po_recipt_items.php',
     ];
 
     public function index()
