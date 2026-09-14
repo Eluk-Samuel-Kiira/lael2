@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\ProductVariant;
+use App\Models\{ ProductVariant, InventoryItems, OrderPayment };
 use App\Models\User;
 use App\Models\Customer;
 use Illuminate\Support\Facades\{ DB, Artisan };
@@ -117,14 +117,91 @@ class DashboardController extends Controller
             ->limit(10)
             ->get(); // Accessor on 'total' handles conversion
         
-        // ✅ Inventory alerts
-        $lowStockItems = ProductVariant::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->where('overal_quantity_at_hand', '<', 10)
-            ->where('overal_quantity_at_hand', '>', 0)
-            ->orderBy('overal_quantity_at_hand')
-            ->limit(5)
-            ->get();
+        // ✅ Inventory alerts - Handle both single-shop and multi-shop
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $lowStockItems = collect();
+        $outOfStockItems = 0;
+
+        if ($isSingleShop) {
+            // ============================================
+            // SINGLE SHOP: Use ProductVariant.overal_quantity_at_hand
+            // ============================================
+            $lowStockItems = ProductVariant::where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->whereColumn('overal_quantity_at_hand', '<=', 'low_stock_level')
+                ->where('overal_quantity_at_hand', '>', 0)
+                ->orderBy('overal_quantity_at_hand')
+                ->limit(5)
+                ->get()
+                ->map(function ($variant) {
+                    return (object) [
+                        'id' => $variant->id,
+                        'name' => $variant->name,
+                        'sku' => $variant->sku,
+                        'quantity' => $variant->overal_quantity_at_hand,
+                        'threshold' => $variant->low_stock_level,
+                        'location_name' => null,
+                        'department_name' => null,
+                    ];
+                });
+
+            $outOfStockItems = ProductVariant::where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->where('overal_quantity_at_hand', '<=', 0)
+                ->count();
+
+        } else {
+            // ============================================
+            // MULTI-SHOP: Use InventoryItems.quantity_allocated vs preferred_stock_level
+            // Group by location + department + variant (unique combinations)
+            // ============================================
+            
+            // Low stock items
+            $lowStockItems = InventoryItems::where('tenant_id', $tenantId)
+                ->whereColumn('quantity_allocated', '<=', 'preferred_stock_level')
+                ->where('quantity_allocated', '>', 0)
+                ->whereHas('variant', function ($q) {
+                    $q->where('is_active', true);
+                })
+                ->with(['variant', 'itemLocation', 'departmentItem'])
+                ->get()
+                // ✅ Ensure unique variant per location + department
+                ->groupBy(function ($item) {
+                    return $item->variant_id . '_' . $item->location_id . '_' . $item->department_id;
+                })
+                ->map(function ($group) {
+                    // Take the first item of each unique combination
+                    $item = $group->first();
+                    return (object) [
+                        'id' => $item->variant_id,
+                        'name' => $item->variant->name ?? 'Unknown',
+                        'sku' => $item->variant->sku ?? '',
+                        'quantity' => $item->quantity_allocated,
+                        'threshold' => $item->preferred_stock_level,
+                        'location_name' => $item->itemLocation->name ?? 'N/A',
+                        'department_name' => $item->departmentItem->name ?? 'N/A',
+                    ];
+                })
+                ->sortBy('quantity')
+                ->take(5)
+                ->values();
+
+            // Out of stock items - also unique per location + department
+            $outOfStockItems = InventoryItems::where('tenant_id', $tenantId)
+                ->where('quantity_allocated', '<=', 0)
+                ->whereHas('variant', function ($q) {
+                    $q->where('is_active', true);
+                })
+                ->get()
+                ->groupBy(function ($item) {
+                    return $item->variant_id . '_' . $item->location_id . '_' . $item->department_id;
+                })
+                ->count();
+        }
+
+        // Also get the total count of low stock items (for badge display)
+        $lowStockCount = $lowStockItems->count();
         
         $outOfStockItems = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
@@ -229,7 +306,7 @@ class DashboardController extends Controller
         $todayOrderItems = OrderItem::whereHas('order', function($query) use ($tenantId, $today) {
                 $query->where('tenant_id', $tenantId)
                     ->whereDate('created_at', $today)
-                    ->whereIn('status', ['completed', 'processing']);
+                    ->whereIn('status', ['completed']);
             })
             ->with('variant')
             ->get();
@@ -237,12 +314,12 @@ class DashboardController extends Controller
         $totalProfit = 0;
         foreach ($todayOrderItems as $item) {
             if ($item->variant) {
-                $profit = ($item->unit_price - $item->variant->cost_price) * $item->quantity;
+                $profit = ($item->selling_price - $item->variant->grand_total_cost_price) * $item->quantity;
                 $totalProfit += $profit;
             }
         }
         
-        return $totalProfit; // Accessor on cost_price and unit_price handle conversion
+        return $totalProfit;
     }
     
     public function overview(Request $request)
@@ -259,7 +336,6 @@ class DashboardController extends Controller
         $endDate = $request->get('end_date', Carbon::today()->format('Y-m-d'));
         $filterType = $request->get('filter_type', 'today');
         
-        // Adjust dates based on filter type
         switch($filterType) {
             case 'yesterday':
                 $startDate = Carbon::yesterday()->format('Y-m-d');
@@ -275,25 +351,24 @@ class DashboardController extends Controller
                 break;
         }
         
-        // Parse dates for queries
         $startDateTime = Carbon::parse($startDate)->startOfDay();
         $endDateTime = Carbon::parse($endDate)->endOfDay();
         
-        // ✅ Financial Summary - Using models
+        // ✅ Financial Summary
         $filteredOrders = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->whereIn('status', ['completed', 'processing'])
             ->get();
         
         $financialSummary = (object)[
-            'total_sales' => $filteredOrders->sum('total'), // Accessor
-            'total_tax' => $filteredOrders->sum('tax_total'), // Accessor
-            'total_discounts' => $filteredOrders->sum('discount_total'), // Accessor
+            'total_sales' => $filteredOrders->sum('total'),
+            'total_tax' => $filteredOrders->sum('tax_total'),
+            'total_discounts' => $filteredOrders->sum('discount_total'),
             'order_count' => $filteredOrders->count(),
             'average_order' => $filteredOrders->count() > 0 ? $filteredOrders->avg('total') : 0,
         ];
         
-        // ✅ Calculate profit - Using models
+        // ✅ Profit
         $profitItems = OrderItem::whereHas('order', function($query) use ($tenantId, $startDateTime, $endDateTime) {
                 $query->where('tenant_id', $tenantId)
                     ->whereBetween('created_at', [$startDateTime, $endDateTime])
@@ -316,40 +391,35 @@ class DashboardController extends Controller
             'revenue' => $revenue,
         ];
         
-        // ✅ Payment method breakdown
-        $paymentBreakdown = DB::table('order_payments')
-            ->join('orders', 'order_payments.order_id', '=', 'orders.id')
-            ->join('payment_methods', 'order_payments.payment_method_id', '=', 'payment_methods.id')
-            ->where('orders.tenant_id', $tenantId)
-            ->whereBetween('orders.created_at', [$startDateTime, $endDateTime])
-            ->where('order_payments.status', 'completed')
-            ->select(
-                'payment_methods.name',
-                'payment_methods.type',
-                DB::raw('COUNT(*) as transaction_count'),
-                DB::raw('SUM(order_payments.amount) as total_amount')
-            )
-            ->groupBy('payment_methods.id', 'payment_methods.name', 'payment_methods.type')
-            ->orderBy('total_amount', 'desc')
+        // ✅ Payment method breakdown — Eloquent only
+        $paymentBreakdown = OrderPayment::whereHas('order', function ($q) use ($tenantId, $startDateTime, $endDateTime) {
+                $q->where('tenant_id', $tenantId)
+                ->whereBetween('created_at', [$startDateTime, $endDateTime]);
+            })
+            ->where('status', 'completed')
+            ->with('paymentMethod')
             ->get()
-            ->map(function($item) {
-                // PaymentMethod model accessor doesn't apply here since we're using DB
-                // But we can manually convert
-                $item->total_amount = $item->total_amount / 100;
-                return $item;
-            });
+            ->groupBy('payment_method_id')
+            ->map(function ($group) {
+                $method = $group->first()->paymentMethod;
+                return (object) [
+                    'name'              => $method->name ?? 'Unknown',
+                    'type'              => $method->type ?? 'unknown',
+                    'transaction_count' => $group->count(),
+                    'total_amount'      => $group->sum('amount'), // accessor
+                ];
+            })
+            ->sortByDesc('total_amount')
+            ->values();
         
-        // ✅ Hourly breakdown - Using models
+        // ✅ Hourly breakdown
         $hourlyBreakdown = collect();
         for ($hour = 0; $hour < 24; $hour++) {
-            $hourOrders = $filteredOrders->filter(function($order) use ($hour) {
-                return $order->created_at->hour == $hour;
-            });
-            
+            $hourOrders = $filteredOrders->filter(fn($order) => $order->created_at->hour == $hour);
             $hourlyBreakdown->push((object)[
                 'hour' => $hour,
                 'order_count' => $hourOrders->count(),
-                'hourly_total' => $hourOrders->sum('total'), // Accessor
+                'hourly_total' => $hourOrders->sum('total'),
             ]);
         }
         
@@ -360,18 +430,18 @@ class DashboardController extends Controller
             ->with(['customer', 'orderCreater'])
             ->orderBy('total', 'desc')
             ->limit(10)
-            ->get(); // Accessor on total handles conversion
+            ->get();
         
-        // ✅ Expense summary (refunds, discounts)
+        // ✅ Expense summary
         $refundOrders = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDateTime, $endDateTime])
             ->where('type', 'return')
             ->get();
         
         $expenseSummary = [
-            'refunds' => $refundOrders->sum('total'), // Accessor
-            'discounts' => $filteredOrders->sum('discount_total'), // Accessor
-            'tax_collected' => $filteredOrders->sum('tax_total'), // Accessor
+            'refunds' => $refundOrders->sum('total'),
+            'discounts' => $filteredOrders->sum('discount_total'),
+            'tax_collected' => $filteredOrders->sum('tax_total'),
         ];
         
         return view('dashboard.overview', compact(
@@ -386,4 +456,5 @@ class DashboardController extends Controller
             'filterType'
         ));
     }
+
 }

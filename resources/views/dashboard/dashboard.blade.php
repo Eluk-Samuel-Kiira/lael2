@@ -253,7 +253,22 @@
                                         </div>
                                         <div class="d-flex flex-column">
                                             <span class="text-gray-800 fw-bold fs-6">{{ $item->name }}</span>
-                                            <span class="text-gray-400 fw-semibold fs-7">{{__('payments.stock_left')}}: {{ $item->overal_quantity_at_hand }}</span>
+                                            
+                                            {{-- ✅ Show location/department for multi-shop --}}
+                                            @if($item->location_name || $item->department_name)
+                                                <span class="text-gray-400 fw-semibold fs-8">
+                                                    <i class="ki-duotone ki-geolocation fs-7 me-1">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                    {{ $item->location_name ?? '—' }} / {{ $item->department_name ?? '—' }}
+                                                </span>
+                                            @endif
+                                            
+                                            <span class="text-gray-400 fw-semibold fs-7">
+                                                {{__('payments.stock_left')}}: <strong>{{ $item->quantity }}</strong>
+                                                / {{__('payments.min')}}: {{ $item->threshold }}
+                                            </span>
                                         </div>
                                     </div>
                                     <span class="badge badge-light-warning">{{__('payments.low_stock')}}</span>
@@ -388,45 +403,6 @@
                                             @endforelse
                                         </tbody>
                                     </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endcan
-
-                <!-- Dashboard Overview Section (if needed) -->
-                @can('view dashboard overview')
-                <div class="row g-5 g-xl-8 mb-6">
-                    <div class="col-xl-12">
-                        <div class="card card-flush">
-                            <div class="card-header pt-5">
-                                <h3 class="card-title align-items-start flex-column">
-                                    <span class="card-label fw-bold text-gray-800">{{__('payments.dashboard_overview')}}</span>
-                                    <span class="text-gray-400 mt-1 fw-semibold fs-6">{{__('payments.complete_overview')}}</span>
-                                </h3>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-5 g-xl-8">
-                                    <!-- Summary stats or additional content -->
-                                    <div class="col-md-4">
-                                        <div class="border rounded p-5">
-                                            <span class="text-gray-600 fw-bold">{{__('payments.total_sales')}}</span>
-                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ number_format($todayStats['sales'], 2) }}</h3>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="border rounded p-5">
-                                            <span class="text-gray-600 fw-bold">{{__('payments.total_orders')}}</span>
-                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ $todayStats['orders'] }}</h3>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="border rounded p-5">
-                                            <span class="text-gray-600 fw-bold">{{__('payments.total_profit')}}</span>
-                                            <h3 class="text-gray-900 fw-bolder fs-1">{{ number_format($todayStats['profit'], 2) }}</h3>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>

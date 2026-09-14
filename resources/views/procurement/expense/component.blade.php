@@ -114,7 +114,7 @@
                                             class="form-check-input approve-switch"
                                             id="approve-switch-{{ $expense->id }}"
                                             onchange="approveExpense({{ $expense->id }}, this.checked ? 1 : 0)"
-                                        >
+                                        @cannot('update expense') readonly @endcannot>
 
                                         <span id="approve-label-{{ $expense->id }}"
                                             class="form-check-label ms-2 fw-bold fs-6 text-gray-700">
@@ -123,13 +123,13 @@
                                     </label>
                                 @endif
                             </td>
-                                <td>
-                                    <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateExpenseStatus({{ $expense->id }}, this.value)"
-                                        @cannot('update expense') disabled @endcannot>
-                                        <option value="pending" {{ $expense->payment_status == 'pending' ? 'selected' : '' }}>{{__('pagination.pending')}}</option>
-                                        <option value="paid" {{ $expense->payment_status == 'paid' ? 'selected' : '' }}>{{__('pagination.paid')}}</option>
-                                        <option value="reimbursed" {{ $expense->payment_status == 'reimbursed' ? 'selected' : '' }}>{{__('pagination.reimbursed')}}</option>
-                                    </select>
+                            <td>
+                                <select name="status" class="form-select form-select-solid form-select-sm" onchange="updateExpenseStatus({{ $expense->id }}, this.value)"
+                                    @cannot('update expense') disabled @endcannot>
+                                    <option value="pending" {{ $expense->payment_status == 'pending' ? 'selected' : '' }}>{{__('pagination.pending')}}</option>
+                                    <option value="paid" {{ $expense->payment_status == 'paid' ? 'selected' : '' }}>{{__('pagination.paid')}}</option>
+                                    <option value="reimbursed" {{ $expense->payment_status == 'reimbursed' ? 'selected' : '' }}>{{__('pagination.reimbursed')}}</option>
+                                </select>
                                 </td>
                             <td>
                                 <div class="d-flex gap-2">
