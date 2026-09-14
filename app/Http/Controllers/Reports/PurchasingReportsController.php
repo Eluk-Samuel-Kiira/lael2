@@ -31,6 +31,9 @@ class PurchasingReportsController extends Controller
         if (!$user->hasPermissionTo('purchasing reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('purchasing_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         return $tenantId;
     }
 

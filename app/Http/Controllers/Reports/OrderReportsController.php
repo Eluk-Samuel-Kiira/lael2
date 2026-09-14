@@ -31,6 +31,9 @@ class OrderReportsController extends Controller
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // Default date range: Last 30 days
         $startDate = $request->get('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
@@ -156,6 +159,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Date Range ──────────────────────────────────────────────
@@ -594,6 +600,9 @@ class OrderReportsController extends Controller
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // ─── Date Range ──────────────────────────────────────────────
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -873,6 +882,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Check if Single Shop or Multi-Shop ──────────────────────
@@ -1276,6 +1288,9 @@ class OrderReportsController extends Controller
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // ─── Date Range ──────────────────────────────────────────────
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -1536,6 +1551,9 @@ class OrderReportsController extends Controller
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1721,6 +1739,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Date Range ──────────────────────────────────────────────
@@ -2058,6 +2079,9 @@ class OrderReportsController extends Controller
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // ─── Date Range ──────────────────────────────────────────────
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -2312,6 +2336,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Date Range ──────────────────────────────────────────────
@@ -2569,6 +2596,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Date Range ──────────────────────────────────────────────
@@ -2909,6 +2939,9 @@ class OrderReportsController extends Controller
 
         if (!$user->hasPermissionTo('order reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('order_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // ─── Check if Single Shop or Multi-Shop ──────────────────────
@@ -3323,6 +3356,7 @@ class OrderReportsController extends Controller
                 'message' => __('payments.not_authorized'),
             ], 403);
         }
+        
 
         $variant = ProductVariant::where('tenant_id', $tenantId)
             ->where('id', $variantId)

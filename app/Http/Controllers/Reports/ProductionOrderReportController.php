@@ -29,6 +29,9 @@ class ProductionOrderReportController extends Controller
         if (!$user->hasPermissionTo('production reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('production_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         return $user->tenant_id;
     }
 

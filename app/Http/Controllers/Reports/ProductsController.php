@@ -25,6 +25,9 @@ class ProductsController extends Controller
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // Get filter parameters
         $categoryId = $request->get('category_id');
@@ -339,6 +342,9 @@ class ProductsController extends Controller
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // Get filter parameters with validation
         $categoryId = $request->get('category_id');
@@ -450,6 +456,9 @@ class ProductsController extends Controller
 
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $categoryId = $request->get('category_id');
@@ -604,6 +613,9 @@ class ProductsController extends Controller
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $categoryId = $request->get('category_id');
         $days = (int)$request->get('days', 30);
@@ -732,6 +744,9 @@ class ProductsController extends Controller
 
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // Get filter parameters
@@ -873,6 +888,9 @@ class ProductsController extends Controller
 
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $perPage = (int)$request->get('per_page', 15);

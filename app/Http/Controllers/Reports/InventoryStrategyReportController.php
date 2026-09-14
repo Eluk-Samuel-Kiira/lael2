@@ -29,6 +29,9 @@ class InventoryStrategyReportController extends Controller
         if (!$user->hasPermissionTo('product reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('product_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         return $user->tenant_id;
     }
 

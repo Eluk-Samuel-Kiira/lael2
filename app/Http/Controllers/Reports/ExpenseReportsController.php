@@ -23,6 +23,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         if (!$tenantId) {
             return redirect()->back()->with('error', __('accounting.invalid_tenant'));
@@ -211,6 +214,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
 
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -342,6 +348,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         if (!$tenantId) {
@@ -517,6 +526,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         if (!$tenantId) {
             return redirect()->back()->with('error', __('accounting.invalid_tenant'));
@@ -679,6 +691,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
 
         $year = $request->get('year', date('Y'));
         $month = $request->get('month', date('m'));
@@ -811,6 +826,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
 
         $data = $this->summary($request);
         // Add export logic here
@@ -830,6 +848,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
@@ -957,6 +978,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $frequency = $request->get('frequency');
@@ -1124,6 +1148,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $period = $request->get('period', 'monthly'); // monthly, quarterly, yearly
@@ -1325,6 +1352,9 @@ class ExpenseReportsController extends Controller
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', Carbon::now()->startOfYear()->format('Y-m-d'));
         $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
@@ -1484,6 +1514,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $startDate = $request->get('start_date', Carbon::now()->subMonths(3)->format('Y-m-d'));
@@ -1688,6 +1721,9 @@ class ExpenseReportsController extends Controller
 
         if (!$user->hasPermissionTo('expense reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('expense_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         $data = $this->byCategory($request);
         // Export logic here
