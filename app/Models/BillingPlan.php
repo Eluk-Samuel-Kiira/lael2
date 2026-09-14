@@ -520,7 +520,7 @@ class BillingPlan extends Model
             ];
         }
 
-            $reportModules = [
+        $reportModules = [
             // Financial Reports
             'module_financial_reports' => $this->includes_financial_reports ?? false,
             'includes_financial_reports' => $this->includes_financial_reports ?? false,

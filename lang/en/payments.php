@@ -16,6 +16,7 @@ return [
     'payment_type' => 'Type',
     'description' => 'Description',
     'amount' => 'Amount',
+    'feature_not_available_in_plan' => 'Feature Not Available In Your Plan',
     'stock_left' => 'Stock Left',
     'min' => 'Min',
     'low_stock' => 'Low Stock',

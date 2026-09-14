@@ -233,6 +233,7 @@
                             </a>
                         </div>
                         
+                        @if (tenant_can('production_orders'))
                         @can('view production_orders')
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('production-orders.index') }}')">
@@ -250,6 +251,7 @@
                             </a>
                         </div>
                         @endcan
+                        @endif
 
                     </div>
                 </div>
@@ -606,7 +608,7 @@
                         @endif
                         
                         <!-- Expense Reports Section -->
-                        @if (tenant_can('advanced_reports'))
+                        @if (tenant_can('expense_reports'))
                         @can('expense reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -723,6 +725,7 @@
                         @endcan
                         
                         <!-- Order Reports Section -->
+                        @if (tenant_can('order_reports'))
                         @can('order reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -847,8 +850,10 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
 
                         <!-- Product Reports Section -->
+                        @if (tenant_can('product_reports'))
                         @can('product reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -923,8 +928,10 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
 
                         <!-- Inventory Reports Section -->
+                        @if (tenant_can('inventory_reports'))
                         @can('inventory reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -1047,8 +1054,10 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
                         
                         <!-- Purchasing Reports Section -->
+                        @if (tenant_can('purchasing_reports'))
                         @can('purchasing reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -1163,8 +1172,10 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
 
                         <!-- Production Orders Section -->
+                        @if (tenant_can('production_reports'))
                         @can('view production_orders reports')
                         <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
                             <span class="menu-link">
@@ -1287,6 +1298,7 @@
                             </div>
                         </div>
                         @endcan
+                        @endif
 
                         @endif
                         

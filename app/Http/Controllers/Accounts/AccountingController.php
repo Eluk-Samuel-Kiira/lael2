@@ -19,6 +19,10 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         // Get location filter from request
         $locationId = $request->get('location_id');
@@ -75,6 +79,10 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // Get location filter from request
@@ -151,6 +159,10 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $filters = [
@@ -312,6 +324,9 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $period = $request->get('period', 'month');
         $locationId = $request->get('location_id'); // Location filter
@@ -460,6 +475,9 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
@@ -569,6 +587,9 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
@@ -689,6 +710,9 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
@@ -797,6 +821,9 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->format('Y-m-d'));
@@ -890,6 +917,9 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $date = $request->get('date', now()->format('Y-m-d'));
@@ -997,6 +1027,9 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // Get month and year from request
@@ -1133,6 +1166,9 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         // Get week and year from request
@@ -1293,6 +1329,9 @@ class AccountingController extends Controller
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $startDate = $request->get('start_date', now()->startOfMonth()->format('Y-m-d'));
         $endDate = $request->get('end_date', now()->endOfDay()->format('Y-m-d H:i:s'));
@@ -1414,6 +1453,9 @@ class AccountingController extends Controller
         
         if (!$user->hasPermissionTo('financial reports')) {
             abort(403, __('payments.not_authorized'));
+        }
+        if (!tenant_can('financial_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
         }
         
         $date = $request->get('date', now()->format('Y-m-d'));

@@ -106,7 +106,7 @@ class DepartmentController extends Controller
 
         // Check maximum departments limit
         $currentDepartmentCount = Department::where('tenant_id', $tenantId)->count();
-        $maxDepartments = tenant_limit('departments', 3, $tenantId); // Using tenant_limit instead of tenant_setting
+        $maxDepartments = tenant_limit('departments', 3, $tenantId);
 
         if ($currentDepartmentCount >= $maxDepartments) {
             return response()->json([

@@ -29,6 +29,9 @@ class InventoryReportsController extends Controller
         if (!$user->hasPermissionTo('inventory reports')) {
             abort(403, __('payments.not_authorized'));
         }
+        if (!tenant_can('inventory_reports')) {
+            abort(403, __('payments.feature_not_available_in_plan'));
+        }
         
         $tenantId = $user->tenant_id;
 
