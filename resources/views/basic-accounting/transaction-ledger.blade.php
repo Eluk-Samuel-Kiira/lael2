@@ -433,6 +433,7 @@
             </div>
         </div>
     </div>
+
     
     <!-- Transaction Details Modal -->
     <div class="modal fade" id="transactionModal" tabindex="-1" aria-hidden="true">
@@ -474,13 +475,14 @@
                     <!-- Amount Details -->
                     <div class="row g-5 mb-8">
                         <div class="col-md-4">
-                            <div class="card card-flush bg-light-{{ request()->get('status', 'COMPLETED') === 'COMPLETED' ? 'success' : 'primary' }} h-100">
+                            <div class="card card-flush bg-light-primary h-100" id="modalAmountCard">
                                 <div class="card-body text-center py-5">
                                     <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.amount') }}</span>
                                     <div class="fs-2hx fw-bold" id="modalAmount">-</div>
                                 </div>
                             </div>
                         </div>
+
                         <div class="col-md-4">
                             <div class="card card-flush bg-light-info h-100">
                                 <div class="card-body text-center py-5">
@@ -626,6 +628,20 @@
             </div>
         </div>
     </div>
+    <style>
+        .text-purple {
+            color: #7239ea !important;
+        }
+
+        .bg-light-purple {
+            background-color: rgba(114, 57, 234, 0.10) !important;
+        }
+
+        .badge-light-purple {
+            background-color: rgba(114, 57, 234, 0.10) !important;
+            color: #7239ea !important;
+        }
+    </style>
     
     @push('scripts')
     <script>
@@ -722,102 +738,151 @@
             const customer = data.customer;
             const paymentMethod = data.payment_method;
             const currency = data.currency;
-            
-            document.getElementById('modalTransactionRef').textContent = transaction.transaction_ref || '-';
-            document.getElementById('modalReceiptNumber').textContent = transaction.receipt_number || '-';
-            document.getElementById('modalDate').textContent = transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleString() : '-';
-            
+
+            // ── Helper: amount style map ─────────────────────────────────
+            // ADJUSTMENT & RECONCILIATION are informational:
+            //   - no +/- sign
+            //   - purple color
+            //   - purple card background
+            //   - because they do NOT change the account balance
+            function getAmountStyle(type) {
+                const styles = {
+                    // Money IN — green with +
+                    'DEPOSIT':        { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
+                    'TRANSFER_IN':    { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
+                    'REFUND':         { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
+
+                    // Money OUT — red with -
+                    'WITHDRAWAL':     { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
+                    'TRANSFER_OUT':   { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
+                    'FEE':            { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
+
+                    // Informational / neutral — purple, NO sign
+                    'ADJUSTMENT':     { text: 'text-purple',   bg: 'bg-light-purple',   sign: ''  },
+                    'RECONCILIATION': { text: 'text-purple',   bg: 'bg-light-purple',   sign: ''  },
+                };
+
+                return styles[type] ?? { text: 'text-gray-800', bg: 'bg-light-secondary', sign: '' };
+            }
+
+            // ── Header fields ─────────────────────────────────────────────
+            document.getElementById('modalTransactionRef').textContent  = transaction.transaction_ref  || '-';
+            document.getElementById('modalReceiptNumber').textContent   = transaction.receipt_number   || '-';
+            document.getElementById('modalDate').textContent =
+                transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleString() : '-';
+
+            // ── Amount ────────────────────────────────────────────────────
             const currencySymbol = '{{ currency_symbol() }}';
-            const isPositive = ['DEPOSIT', 'TRANSFER_IN', 'REFUND'].includes(transaction.transaction_type);
-            const amountClass = isPositive ? 'text-success' : 'text-danger';
-            const amountSign = isPositive ? '+' : '-';
-            
+            const style          = getAmountStyle(transaction.transaction_type);
+
+            // Amount text
             document.getElementById('modalAmount').innerHTML = `
-                <span class="${amountClass}">
-                    ${amountSign}${parseFloat(transaction.amount).toFixed(2)} ${currencySymbol}
+                <span class="${style.text}">
+                    ${style.sign}${parseFloat(transaction.amount).toFixed(2)} ${currencySymbol}
                 </span>
             `;
-            
-            document.getElementById('modalBalanceBefore').textContent = 
+
+            // Amount card background
+            const amountCard = document.getElementById('modalAmountCard');
+            if (amountCard) {
+                amountCard.classList.remove(
+                    'bg-light-success', 'bg-light-danger', 'bg-light-primary',
+                    'bg-light-info', 'bg-light-warning', 'bg-light-secondary', 'bg-light-purple'
+                );
+                amountCard.classList.add(style.bg);
+            }
+
+            // ── Balance before / after ────────────────────────────────────
+            document.getElementById('modalBalanceBefore').textContent =
                 `${parseFloat(transaction.balance_before).toFixed(2)} ${currencySymbol}`;
-            document.getElementById('modalBalanceAfter').textContent = 
+            document.getElementById('modalBalanceAfter').textContent =
                 `${parseFloat(transaction.balance_after).toFixed(2)} ${currencySymbol}`;
-            
+
+            // ── Payment method ────────────────────────────────────────────
             document.getElementById('modalPaymentMethod').textContent = paymentMethod?.name || '-';
-            
-            // Transaction type badge
+
+            // ── Transaction type badge ────────────────────────────────────
             const typeColors = {
-                'DEPOSIT': 'success',
-                'WITHDRAWAL': 'danger',
-                'TRANSFER_IN': 'info',
-                'TRANSFER_OUT': 'warning',
-                'FEE': 'secondary',
-                'REFUND': 'primary',
-                'ADJUSTMENT': 'info',
+                'DEPOSIT':        'success',
+                'WITHDRAWAL':     'danger',
+                'TRANSFER_IN':    'info',
+                'TRANSFER_OUT':   'warning',
+                'FEE':            'secondary',
+                'REFUND':         'primary',
+                'ADJUSTMENT':     'purple',   // ← was 'info'
                 'RECONCILIATION': 'dark'
             };
             const typeColor = typeColors[transaction.transaction_type] || 'secondary';
             document.getElementById('modalTransactionType').innerHTML = `
                 <span class="badge badge-light-${typeColor} py-2 px-3">${transaction.transaction_type}</span>
             `;
-            
+
+            // ── Category ──────────────────────────────────────────────────
             document.getElementById('modalCategory').textContent = transaction.transaction_category || '-';
-            
-            // Status badge
+
+            // ── Status badge ──────────────────────────────────────────────
             const statusColors = {
                 'COMPLETED': 'success',
-                'PENDING': 'warning',
-                'FAILED': 'danger',
+                'PENDING':   'warning',
+                'FAILED':    'danger',
                 'CANCELLED': 'secondary',
-                'REVERSED': 'dark'
+                'REVERSED':  'dark'
             };
             const statusColor = statusColors[transaction.status] || 'secondary';
             document.getElementById('modalStatus').innerHTML = `
                 <span class="badge badge-light-${statusColor} py-2 px-3">${transaction.status}</span>
             `;
-            
+
+            // ── Description / user / customer ─────────────────────────────
             document.getElementById('modalDescription').textContent = transaction.description || '-';
             document.getElementById('modalProcessedBy').textContent = transaction.user?.name || 'System';
-            document.getElementById('modalCustomer').textContent = customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
-            
-            // Reference information
+            document.getElementById('modalCustomer').textContent =
+                customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
+
+            // ── Reference information ─────────────────────────────────────
             document.getElementById('modalReferenceTable').textContent = transaction.reference_table || '-';
-            document.getElementById('modalReferenceId').textContent = transaction.reference_id || '-';
-            
+            document.getElementById('modalReferenceId').textContent    = transaction.reference_id    || '-';
+
+            const externalRefRow = document.getElementById('externalReferenceRow');
             if (transaction.external_reference) {
-                document.getElementById('externalReferenceRow').style.display = '';
+                externalRefRow.style.display = '';
                 document.getElementById('modalExternalReference').textContent = transaction.external_reference;
+            } else {
+                externalRefRow.style.display = 'none';
             }
-            
+
+            const bankRefRow = document.getElementById('bankReferenceRow');
             if (transaction.bank_reference) {
-                document.getElementById('bankReferenceRow').style.display = '';
+                bankRefRow.style.display = '';
                 document.getElementById('modalBankReference').textContent = transaction.bank_reference;
+            } else {
+                bankRefRow.style.display = 'none';
             }
-            
-            // Handle metadata
+
+            // ── Metadata ──────────────────────────────────────────────────
             let metadata = {};
             try {
-                metadata = transaction.metadata ? 
-                    (typeof transaction.metadata === 'string' ? JSON.parse(transaction.metadata) : transaction.metadata) 
+                metadata = transaction.metadata
+                    ? (typeof transaction.metadata === 'string' ? JSON.parse(transaction.metadata) : transaction.metadata)
                     : {};
             } catch (e) {
                 metadata = { error: 'Failed to parse metadata' };
             }
-            
+
             document.getElementById('rawMetadata').textContent = JSON.stringify(metadata, null, 2);
-            
-            // Populate formatted metadata
+
+            // Formatted metadata table
             const formattedTable = document.getElementById('formattedMetadataTable').getElementsByTagName('tbody')[0];
             formattedTable.innerHTML = '';
-            
+
             for (const key in metadata) {
                 if (metadata[key] !== null && metadata[key] !== undefined) {
-                    const row = formattedTable.insertRow();
-                    const fieldCell = row.insertCell();
-                    const valueCell = row.insertCell();
-                    
+                    const row        = formattedTable.insertRow();
+                    const fieldCell  = row.insertCell();
+                    const valueCell  = row.insertCell();
+
                     fieldCell.innerHTML = `<strong>${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>`;
-                    
+
                     let value = metadata[key];
                     if (typeof value === 'object' && value !== null) {
                         value = JSON.stringify(value, null, 2);
@@ -826,7 +891,7 @@
                 }
             }
         }
-        
+                
         function printTransactionDetails() {
             const printContent = `
                 <div style="font-family: Arial, sans-serif; padding: 20px;">

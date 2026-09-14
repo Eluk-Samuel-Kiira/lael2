@@ -76,8 +76,13 @@
                                         </span>
                                     </div>
                                     <div class="d-flex flex-column">
-                                        <span class="fw-bolder fs-2x text-gray-900">{{ number_format(($financialSummary->total_sales ?? 0) / 100, 2) }}</span>
-                                        <span class="text-gray-400 fw-semibold fs-7">{{ $financialSummary->order_count ?? 0 }} {{__('payments.transactions')}}</span>
+                                        {{-- ✅ accessor already converted --}}
+                                        <span class="fw-bolder fs-2x text-gray-900">
+                                            {{ number_format($financialSummary->total_sales ?? 0, 2) }}
+                                        </span>
+                                        <span class="text-gray-400 fw-semibold fs-7">
+                                            {{ $financialSummary->order_count ?? 0 }} {{__('payments.transactions')}}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -95,9 +100,17 @@
                                         </span>
                                     </div>
                                     <div class="d-flex flex-column">
-                                        <span class="fw-bolder fs-2x text-gray-900">{{ number_format(($profitData->gross_profit ?? 0) / 100, 2) }}</span>
+                                        {{-- ✅ both values are floats now --}}
+                                        <span class="fw-bolder fs-2x text-gray-900">
+                                            {{ number_format($profitData->gross_profit ?? 0, 2) }}
+                                        </span>
                                         <span class="text-gray-400 fw-semibold fs-7">
-                                            {{ number_format((($profitData->gross_profit ?? 0) / max($profitData->revenue ?? 1, 1)) * 100, 1) }}% {{__('payments.margin')}}
+                                            @php
+                                                $margin = ($profitData->revenue ?? 0) > 0
+                                                    ? ($profitData->gross_profit / $profitData->revenue) * 100
+                                                    : 0;
+                                            @endphp
+                                            {{ number_format($margin, 1) }}% {{__('payments.margin')}}
                                         </span>
                                     </div>
                                 </div>
@@ -116,7 +129,10 @@
                                         </span>
                                     </div>
                                     <div class="d-flex flex-column">
-                                        <span class="fw-bolder fs-2x text-gray-900">{{ number_format(($financialSummary->average_order ?? 0) / 100, 2) }}</span>
+                                        {{-- ✅ accessor already converted --}}
+                                        <span class="fw-bolder fs-2x text-gray-900">
+                                            {{ number_format($financialSummary->average_order ?? 0, 2) }}
+                                        </span>
                                         <span class="text-gray-400 fw-semibold fs-7">{{__('payments.per_transaction')}}</span>
                                     </div>
                                 </div>
@@ -135,7 +151,10 @@
                                         </span>
                                     </div>
                                     <div class="d-flex flex-column">
-                                        <span class="fw-bolder fs-2x text-gray-900">{{ number_format(($expenseSummary['tax_collected']), 2) }}</span>
+                                        {{-- ✅ already converted by accessor --}}
+                                        <span class="fw-bolder fs-2x text-gray-900">
+                                            {{ number_format($expenseSummary['tax_collected'] ?? 0, 2) }}
+                                        </span>
                                         <span class="text-gray-400 fw-semibold fs-7">{{__('payments.net_of_discounts')}}</span>
                                     </div>
                                 </div>
@@ -194,8 +213,17 @@
                                     <span class="text-gray-800 fw-bold">{{__('payments.discounts_given')}}</span>
                                     <span class="text-gray-800 fw-bolder">{{ number_format($expenseSummary['discounts'], 2) }}</span>
                                 </div>
+                                @php
+                                    $totalSales = $financialSummary->total_sales ?? 0;
+                                    $discounts = $expenseSummary['discounts'] ?? 0;
+                                    $discountPct = $totalSales > 0 ? min(100, ($discounts / $totalSales) * 100) : 0;
+                                @endphp
+
                                 <div class="progress h-6px bg-light mb-7">
-                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ ($expenseSummary['discounts'] / max($financialSummary->total_sales ?? 1, 1)) * 100 }}%"></div>
+                                    <div class="progress-bar bg-warning" 
+                                        role="progressbar" 
+                                        style="width: {{ $discountPct }}%">
+                                    </div>
                                 </div>
 
                                 <div class="d-flex flex-stack mb-7">
@@ -217,7 +245,7 @@
                                 <div class="d-flex flex-stack">
                                     <span class="text-gray-800 fw-bold">{{__('payments.net_revenue')}}</span>
                                     <span class="text-gray-800 fw-bolder fs-4 text-success">
-                                        {{ number_format((($financialSummary->total_sales ?? 0) / 100) - $expenseSummary['refunds'], 2) }}
+                                        {{ number_format(($financialSummary->total_sales ?? 0) - $expenseSummary['refunds'], 2) }}
                                     </span>
                                 </div>
                             </div>
