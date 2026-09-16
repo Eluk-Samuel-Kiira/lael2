@@ -488,4 +488,290 @@ class PaymentMethodController extends Controller
             'locations' => $paymentMethod->location_id ?? [],
         ]);
     }
+
+    /**
+     * Show the transfer form (or return JSON for modal)
+     */
+    public function transferForm(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('transfer between payment methods')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        // Only active + non-deleted payment methods for this tenant
+        $methods = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'type', 'current_balance', 'available_balance', 'currency_id', 'allow_negative_balance']);
+
+        // Get locations if you filter by them
+        $locations = Location::where('tenant_id', $tenantId)->get();
+
+        // Currency info for display
+        $currencies = \App\Models\Currency::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->get(['id', 'code', 'symbol']);
+
+        return response()->json([
+            'success'          => true,
+            'payment_methods'  => $methods,
+            'locations'        => $locations,
+            'currencies'       => $currencies,
+            'tenant_currency'  => currency_code(),
+            'currency_symbol'  => currency_symbol(),
+        ]);
+    }
+
+    /**
+     * Preview a transfer (no DB writes) — used for JS confirmation.
+     * ✅ Uses current_balance as the single source of truth.
+     */
+    public function transferPreview(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('transfer between payment methods')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $validated = $request->validate([
+            'from_payment_method_id' => 'required|integer|exists:payment_methods,id',
+            'to_payment_method_id'   => 'required|integer|different:from_payment_method_id|exists:payment_methods,id',
+            'amount'                 => 'required|numeric|min:0.01',
+            'description'            => 'nullable|string|max:500',
+        ]);
+
+        // Fetch both methods scoped to tenant
+        $from = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('id', $validated['from_payment_method_id'])
+            ->first();
+
+        $to = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('id', $validated['to_payment_method_id'])
+            ->first();
+
+        if (!$from || !$to) {
+            return response()->json(['success' => false, 'message' => __('payments._not_found')], 404);
+        }
+
+        $amount = (float) $validated['amount'];
+
+        // ✅ Single source of truth: current_balance
+        $fromBalance   = (float) $from->current_balance;
+        $toBalance     = (float) $to->current_balance;
+        $allowNegative = (bool)  $from->allow_negative_balance;
+
+        $errors = [];
+
+        if ($amount <= 0) {
+            $errors[] = __('payments.amount_must_be_greater_than_zero');
+        }
+
+        if (!$allowNegative && $amount > $fromBalance) {
+            $errors[] = __('payments.insufficient_balance');
+        }
+
+        if ($from->currency_id && $to->currency_id && $from->currency_id !== $to->currency_id) {
+            $errors[] = __('payments.currencies_do_not_match');
+        }
+
+        if (!empty($errors)) {
+            return response()->json([
+                'success' => false,
+                'message' => implode(' ', $errors),
+                'errors'  => $errors,
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'preview' => [
+                'from' => [
+                    'id'             => $from->id,
+                    'name'           => $from->name,
+                    'type_label'     => $from->getTypeLabel(),
+                    'balance_before' => $fromBalance,
+                    'balance_after'  => $fromBalance - $amount,
+                ],
+                'to' => [
+                    'id'             => $to->id,
+                    'name'           => $to->name,
+                    'type_label'     => $to->getTypeLabel(),
+                    'balance_before' => $toBalance,
+                    'balance_after'  => $toBalance + $amount,
+                ],
+                'amount'          => $amount,
+                'currency'        => currency_code(),
+                'currency_symbol' => currency_symbol(),
+                'description'     => $validated['description'] ?? null,
+                'reference'       => 'TRF-' . date('Ymd') . '-' . strtoupper(Str::random(6)),
+                'timestamp'       => now()->toDateTimeString(),
+            ],
+        ]);
+    }
+
+    /**
+     * Execute a transfer — writes 2 ledger rows + updates both balances.
+     *
+     * Outgoing row: TRANSFER_OUT (debit on source)
+     * Incoming row: TRANSFER_IN  (credit on destination)
+     *
+     * ✅ Uses current_balance as the single source of truth.
+     */
+    public function transfer(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('transfer between payment methods')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $validated = $request->validate([
+            'from_payment_method_id' => 'required|integer|exists:payment_methods,id',
+            'to_payment_method_id'   => 'required|integer|different:from_payment_method_id|exists:payment_methods,id',
+            'amount'                 => 'required|numeric|min:0.01',
+            'description'            => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $from = PaymentMethod::where('tenant_id', $tenantId)
+                ->where('id', $validated['from_payment_method_id'])
+                ->firstOrFail();
+
+            $to = PaymentMethod::where('tenant_id', $tenantId)
+                ->where('id', $validated['to_payment_method_id'])
+                ->firstOrFail();
+
+            $amount = (float) $validated['amount'];
+
+            // ✅ Server-side balance validation against current_balance
+            $fromBalance   = (float) $from->current_balance;
+            $allowNegative = (bool)  $from->allow_negative_balance;
+
+            if (!$allowNegative && $amount > $fromBalance) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.insufficient_balance'),
+                ], 422);
+            }
+
+            if ($from->currency_id && $to->currency_id && $from->currency_id !== $to->currency_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.currencies_do_not_match'),
+                ], 422);
+            }
+
+            $reference  = 'TRF-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+            $currencyId = $from->currency_id
+                ?? $to->currency_id
+                ?? \App\Models\Currency::default()->id;
+
+            $description = $validated['description']
+                ?? "Fund transfer from {$from->name} to {$to->name}";
+
+            $service = app('payment-transaction');
+
+            // ── 1. OUTGOING LEG (debit source) ────────────────────────────
+            $outgoingLog = $service->recordTransaction([
+                'tenant_id'            => $tenantId,
+                'user_id'              => $user->id,
+                'payment_method_id'    => $from->id,
+                'transaction_type'     => 'TRANSFER_OUT',
+                'transaction_category' => 'OTHER',
+                'amount'               => $amount,
+                'currency_id'          => $currencyId,
+                'reference_table'      => 'payment_methods',
+                'reference_id'         => $to->id,
+                'description'          => $description,
+                'notes'                => 'Fund transfer (outgoing leg)',
+                'counterparty_id'      => $to->id,
+                'counterparty_name'    => $to->name,
+                'counterparty_account' => $to->account_number ?? null,
+                'metadata' => [
+                    'transfer_reference' => $reference,
+                    'direction'          => 'OUT',
+                    'from_method'        => ['id' => $from->id, 'name' => $from->name, 'type' => $from->type],
+                    'to_method'          => ['id' => $to->id,   'name' => $to->name,   'type' => $to->type],
+                    'initiated_by'       => $user->name,
+                ],
+            ]);
+
+            // ── 2. INCOMING LEG (credit destination) ──────────────────────
+            $incomingLog = $service->recordTransaction([
+                'tenant_id'            => $tenantId,
+                'user_id'              => $user->id,
+                'payment_method_id'    => $to->id,
+                'transaction_type'     => 'TRANSFER_IN',
+                'transaction_category' => 'OTHER',
+                'amount'               => $amount,
+                'currency_id'          => $currencyId,
+                'reference_table'      => 'payment_methods',
+                'reference_id'         => $from->id,
+                'description'          => $description,
+                'notes'                => 'Fund transfer (incoming leg)',
+                'counterparty_id'      => $from->id,
+                'counterparty_name'    => $from->name,
+                'counterparty_account' => $from->account_number ?? null,
+                'metadata' => [
+                    'transfer_reference' => $reference,
+                    'direction'          => 'IN',
+                    'from_method'        => ['id' => $from->id, 'name' => $from->name, 'type' => $from->type],
+                    'to_method'          => ['id' => $to->id,   'name' => $to->name,   'type' => $to->type],
+                    'initiated_by'       => $user->name,
+                ],
+            ]);
+
+            return response()->json([
+                'success'   => true,
+                'message'   => __('payments.transfer_completed'),
+                'reference' => $reference,
+                'transfer'  => [
+                    'amount'   => $amount,
+                    'currency' => currency_code(),
+                    'from' => [
+                        'id'             => $from->id,
+                        'name'           => $from->name,
+                        'balance_before' => $fromBalance,
+                        'balance_after'  => $fromBalance - $amount,
+                    ],
+                    'to' => [
+                        'id'             => $to->id,
+                        'name'           => $to->name,
+                        'balance_before' => (float) $to->current_balance,
+                        'balance_after'  => (float) $to->current_balance + $amount,
+                    ],
+                    'outgoing_log_id' => $outgoingLog->id,
+                    'incoming_log_id' => $incomingLog->id,
+                ],
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments._not_found'),
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Transfer failed: ' . $e->getMessage(), [
+                'trace'   => $e->getTraceAsString(),
+                'payload' => $request->all(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+
 }
