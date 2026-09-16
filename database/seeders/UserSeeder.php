@@ -214,6 +214,7 @@ class UserSeeder extends Seeder
                 'delete payment method',
                 'update payment method',
                 'update current balance',
+                'transfer between payment methods',
             ],
             'Reports Module' => [
                 'view reports',

@@ -230,7 +230,15 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         Route::resource('paymentmethod', PaymentMethodController::class);
         Route::post('/payment-methods-status/{id}', [PaymentMethodController::class, 'changePaymentMethodStatus'])->name('payment-methods.status');
-        
+        Route::prefix('payment-methods')->middleware(['auth'])->group(function () {
+
+            Route::post('/transfer/preview', [PaymentMethodController::class, 'transferPreview'])
+                ->name('paymentmethod.transfer.preview');
+
+            Route::post('/transfer', [PaymentMethodController::class, 'transfer'])
+                ->name('paymentmethod.transfer');
+        });
+
         Route::post('payments/calculate-tax-preview', [EmployeePaymentController::class, 'calculateTaxPreview'])
             ->name('payment.calculate-tax-preview');
 

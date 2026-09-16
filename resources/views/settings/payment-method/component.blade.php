@@ -105,6 +105,18 @@
                                         <span>{{ __('auth._edit') }}</span>
                                     </button>
                                     @endcan
+
+                                    @can('transfer between payment methods')
+                                    <button type="button"
+                                            class="btn btn-sm btn-light btn-active-color-primary d-flex align-items-center px-3 py-2"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#transferFundsModal{{ $paymentMethod->id }}">
+                                        <i class="ki-duotone ki-arrows-circle fs-4 me-1">
+                                            <span class="path1"></span><span class="path2"></span>
+                                        </i>
+                                        <span>{{ __('payments._transfer') }}</span>
+                                    </button>
+                                    @endcan
                                     
                                     <!-- Delete Button -->
                                     @can('delete payment method')
@@ -147,6 +159,7 @@
                                     </div>
                                 </div>
                                 @include('settings.payment-method.edit')
+                                @include('settings.payment-method.transfer')
                             </td>
                         </tr>
                     @endforeach

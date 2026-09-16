@@ -30,17 +30,15 @@ class AddNewPermissions extends Command
      * New permissions to add - only these will be processed
      */
     protected $newPermissions = [
-        'Production Management' => [
-            'view production_orders',
-            'create production_orders',
-            'edit production_orders',
-            'delete production_orders',
-            'start production_orders',
-            'complete production_orders',
-            'cancel production_orders',
-            'approve production_orders',
-            'view production_orders reports',
-            'production reports',
+        
+        'Payment Method Management' => [
+            'create payment method',
+            'view payment method',
+            'edit payment method',
+            'delete payment method',
+            'update payment method',
+            'update current balance',
+            'transfer between payment methods',
         ],
     ];
 

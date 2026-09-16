@@ -1366,7 +1366,7 @@
                         
                         @can('view payment method')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('paymentmethod.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('paymentmethod.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
