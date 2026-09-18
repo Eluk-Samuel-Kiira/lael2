@@ -18,7 +18,7 @@ class POSController extends Controller
 {
     public function index(Request $request)
     {
-        Artisan::call('optimize:clear');
+        // Artisan::call('optimize:clear');
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         
@@ -123,29 +123,46 @@ class POSController extends Controller
             if (empty($selectedDepartmentId)) {
                 $products = collect();
                 $user_departments = $user->departments()->get();
-                return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
+
+                return view('orders.pos-index', compact(
+                    'products',
+                    'user_departments',
+                    'isSingleShop',
+                    'selectedDepartmentId'
+                ));
             }
-            
-            $userLocationId = $user->location_id;
-            
+
+            // ✅ Resolve from location_user (not users.location_id)
+            $userLocationId = $this->resolveUserLocationId($request, $user);
+            \Log::info($userLocationId);
+
+            if (!$userLocationId) {
+                return redirect()
+                    ->back()
+                    ->with('toast', [
+                        'type'    => 'error',
+                        'message' => __('pagination.no_location_assigned'),
+                    ]);
+            }
+
             $products = Product::with([
                 'departments',
                 'taxes' => fn($q) => $q->where('is_active', 1),
                 'promotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants' => function($query) use ($selectedDepartmentId, $userLocationId) {
+                'variants' => function ($query) use ($selectedDepartmentId, $userLocationId) {
                     $query->where('is_active', 1)
-                        ->whereHas('inventory', function($q) use ($selectedDepartmentId, $userLocationId) {
+                        ->whereHas('inventory', function ($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
                         })
-                        ->with(['inventory' => function($q) use ($selectedDepartmentId, $userLocationId) {
+                        ->with(['inventory' => function ($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
                         }])
-                        ->with(['batches' => function($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where(function($sub) {
+                        ->with(['batches' => function ($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where(function ($sub) {
                                 $sub->where('quantity_remaining', '>', 0)
                                     ->orWhereNull('quantity_remaining');
                             })
@@ -153,9 +170,8 @@ class POSController extends Controller
                             ->where('department_id', $selectedDepartmentId)
                             ->orderBy('expiry_date', 'asc');
                         }])
-                        // ✅ Load serial numbers for this location/department
-                        ->with(['serialNumbers' => function($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where(function($sub) {
+                        ->with(['serialNumbers' => function ($q) use ($selectedDepartmentId, $userLocationId) {
+                            $q->where(function ($sub) {
                                 $sub->where('status', SerialNumber::STATUS_AVAILABLE)
                                     ->orWhere('status', SerialNumber::STATUS_RESERVED);
                             })
@@ -170,15 +186,15 @@ class POSController extends Controller
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->whereHas('departments', function($q) use ($selectedDepartmentId) {
+            ->whereHas('departments', function ($q) use ($selectedDepartmentId) {
                 $q->where('department_id', $selectedDepartmentId);
             })
-            ->whereHas('variants', function($q) use ($selectedDepartmentId, $userLocationId) {
+            ->whereHas('variants', function ($q) use ($selectedDepartmentId, $userLocationId) {
                 $q->where('is_active', 1)
-                    ->whereHas('inventory', function($query) use ($selectedDepartmentId, $userLocationId) {
-                        $query->where('department_id', $selectedDepartmentId)
+                ->whereHas('inventory', function ($query) use ($selectedDepartmentId, $userLocationId) {
+                    $query->where('department_id', $selectedDepartmentId)
                             ->where('location_id', $userLocationId);
-                    });
+                });
             })
             ->limit(10)
             ->latest()
@@ -421,14 +437,23 @@ class POSController extends Controller
             // ─── MULTI-SHOP SEARCH ────────────────────────────────────────────
             if (empty($departmentId)) {
                 return response()->json([
-                    'success' => true,
-                    'products' => [],
-                    'has_more' => false,
-                    'message' => 'Please select a department first'
+                    'success'   => true,
+                    'products'  => [],
+                    'has_more'  => false,
+                    'message'   => 'Please select a department first',
                 ]);
             }
 
-            $userLocationId = $user->location_id;
+            // ✅ Resolve from location_user
+            $userLocationId = $this->resolveUserLocationId($request, $user);
+
+            if (!$userLocationId) {
+                return response()->json([
+                    'success'  => false,
+                    'products' => [],
+                    'message'  => __('pagination.no_location_assigned'),
+                ], 422);
+            }
 
             $products = Product::with([
                 'departments',
@@ -436,18 +461,18 @@ class POSController extends Controller
                 'promotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants' => function($query) use ($departmentId, $userLocationId) {
+                'variants' => function ($query) use ($departmentId, $userLocationId) {
                     $query->where('is_active', 1)
-                        ->whereHas('inventory', function($q) use ($departmentId, $userLocationId) {
+                        ->whereHas('inventory', function ($q) use ($departmentId, $userLocationId) {
                             $q->where('department_id', $departmentId)
                             ->where('location_id', $userLocationId);
                         })
-                        ->with(['inventory' => function($q) use ($departmentId, $userLocationId) {
+                        ->with(['inventory' => function ($q) use ($departmentId, $userLocationId) {
                             $q->where('department_id', $departmentId)
                             ->where('location_id', $userLocationId);
                         }])
-                        ->with(['batches' => function($q) use ($departmentId, $userLocationId) {
-                            $q->where(function($sub) {
+                        ->with(['batches' => function ($q) use ($departmentId, $userLocationId) {
+                            $q->where(function ($sub) {
                                 $sub->where('quantity_remaining', '>', 0)
                                     ->orWhereNull('quantity_remaining');
                             })
@@ -455,9 +480,8 @@ class POSController extends Controller
                             ->where('department_id', $departmentId)
                             ->orderBy('expiry_date', 'asc');
                         }])
-                        // ✅ Load serial numbers for multi-shop search
-                        ->with(['serialNumbers' => function($q) use ($departmentId, $userLocationId) {
-                            $q->where(function($sub) {
+                        ->with(['serialNumbers' => function ($q) use ($departmentId, $userLocationId) {
+                            $q->where(function ($sub) {
                                 $sub->where('status', SerialNumber::STATUS_AVAILABLE)
                                     ->orWhere('status', SerialNumber::STATUS_RESERVED);
                             })
@@ -472,20 +496,20 @@ class POSController extends Controller
             ])
             ->where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->whereHas('departments', function($q) use ($departmentId) {
+            ->whereHas('departments', function ($q) use ($departmentId) {
                 $q->where('department_id', $departmentId);
             })
-            ->whereHas('variants', function($q) use ($departmentId, $userLocationId) {
+            ->whereHas('variants', function ($q) use ($departmentId, $userLocationId) {
                 $q->where('is_active', 1)
-                    ->whereHas('inventory', function($query) use ($departmentId, $userLocationId) {
-                        $query->where('department_id', $departmentId)
+                ->whereHas('inventory', function ($query) use ($departmentId, $userLocationId) {
+                    $query->where('department_id', $departmentId)
                             ->where('location_id', $userLocationId);
-                    });
+                });
             })
-            ->where(function($q) use ($searchTerm) {
+            ->where(function ($q) use ($searchTerm) {
                 $q->where('name', 'LIKE', "%{$searchTerm}%")
                 ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
-                ->orWhereHas('variants', function($vq) use ($searchTerm) {
+                ->orWhereHas('variants', function ($vq) use ($searchTerm) {
                     $vq->where('name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
                 });
@@ -615,7 +639,62 @@ class POSController extends Controller
         ]);
     }
 
+    /**
+     * Resolve the location from the selected department.
+     *
+     * A department belongs to exactly one location. The user must be
+     * assigned to that location (via location_user) for access.
+     *
+     * Returns:
+     *   int   → the location_id to use
+     *   null  → user has no valid access (caller must return empty results)
+     */
+    private function resolveUserLocationId(Request $request, $user): ?int
+    {
+        $departmentId = $request->input('department');
 
+        // No department selected → nothing to resolve
+        if (empty($departmentId)) {
+            \Log::info('[resolveUserLocationId] no department supplied');
+            return null;
+        }
+
+        // Look up the department and its location
+        $department = \App\Models\Department::find($departmentId);
+
+        if (!$department) {
+            \Log::warning('[resolveUserLocationId] department not found', [
+                'department_id' => $departmentId,
+            ]);
+            return null;
+        }
+
+        if (!$department->location_id) {
+            \Log::warning('[resolveUserLocationId] department has no location', [
+                'department_id' => $departmentId,
+            ]);
+            return null;
+        }
+
+        // ✅ Authoritative check: does the user have this location?
+        $hasAccess = $user->locations()
+            ->where('locations.id', $department->location_id)
+            ->exists();
+
+        // \Log::info('[resolveUserLocationId] department → location', [
+        //     'user_id'       => $user->id,
+        //     'department_id' => $departmentId,
+        //     'location_id'   => $department->location_id,
+        //     'has_access'    => $hasAccess,
+        //     'assigned_ids'  => $user->locations()->pluck('locations.id')->toArray(),
+        // ]);
+
+        if (!$hasAccess) {
+            return null;    // caller should return zero products
+        }
+
+        return (int) $department->location_id;
+    }
 
     public function processPayment(Request $request)
     {
@@ -686,13 +765,15 @@ class POSController extends Controller
             }
 
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+            $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
+
 
             $order = Order::create([
                 'tenant_id' => $tenantId,
                 'customer_id' => $customerId,
                 'customer_name' => $customerName,
-                'location_id' => $user->location_id ?? 1,
-                'department_id' => $user->department_id ?? 1,
+                'location_id' => $orderLocationId,                                       
+                'department_id' => $request->input('department') ?? $user->department_id ?? 1,
                 'order_number' => $orderNumber,
                 'type' => 'sale',
                 'status' => 'confirmed',
@@ -720,52 +801,35 @@ class POSController extends Controller
                         'shop_type' => 'single_shop',
                     ];
                 } else {
-                    // ✅ Use inventory_id and department_id from cart
-                    $inventoryId = $item['inventory_id'] ?? null;
-                    $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
-                    $locationId = $user->location_id ?? 1;
+                        $inventoryId  = $item['inventory_id']  ?? null;
+                        $departmentId = $item['department_id']
+                            ?? $request->input('department')        // ✅ top-level department from the request
+                            ?? $cartData['department_id'] ?? null   // ✅ or from cart payload
+                            ?? $user->department_id
+                            ?? null;
 
-                    if ($inventoryId) {
-                        $inventory = InventoryItems::find($inventoryId);
-                        if ($inventory) {
-                            $inventoryData = [
-                                'initial_stock' => $inventory->quantity_allocated,
-                                'current_stock' => $inventory->quantity_allocated - $item['quantity'],
-                                'inventory_id'  => $inventory->id,
-                                'location_id'   => $inventory->location_id,
-                                'department_id' => $inventory->department_id,
-                                'shop_type'     => 'multi_shop',
-                            ];
-                        } else {
-                            // Fallback: query inventory
-                            $inventory = $variant->inventory()
-                                ->where('location_id', $locationId)
-                                ->where('department_id', $departmentId)
-                                ->first();
-                            $inventoryData = [
-                                'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                                'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                                'inventory_id'  => $inventory?->id,
-                                'location_id'   => $locationId,
-                                'department_id' => $departmentId,
-                                'shop_type'     => 'multi_shop',
-                            ];
-                        }
-                    } else {
-                        // Fallback: query inventory
+                    $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
+
+                    // Resolve using the helper (inventory → department → user pivot → legacy FK)
+                    $locationId = $this->resolveDepletionLocationId($inventory, $departmentId, $user);
+
+                    // If we still don't have an inventory row, query by the resolved location + department
+                    if (!$inventory && $locationId && $departmentId) {
                         $inventory = $variant->inventory()
                             ->where('location_id', $locationId)
                             ->where('department_id', $departmentId)
                             ->first();
-                        $inventoryData = [
-                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                            'inventory_id'  => $inventory?->id,
-                            'location_id'   => $locationId,
-                            'department_id' => $departmentId,
-                            'shop_type'     => 'multi_shop',
-                        ];
                     }
+
+                    // ✅ Once we have the inventory row, trust ITS location_id and department_id
+                    $inventoryData = [
+                        'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+                        'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+                        'inventory_id'  => $inventory?->id,
+                        'location_id'   => $inventory?->location_id ?? $locationId,
+                        'department_id' => $inventory?->department_id ?? $departmentId,
+                        'shop_type'     => 'multi_shop',
+                    ];
                 }
 
                 $order->orderItems()->create([
@@ -858,12 +922,14 @@ class POSController extends Controller
 
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
 
+            $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
+
             $order = Order::create([
                 'tenant_id' => $tenantId,
                 'customer_id' => $customerId,
                 'customer_name' => $customerName,
-                'location_id' => $user->location_id ?? 1,
-                'department_id' => $user->department_id ?? 1,
+                'location_id' => $orderLocationId,                                       
+                'department_id' => $request->input('department') ?? $user->department_id ?? 1,
                 'order_number' => $orderNumber,
                 'type' => 'sale',
                 'status' => 'confirmed',
@@ -1914,36 +1980,78 @@ class POSController extends Controller
     // ============================================================
 
     /**
+     * Resolve the location_id used to deplete a line item in multi-shop mode.
+     *
+     * Priority:
+     *   1. The inventory row's own location_id
+     *   2. The department's location_id (a department belongs to one location)
+     *   3. The resolved user location (from location_user pivot)
+     *   4. The legacy users.location_id FK
+     */
+    private function resolveDepletionLocationId($inventory, $departmentId, $user = null): ?int
+    {
+        // 1. Inventory row is authoritative
+        if ($inventory && $inventory->location_id) {
+            return (int) $inventory->location_id;
+        }
+
+        // 2. Department → location (department knows its own location)
+        if ($departmentId) {
+            $dept = \App\Models\Department::find($departmentId);
+            if ($dept && $dept->location_id) {
+                // ✅ Check user has access to this specific location
+                $u = $user ?? Auth::user();
+                if ($u && $u->locations()->where('locations.id', $dept->location_id)->exists()) {
+                    return (int) $dept->location_id;
+                }
+                // If user doesn't have access, still return it — depletion must fail loudly
+                // rather than silently pick a wrong location
+                throw new \Exception(
+                    "Location not assigned to your account. " .
+                    "Department {$departmentId} belongs to location {$dept->location_id}, " .
+                    "but you don't have access to it."
+                );
+            }
+        }
+
+        // 3. User's first assigned location (fallback when no department)
+        $u = $user ?? Auth::user();
+        if ($u) {
+            $assigned = $u->locations()->orderBy('locations.id')->value('locations.id');
+            if ($assigned) return (int) $assigned;
+
+            if ($u->location_id) return (int) $u->location_id;
+        }
+
+        return null;
+    }
+
+    /**
      * Multi Shop - Quantity strategy
      * Depletes from: inventory_items table (location_id + department_id)
      */
     private function depleteMultiQuantity($variant, $item, $order)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $order->tenant_id;
 
-        // ✅ Get inventory data - handles both OrderItem and stdClass
-        $inventoryData = [];
-        if (is_object($item) && property_exists($item, 'inventory_data')) {
-            $inventoryData = json_decode($item->inventory_data, true);
-        } else if (is_array($item) && isset($item['inventory_data'])) {
-            $inventoryData = json_decode($item['inventory_data'], true);
-        }
-        
-        // If no inventory_data, try to use what's available
-        $inventoryId = $inventoryData['inventory_id'] ?? null;
-        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
-        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
-        
-        // Get quantity from item
+        $inventoryData = is_object($item) && property_exists($item, 'inventory_data')
+            ? json_decode($item->inventory_data, true)
+            : [];
+
+        $inventoryId  = $inventoryData['inventory_id']  ?? null;
+        $departmentId = $inventoryData['department_id']
+            ?? ($item->department_id ?? null)
+            ?? $order->department_id
+            ?? null;
+        $locationId   = $inventoryData['location_id'] ?? null;
+
         $quantity = is_object($item) ? ($item->quantity ?? 0) : ($item['quantity'] ?? 0);
 
-        // Find the inventory record
-        $inventory = null;
-        if ($inventoryId) {
-            $inventory = InventoryItems::find($inventoryId);
-        }
+        // ✅ 1. By inventory_id (most direct)
+        $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
 
+        // ✅ 2. By variant + department + location
         if (!$inventory && $locationId && $departmentId) {
             $inventory = InventoryItems::where('variant_id', $variant->id)
                 ->where('tenant_id', $tenantId)
@@ -1952,51 +2060,71 @@ class POSController extends Controller
                 ->first();
         }
 
-        if (!$inventory) {
-            throw new \Exception("No inventory found for {$variant->name} at location {$locationId} / department {$departmentId}");
+        // ✅ 3. By variant + department (ignore the location — it might be stale)
+        if (!$inventory && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->where('department_id', $departmentId)
+                ->first();
         }
 
+        // ✅ 4. By variant + location
+        if (!$inventory && $locationId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->first();
+        }
+
+        // ✅ 5. By variant only (last resort)
+        if (!$inventory) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->first();
+        }
+
+        if (!$inventory) {
+            throw new \Exception(
+                "No inventory allocation found for {$variant->name} " .
+                "(variant_id={$variant->id}, tenant_id={$tenantId}). " .
+                "Check that the variant is stocked anywhere in your tenant."
+            );
+        }
+
+        // ✅ Use the inventory row's OWN location_id — it's the truth
         $before = $inventory->quantity_allocated;
-        $after = $before - $quantity;
+        $after  = $before - $quantity;
 
         if ($after < 0) {
-            throw new \Exception("Insufficient stock for {$variant->name}. Available: {$before}, Required: {$quantity}");
+            throw new \Exception(
+                "Insufficient stock for {$variant->name}. " .
+                "Available: {$before}, Required: {$quantity} " .
+                "(inventory_id={$inventory->id}, location_id={$inventory->location_id}, department_id={$inventory->department_id})"
+            );
         }
 
-        // Update inventory
         $inventory->update(['quantity_allocated' => $after]);
 
-        // Log transaction
         InventoryTransactions::create([
-            'quantity' => -$quantity,
-            'reference_id' => $order->id,
+            'quantity'       => -$quantity,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "POS sale - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
         ]);
 
-        // Log adjustment
         InventoryAdjustments::create([
             'quantity_before' => $before,
-            'quantity_after' => $after,
-            'reason' => 'order_sale',
-            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'quantity_after'  => $after,
+            'reason'          => 'order_sale',
+            'notes'           => "POS sale - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'    => $inventory->id,
+            'created_by'      => auth()->id(),
+            'tenant_id'       => $tenantId,
         ]);
-
-        // \Log::info('[Multi Shop] Quantity depleted', [
-        //     'variant' => $variant->name,
-        //     'inventory_id' => $inventory->id,
-        //     'location_id' => $inventory->location_id,
-        //     'department_id' => $inventory->department_id,
-        //     'before' => $before,
-        //     'after' => $after
-        // ]);
     }
 
     /**
@@ -2005,44 +2133,34 @@ class POSController extends Controller
      */
     private function depleteMultiBatch($variant, $item, $order)
     {
-        $user = Auth::user();
-        $tenantId = $order->tenant_id;
-        
-        // ✅ Get quantity from item
-        $quantityNeeded = $item->quantity;  // ✅ This is the actual quantity, not 0
-        
-        // ✅ Get batch_id from the order item
-        $batchId = $item->batch_id ?? null;
-        
-        // \Log::info('depleteMultiBatch called', [
-        //     'variant_id' => $variant->id,
-        //     'variant_name' => $variant->name,
-        //     'quantity_needed' => $quantityNeeded,
-        //     'batch_id' => $batchId,
-        //     'batch_number' => $item->batch_number ?? null,
-        //     'order_id' => $order->id
-        // ]);
-        
-        // ✅ Get inventory data
+        $user        = Auth::user();
+        $tenantId    = $order->tenant_id;
+        $quantityNeeded = $item->quantity;
+        $batchId        = $item->batch_id ?? null;
+
+        // Inventory data
         $inventoryData = [];
         if (is_object($item) && property_exists($item, 'inventory_data')) {
             $inventoryData = json_decode($item->inventory_data, true);
-        } else if (is_array($item) && isset($item['inventory_data'])) {
+        } elseif (is_array($item) && isset($item['inventory_data'])) {
             $inventoryData = json_decode($item['inventory_data'], true);
         }
-        
-        $inventoryId = $inventoryData['inventory_id'] ?? null;
-        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
-        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
-        
-        // Get item name
-        $itemName = is_object($item) ? ($item->item_name ?? $item->name ?? $variant->name) : ($item['name'] ?? $variant->name);
 
-        // Get inventory record
+        $inventoryId  = $inventoryData['inventory_id']  ?? null;
+        $departmentId = $inventoryData['department_id'] ?? null;
+
+        $itemName = is_object($item)
+            ? ($item->item_name ?? $item->name ?? $variant->name)
+            : ($item['name'] ?? $variant->name);
+
+        // Find inventory
         $inventory = null;
         if ($inventoryId) {
             $inventory = InventoryItems::find($inventoryId);
         }
+
+        // ✅ Resolve location_id from inventory → department → user pivot
+        $locationId = $this->resolveDepletionLocationId($inventory, $departmentId, $user);
 
         if (!$inventory && $locationId && $departmentId) {
             $inventory = InventoryItems::where('variant_id', $variant->id)
@@ -2055,6 +2173,10 @@ class POSController extends Controller
         if (!$inventory) {
             throw new \Exception("No inventory found for {$variant->name} at this location/department");
         }
+
+        // ✅ Inventory's own location_id is authoritative
+        $locationId   = (int) $inventory->location_id;
+        $departmentId = (int) $inventory->department_id;
 
         // ✅ Get batches for this variant
         $batches = PurchaseReceiptItem::query()
@@ -2217,20 +2339,20 @@ class POSController extends Controller
      */
     private function depleteMultiSerial($variant, $item, $order)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $order->tenant_id;
 
-        // Get inventory data
-        $inventoryData = json_decode($item->inventory_data, true);
-        $inventoryId = $inventoryData['inventory_id'] ?? null;
-        $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
-        $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
+        $inventoryData = json_decode($item->inventory_data, true) ?? [];
+        $inventoryId   = $inventoryData['inventory_id']  ?? null;
+        $departmentId  = $inventoryData['department_id'] ?? null;
 
-        // Get inventory record
         $inventory = null;
         if ($inventoryId) {
             $inventory = InventoryItems::find($inventoryId);
         }
+
+        // ✅ Resolve location_id from inventory → department → user pivot
+        $locationId = $this->resolveDepletionLocationId($inventory, $departmentId, $user);
 
         if (!$inventory && $locationId && $departmentId) {
             $inventory = InventoryItems::where('variant_id', $variant->id)
@@ -2243,6 +2365,10 @@ class POSController extends Controller
         if (!$inventory) {
             throw new \Exception("No inventory found for {$variant->name} at this location/department");
         }
+
+        // ✅ Prefer inventory's own location/department
+        $locationId   = (int) $inventory->location_id;
+        $departmentId = (int) $inventory->department_id;
 
         // ✅ Get serial_id from order item
         $serialId = $item->serial_id ?? null;

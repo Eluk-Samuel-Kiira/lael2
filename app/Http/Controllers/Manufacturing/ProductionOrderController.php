@@ -807,6 +807,7 @@ class ProductionOrderController extends Controller
 
     public function getAvailableBatches(Request $request)
     {
+
         $user = Auth::user();
         $tenantId = $user->tenant_id;
         $variantId = $request->variant_id;
@@ -1021,4 +1022,5 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
+    
 }

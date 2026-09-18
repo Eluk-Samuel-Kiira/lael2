@@ -281,11 +281,16 @@ class ProductionOrderReportController extends Controller
         ->firstOrFail();
         
         // ─── Get Inventory Logs for this order ──────────────────────────
-        $inventoryLogs = SingleShopInventoryLog::where('order_id', $orderId)
-            ->where('source', 'production')
-            ->orWhere('reason', 'production_consumption')
-            ->orWhere('reason', 'production_output')
-            ->orWhere('reason', 'production_output_update')
+        $inventoryLogs = SingleShopInventoryLog::with('variant')
+            ->where('order_id', $orderId)
+            ->where(function ($q) {
+                $q->where('source', 'production')
+                ->orWhereIn('reason', [
+                    'production_consumption',
+                    'production_output',
+                    'production_output_update',
+                ]);
+            })
             ->orderBy('created_at', 'desc')
             ->get();
         

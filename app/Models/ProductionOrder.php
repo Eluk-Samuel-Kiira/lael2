@@ -487,7 +487,13 @@ private function produceFinishedGood(ProductionOrderOutput $output): void
     // ─── Private Methods ──────────────────────────────────────────────────
 
     /**
-     * ✅ VALIDATE: All inputs have sufficient stock in overal_quantity_at_hand
+     * ✅ VALIDATE: All inputs have sufficient stock.
+     *
+     * Priority (matches consumeRawMaterial):
+     *   1. Specific batch selected → validate that batch's quantity_remaining
+     *   2. strategy === 'batch'    → validate sum across all available batches
+     *   3. strategy === 'serial'   → validate available serial count
+     *   4. otherwise               → validate overal_quantity_at_hand
      */
     private function validateInputStock(): void
     {
@@ -495,191 +501,485 @@ private function produceFinishedGood(ProductionOrderOutput $output): void
             $variant = $input->productVariant;
             if (!$variant) continue;
 
-            $product = $variant->product;
+            $product  = $variant->product;
             $strategy = $product?->resolvedInventoryStrategy() ?? 'quantity';
-            $quantityNeeded = $input->planned_quantity;
+            $needed   = $input->planned_quantity;
 
-            // ✅ For BATCH strategy: Check batch quantity_remaining
+            // ── 1. Specific batch chosen → validate against that batch ─────
+            if ($input->purchase_receipt_item_id) {
+                $batch = PurchaseReceiptItem::where('id', $input->purchase_receipt_item_id)
+                    ->where('tenant_id', $this->tenant_id)
+                    ->first();
+
+                if (!$batch) {
+                    throw new \Exception("Selected batch not found for {$variant->name}");
+                }
+
+                $available = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+
+                if ($available < $needed) {
+                    throw new \Exception(
+                        "Insufficient stock in selected batch for {$variant->name}. " .
+                        "Batch: {$batch->batch_number}, Available: {$available}, Required: {$needed}"
+                    );
+                }
+
+                continue;
+            }
+
+            // ── 2. Batch strategy without a specific batch → sum all batches ─
             if ($strategy === 'batch') {
-                if ($input->purchase_receipt_item_id) {
-                    $batch = PurchaseReceiptItem::find($input->purchase_receipt_item_id);
-                    if (!$batch) {
-                        throw new \Exception("Batch not found for {$variant->name}");
-                    }
-                    
-                    $available = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-                    if ($available < $quantityNeeded) {
-                        throw new \Exception("Insufficient batch stock for {$variant->name}. Available: {$available}, Required: {$quantityNeeded}");
-                    }
-                } else {
-                    $available = $variant->batches()
-                        ->where(function($q) {
-                            $q->where('quantity_remaining', '>', 0)
-                              ->orWhereNull('quantity_remaining');
-                        })
-                        ->sum('quantity_remaining');
-                    
-                    if ($available < $quantityNeeded) {
-                        throw new \Exception("Insufficient batch stock for {$variant->name}. Available: {$available}, Required: {$quantityNeeded}");
-                    }
+                $available = $this->totalAvailableBatchQuantity($variant);
+
+                if ($available < $needed) {
+                    throw new \Exception(
+                        "Insufficient batch stock for {$variant->name}. " .
+                        "Available: {$available}, Required: {$needed}"
+                    );
                 }
+
+                continue;
             }
-            // ✅ For QUANTITY strategy: Check overal_quantity_at_hand
-            elseif ($strategy === 'quantity') {
-                $available = $variant->overal_quantity_at_hand ?? 0;
-                if ($available < $quantityNeeded) {
-                    throw new \Exception("Insufficient stock for {$variant->name}. Available: {$available}, Required: {$quantityNeeded}");
-                }
-            }
-            // ✅ For SERIAL strategy: Check available serials
-            elseif ($strategy === 'serial') {
+
+            // ── 3. Serial strategy → count available serials ───────────────
+            if ($strategy === 'serial') {
                 $available = SerialNumber::where('variant_id', $variant->id)
                     ->where('status', SerialNumber::STATUS_AVAILABLE)
                     ->where('tenant_id', $this->tenant_id)
                     ->count();
-                
-                if ($available < $quantityNeeded) {
-                    throw new \Exception("Insufficient serial numbers for {$variant->name}. Available: {$available}, Required: {$quantityNeeded}");
+
+                if ($available < $needed) {
+                    throw new \Exception(
+                        "Insufficient serial numbers for {$variant->name}. " .
+                        "Available: {$available}, Required: {$needed}"
+                    );
                 }
+
+                continue;
+            }
+
+            // ── 4. Quantity strategy → overall quantity ────────────────────
+            $available = $variant->overal_quantity_at_hand ?? 0;
+
+            if ($available < $needed) {
+                throw new \Exception(
+                    "Insufficient stock for {$variant->name}. " .
+                    "Available: {$available}, Required: {$needed}"
+                );
             }
         }
     }
 
     /**
-     * ✅ CONSUME: Deplete overal_quantity_at_hand (master stock)
+     * Sum of remaining quantities across all available batches for a variant,
+     * optionally scoped to a location.
+     */
+    private function totalAvailableBatchQuantity(ProductVariant $variant, ?int $locationId = null): float
+    {
+        $query = PurchaseReceiptItem::query()
+            ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+            ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+            ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+            ->where('purchase_orders.tenant_id', $this->tenant_id)
+            ->where('purchase_order_items.product_variant_id', $variant->id)
+            ->where(function ($q) {
+                $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                  ->orWhereNull('purchase_receipt_items.quantity_remaining');
+            });
+
+        if ($locationId) {
+            $query->where('purchase_receipt_items.location_id', $locationId);
+        }
+
+        return (float) $query->sum('purchase_receipt_items.quantity_remaining');
+    }
+
+
+    /**
+     * ✅ CONSUME: Deplete stock according to priority.
+     *
+     * Priority:
+     *   1. Specific batch selected → deplete THAT batch + overall quantity
+     *   2. strategy === 'batch'    → FIFO across batches + overall quantity
+     *   3. strategy === 'serial'   → reserve serials (no overall change)
+     *   4. otherwise               → deplete overall quantity only
+     *
+     * NOTE: When a batch is consumed, we ALWAYS also reduce
+     * overal_quantity_at_hand, because the batch still contributes to that
+     * master tally and must stay in sync.
      */
     private function consumeRawMaterial(ProductionOrderInput $input): void
     {
         $variant = $input->productVariant;
         if (!$variant) return;
 
-        $product = $variant->product;
+        $product  = $variant->product;
         $strategy = $product?->resolvedInventoryStrategy() ?? 'quantity';
-        $quantity = $input->planned_quantity;
+        $quantity = (float) $input->planned_quantity;
 
         \Log::info('[Production] Consuming raw material', [
-            'variant' => $variant->name,
-            'strategy' => $strategy,
-            'quantity' => $quantity,
-            'current_stock' => $variant->overal_quantity_at_hand,
+            'variant'               => $variant->name,
+            'strategy'              => $strategy,
+            'quantity'              => $quantity,
+            'purchase_receipt_item' => $input->purchase_receipt_item_id,
+            'overal_before'         => $variant->overal_quantity_at_hand,
         ]);
 
-        // Update input with actual quantity
+        // Persist actual quantity + cost on the input row
         $input->update([
             'actual_quantity' => $quantity,
-            'actual_cost' => $input->estimated_cost,
+            'actual_cost'     => $input->estimated_cost,
         ]);
 
-        // ✅ BATCH STRATEGY: Reduce batch quantity_remaining
-        if ($strategy === 'batch' && $input->purchase_receipt_item_id) {
-            $batch = PurchaseReceiptItem::find($input->purchase_receipt_item_id);
-            if ($batch) {
-                $before = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-                $after = max(0, $before - $quantity);
-                
-                $batch->quantity_remaining = $after;
-                $batch->save();
-
-                // ✅ Log batch consumption
-                BatchLog::create([
-                    'batch_id' => $batch->id,
-                    'batch_number' => $batch->batch_number,
-                    'variant_id' => $variant->id,
-                    'variant_name' => $variant->name,
-                    'variant_sku' => $variant->sku,
-                    'type' => 'consumed',
-                    'quantity_change' => -$quantity,
-                    'quantity_before' => $before,
-                    'quantity_after' => $after,
-                    'unit_cost' => $batch->unit_cost ?? 0,
-                    'total_cost' => ($batch->unit_cost ?? 0) * $quantity,
-                    'production_order_id' => $this->id,
-                    'production_order_input_id' => $input->id,
-                    'tenant_id' => $this->tenant_id,
-                    'location_id' => $this->location_id,
-                    'expiry_date' => $batch->expiry_date,
-                    'event_date' => now(),
-                    'performed_by' => auth()->id(),
-                ]);
-            }
+        // ── 1. Specific batch chosen ────────────────────────────────────
+        if ($input->purchase_receipt_item_id) {
+            $this->depleteSpecificBatch($input, $variant, $quantity);
+            $this->decrementOverallQuantity($variant, $quantity, $input, 'production_consumption_batch');
+            return;
         }
-        // ✅ QUANTITY STRATEGY: Reduce overal_quantity_at_hand
-        elseif ($strategy === 'quantity') {
-            $before = $variant->overal_quantity_at_hand ?? 0;
-            $after = max(0, $before - $quantity);
-            
-            $variant->overal_quantity_at_hand = $after;
-            $variant->save();
 
-            // ✅ Log inventory movement (audit trail)
-            SingleShopInventoryLog::create([
-                'variant_id' => $variant->id,
-                'order_id' => $this->id,
-                'tenant_id' => $this->tenant_id,
-                'created_by' => auth()->id(),
-                'quantity_before' => $before,
-                'quantity_after' => $after,
-                'quantity_change' => -$quantity,
-                'reason' => 'production_consumption',
-                'notes' => "Consumed in production #{$this->production_number} - {$variant->name}",
-                'source' => 'production',
+        // ── 2. Batch strategy, no specific batch → FIFO ─────────────────
+        if ($strategy === 'batch') {
+            $this->depleteBatchesFifo($input, $variant, $quantity);
+            $this->decrementOverallQuantity($variant, $quantity, $input, 'production_consumption_batch_fifo');
+            return;
+        }
+
+        // ── 3. Serial strategy → reserve serials ────────────────────────
+        if ($strategy === 'serial') {
+            $this->reserveSerials($input, $variant, $quantity);
+            return;
+        }
+
+        // ── 4. Quantity strategy → overall only ─────────────────────────
+        $this->decrementOverallQuantity($variant, $quantity, $input, 'production_consumption');
+    }
+
+
+    /**
+     * Deplete a specific batch chosen on the input row.
+     * Logs to BatchLog. Does NOT touch overal_quantity_at_hand — the
+     * caller handles that so the two counters stay in sync.
+     */
+    private function depleteSpecificBatch(ProductionOrderInput $input, ProductVariant $variant, float $quantity): void
+    {
+        $batch = PurchaseReceiptItem::where('id', $input->purchase_receipt_item_id)
+            ->where('tenant_id', $this->tenant_id)
+            ->first();
+
+        if (!$batch) {
+            throw new \Exception("Selected batch not found for {$variant->name}");
+        }
+
+        $before = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+
+        if ($before < $quantity) {
+            throw new \Exception(
+                "Insufficient batch stock for {$variant->name}. " .
+                "Batch: {$batch->batch_number}, Available: {$before}, Required: {$quantity}"
+            );
+        }
+
+        $after = $before - $quantity;
+        $batch->quantity_remaining = $after;
+        $batch->save();
+
+        $unitCost = (float) ($batch->unit_cost ?? 0);
+
+        BatchLog::create([
+            'batch_id'                   => $batch->id,
+            'batch_number'               => $batch->batch_number,
+            'variant_id'                 => $variant->id,
+            'variant_name'               => $variant->name,
+            'variant_sku'                => $variant->sku,
+            'type'                       => BatchLog::TYPE_DEPLETED,
+            'quantity_change'            => -$quantity,
+            'quantity_before'            => $before,
+            'quantity_after'             => $after,
+            'unit_cost'                  => $unitCost,
+            'total_cost'                 => $unitCost * $quantity,
+            'production_order_id'        => $this->id,
+            'production_order_input_id'  => $input->id,
+            'tenant_id'                  => $this->tenant_id,
+            'location_id'                => $this->location_id,
+            'expiry_date'                => $batch->expiry_date,
+            'event_date'                 => now(),
+            'performed_by'               => auth()->id(),
+            'metadata' => [
+                'source'            => 'production_consumption',
+                'production_number' => $this->production_number,
+            ],
+        ]);
+    }
+
+
+    /**
+     * FIFO depletion across all available batches for a variant.
+     * Logs each batch touched to BatchLog.
+     */
+    private function depleteBatchesFifo(ProductionOrderInput $input, ProductVariant $variant, float $quantity): void
+    {
+        $batches = PurchaseReceiptItem::query()
+            ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+            ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+            ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+            ->where('purchase_orders.tenant_id', $this->tenant_id)
+            ->where('purchase_order_items.product_variant_id', $variant->id)
+            ->where(function ($q) {
+                $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                  ->orWhereNull('purchase_receipt_items.quantity_remaining');
+            })
+            ->orderBy('purchase_receipt_items.expiry_date', 'asc')
+            ->orderBy('purchase_receipt_items.id', 'asc')
+            ->select('purchase_receipt_items.*')
+            ->get();
+
+        if ($batches->isEmpty()) {
+            throw new \Exception("No available batches for {$variant->name}");
+        }
+
+        $remaining = $quantity;
+
+        foreach ($batches as $batch) {
+            if ($remaining <= 0) break;
+
+            $before    = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+            $deduct    = min($before, $remaining);
+            $after     = $before - $deduct;
+            $remaining -= $deduct;
+
+            $batch->quantity_remaining = $after;
+            $batch->save();
+
+            $unitCost = (float) ($batch->unit_cost ?? 0);
+
+            BatchLog::create([
+                'batch_id'                   => $batch->id,
+                'batch_number'               => $batch->batch_number,
+                'variant_id'                 => $variant->id,
+                'variant_name'               => $variant->name,
+                'variant_sku'                => $variant->sku,
+                'type'                       => BatchLog::TYPE_DEPLETED,
+                'quantity_change'            => -$deduct,
+                'quantity_before'            => $before,
+                'quantity_after'             => $after,
+                'unit_cost'                  => $unitCost,
+                'total_cost'                 => $unitCost * $deduct,
+                'production_order_id'        => $this->id,
+                'production_order_input_id'  => $input->id,
+                'tenant_id'                  => $this->tenant_id,
+                'location_id'                => $this->location_id,
+                'expiry_date'                => $batch->expiry_date,
+                'event_date'                 => now(),
+                'performed_by'               => auth()->id(),
                 'metadata' => [
-                    'input_id' => $input->id,
+                    'source'            => 'production_consumption_fifo',
                     'production_number' => $this->production_number,
                 ],
             ]);
         }
-        // ✅ SERIAL STRATEGY: Mark serials as reserved
-        elseif ($strategy === 'serial') {
-            $serials = SerialNumber::where('variant_id', $variant->id)
-                ->where('status', SerialNumber::STATUS_AVAILABLE)
-                ->where('tenant_id', $this->tenant_id)
-                ->limit($quantity)
-                ->get();
 
-            foreach ($serials as $serial) {
-                $serial->update([
-                    'status' => SerialNumber::STATUS_RESERVED,
-                    'production_order_id' => $this->id,
-                    'notes' => "Consumed in production #{$this->production_number}",
-                ]);
-            }
+        if ($remaining > 0) {
+            throw new \Exception(
+                "Insufficient batch stock for {$variant->name}. " .
+                "Short by {$remaining} after FIFO across all batches."
+            );
         }
     }
 
 
     /**
-     * Restore raw material (reverse consumption for cancellation)
+     * Reserve serial numbers for a serial-strategy variant.
+     */
+    private function reserveSerials(ProductionOrderInput $input, ProductVariant $variant, float $quantity): void
+    {
+        $serials = SerialNumber::where('variant_id', $variant->id)
+            ->where('status', SerialNumber::STATUS_AVAILABLE)
+            ->where('tenant_id', $this->tenant_id)
+            ->limit((int) $quantity)
+            ->get();
+
+        if ($serials->count() < $quantity) {
+            throw new \Exception(
+                "Insufficient serial numbers for {$variant->name}. " .
+                "Available: {$serials->count()}, Required: {$quantity}"
+            );
+        }
+
+        foreach ($serials as $serial) {
+            $serial->update([
+                'status'              => SerialNumber::STATUS_RESERVED,
+                'production_order_id' => $this->id,
+                'notes'               => "Consumed in production #{$this->production_number}",
+            ]);
+        }
+    }
+
+
+    /**
+     * Reduce variant.overal_quantity_at_hand and log to SingleShopInventoryLog.
+     */
+    private function decrementOverallQuantity(
+        ProductVariant $variant,
+        float $quantity,
+        ProductionOrderInput $input,
+        string $reason
+    ): void {
+        $before = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $after  = max(0, $before - $quantity);
+
+        $variant->overal_quantity_at_hand = $after;
+        $variant->save();
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $this->id,
+            'tenant_id'       => $this->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $after,
+            'quantity_change' => -$quantity,
+            'reason'          => $reason,
+            'notes'           => "Consumed in production #{$this->production_number} - {$variant->name}",
+            'source'          => 'production',
+            'metadata' => [
+                'input_id'              => $input->id,
+                'production_number'     => $this->production_number,
+                'purchase_receipt_item' => $input->purchase_receipt_item_id,
+            ],
+        ]);
+    }
+
+
+    /**
+     * Restore raw material (reverse consumption for cancellation).
+     *
+     * Mirrors consumeRawMaterial() exactly:
+     *   - If a specific batch was consumed → restore it + overall
+     *   - If batch strategy FIFO     → cannot perfectly reverse FIFO,
+     *                                  so we restore to overall + log a
+     *                                  compensating BatchLog on the first batch
+     *   - If serial strategy          → release reserved serials
+     *   - Otherwise                   → restore overall only
      */
     private function restoreRawMaterial(ProductionOrderInput $input): void
     {
         $variant = $input->productVariant;
         if (!$variant) return;
 
-        $product = $variant->product;
+        $product  = $variant->product;
         $strategy = $product?->resolvedInventoryStrategy() ?? 'quantity';
-        $quantity = $input->actual_quantity;
+        $quantity = (float) $input->actual_quantity;
 
-        if ($strategy === 'batch' && $input->purchase_receipt_item_id) {
-            $batch = PurchaseReceiptItem::find($input->purchase_receipt_item_id);
+        if ($quantity <= 0) return;
+
+        // ── 1. Specific batch was consumed → restore it + overall ───────
+        if ($input->purchase_receipt_item_id) {
+            $batch = PurchaseReceiptItem::where('id', $input->purchase_receipt_item_id)
+                ->where('tenant_id', $this->tenant_id)
+                ->first();
+
             if ($batch) {
-                $batch->quantity_remaining += $quantity;
+                $before = (float) ($batch->quantity_remaining ?? 0);
+                $after  = $before + $quantity;
+
+                $batch->quantity_remaining = $after;
                 $batch->save();
+
+                $unitCost = (float) ($batch->unit_cost ?? 0);
+
+                BatchLog::create([
+                    'batch_id'                  => $batch->id,
+                    'batch_number'              => $batch->batch_number,
+                    'variant_id'                => $variant->id,
+                    'variant_name'              => $variant->name,
+                    'variant_sku'               => $variant->sku,
+                    'type'                      => BatchLog::TYPE_ADJUSTED,
+                    'quantity_change'           => $quantity,
+                    'quantity_before'           => $before,
+                    'quantity_after'            => $after,
+                    'unit_cost'                 => $unitCost,
+                    'total_cost'                => $unitCost * $quantity,
+                    'production_order_id'       => $this->id,
+                    'production_order_input_id' => $input->id,
+                    'tenant_id'                 => $this->tenant_id,
+                    'location_id'               => $this->location_id,
+                    'expiry_date'               => $batch->expiry_date,
+                    'event_date'                => now(),
+                    'performed_by'              => auth()->id(),
+                    'metadata' => [
+                        'source'            => 'production_cancel_restore',
+                        'production_number' => $this->production_number,
+                    ],
+                ]);
             }
-        } elseif ($strategy === 'quantity') {
-            $variant->overal_quantity_at_hand += $quantity;
-            $variant->save();
-        } elseif ($strategy === 'serial') {
+
+            $this->incrementOverallQuantity($variant, $quantity, $input, 'production_cancel_restore_batch');
+            return;
+        }
+
+        // ── 2. Batch FIFO consumed → restore overall only (best effort) ─
+        // FIFO reversal isn't exact; we restore to overall and log a
+        // compensating overall entry. Adjust manually if exact batch
+        // restoration is required.
+        if ($strategy === 'batch') {
+            $this->incrementOverallQuantity($variant, $quantity, $input, 'production_cancel_restore_batch_fifo');
+            return;
+        }
+
+        // ── 3. Serial strategy → release reserved serials ───────────────
+        if ($strategy === 'serial') {
             SerialNumber::where('variant_id', $variant->id)
                 ->where('production_order_id', $this->id)
                 ->where('status', SerialNumber::STATUS_RESERVED)
+                ->limit((int) $quantity)
                 ->update([
-                    'status' => SerialNumber::STATUS_AVAILABLE,
+                    'status'              => SerialNumber::STATUS_AVAILABLE,
                     'production_order_id' => null,
-                    'notes' => null,
+                    'notes'               => null,
                 ]);
+            return;
         }
+
+        // ── 4. Quantity strategy → restore overall ──────────────────────
+        $this->incrementOverallQuantity($variant, $quantity, $input, 'production_cancel_restore');
     }
+
+
+    /**
+     * Increase variant.overal_quantity_at_hand and log to SingleShopInventoryLog.
+     */
+    private function incrementOverallQuantity(
+        ProductVariant $variant,
+        float $quantity,
+        ProductionOrderInput $input,
+        string $reason
+    ): void {
+        $before = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $after  = $before + $quantity;
+
+        $variant->overal_quantity_at_hand = $after;
+        $variant->save();
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $this->id,
+            'tenant_id'       => $this->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $after,
+            'quantity_change' => $quantity,
+            'reason'          => $reason,
+            'notes'           => "Restored from cancelled production #{$this->production_number} - {$variant->name}",
+            'source'          => 'production',
+            'metadata' => [
+                'input_id'              => $input->id,
+                'production_number'     => $this->production_number,
+                'purchase_receipt_item' => $input->purchase_receipt_item_id,
+            ],
+        ]);
+    }
+    
 
     /**
      * Record accounting transaction

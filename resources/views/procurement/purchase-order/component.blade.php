@@ -13,8 +13,9 @@
                                 value="1" />
                         </div>
                     </th>
-                    <th class="min-w-125px">{{__('pagination._id')}}</th>
+                    {{--<th class="min-w-125px">{{__('pagination._id')}}</th> --}}
                     <th class="min-w-125px">{{__('passwords.po_number')}}</th>
+                    <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('passwords.supplier')}}</th>
                     <th class="min-w-125px">{{__('auth._status')}}</th>
                     <th class="min-w-125px">{{__('pagination._total')}}</th>
@@ -35,9 +36,11 @@
                                     <input class="form-check-input row-checkbox" type="checkbox" value="{{ $order->id }}" />
                                 </div>
                             </td>
+                            {{--
                             <td>
                                 <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $order->id }}</div>
                             </td>
+                            --}}
                             
                             <td>
                                 <a href="javascript:void(0);" 
@@ -48,6 +51,7 @@
                                 </a>
                             </td>
 
+                            <td>{{ $order->location->name ?? __('pagination._none') }}</td>
                             <td>{{ $order->supplier->name ?? __('pagination._none') }}</td>
 
                             <td>

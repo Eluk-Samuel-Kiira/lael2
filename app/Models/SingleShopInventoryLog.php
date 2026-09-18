@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\HasTenant;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 
 class SingleShopInventoryLog extends Model
@@ -35,9 +36,9 @@ class SingleShopInventoryLog extends Model
     /**
      * Relationships
      */
-    public function variant()
+    public function variant(): BelongsTo
     {
-        return $this->belongsTo(ProductVariant::class);
+        return $this->belongsTo(ProductVariant::class, 'variant_id');
     }
 
     public function order()

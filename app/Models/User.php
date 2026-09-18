@@ -95,10 +95,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsTo(Location::class, 'location_id');
     }
 
-    public function locations()
-    {
-        return $this->belongsTo(Location::class, 'location_id');
-    }
+    
 
     public function departments()
     {
@@ -108,6 +105,27 @@ class User extends Authenticatable implements MustVerifyEmail
             'user_id',                // foreign key on pivot (for employees/users)
             'department_id'           // related key on pivot (for departments)
         );
+    }
+
+    /**
+     * The primary location assigned to this user (single FK on users table).
+     */
+    public function primaryLocation()
+    {
+        return $this->belongsTo(Location::class, 'location_id');
+    }
+
+    /**
+     * All locations this user has access to (many-to-many).
+     */
+    public function locations()
+    {
+        return $this->belongsToMany(
+            Location::class,
+            'location_user',
+            'user_id',
+            'location_id'
+        )->withTimestamps();
     }
 
      /**
