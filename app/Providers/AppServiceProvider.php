@@ -65,32 +65,77 @@ class AppServiceProvider extends ServiceProvider
                 'active_payment_methods' => collect(),
             ];
 
-            // Only query if user is authenticated
             if (Auth::check()) {
                 $user = Auth::user();
                 $tenantId = $user->tenant_id;
-                $userLocationId = $user->location_id ?? null;
-                
-                // ✅ FIXED: Get active payment methods with location filtering
+
+                // ✅ All locations this user can operate in (from location_user)
+                $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+                // ✅ The location the user is currently operating in (if any)
+                $activeLocationId = session('current_location_id')
+                    ?? (request()->filled('location') ? (int) request('location') : null);
+
+                // If the active location isn't in the user's assigned list, ignore it
+                if ($activeLocationId && !in_array((int) $activeLocationId, $userLocationIds, true)) {
+                    $activeLocationId = null;
+                }
+
+                // ✅ Build the list of location IDs to filter by
+                // - If we have an active location → filter by just that one
+                // - Otherwise → filter by all assigned locations
+                $filterLocationIds = $activeLocationId
+                    ? [(int) $activeLocationId]
+                    : $userLocationIds;
+
+                // ✅ Query builder: match methods whose location_id JSON overlaps
+                //    with any of $filterLocationIds, OR whose location_id is null (available everywhere)
+                $applyLocationFilter = function ($query) use ($filterLocationIds) {
+                    if (empty($filterLocationIds)) {
+                        // User has no locations assigned → only show globally-available methods
+                        return $query->whereNull('location_id');
+                    }
+
+                    return $query->where(function ($q) use ($filterLocationIds) {
+                        // Globally available
+                        $q->whereNull('location_id');
+
+                        // Or contains any of the user's locations
+                        foreach ($filterLocationIds as $locId) {
+                            $q->orWhereRaw(
+                                'JSON_CONTAINS(location_id, ?)',
+                                [json_encode((string) $locId)]
+                            );
+                        }
+                    });
+                };
+
+                // ✅ Active payment methods (for dropdowns)
                 $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
                     ->where('is_active', 1)
-                    ->when($userLocationId, function($query) use ($userLocationId) {
-                        return $query->where(function($q) use ($userLocationId) {
-                            $q->whereNull('location_id')
-                              ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
-                        });
-                    })
+                    ->tap($applyLocationFilter)
                     ->orderBy('name')
                     ->get();
-                
+
+                // ✅ Grouped by type (for POS / payment selectors)
+                $globalPaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
+                    ->where('is_active', true)
+                    ->tap($applyLocationFilter)
+                    ->orderBy('type')
+                    ->orderBy('name')
+                    ->get()
+                    ->groupBy('type');
+
                 $data = [
                     'users' => User::where('tenant_id', $tenantId)
                         ->where('status', 'active')
-                        ->whereDoesntHave('roles', function ($query) {
-                            $query->where('name', 'super_admin');
-                        })
+                        ->whereDoesntHave('roles', fn($q) => $q->where('name', 'super_admin'))
                         ->get(),
-                    'roles' => Role::where('tenant_id', $tenantId)->whereNot('name', 'super_admin')->with('permissions')->latest()->get(),
+                    'roles' => Role::where('tenant_id', $tenantId)
+                        ->whereNot('name', 'super_admin')
+                        ->with('permissions')
+                        ->latest()
+                        ->get(),
                     'permissions' => Permission::regular()->get(),
                     'departments' => Department::where('tenant_id', $tenantId)->where('isActive', 1)->get(),
                     'categories' => Category::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
@@ -102,18 +147,7 @@ class AppServiceProvider extends ServiceProvider
                     'locations' => Location::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'customers' => Customer::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'taxes' => Tax::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
-                    'globalPaymentMethods' => PaymentMethod::where('tenant_id', $tenantId)
-                        ->where('is_active', true)
-                        ->where(function($query) use ($userLocationId) {
-                            if ($userLocationId) {
-                                $query->whereNull('location_id')
-                                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
-                            }
-                        })
-                        ->orderBy('type')
-                        ->orderBy('name')
-                        ->get()
-                        ->groupBy('type'),
+                    'globalPaymentMethods' => $globalPaymentMethods,
                     'promotions' => Promotion::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'suppliers' => Supplier::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'expenseCategories' => ExpenseCategory::where('tenant_id', $tenantId)->where('is_active', 1)->orderBy('name')->get(),
@@ -121,7 +155,6 @@ class AppServiceProvider extends ServiceProvider
                     'active_payment_methods' => $activePaymentMethods,
                     'chartOfAccounts' => ChartOfAccount::where('tenant_id', $tenantId)
                         ->where('is_active', true)
-                        // ->where('account_type', 'like', '%expense%') // Filter for expense accounts
                         ->orderBy('account_code')
                         ->get(),
                 ];

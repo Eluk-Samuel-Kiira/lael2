@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\PurchaseReceiptItem;
-use App\Models\Location;
+use App\Models\{ Location, BatchLog };
 use App\Models\Department;
 
 class BatchController extends Controller

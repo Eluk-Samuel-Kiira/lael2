@@ -42,6 +42,19 @@ class Location extends Model
         return $this->belongsTo(Tenant::class);
     }
 
+    /**
+     * Users who have access to this location (many-to-many).
+     */
+    public function users()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'location_user',
+            'location_id',
+            'user_id'
+        )->withTimestamps();
+    }
+
     public function locationCreater()
     {
         return $this->belongsTo(User::class, 'created_by', 'id');

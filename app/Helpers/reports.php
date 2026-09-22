@@ -38,39 +38,70 @@ if (!function_exists('getOrderTypeColor')) {
 if (!function_exists('getPaymentMethodsByType')) {
     function getPaymentMethodsByType($type = null) {
         $user = auth()->user();
+
+        if (!$user) {
+            return $type ? collect([]) : collect();
+        }
+
         $tenantId = $user->tenant_id ?? null;
-        $userLocationId = $user->location_id ?? null;
-        
+
         if (!$tenantId) {
-            return $type ? collect([]) : [];
+            return $type ? collect([]) : collect();
         }
-        
+
+        // ✅ All locations the user has access to (from location_user pivot)
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ✅ The location the user is currently operating in, if any
+        $activeLocationId = session('current_location_id')
+            ?? (request()->filled('location') ? (int) request('location') : null);
+
+        // Ignore it if the user doesn't actually have access
+        if ($activeLocationId && !in_array((int) $activeLocationId, $userLocationIds, true)) {
+            $activeLocationId = null;
+        }
+
+        // ✅ Which location IDs to filter by
+        $filterLocationIds = $activeLocationId
+            ? [(int) $activeLocationId]
+            : $userLocationIds;
+
+        // ✅ Cache key reflects both the tenant AND the locations used
         $cacheKey = "tenant_{$tenantId}_payment_methods_grouped";
-        
-        // Add location to cache key if user has a location
-        if ($userLocationId) {
-            $cacheKey .= "_location_{$userLocationId}";
+        if (!empty($filterLocationIds)) {
+            sort($filterLocationIds);
+            $cacheKey .= '_locations_' . implode('_', $filterLocationIds);
         }
-        
-        $methods = Cache::remember($cacheKey, 3600, function () use ($tenantId, $userLocationId) {
+
+        $methods = Cache::remember($cacheKey, 3600, function () use ($tenantId, $filterLocationIds) {
             $query = PaymentMethod::where('tenant_id', $tenantId)
                 ->where('is_active', true);
-            
-            // Filter by location if user has one
-            if ($userLocationId) {
-                $query->where(function($q) use ($userLocationId) {
-                    $q->whereNull('location_id')
-                      ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+
+            if (empty($filterLocationIds)) {
+                // User has no locations → only globally-available methods
+                $query->whereNull('location_id');
+            } else {
+                $query->where(function ($q) use ($filterLocationIds) {
+                    // Globally available
+                    $q->whereNull('location_id');
+
+                    // OR matches any of the user's locations
+                    foreach ($filterLocationIds as $locId) {
+                        $q->orWhereRaw(
+                            'JSON_CONTAINS(location_id, ?)',
+                            [json_encode((string) $locId)]
+                        );
+                    }
                 });
             }
-            
+
             return $query->get()->groupBy('type');
         });
-        
+
         if ($type) {
             return $methods[$type] ?? collect([]);
         }
-        
+
         return $methods;
     }
 }
@@ -79,32 +110,63 @@ if (!function_exists('getPaymentMethodsByType')) {
 if (!function_exists('getUniquePaymentTypes')) {
     function getUniquePaymentTypes() {
         $user = auth()->user();
+
+        if (!$user) {
+            return [];
+        }
+
         $tenantId = $user->tenant_id ?? null;
-        $userLocationId = $user->location_id ?? null;
-        
+
         if (!$tenantId) {
             return [];
         }
-        
-        $cacheKey = "tenant_{$tenantId}_payment_types";
-        
-        // Add location to cache key if user has a location
-        if ($userLocationId) {
-            $cacheKey .= "_location_{$userLocationId}";
+
+        // ✅ All locations the user has access to (from location_user pivot)
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ✅ The location the user is currently operating in, if any
+        $activeLocationId = session('current_location_id')
+            ?? (request()->filled('location') ? (int) request('location') : null);
+
+        // Ignore it if the user doesn't actually have access
+        if ($activeLocationId && !in_array((int) $activeLocationId, $userLocationIds, true)) {
+            $activeLocationId = null;
         }
-        
-        return Cache::remember($cacheKey, 3600, function () use ($tenantId, $userLocationId) {
+
+        // ✅ Which location IDs to filter by
+        $filterLocationIds = $activeLocationId
+            ? [(int) $activeLocationId]
+            : $userLocationIds;
+
+        // ✅ Cache key reflects both the tenant AND the locations used
+        $cacheKey = "tenant_{$tenantId}_payment_types";
+        if (!empty($filterLocationIds)) {
+            sort($filterLocationIds);
+            $cacheKey .= '_locations_' . implode('_', $filterLocationIds);
+        }
+
+        return Cache::remember($cacheKey, 3600, function () use ($tenantId, $filterLocationIds) {
             $query = PaymentMethod::where('tenant_id', $tenantId)
                 ->where('is_active', true);
-            
-            // Filter by location if user has one
-            if ($userLocationId) {
-                $query->where(function($q) use ($userLocationId) {
-                    $q->whereNull('location_id')
-                      ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$userLocationId)]);
+
+            if (empty($filterLocationIds)) {
+                // User has no locations → only globally-available methods
+                $query->whereNull('location_id');
+            } else {
+                $query->where(function ($q) use ($filterLocationIds) {
+                    // Globally available
+                    $q->whereNull('location_id');
+
+                    // OR matches any of the user's locations
+                    foreach ($filterLocationIds as $locId) {
+                        $q->orWhereRaw(
+                            'JSON_CONTAINS(location_id, ?)',
+                            [json_encode((string) $locId)]
+                        );
+                    }
                 });
             }
-            
+
             return $query->select('type')
                 ->distinct()
                 ->pluck('type')

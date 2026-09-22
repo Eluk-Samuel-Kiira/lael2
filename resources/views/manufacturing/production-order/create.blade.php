@@ -83,10 +83,11 @@
                                                 name="inputs[0][product_variant_id]" 
                                                 id="material_id_input_0">
                                             <datalist id="material_list_input_0">
-                                                <option value="">Select material</option>
+                                                <option value="">{{ __('passwords.select_material_first') }}</option>
                                                 @foreach($variants as $variant)
                                                     <option value="{{ $variant->name }}" 
                                                             data-id="{{ $variant->id }}"
+                                                            data-uom-id="{{ $variant->weight_unit }}"
                                                             data-cost-price="{{ $variant->supplier_cost_price }}">
                                                     </option>
                                                 @endforeach
@@ -99,20 +100,23 @@
                                         <input type="number" name="inputs[0][planned_quantity]" class="form-control input-quantity" min="0.01" step="0.01" value="1">
                                         <div id="inputs.0.planned_quantity"></div>
                                     </div>
+                                    
                                     <div class="col-md-2">
                                         <label class="form-label">{{ __('passwords.unit') }}</label>
-                                        <select name="inputs[0][unit]" class="form-select">
-                                            <option value="kg">kg</option>
-                                            <option value="g">g</option>
-                                            <option value="l">l</option>
-                                            <option value="ml">ml</option>
-                                            <option value="pcs">pcs</option>
-                                            <option value="units">units</option>
-                                            <option value="litres">litres</option>
-                                            <option value="grams">grams</option>
+                                        <select name="inputs[0][unit]" class="form-select" data-control="select2" data-placeholder="{{ __('passwords.select_unit') }}">
+                                            <option value=""></option>
+                                            @forelse($uoms as $uom)
+                                                <option value="{{ $uom->id }}"
+                                                        data-symbol="{{ $uom->symbol ?? $uom->name }}">
+                                                    {{ $uom->name }}@if($uom->symbol) ({{ $uom->symbol }})@endif
+                                                </option>
+                                            @empty
+                                                <option value="" disabled>{{ __('passwords.no_units_configured') }}</option>
+                                            @endforelse
                                         </select>
                                         <div id="inputs.0.unit"></div>
                                     </div>
+
                                     <div class="col-md-2">
                                         <label class="form-label">{{ __('passwords.estimated_cost') }}</label>
                                         <input type="number" name="inputs[0][estimated_cost]" class="form-control input-cost" min="0" step="0.01" value="0">
@@ -179,10 +183,11 @@
                                                 name="outputs[0][product_variant_id]" 
                                                 id="product_id_output_0">
                                             <datalist id="product_list_output_0">
-                                                <option value="">Select product</option>
+                                                <option value="">{{ __('passwords.select_material_first') }}</option>
                                                 @foreach($variants as $variant)
                                                     <option value="{{ $variant->name }}" 
                                                             data-id="{{ $variant->id }}"
+                                                            data-uom-id="{{ $variant->weight_unit }}"
                                                             data-selling-price="{{ $variant->selling_price }}">
                                                     </option>
                                                 @endforeach
@@ -197,15 +202,15 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">{{ __('passwords.unit') }}</label>
-                                        <select name="outputs[0][unit]" class="form-select">
-                                            <option value="kg">kg</option>
-                                            <option value="g">g</option>
-                                            <option value="l">l</option>
-                                            <option value="ml">ml</option>
-                                            <option value="pcs">pcs</option>
-                                            <option value="units">units</option>
-                                            <option value="litres">litres</option>
-                                            <option value="grams">grams</option>
+                                        <select name="outputs[0][unit]" class="form-select" data-control="select2" data-placeholder="{{ __('passwords.select_unit') }}">
+                                            <option value=""></option>
+                                            @forelse($uoms as $uom)
+                                                <option value="{{ $uom->symbol ?? $uom->name }}">
+                                                    {{ $uom->name }}@if($uom->symbol) ({{ $uom->symbol }})@endif
+                                                </option>
+                                            @empty
+                                                <option value="" disabled>{{ __('passwords.no_units_configured') }}</option>
+                                            @endforelse
                                         </select>
                                         <div id="outputs.0.unit"></div>
                                     </div>
@@ -299,115 +304,208 @@
     </div>
 </div>
 
+
+
 @push('scripts')
 <script>
-    let inputIndex = 1;
+    let inputIndex  = 1;
     let outputIndex = 1;
+
+    /* ────────────────────────────────────────────────────────────────
+     |  Utilities
+     ──────────────────────────────────────────────────────────────── */
+
+    /**
+     * Strip leftover Select2 artifacts from a cloned row.
+     * MUST run before the row is appended and before Select2 is re-init'd.
+     */
+    function resetSelect2InRow(row) {
+        // Remove orphan Select2 container spans
+        row.querySelectorAll('.select2-container').forEach(el => el.remove());
+
+        // Clean up every <select> in the row
+        row.querySelectorAll('select').forEach(sel => {
+            sel.classList.remove('select2-hidden-accessible');
+            sel.removeAttribute('data-select2-id');
+            sel.removeAttribute('aria-hidden');
+            sel.removeAttribute('tabindex');
+            sel.value = '';
+        });
+
+        // Remove any data-select2-id on other elements
+        row.querySelectorAll('[data-select2-id]').forEach(el => {
+            el.removeAttribute('data-select2-id');
+        });
+    }
+
+    /**
+     * Initialize Select2 on every select in the given row that carries
+     * data-control="select2".
+     */
+    function initSelect2InRow(row) {
+        if (typeof $ === 'undefined' || !$.fn || !$.fn.select2) return;
+
+        $(row).find('select[data-control="select2"]').each(function () {
+            // Destroy any stale instance first
+            if ($(this).hasClass('select2-hidden-accessible')) {
+                try { $(this).select2('destroy'); } catch (e) { /* noop */ }
+            }
+            $(this).select2({
+                dropdownParent: $('#kt_modal_add_production_order'),
+                width: '100%',
+                placeholder: $(this).data('placeholder') || '{{ __("passwords.select_unit") }}',
+                allowClear: true,
+            });
+        });
+    }
+
+    /**
+     * Read the currently selected location_id from the modal.
+     * x-typable-select renders a hidden <input name="location_id">, so we
+     * prefer that over any visible typed value.
+     */
+    function getModalLocationId() {
+        const modal = document.getElementById('kt_modal_add_production_order');
+        if (!modal) return '';
+
+        let el = modal.querySelector('input[type="hidden"][name="location_id"]');
+        if (el && el.value) return el.value;
+
+        el = modal.querySelector('input[type="hidden"]#location_id');
+        if (el && el.value) return el.value;
+
+        el = modal.querySelector('select[name="location_id"]');
+        if (el && el.value) return el.value;
+
+        el = modal.querySelector('.fv-row input[name="location_id"]');
+        if (el && el.value) return el.value;
+
+        return '';
+    }
+
+    /* ────────────────────────────────────────────────────────────────
+     |  Add / remove rows
+     ──────────────────────────────────────────────────────────────── */
 
     function addProductionInput() {
         const container = document.getElementById('production_inputs_container');
-        const template = document.getElementById('input_0');
-        const newRow = template.cloneNode(true);
-        
-        const newId = `input_${inputIndex}`;
-        newRow.id = newId;
-        
+        const template  = document.getElementById('input_0');
+        const newRow    = template.cloneNode(true);
+
+        newRow.id = `input_${inputIndex}`;
+
+        // 1. Rename name="inputs[0][...]" → name="inputs[N][...]"
         newRow.querySelectorAll('[name]').forEach(el => {
             const name = el.getAttribute('name');
-            if (name) {
-                el.setAttribute('name', name.replace('[0]', `[${inputIndex}]`));
-            }
+            if (name) el.setAttribute('name', name.replace('[0]', `[${inputIndex}]`));
         });
-        
+
+        // 2. Typable search input
         const searchInput = newRow.querySelector('.material-typable-input');
         if (searchInput) {
             searchInput.id = `material_search_input_${inputIndex}`;
             searchInput.setAttribute('data-item-index', inputIndex);
             searchInput.setAttribute('data-type', 'input');
+            searchInput.setAttribute('list', `material_list_input_${inputIndex}`);
             searchInput.value = '';
         }
-        
+
+        // 3. Datalist
         const datalist = newRow.querySelector('datalist');
-        if (datalist) {
-            datalist.id = `material_list_input_${inputIndex}`;
-        }
-        
+        if (datalist) datalist.id = `material_list_input_${inputIndex}`;
+
+        // 4. Hidden variant id
         const hiddenId = newRow.querySelector('input[name*="[product_variant_id]"]');
         if (hiddenId) {
             hiddenId.id = `material_id_input_${inputIndex}`;
             hiddenId.value = '';
         }
-        
+
+        // 5. Batch select + load button
         const batchSelect = newRow.querySelector('.batch-source-select');
         if (batchSelect) {
             batchSelect.setAttribute('data-input-index', inputIndex);
             batchSelect.innerHTML = '<option value="">{{ __("passwords.no_batch") }}</option>';
         }
-        
+
         const loadBtn = newRow.querySelector('.load-batches-btn');
         if (loadBtn) {
             loadBtn.setAttribute('data-input-index', inputIndex);
             loadBtn.setAttribute('onclick', `loadAvailableBatches(${inputIndex})`);
         }
-        
+
+        // 6. Enable remove button
         const removeBtn = newRow.querySelector('.btn-danger');
-        if (removeBtn) {
-            removeBtn.disabled = false;
-        }
-        
+        if (removeBtn) removeBtn.disabled = false;
+
+        // 7. Reset numeric fields
         newRow.querySelectorAll('.input-quantity, .input-cost').forEach(el => {
             el.value = el.type === 'number' ? '0' : '';
         });
-        
+
+        // 8. Strip Select2 remnants BEFORE appending
+        resetSelect2InRow(newRow);
+
+        // 9. Append
         container.appendChild(newRow);
+
+        // 10. Re-init Select2 on the new row
+        initSelect2InRow(newRow);
+
         inputIndex++;
         updateTotals();
     }
 
     function addProductionOutput() {
         const container = document.getElementById('production_outputs_container');
-        const template = document.getElementById('output_0');
-        const newRow = template.cloneNode(true);
-        
-        const newId = `output_${outputIndex}`;
-        newRow.id = newId;
-        
+        const template  = document.getElementById('output_0');
+        const newRow    = template.cloneNode(true);
+
+        newRow.id = `output_${outputIndex}`;
+
         newRow.querySelectorAll('[name]').forEach(el => {
             const name = el.getAttribute('name');
-            if (name) {
-                el.setAttribute('name', name.replace('[0]', `[${outputIndex}]`));
-            }
+            if (name) el.setAttribute('name', name.replace('[0]', `[${outputIndex}]`));
         });
-        
+
         const searchInput = newRow.querySelector('.product-typable-input');
         if (searchInput) {
             searchInput.id = `product_search_output_${outputIndex}`;
             searchInput.setAttribute('data-item-index', outputIndex);
             searchInput.setAttribute('data-type', 'output');
+            searchInput.setAttribute('list', `product_list_output_${outputIndex}`);
             searchInput.value = '';
         }
-        
+
         const datalist = newRow.querySelector('datalist');
-        if (datalist) {
-            datalist.id = `product_list_output_${outputIndex}`;
-        }
-        
+        if (datalist) datalist.id = `product_list_output_${outputIndex}`;
+
         const hiddenId = newRow.querySelector('input[name*="[product_variant_id]"]');
         if (hiddenId) {
             hiddenId.id = `product_id_output_${outputIndex}`;
             hiddenId.value = '';
         }
-        
+
         const removeBtn = newRow.querySelector('.btn-danger');
-        if (removeBtn) {
-            removeBtn.disabled = false;
-        }
-        
+        if (removeBtn) removeBtn.disabled = false;
+
         newRow.querySelectorAll('.output-quantity, .output-cost').forEach(el => {
             el.value = el.type === 'number' ? '0' : '';
         });
-        
+
+        // Reset inventory_strategy to its default (first option)
+        const invStrategy = newRow.querySelector('select[name*="[inventory_strategy]"]');
+        if (invStrategy) invStrategy.value = 'quantity';
+
+        // Strip Select2 remnants
+        resetSelect2InRow(newRow);
+
+        // Append
         container.appendChild(newRow);
+
+        // Re-init Select2 (the unit select only, inventory_strategy is native)
+        initSelect2InRow(newRow);
+
         outputIndex++;
         updateTotals();
     }
@@ -428,18 +526,17 @@
         }
     }
 
-    // ✅ FIXED: loadAvailableBatches - uses the correct hidden input ID
+    /* ────────────────────────────────────────────────────────────────
+     |  Load available batches
+     ──────────────────────────────────────────────────────────────── */
+
     function loadAvailableBatches(index) {
         const row = document.getElementById(`input_${index}`);
-        if (!row) {
-            console.error('Row not found for index:', index);
-            return;
-        }
-        
-        // ✅ Get the hidden input by its ID pattern
+        if (!row) return;
+
         const hiddenInput = document.getElementById(`material_id_input_${index}`);
         const variantId = hiddenInput ? hiddenInput.value : null;
-        
+
         if (!variantId) {
             Swal.fire({
                 title: '{{ __("passwords.info") }}',
@@ -449,21 +546,25 @@
             });
             return;
         }
-        
-        const locationId = document.querySelector('select[name="location_id"]')?.value || '';
-        
+
+        const locationId = getModalLocationId();
+
         Swal.fire({
             title: '{{ __("passwords.loading_batches") }}',
             text: '{{ __("passwords.please_wait") }}',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
-        
-        fetch(`/production-orders/available-batches?variant_id=${variantId}&location_id=${locationId}`)
+
+        const url = new URL('/production-orders/available-batches', window.location.origin);
+        url.searchParams.set('variant_id', variantId);
+        if (locationId) url.searchParams.set('location_id', locationId);
+
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 Swal.close();
-                
+
                 if (data.success && data.batches.length > 0) {
                     const select = row.querySelector('.batch-source-select');
                     if (select) {
@@ -478,7 +579,7 @@
                             }
                             select.appendChild(option);
                         });
-                        
+
                         Swal.fire({
                             title: '{{ __("passwords.success") }}',
                             text: `{{ __("passwords.batches_loaded") }} ${data.batches.length}`,
@@ -508,106 +609,187 @@
             });
     }
 
+    /* ────────────────────────────────────────────────────────────────
+     |  Event handlers — variant selection, UOM auto-select, totals
+     ──────────────────────────────────────────────────────────────── */
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // Setup for material inputs
-        document.addEventListener('input', function(e) {
-            const target = e.target;
-            
-            // ✅ Fix: Check for both input and output typable fields
-            if (target.classList.contains('material-typable-input') || target.classList.contains('product-typable-input')) {
-                const input = target;
-                const index = input.getAttribute('data-item-index');
-                const type = input.getAttribute('data-type') || 'material';
-                
-                // ✅ Use the correct ID pattern based on type
-                let datalistId, hiddenId;
-                if (type === 'input' || type === 'material') {
-                    datalistId = `material_list_input_${index}`;
-                    hiddenId = `material_id_input_${index}`;
+    /**
+     * Handle typable-input selection: set hidden variant id, auto-select UOM,
+     * and (for inputs) auto-load batches.
+     */
+    function handleVariantSelected(inputEl) {
+        const index = inputEl.getAttribute('data-item-index');
+        const type  = inputEl.getAttribute('data-type') || 'material';
+
+        const isInput = (type === 'input' || type === 'material');
+
+        const datalistId = isInput ? `material_list_input_${index}`  : `product_list_output_${index}`;
+        const hiddenId   = isInput ? `material_id_input_${index}`    : `product_id_output_${index}`;
+        const rowId      = isInput ? `input_${index}`                : `output_${index}`;
+
+        const datalist = document.getElementById(datalistId);
+        const hidden   = document.getElementById(hiddenId);
+        const row      = document.getElementById(rowId);
+
+        if (!datalist || !hidden || !row) return;
+
+        // Find the matching option
+        let matched = null;
+        datalist.querySelectorAll('option').forEach(opt => {
+            if (opt.value === inputEl.value) matched = opt;
+        });
+
+        if (!matched) {
+            hidden.value = '';
+            return;
+        }
+
+        // Set hidden variant id
+        hidden.value = matched.getAttribute('data-id');
+
+        // Auto-select the UOM
+        const uomId     = matched.getAttribute('data-uom-id');
+        const uomSymbol = matched.getAttribute('data-uom-symbol');
+        const targetVal = uomId || uomSymbol;
+
+        const uomSelect = row.querySelector('select[name*="[unit]"]');
+
+        if (uomSelect && targetVal) {
+            let found = false;
+            Array.from(uomSelect.options).forEach(opt => {
+                if (String(opt.value) === String(targetVal)) found = true;
+            });
+
+            if (found) {
+                uomSelect.value = targetVal;
+                // Sync Select2 if attached
+                if (typeof $ !== 'undefined' && $.fn.select2 && $(uomSelect).hasClass('select2-hidden-accessible')) {
+                    $(uomSelect).val(targetVal).trigger('change.select2');
                 } else {
-                    datalistId = `product_list_output_${index}`;
-                    hiddenId = `product_id_output_${index}`;
+                    uomSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                
-                const datalist = document.getElementById(datalistId);
-                const hidden = document.getElementById(hiddenId);
-                
-                if (datalist && hidden) {
-                    const options = datalist.querySelectorAll('option');
-                    let found = false;
-                    options.forEach(opt => {
-                        if (opt.value === input.value) {
-                            hidden.value = opt.getAttribute('data-id');
-                            found = true;
-                            
-                            // Load batches if material input
-                            if (type === 'input' || type === 'material') {
-                                const row = document.getElementById(`input_${index}`);
-                                if (row) {
-                                    const loadBtn = row.querySelector('.load-batches-btn');
-                                    if (loadBtn) {
-                                        loadAvailableBatches(parseInt(index));
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    if (!found) {
-                        hidden.value = '';
-                    }
-                }
+            } else {
+                console.warn('[UOM] No matching option for', targetVal);
             }
-        });
+        }
 
-        // Calculate totals on input change
-        document.addEventListener('change', function(e) {
-            const target = e.target;
-            if (target.classList.contains('input-quantity') || 
-                target.classList.contains('input-cost') ||
-                target.classList.contains('output-quantity') || 
-                target.classList.contains('output-cost')) {
-                updateTotals();
-            }
-        });
-
-        document.addEventListener('input', function(e) {
-            const target = e.target;
-            if (target.classList.contains('input-quantity') || 
-                target.classList.contains('input-cost') ||
-                target.classList.contains('output-quantity') || 
-                target.classList.contains('output-cost')) {
-                updateTotals();
-            }
-        });
-    });
-
-    function updateTotals() {
-        let totalInputCost = 0;
-        let totalOutputCost = 0;
-        
-        document.querySelectorAll('.production-input-item').forEach(row => {
-            const quantity = parseFloat(row.querySelector('.input-quantity')?.value) || 0;
-            const cost = parseFloat(row.querySelector('.input-cost')?.value) || 0;
-            totalInputCost += quantity * cost;
-        });
-        
-        document.querySelectorAll('.production-output-item').forEach(row => {
-            const quantity = parseFloat(row.querySelector('.output-quantity')?.value) || 0;
-            const cost = parseFloat(row.querySelector('.output-cost')?.value) || 0;
-            totalOutputCost += quantity * cost;
-        });
-        
-        document.getElementById('total_input_cost').textContent = totalInputCost.toFixed(2);
-        document.getElementById('total_output_cost').textContent = totalOutputCost.toFixed(2);
-        document.getElementById('grand_total_input').textContent = totalInputCost.toFixed(2);
-        document.getElementById('grand_total_output').textContent = totalOutputCost.toFixed(2);
-        document.getElementById('grand_total_cost').textContent = (totalInputCost + totalOutputCost).toFixed(2);
+        // Auto-load batches for inputs
+        if (isInput) {
+            loadAvailableBatches(parseInt(index, 10));
+        }
     }
 
-    // ── SUBMIT PRODUCTION ORDER FORM ──────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        // Delegate: 'input' event on typable fields
+        document.addEventListener('input', function (e) {
+            if (e.target.classList.contains('material-typable-input') ||
+                e.target.classList.contains('product-typable-input')) {
+                handleVariantSelected(e.target);
+            }
+        });
+
+        // Delegate: 'change' event → dispatch input (helps some browsers)
+        document.addEventListener('change', function (e) {
+            if (e.target.classList.contains('material-typable-input') ||
+                e.target.classList.contains('product-typable-input')) {
+                e.target.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+            if (e.target.classList.contains('input-quantity') ||
+                e.target.classList.contains('input-cost') ||
+                e.target.classList.contains('output-quantity') ||
+                e.target.classList.contains('output-cost')) {
+                updateTotals();
+            }
+        });
+
+        // Totals on every input keystroke
+        document.addEventListener('input', function (e) {
+            if (e.target.classList.contains('input-quantity') ||
+                e.target.classList.contains('input-cost') ||
+                e.target.classList.contains('output-quantity') ||
+                e.target.classList.contains('output-cost')) {
+                updateTotals();
+            }
+        });
+
+        // Reset counters + clean state when the modal is opened
+        const modal = document.getElementById('kt_modal_add_production_order');
+        if (modal) {
+            modal.addEventListener('show.bs.modal', function () {
+                inputIndex  = 1;
+                outputIndex = 1;
+
+                // Remove any cloned rows from previous use
+                document.querySelectorAll('#production_inputs_container .production-input-item').forEach((row, i) => {
+                    if (i > 0) row.remove();
+                });
+                document.querySelectorAll('#production_outputs_container .production-output-item').forEach((row, i) => {
+                    if (i > 0) row.remove();
+                });
+
+                // Reset first-row selects to empty
+                ['input_0', 'output_0'].forEach(id => {
+                    const row = document.getElementById(id);
+                    if (!row) return;
+                    row.querySelectorAll('select').forEach(sel => {
+                        if (typeof $ !== 'undefined' && $.fn.select2 && $(sel).hasClass('select2-hidden-accessible')) {
+                            $(sel).val('').trigger('change.select2');
+                        } else {
+                            sel.value = '';
+                        }
+                    });
+                });
+
+                updateTotals();
+            });
+        }
+
+        // First-time init for the initial rows (they exist in DOM already)
+        const initialInput  = document.getElementById('input_0');
+        const initialOutput = document.getElementById('output_0');
+        if (initialInput)  initSelect2InRow(initialInput);
+        if (initialOutput) initSelect2InRow(initialOutput);
+    });
+
+    /* ────────────────────────────────────────────────────────────────
+     |  Totals
+     ──────────────────────────────────────────────────────────────── */
+
+    function updateTotals() {
+        let totalInputCost  = 0;
+        let totalOutputCost = 0;
+
+        document.querySelectorAll('.production-input-item').forEach(row => {
+            const qty  = parseFloat(row.querySelector('.input-quantity')?.value) || 0;
+            const cost = parseFloat(row.querySelector('.input-cost')?.value)     || 0;
+            totalInputCost += qty * cost;
+        });
+
+        document.querySelectorAll('.production-output-item').forEach(row => {
+            const qty  = parseFloat(row.querySelector('.output-quantity')?.value) || 0;
+            const cost = parseFloat(row.querySelector('.output-cost')?.value)     || 0;
+            totalOutputCost += qty * cost;
+        });
+
+        const setText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val.toFixed(2);
+        };
+
+        setText('total_input_cost',    totalInputCost);
+        setText('total_output_cost',   totalOutputCost);
+        setText('grand_total_input',   totalInputCost);
+        setText('grand_total_output',  totalOutputCost);
+        setText('grand_total_cost',    totalInputCost + totalOutputCost);
+    }
+
+    /* ────────────────────────────────────────────────────────────────
+     |  Submit
+     ──────────────────────────────────────────────────────────────── */
+
     function submitProductionOrderForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardProductionOrderButton') {
-        const form = document.getElementById(formId);
+        const form         = document.getElementById(formId);
         const submitButton = document.getElementById(submitButtonId);
 
         if (!form || !submitButton) {
@@ -615,59 +797,49 @@
             return;
         }
 
-        // Collect form data using FormData directly
         const formData = new FormData(form);
-
-        // Convert FormData to proper nested structure
         const data = {};
-        for (let [key, value] of formData.entries()) {
-            // Handle inputs nested structure
+
+        for (const [key, value] of formData.entries()) {
             if (key.startsWith('inputs[')) {
-                const matches = key.match(/inputs\[(\d+)\]\[(.+)\]/);
-                if (matches) {
-                    const index = matches[1];
-                    const field = matches[2];
-                    if (!data.inputs) data.inputs = [];
-                    if (!data.inputs[index]) data.inputs[index] = {};
-                    data.inputs[index][field] = value;
+                const m = key.match(/inputs\[(\d+)\]\[(.+)\]/);
+                if (m) {
+                    const [, idx, field] = m;
+                    if (!data.inputs)      data.inputs = [];
+                    if (!data.inputs[idx]) data.inputs[idx] = {};
+                    data.inputs[idx][field] = value;
                 }
-            }
-            // Handle outputs nested structure
-            else if (key.startsWith('outputs[')) {
-                const matches = key.match(/outputs\[(\d+)\]\[(.+)\]/);
-                if (matches) {
-                    const index = matches[1];
-                    const field = matches[2];
-                    if (!data.outputs) data.outputs = [];
-                    if (!data.outputs[index]) data.outputs[index] = {};
-                    data.outputs[index][field] = value;
+            } else if (key.startsWith('outputs[')) {
+                const m = key.match(/outputs\[(\d+)\]\[(.+)\]/);
+                if (m) {
+                    const [, idx, field] = m;
+                    if (!data.outputs)      data.outputs = [];
+                    if (!data.outputs[idx]) data.outputs[idx] = {};
+                    data.outputs[idx][field] = value;
                 }
-            }
-            // Handle simple fields
-            else {
+            } else {
                 data[key] = value;
             }
         }
 
-        // ✅ Filter out empty/invalid inputs
+        // Filter + reindex inputs
         if (data.inputs) {
-            data.inputs = data.inputs.filter(input => 
-                input.product_variant_id && 
-                input.planned_quantity && 
+            data.inputs = Object.values(data.inputs).filter(input =>
+                input.product_variant_id &&
+                input.planned_quantity &&
                 parseFloat(input.planned_quantity) > 0
             );
         }
 
-        // ✅ Filter out empty/invalid outputs
+        // Filter + reindex outputs
         if (data.outputs) {
-            data.outputs = data.outputs.filter(output => 
-                output.product_variant_id && 
-                output.planned_quantity && 
+            data.outputs = Object.values(data.outputs).filter(output =>
+                output.product_variant_id &&
+                output.planned_quantity &&
                 parseFloat(output.planned_quantity) > 0
             );
         }
 
-        // ✅ Validation
         if (!data.inputs || data.inputs.length === 0) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
@@ -688,14 +860,10 @@
             return;
         }
 
-        // Add method and routeName
-        data._method = method;
+        data._method   = method;
         data.routeName = url;
 
-        // Start loading
         LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
         handleFormSubmission(data, submitButton, discardButtonId);
     }
 </script>

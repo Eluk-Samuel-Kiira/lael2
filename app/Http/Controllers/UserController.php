@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\{ User, Department };
+use App\Models\{ User, Department, Location };
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Str;
@@ -480,12 +480,11 @@ class UserController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('update user')) {
             abort(403, __('payments.not_authorized'));
         }
 
-        // Find the employee
         $employee = User::find($id);
 
         if (!$employee) {
@@ -496,16 +495,6 @@ class UserController extends Controller
             return redirect()->back();
         }
 
-        // Check if employee has protected role (super_admin or admin) - IMMUTABLE
-        // if ($employee->hasRole('super_admin') || $employee->hasRole('admin')) {
-        //     session()->flash('toast', [
-        //         'type' => 'error',
-        //         'message' => __('auth.cannot_update_protected_role'),
-        //     ]);
-        //     return redirect()->back();
-        // }
-
-        // Ensure it belongs to the same tenant (unless super_admin)
         if (!$user->hasRole('super_admin')) {
             if ($employee->tenant_id != $tenantId) {
                 session()->flash('toast', [
@@ -516,7 +505,7 @@ class UserController extends Controller
             }
         }
 
-        // Validate departments[] array with tenant check
+        // Validate departments[] AND locations[]
         $validated = $request->validate([
             'departments'   => ['nullable', 'array'],
             'departments.*' => [
@@ -530,10 +519,23 @@ class UserController extends Controller
                     }
                 }
             ],
+            'locations'   => ['nullable', 'array'],
+            'locations.*' => [
+                'exists:locations,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    $location = Location::where('id', $value)
+                                        ->where('tenant_id', $tenantId)
+                                        ->first();
+                    if (!$location) {
+                        $fail('The selected location is invalid.');
+                    }
+                }
+            ],
         ]);
 
-        // Sync departments (many-to-many relation)
+        // Sync both pivots
         $employee->departments()->sync($validated['departments'] ?? []);
+        $employee->locations()->sync($validated['locations'] ?? []);
 
         session()->flash('toast', [
             'type' => 'success',
@@ -542,4 +544,6 @@ class UserController extends Controller
 
         return redirect()->back();
     }
+
+
 }

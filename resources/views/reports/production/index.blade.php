@@ -681,7 +681,7 @@ function viewDetails(orderId) {
                 };
                 html += `
                     <tr>
-                        <td>${input.productVariant?.name || 'N/A'}</td>
+                        <td>${input.product_variant?.name || 'N/A'}</td>
                         <td>${input.planned_quantity}</td>
                         <td>${input.actual_quantity}</td>
                         <td>${input.waste_quantity}</td>
@@ -728,7 +728,7 @@ function viewDetails(orderId) {
                 };
                 html += `
                     <tr>
-                        <td>${output.productVariant?.name || 'N/A'}</td>
+                        <td>${output.product_variant?.name || 'N/A'}</td>
                         <td><span class="badge badge-light-${output.inventory_strategy === 'batch' ? 'info' : output.inventory_strategy === 'serial' ? 'warning' : 'primary'}">${output.inventory_strategy}</span></td>
                         <td>${output.planned_quantity}</td>
                         <td class="text-success fw-bold">${output.actual_quantity}</td>
@@ -805,7 +805,7 @@ function viewLogs(orderId) {
                     const changeColor = log.quantity_change >= 0 ? 'success' : 'danger';
                     html += `
                         <tr>
-                            <td>${log.variant_name || 'N/A'}</td>
+                            <td>${log.variant?.name || 'N/A'}</td>
                             <td class="text-${changeColor} fw-bold">${log.quantity_change >= 0 ? '+' : ''}${log.quantity_change}</td>
                             <td>${log.quantity_before}</td>
                             <td>${log.quantity_after}</td>
@@ -859,7 +859,7 @@ function viewLogs(orderId) {
                     html += `
                         <tr>
                             <td><span class="badge badge-light-dark">${log.batch_number}</span></td>
-                            <td>${log.variant_name}</td>
+                            <td>${log.variant?.name || log.variant_name || 'N/A'}</td>
                             <td><span class="badge badge-light-${typeColors[log.type] || 'secondary'}">${log.type}</span></td>
                             <td class="${log.quantity_change >= 0 ? 'text-success' : 'text-danger'} fw-bold">${log.quantity_change >= 0 ? '+' : ''}${log.quantity_change}</td>
                             <td>${log.quantity_before}</td>

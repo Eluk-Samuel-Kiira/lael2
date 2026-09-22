@@ -1,4 +1,3 @@
-{{-- resources/views/manufacturing/production-order/component.blade.php --}}
 @can('view production_orders')
 <div class="card-body py-4" id="reloadProductionComponent">
     <div class="table-responsive">
@@ -11,6 +10,7 @@
                         </div>
                     </th>
                     <th class="min-w-125px">{{__('passwords.production_number')}}</th>
+                    <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('auth._status')}}</th>
                     <th class="min-w-125px">{{__('passwords.inputs')}}</th>
                     <th class="min-w-125px">{{__('passwords.outputs')}}</th>
@@ -35,6 +35,11 @@
                                data-bs-target="#productionItems{{ $order->id }}">
                                 {{ $order->production_number }}
                             </a>
+                        </td>
+                        <td>
+                            <div class="badge badge-light fw-bold">
+                                {{ $order->location->name ?? __('pagination._none') }}
+                            </div>
                         </td>
                         <td>
                             <div class="badge badge-{{ $order->status_badge }} fw-bold">
@@ -71,7 +76,7 @@
                             <div class="badge badge-light fw-bold">{{ $order->createdBy->name ?? __('pagination._none')}}</div>
                         </td>
                         <td>
-                            <div class="d-flex gap-2 flex-wrap">
+                            <div class="d-flex gap-2">
                                 @if($order->status === 'draft')
                                     @can('start production_orders')
                                         <button class="btn btn-sm btn-warning" 
@@ -104,15 +109,17 @@
                                 @endif
 
                                 @can('view production_orders')
-                                    <button class="btn btn-sm btn-light btn-active-color-success" 
+                                    <button type="button"
+                                            class="btn btn-sm btn-light btn-active-color-success"
                                             data-bs-toggle="modal"
-                                            data-bs-target="#viewProduction{{$order->id}}">
+                                            data-bs-target="#viewProduction{{ $order->id }}"
+                                            onclick="event.preventDefault(); event.stopPropagation(); return false;">
                                         <i class="bi bi-eye fs-5"></i>
                                     </button>
                                 @endcan
                             </div>
 
-                            {{-- Include Modals --}}
+                            @include('manufacturing.production-order.view', ['order' => $order])
                             @include('manufacturing.production-order.update-modal', ['order' => $order])
                         </td>
                     </tr>
