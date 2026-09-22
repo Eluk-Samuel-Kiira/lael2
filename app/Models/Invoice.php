@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use App\Traits\HasTenant;
+use Illuminate\Support\Facades\DB;              
 
 
 class Invoice extends Model
