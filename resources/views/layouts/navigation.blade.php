@@ -437,7 +437,7 @@
 
 
                 <!-- Updated Reports Menu -->
-                @canany(['view reports', 'view production_orders reports', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
+                @canany(['view reports', 'invoice reports', 'view production_orders reports', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
                 <div data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-placement="right-start" class="menu-item here menu-lg-down-accordion">
                     <!--begin:Menu link-->
                     <span class="menu-link">
@@ -845,6 +845,72 @@
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.inventory_sales')}}</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        @endcan
+
+                        <!-- Invoice Reports Section -->
+                        @can('invoice reports')
+                        <div data-kt-menu-trigger="click" class="menu-item menu-accordion menu-sub-indention">
+                            <span class="menu-link">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title" style="font-family: {{ getUIOptions('font_family') }}; font-size: {{ getUIOptions('font_size') }}rem">
+                                    {{__('auth.invoice_reports')}}
+                                </span>
+                                <span class="menu-arrow"></span>
+                            </span>
+                            <div class="menu-sub menu-sub-accordion">
+                                <!-- Invoice Summary -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.summary') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.invoice_summary_report')}}</span>
+                                    </a>
+                                </div>
+
+                                <!-- Outstanding / Aging -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.outstanding') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.outstanding_aging_report')}}</span>
+                                    </a>
+                                </div>
+
+                                <!-- Invoice Payments -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.payments') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.invoice_payments_report')}}</span>
+                                    </a>
+                                </div>
+
+                                <!-- Delivery / Send Status -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.delivery') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.invoice_delivery_report')}}</span>
+                                    </a>
+                                </div>
+
+                                <!-- Status Trends -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.status-trends') }}')">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{__('auth.invoice_status_trends')}}</span>
                                     </a>
                                 </div>
                             </div>

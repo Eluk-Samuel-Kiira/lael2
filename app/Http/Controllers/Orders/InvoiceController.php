@@ -390,19 +390,16 @@ class InvoiceController extends Controller
     public function recordPayment(Request $request, $id)
     {
         $user = Auth::user();
-        $invoice = Invoice::with('order')->where('tenant_id', $user->tenant_id)->findOrFail($id);
+        $invoice = Invoice::with('order')
+            ->where('tenant_id', $user->tenant_id)
+            ->findOrFail($id);
 
-        if ($invoice->isPaid()) {
+        // Single gate — blocks draft, paid, void, cancelled, and anything
+        // else not in the payable set. Message tells the user why.
+        if ($reason = $invoice->paymentBlockReason()) {
             return response()->json([
                 'success' => false,
-                'message' => __('payments.invoice_already_paid'),
-            ], 422);
-        }
-
-        if ($invoice->isVoid()) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.invoice_voided'),
+                'message' => $reason,
             ], 422);
         }
 

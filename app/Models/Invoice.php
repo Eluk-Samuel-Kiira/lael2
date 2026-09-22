@@ -331,6 +331,38 @@ class Invoice extends Model
         return $this->status === self::STATUS_SENT;
     }
 
+    public function paymentBlockReason(): ?string
+    {
+        // 1. Draft = not sent = stock not depleted. Nothing can be paid.
+        if ($this->status === self::STATUS_DRAFT) {
+            return __('payments.invoice_not_sent_yet');
+        }
+
+        // 2. Terminal states
+        if ($this->isPaid())  return __('payments.invoice_already_paid');
+        if ($this->isVoid())  return __('payments.invoice_voided');
+        if ($this->status === self::STATUS_CANCELLED) {
+            return __('payments.invoice_cancelled');
+        }
+
+        // 3. Any status not in the payable set
+        if (!$this->isPayable()) {
+            return __('payments.invoice_not_payable');
+        }
+
+        return null;
+    }
+
+    public function isPayable(): bool
+    {
+        return in_array($this->status, [
+            self::STATUS_SENT,
+            self::STATUS_VIEWED,
+            self::STATUS_PARTIALLY_PAID,
+            self::STATUS_OVERDUE,
+        ], true);
+    }
+
     public function isViewed(): bool
     {
         return $this->status === self::STATUS_VIEWED;

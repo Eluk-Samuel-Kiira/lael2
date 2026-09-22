@@ -12,7 +12,7 @@ use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMet
 use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
-    PurchasingReportsController, InventoryStrategyReportController, ProductionOrderReportController };
+    PurchasingReportsController, InventoryStrategyReportController, ProductionOrderReportController, InvoiceReportsController };
 
     // Route::get('/test-currency', function() {
     //     return debug_currency_conversion(4, 'AUD');
@@ -474,6 +474,16 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('recipes.ingredients');
         Route::get('/variants/{variantId}/serials', [OrderReportsController::class, 'getVariantSerials'])
             ->name('variants.serials');
+
+
+
+        Route::prefix('reports/invoices')->name('reports.invoices.')->group(function () {
+            Route::get('summary',        [InvoiceReportsController::class, 'summary'])->name('summary');
+            Route::get('outstanding',    [InvoiceReportsController::class, 'outstanding'])->name('outstanding');
+            Route::get('payments',       [InvoiceReportsController::class, 'payments'])->name('payments');
+            Route::get('delivery',       [InvoiceReportsController::class, 'delivery'])->name('delivery');
+            Route::get('status-trends',  [InvoiceReportsController::class, 'statusTrends'])->name('status-trends');
+        });
 
 
         // Product Reports Routes

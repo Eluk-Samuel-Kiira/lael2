@@ -1214,6 +1214,8 @@ return [
     'optional_note'                  => 'Optional note for this transfer',
     'outgoing'                       => 'Outgoing',
     'incoming'                       => 'Incoming',
+    // payments.php
+    'invoice_not_sent_yet' => 'This invoice has not been sent yet. Send it first — inventory is only depleted when the invoice is sent.',
     'account'                        => 'Account',
     'balance_before'                 => 'Balance Before',
     'balance_after'                  => 'Balance After',

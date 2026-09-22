@@ -39,6 +39,7 @@ class AddNewPermissions extends Command
             'update payment method',
             'update current balance',
             'transfer between payment methods',
+            'invoice reports',
         ],
     ];
 
