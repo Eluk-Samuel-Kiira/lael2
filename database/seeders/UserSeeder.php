@@ -261,6 +261,7 @@ class UserSeeder extends Seeder
                 'create invoice',
                 'edit invoice',
                 'delete invoice',
+                'invoice reports',
                 'send invoice',
                 'void invoice',
                 'update invoice',
