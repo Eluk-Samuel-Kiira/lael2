@@ -618,4 +618,19 @@ class Order extends Model
     {
         return $this->created_at->format('Y-m-d');
     }
+
+
+    
+    /**
+     * The authoritative location for this order — always derived from the
+     * department, because a department belongs to exactly one location.
+     */
+    public function getCorrectLocationAttribute(): ?Location
+    {
+        if ($this->department && $this->department->location) {
+            return $this->department->location;
+        }
+
+        return $this->location;
+    }
 }

@@ -11,6 +11,7 @@
                     </th>
                     <th class="min-w-125px">{{__('payments.invoice_number')}}</th>
                     <th class="min-w-150px">{{__('payments.customer')}}</th>
+                    <th class="min-w-150px">{{__('payments.location')}}</th>
                     <th class="min-w-125px">{{__('payments.issue_date')}}</th>
                     <th class="min-w-125px">{{__('payments.due_date')}}</th>
                     <th class="min-w-125px">{{__('payments.amount')}}</th>
@@ -45,6 +46,11 @@
                                         <span class="text-muted fs-7">{{ $invoice->billing_email ?? '—' }}</span>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-light-warning fw-bold px-3 py-2">
+                                    {{ $invoice->order->correct_location->name ?? 'N/A' }}
+                                </span>
                             </td>
                             <td>
                                 <span class="badge badge-light-primary fw-bold px-3 py-2">

@@ -14,6 +14,7 @@
                     </th>
                     <th class="min-w-125px">{{__('passwords.order_number')}}</th>
                     <th class="min-w-125px">{{__('passwords._customer')}}</th>
+                    <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('passwords._type')}}</th>
                     <th class="min-w-125px">{{__('passwords._status')}}</th>
                     <th class="min-w-125px">{{__('passwords._source')}}</th>
@@ -60,6 +61,11 @@
                         </td>
 
                         <td><span class="text-gray-800 fw-bold">{{ $order->customer_name ?? __('passwords.none') }}</span></td>
+                        <td>
+                            <span class="badge badge-light-warning fw-bold px-3 py-2">
+                                {{ $order->correct_location->name ?? 'N/A' }}
+                            </span>
+                        </td>
 
                         <td>
                             <span class="badge badge-light-primary fw-bold fs-8 px-3 py-2">{{ ucwords($order->type) }}</span>
@@ -311,7 +317,7 @@
                     <div class="col-6">
                         <div class="bg-light rounded-2 p-3 h-100">
                             <div class="text-muted fs-8 fw-semibold text-uppercase mb-1">{{__('passwords.location')}}</div>
-                            <div class="fw-bold text-gray-800 fs-7">{{ $order->location->name ?? '—' }}</div>
+                            <div class="fw-bold text-gray-800 fs-7">{{ $order->correct_location->name ?? '—' }}</div>
                         </div>
                     </div>
                     <div class="col-6">
@@ -517,7 +523,7 @@
                     <div class="info-label">{{ __('passwords._customer') }}</div>
                     <div class="info-value">{{ $order->customer_name ?? __('passwords.none') }}</div>
                     <div class="info-label">{{ __('passwords.location') }}</div>
-                    <div class="info-value">{{ $order->location->name ?? '—' }}</div>
+                    <div class="info-value">{{ $order->correct_location->name ?? '—' }}</div>
                     <div class="info-label">{{ __('passwords.department') }}</div>
                     <div class="info-value">{{ $order->department->name ?? '—' }}</div>
                 </div>

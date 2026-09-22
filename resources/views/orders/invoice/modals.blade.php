@@ -320,7 +320,7 @@
                         </div>
                         <div class="col-md-3">
                             <span class="text-muted fs-7">{{ __('payments.location') }}</span>
-                            <div class="fw-semibold">{{ $invoice->order->location->name ?? 'N/A' }}</div>
+                            <div class="fw-semibold">{{ $invoice->order->correct_location->name ?? 'N/A' }}</div>
                         </div>
                         <div class="col-md-3">
                             <span class="text-muted fs-7">{{ __('payments.department') }}</span>
