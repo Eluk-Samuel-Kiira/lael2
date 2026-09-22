@@ -883,188 +883,225 @@ class POSController extends Controller
             ]);
         }
 
-        try {
-            $cartData = json_decode($request->cart_data, true);
-            $isSingleShop = tenant_is_single_shop($tenantId);
+        $cartData = json_decode($request->cart_data, true);
 
-            if (empty($cartData['items'])) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('pagination.cart_empty'),
-                ]);
-            }
-
-            $customerId = null;
-            $customerName = null;
-            $customerEmail = null;
-            $customerPhone = null;
-            $customerAddress = null;
-
-            if (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'existing') {
-                $customerId = $cartData['customer']['id'];
-                $customer = Customer::find($customerId);
-                if ($customer) {
-                    $customerName = trim($customer->first_name . ' ' . $customer->last_name);
-                    $customerEmail = $customer->email;
-                    $customerPhone = $customer->phone;
-                    $customerAddress = $customer->address ?? null;
-                }
-            } elseif (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'new') {
-                $customerName = $cartData['customer']['name'];
-            }
-
-            if (!$customerName) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('pagination.customer_required_for_invoice'),
-                ]);
-            }
-
-            $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-
-            $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
-
-            $order = Order::create([
-                'tenant_id' => $tenantId,
-                'customer_id' => $customerId,
-                'customer_name' => $customerName,
-                'location_id' => $orderLocationId,                                       
-                'department_id' => $request->input('department') ?? $user->department_id ?? 1,
-                'order_number' => $orderNumber,
-                'type' => 'sale',
-                'status' => 'confirmed',
-                'subtotal' => $cartData['subtotal'],
-                'discount_total' => $cartData['discount'],
-                'tax_total' => $cartData['tax'],
-                'total' => $cartData['total'],
-                'paid_amount' => 0,
-                'balance_due' => $cartData['total'],
-                'subtotal_before_bargain' => null,
-                'bargain_discount_applied' => 0,
-                'source' => 'invoice',
-                'created_by' => $user->id,
-            ]);
-
-            foreach ($cartData['items'] as $item) {
-                $variant = ProductVariant::find($item['variant_id']);
-                if (!$variant) continue;
-
-                // ✅ For invoices, we also need to track inventory
-                if ($isSingleShop) {
-                    $inventoryData = [
-                        'initial_stock' => $variant->overal_quantity_at_hand,
-                        'current_stock' => $variant->overal_quantity_at_hand - $item['quantity'],
-                        'shop_type' => 'single_shop',
-                    ];
-                } else {
-                    // ✅ Use inventory_id and department_id from cart for invoices too
-                    $inventoryId = $item['inventory_id'] ?? null;
-                    $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
-                    $locationId = $user->location_id ?? 1;
-
-                    if ($inventoryId) {
-                        $inventory = InventoryItems::find($inventoryId);
-                        if ($inventory) {
-                            $inventoryData = [
-                                'initial_stock' => $inventory->quantity_allocated,
-                                'current_stock' => $inventory->quantity_allocated - $item['quantity'],
-                                'inventory_id'  => $inventory->id,
-                                'location_id'   => $inventory->location_id,
-                                'department_id' => $inventory->department_id,
-                                'shop_type'     => 'multi_shop',
-                            ];
-                        } else {
-                            $inventory = $variant->inventory()
-                                ->where('location_id', $locationId)
-                                ->where('department_id', $departmentId)
-                                ->first();
-                            $inventoryData = [
-                                'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                                'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                                'inventory_id'  => $inventory?->id,
-                                'location_id'   => $locationId,
-                                'department_id' => $departmentId,
-                                'shop_type'     => 'multi_shop',
-                            ];
-                        }
-                    } else {
-                        $inventory = $variant->inventory()
-                            ->where('location_id', $locationId)
-                            ->where('department_id', $departmentId)
-                            ->first();
-                        $inventoryData = [
-                            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
-                            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
-                            'inventory_id'  => $inventory?->id,
-                            'location_id'   => $locationId,
-                            'department_id' => $departmentId,
-                            'shop_type'     => 'multi_shop',
-                        ];
-                    }
-                }
-
-                $order->orderItems()->create([
-                    'product_id' => $variant->product_id,
-                    'variant_id' => $variant->id,
-                    'item_name' => $item['name'],
-                    'sku' => $variant->sku,
-                    'unit_price' => $item['price'],
-                    'quantity' => $item['quantity'],
-                    'tax_amount' => $item['tax_total'] ?? 0,
-                    'discount' => $item['discount'] ?? 0,
-                    'total_price' => $item['total'],
-                    'batch_id' => $item['batch_id'] ?? null,       
-                    'batch_number' => $item['batch_number'] ?? null,
-                    'serial_id' => $item['serial_id'] ?? null,
-                    'serial_number' => $item['serial_number'] ?? null,
-                    'inventory_data' => json_encode($inventoryData),
-                    'tax_data' => json_encode($item['taxes'] ?? []),
-                    'promotion_data' => json_encode($item['promotions'] ?? []),
-                ]);
-            }
-
-            $invoiceNumber = Invoice::generateInvoiceNumber($tenantId);
-
-            $invoice = Invoice::create([
-                'tenant_id' => $tenantId,
-                'order_id' => $order->id,
-                'customer_id' => $customerId,
-                'invoice_number' => $invoiceNumber,
-                'public_token' => Invoice::generatePublicToken(),
-                'billing_name' => $customerName,
-                'billing_email' => $customerEmail,
-                'billing_phone' => $customerPhone,
-                'billing_address' => $customerAddress,
-                'issue_date' => now()->toDateString(),
-                'due_date' => now()->addDays(14)->toDateString(),
-                'status' => 'draft',
-                'currency' => 'UGX',
-                'subtotal' => $cartData['subtotal'],
-                'discount_total' => $cartData['discount'],
-                'tax_total' => $cartData['tax'],
-                'total' => $cartData['total'],
-                'amount_paid' => 0,
-                'balance_due' => $cartData['total'],
-                'created_by' => $user->id,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => __('pagination.invoice_generated'),
-                'order_id' => $order->id,
-                'order_number' => $orderNumber,
-                'invoice_id' => $invoice->id,
-                'invoice_number' => $invoiceNumber,
-                'customerName' => $customerName,
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Invoice generation failed: ' . $e->getMessage());
+        if (empty($cartData['items'])) {
             return response()->json([
                 'success' => false,
-                'message' => __('pagination.invoice_generation_failed'),
-            ], 500);
+                'message' => __('pagination.cart_empty'),
+            ]);
         }
+
+        // Resolve customer BEFORE transaction (read-only)
+        $customerId = null;
+        $customerName = null;
+        $customerEmail = null;
+        $customerPhone = null;
+        $customerAddress = null;
+
+        if (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'existing') {
+            $customerId = $cartData['customer']['id'];
+            $customer = Customer::find($customerId);
+            if ($customer) {
+                $customerName    = trim($customer->first_name . ' ' . $customer->last_name);
+                $customerEmail   = $customer->email;
+                $customerPhone   = $customer->phone;
+                $customerAddress = $customer->address ?? null;
+            }
+        } elseif (isset($cartData['customer']['type']) && $cartData['customer']['type'] === 'new') {
+            $customerName = $cartData['customer']['name'];
+        }
+
+        if (!$customerName) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.customer_required_for_invoice'),
+            ]);
+        }
+
+        $isSingleShop    = tenant_is_single_shop($tenantId);
+        $orderNumber     = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+        $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
+
+        $maxAttempts = 3;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            DB::beginTransaction();
+
+            try {
+                // ── Create Order ──────────────────────────────────────────
+                $order = Order::create([
+                    'tenant_id'                 => $tenantId,
+                    'customer_id'               => $customerId,
+                    'customer_name'             => $customerName,
+                    'location_id'               => $orderLocationId,
+                    'department_id'             => $request->input('department') ?? $user->department_id ?? 1,
+                    'order_number'              => $orderNumber,
+                    'type'                      => 'sale',
+                    'status'                    => 'confirmed',
+                    'subtotal'                  => $cartData['subtotal'],
+                    'discount_total'            => $cartData['discount'],
+                    'tax_total'                 => $cartData['tax'],
+                    'total'                     => $cartData['total'],
+                    'paid_amount'               => 0,
+                    'balance_due'               => $cartData['total'],
+                    'subtotal_before_bargain'   => null,
+                    'bargain_discount_applied'  => 0,
+                    'source'                    => 'invoice',
+                    'created_by'                => $user->id,
+                ]);
+
+                // ── Create Order Items ────────────────────────────────────
+                foreach ($cartData['items'] as $item) {
+                    $variant = ProductVariant::find($item['variant_id']);
+                    if (!$variant) continue;
+
+                    $inventoryData = $this->buildInventoryDataForInvoice(
+                        $item,
+                        $variant,
+                        $isSingleShop,
+                        $user
+                    );
+
+                    $order->orderItems()->create([
+                        'product_id'       => $variant->product_id,
+                        'variant_id'       => $variant->id,
+                        'item_name'        => $item['name'],
+                        'sku'              => $variant->sku,
+                        'unit_price'       => $item['price'],
+                        'quantity'         => $item['quantity'],
+                        'tax_amount'       => $item['tax_total'] ?? 0,
+                        'discount'         => $item['discount'] ?? 0,
+                        'total_price'      => $item['total'],
+                        'batch_id'         => $item['batch_id'] ?? null,
+                        'batch_number'     => $item['batch_number'] ?? null,
+                        'serial_id'        => $item['serial_id'] ?? null,
+                        'serial_number'    => $item['serial_number'] ?? null,
+                        'inventory_data'   => json_encode($inventoryData),
+                        'tax_data'         => json_encode($item['taxes'] ?? []),
+                        'promotion_data'   => json_encode($item['promotions'] ?? []),
+                    ]);
+                }
+
+                // ── Generate Invoice Number INSIDE the transaction, with lock ──
+                $invoiceNumber = Invoice::generateInvoiceNumber($tenantId, true); // pass lock flag
+
+                // ── Create Invoice ────────────────────────────────────────
+                $invoice = Invoice::create([
+                    'tenant_id'       => $tenantId,
+                    'order_id'        => $order->id,
+                    'customer_id'     => $customerId,
+                    'invoice_number'  => $invoiceNumber,
+                    'public_token'    => Invoice::generatePublicToken(),
+                    'billing_name'    => $customerName,
+                    'billing_email'   => $customerEmail,
+                    'billing_phone'   => $customerPhone,
+                    'billing_address' => $customerAddress,
+                    'issue_date'      => now()->toDateString(),
+                    'due_date'        => now()->addDays(14)->toDateString(),
+                    'status'          => 'draft',
+                    'currency'        => 'UGX',
+                    'subtotal'        => $cartData['subtotal'],
+                    'discount_total'  => $cartData['discount'],
+                    'tax_total'       => $cartData['tax'],
+                    'total'           => $cartData['total'],
+                    'amount_paid'     => 0,
+                    'balance_due'     => $cartData['total'],
+                    'created_by'      => $user->id,
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success'        => true,
+                    'message'        => __('pagination.invoice_generated'),
+                    'order_id'       => $order->id,
+                    'order_number'   => $orderNumber,
+                    'invoice_id'     => $invoice->id,
+                    'invoice_number' => $invoiceNumber,
+                    'customerName'   => $customerName,
+                ]);
+
+            } catch (\Illuminate\Database\QueryException $e) {
+                DB::rollBack();
+
+                // Duplicate invoice number → retry
+                $isDuplicate = $e->errorInfo[1] ?? null;
+
+                if ($isDuplicate === 1062 && $attempt < $maxAttempts) {
+                    \Log::warning("Invoice number collision, retrying (attempt {$attempt})", [
+                        'tenant_id' => $tenantId,
+                        'error'     => $e->getMessage(),
+                    ]);
+                    usleep(50000); // 50ms backoff
+                    continue;
+                }
+
+                \Log::error('Invoice generation failed: ' . $e->getMessage(), [
+                    'tenant_id' => $tenantId,
+                    'attempt'   => $attempt,
+                    'trace'     => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.invoice_generation_failed'),
+                ], 500);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+
+                \Log::error('Invoice generation failed: ' . $e->getMessage(), [
+                    'tenant_id' => $tenantId,
+                    'trace'     => $e->getTraceAsString(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.invoice_generation_failed'),
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => __('pagination.invoice_generation_failed'),
+        ], 500);
+    }
+
+    private function buildInventoryDataForInvoice($item, $variant, $isSingleShop, $user): array
+    {
+        if ($isSingleShop) {
+            return [
+                'initial_stock' => $variant->overal_quantity_at_hand,
+                'current_stock' => $variant->overal_quantity_at_hand - $item['quantity'],
+                'shop_type'     => 'single_shop',
+            ];
+        }
+
+        $inventoryId  = $item['inventory_id'] ?? null;
+        $departmentId = $item['department_id'] ?? $user->department_id ?? 1;
+        $locationId   = $user->location_id ?? 1;
+
+        $inventory = $inventoryId
+            ? InventoryItems::find($inventoryId)
+            : null;
+
+        if (!$inventory) {
+            $inventory = $variant->inventory()
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+
+        return [
+            'initial_stock' => $inventory ? $inventory->quantity_allocated : 0,
+            'current_stock' => $inventory ? $inventory->quantity_allocated - $item['quantity'] : 0,
+            'inventory_id'  => $inventory?->id,
+            'location_id'   => $inventory?->location_id ?? $locationId,
+            'department_id' => $inventory?->department_id ?? $departmentId,
+            'shop_type'     => 'multi_shop',
+        ];
     }
 
 
