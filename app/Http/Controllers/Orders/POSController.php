@@ -1104,6 +1104,26 @@ class POSController extends Controller
         ];
     }
 
+    public static function generateInvoiceNumber(int $tenantId): string
+    {
+        $year = (int) date('Y');
+
+        // Atomic increment inside a single statement
+        DB::statement("
+            INSERT INTO document_sequences (tenant_id, document_type, year, last_number, created_at, updated_at)
+            VALUES (?, 'invoice', ?, 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE last_number = last_number + 1, updated_at = NOW()
+        ", [$tenantId, $year]);
+
+        $next = DB::table('document_sequences')
+            ->where('tenant_id', $tenantId)
+            ->where('document_type', 'invoice')
+            ->where('year', $year)
+            ->value('last_number');
+
+        return 'INV-' . $year . '-' . str_pad($next, 5, '0', STR_PAD_LEFT);
+    }
+
 
     public function processSplitPayment(Request $request)
     {
