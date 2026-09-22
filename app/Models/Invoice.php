@@ -207,36 +207,37 @@ class Invoice extends Model
     public static function generateInvoiceNumber($tenantId): string
     {
         $prefix = 'INV-';
-        $year = date('Y');
-        
-        // Get the last invoice number for this tenant and year
-        $lastInvoice = static::where('tenant_id', $tenantId)
-            ->where('invoice_number', 'like', $prefix . $year . '-%')
-            ->orderBy('id', 'desc')
-            ->first();
+        $year   = date('Y');
+        $like   = $prefix . $year . '-%';
 
+        // Raw DB, no global scope, no ambiguity
+        $lastInvoice = DB::table('invoices')
+            ->where('tenant_id', $tenantId)
+            ->where('invoice_number', 'like', $like)
+            ->orderByRaw('CAST(SUBSTRING(invoice_number, ?) AS UNSIGNED) DESC', [strlen($prefix . $year . '-') + 1])
+            ->value('invoice_number');
+
+        $nextSeq = 1;
         if ($lastInvoice) {
-            $lastNumber = (int) substr($lastInvoice->invoice_number, -5);
-            $sequence = str_pad($lastNumber + 1, 5, '0', STR_PAD_LEFT);
-        } else {
-            $sequence = '00001';
+            // Extract just the trailing numeric portion
+            $nextSeq = ((int) substr($lastInvoice, strlen($prefix . $year . '-'))) + 1;
         }
 
-        $invoiceNumber = $prefix . $year . '-' . $sequence;
+        $candidate = $prefix . $year . '-' . str_pad($nextSeq, 5, '0', STR_PAD_LEFT);
 
-        // ✅ CHECK IF NUMBER ALREADY EXISTS AND INCREMENT IF NEEDED
+        // Safety net — bump until unique
         $attempts = 0;
-        while (static::where('tenant_id', $tenantId)
-            ->where('invoice_number', $invoiceNumber)
+        while (DB::table('invoices')
+            ->where('tenant_id', $tenantId)
+            ->where('invoice_number', $candidate)
             ->exists() && $attempts < 100) {
-            
+
             $attempts++;
-            $sequenceNumber = (int) $sequence + $attempts;
-            $sequence = str_pad($sequenceNumber, 5, '0', STR_PAD_LEFT);
-            $invoiceNumber = $prefix . $year . '-' . $sequence;
+            $nextSeq++;
+            $candidate = $prefix . $year . '-' . str_pad($nextSeq, 5, '0', STR_PAD_LEFT);
         }
 
-        return $invoiceNumber;
+        return $candidate;
     }
 
     public static function generatePublicToken(): string
