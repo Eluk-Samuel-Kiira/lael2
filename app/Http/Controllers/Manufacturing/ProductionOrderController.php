@@ -105,6 +105,25 @@ class ProductionOrderController extends Controller
             'outputs.*.inventory_strategy' => 'required|in:quantity,batch,serial',
         ]);
 
+        // 🔒 Prevent duplicate batch usage within a single production order
+        $batchIds = collect($request->inputs)
+            ->pluck('purchase_receipt_item_id')
+            ->filter()                 // drop nulls / "no batch"
+            ->values();
+
+        $duplicates = $batchIds->duplicates()->unique()->values();
+
+        if ($duplicates->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.batch_already_used')
+                    ?? 'The same batch was selected more than once.',
+                'errors'  => [
+                    'inputs' => ['Batch IDs used more than once: ' . $duplicates->implode(', ')],
+                ],
+            ], 422);
+        }
+
         DB::beginTransaction();
 
         try {
@@ -207,7 +226,6 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
-
     /**
      * Start production with payment withdrawal
      */
@@ -805,12 +823,17 @@ class ProductionOrderController extends Controller
         ]);
     }
 
+
     public function getAvailableBatches(Request $request)
     {
+        $request->validate([
+            'variant_id'  => 'required|integer|exists:product_variants,id',
+            'location_id' => 'nullable|integer|exists:locations,id',
+        ]);
 
-        $user = Auth::user();
-        $tenantId = $user->tenant_id;
-        $variantId = $request->variant_id;
+        $user       = Auth::user();
+        $tenantId   = $user->tenant_id;
+        $variantId  = $request->variant_id;
         $locationId = $request->location_id ?? $user->location_id;
 
         $batches = PurchaseReceiptItem::query()
@@ -819,31 +842,38 @@ class ProductionOrderController extends Controller
             ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
             ->where('purchase_orders.tenant_id', $tenantId)
             ->where('purchase_order_items.product_variant_id', $variantId)
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
-                  ->orWhereNull('purchase_receipt_items.quantity_remaining');
+                ->orWhereNull('purchase_receipt_items.quantity_remaining');
             })
-            ->when($locationId, function($q) use ($locationId) {
+            ->when($locationId, function ($q) use ($locationId) {
                 return $q->where('purchase_receipt_items.location_id', $locationId);
             })
-            ->orderBy('purchase_receipt_items.expiry_date', 'asc')
+            ->orderByRaw('purchase_receipt_items.expiry_date IS NULL, purchase_receipt_items.expiry_date ASC')
             ->select('purchase_receipt_items.*')
             ->get();
 
         return response()->json([
             'success' => true,
-            'batches' => $batches->map(function($batch) {
+            'batches' => $batches->map(function ($batch) {
+                // Prefer quantity_remaining; fall back to quantity_received; finally 0
+                $remaining = $batch->quantity_remaining
+                    ?? $batch->quantity_received
+                    ?? 0;
+
                 return [
-                    'id' => $batch->id,
-                    'batch_number' => $batch->batch_number,
-                    'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received ?? 0,
-                    'expiry_date' => $batch->expiry_date?->format('Y-m-d'),
-                    'unit_cost' => $batch->unit_cost,
-                    'location_id' => $batch->location_id,
+                    'id'                 => $batch->id,
+                    'batch_number'       => $batch->batch_number,
+                    'quantity_remaining' => (float) $remaining,
+                    'quantity_received'  => (float) ($batch->quantity_received ?? 0),
+                    'expiry_date'        => $batch->expiry_date?->format('Y-m-d'),
+                    'location_id'        => $batch->location_id,
+                    // NOTE: unit_cost intentionally omitted per your request
                 ];
             }),
         ]);
     }
+
 
     public function updateOutput(Request $request, $id)
     {

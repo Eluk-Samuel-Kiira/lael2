@@ -626,6 +626,7 @@ return [
     'send_supplier' => 'Send To Supplier',
     'receive_items' => 'Receive Items',
     'cancel' => 'Cancel',
+    'batch_already_used' => 'This batch is already selected on another row.',
     'view' => 'View',
     'failed_to_load_details' => 'Failed to load details',
     'network_error' => 'Network Errors',

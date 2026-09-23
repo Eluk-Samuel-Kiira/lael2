@@ -289,7 +289,7 @@
                                     </thead>
                                     <tbody>
                                         @foreach($order->outputs as $index => $output)
-                                        @php
+                                       @php
                                             $variant = $output->productVariant;
                                             $planned = $output->planned_quantity;
                                             $actual = $output->actual_quantity;
