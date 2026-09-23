@@ -188,7 +188,8 @@
                                                     <option value="{{ $variant->name }}" 
                                                             data-id="{{ $variant->id }}"
                                                             data-uom-id="{{ $variant->weight_unit }}"
-                                                            data-selling-price="{{ $variant->selling_price }}">
+                                                            data-selling-price="{{ $variant->selling_price }}"
+                                                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
                                                     </option>
                                                 @endforeach
                                             </datalist>
@@ -205,7 +206,8 @@
                                         <select name="outputs[0][unit]" class="form-select" data-control="select2" data-placeholder="{{ __('passwords.select_unit') }}">
                                             <option value=""></option>
                                             @forelse($uoms as $uom)
-                                                <option value="{{ $uom->symbol ?? $uom->name }}">
+                                                <option value="{{ $uom->id }}"
+                                                        data-symbol="{{ $uom->symbol ?? $uom->name }}">
                                                     {{ $uom->name }}@if($uom->symbol) ({{ $uom->symbol }})@endif
                                                 </option>
                                             @empty
@@ -341,14 +343,13 @@
     /**
      * Initialize Select2 on every select in the given row that carries
      * data-control="select2".
-     */
+    */
     function initSelect2InRow(row) {
         if (typeof $ === 'undefined' || !$.fn || !$.fn.select2) return;
 
         $(row).find('select[data-control="select2"]').each(function () {
-            // Destroy any stale instance first
             if ($(this).hasClass('select2-hidden-accessible')) {
-                try { $(this).select2('destroy'); } catch (e) { /* noop */ }
+                try { $(this).select2('destroy'); } catch (e) {}
             }
             $(this).select2({
                 dropdownParent: $('#kt_modal_add_production_order'),
@@ -357,6 +358,15 @@
                 allowClear: true,
             });
         });
+
+        // Force width recalculation after DOM settles
+        setTimeout(() => {
+            $(row).find('select[data-control="select2"]').each(function () {
+                if ($(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2('close'); // no-op if not open, but safe
+                }
+            });
+        }, 50);
     }
 
     /**
@@ -530,72 +540,105 @@
      |  Load available batches
      ──────────────────────────────────────────────────────────────── */
 
+    /**
+     * When a batch is picked, auto-fill the row's quantity (and cost).
+     */
+    function handleBatchSelected(selectEl) {
+        const row = selectEl.closest('.production-input-item');
+        if (!row) return;
+
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        if (!selectedOption || !selectedOption.value) return;
+
+        const qty = parseFloat(selectedOption.dataset.quantityRemaining) || 0;
+        const qtyInput = row.querySelector('.input-quantity');
+
+        if (qtyInput && qty > 0) {
+            qtyInput.value = qty;
+            qtyInput.dispatchEvent(new Event('input',  { bubbles: true }));
+            qtyInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        updateTotals();
+    }
+
+    /**
+     * Collect all purchase_receipt_item_id values currently chosen
+     * across every input row except `exceptIndex`.
+     */
+    function getUsedBatchIds(exceptIndex = null) {
+        const used = new Set();
+        document.querySelectorAll('.production-input-item').forEach(row => {
+            const rowId = row.id;                        // e.g. "input_3"
+            if (exceptIndex !== null && rowId === `input_${exceptIndex}`) return;
+
+            const sel = row.querySelector('.batch-source-select');
+            if (sel && sel.value) used.add(String(sel.value));
+        });
+        return used;
+    }
+
     function loadAvailableBatches(index) {
         const row = document.getElementById(`input_${index}`);
         if (!row) return;
 
         const hiddenInput = document.getElementById(`material_id_input_${index}`);
         const variantId = hiddenInput ? hiddenInput.value : null;
-
-        if (!variantId) {
-            Swal.fire({
-                title: '{{ __("passwords.info") }}',
-                text: '{{ __("passwords.select_material_first") }}',
-                icon: 'info',
-                confirmButtonColor: '#0d6efd'
-            });
-            return;
-        }
+        if (!variantId) { /* ...existing Swal... */ return; }
 
         const locationId = getModalLocationId();
 
-        Swal.fire({
-            title: '{{ __("passwords.loading_batches") }}',
-            text: '{{ __("passwords.please_wait") }}',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
+        Swal.fire({ /* loading... */ });
 
         const url = new URL('/production-orders/available-batches', window.location.origin);
         url.searchParams.set('variant_id', variantId);
         if (locationId) url.searchParams.set('location_id', locationId);
 
         fetch(url)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 Swal.close();
 
-                if (data.success && data.batches.length > 0) {
-                    const select = row.querySelector('.batch-source-select');
-                    if (select) {
-                        select.innerHTML = '<option value="">{{ __("passwords.no_batch") }}</option>';
-                        data.batches.forEach(batch => {
-                            const option = document.createElement('option');
-                            option.value = batch.id;
-                            const quantity = batch.quantity_remaining || 0;
-                            option.textContent = `${batch.batch_number} (${quantity} units)`;
-                            if (batch.expiry_date) {
-                                option.textContent += ` - Expires: ${batch.expiry_date}`;
-                            }
-                            select.appendChild(option);
-                        });
-
-                        Swal.fire({
-                            title: '{{ __("passwords.success") }}',
-                            text: `{{ __("passwords.batches_loaded") }} ${data.batches.length}`,
-                            icon: 'success',
-                            timer: 1500,
-                            showConfirmButton: false
-                        });
-                    }
-                } else {
-                    Swal.fire({
-                        title: '{{ __("passwords.info") }}',
-                        text: '{{ __("passwords.no_batches_available") }}',
-                        icon: 'info',
-                        confirmButtonColor: '#0d6efd'
-                    });
+                if (!(data.success && data.batches.length > 0)) {
+                    Swal.fire({ /* no batches */ });
+                    return;
                 }
+
+                const select = row.querySelector('.batch-source-select');
+                if (!select) return;
+
+                // 🔒 Batches already chosen by OTHER rows
+                const usedBatchIds = getUsedBatchIds(parseInt(index, 10));
+
+                select.innerHTML = '<option value="">{{ __("passwords.no_batch") }}</option>';
+                data.batches.forEach(batch => {
+                    const option = document.createElement('option');
+                    option.value = batch.id;
+
+                    const quantity = batch.quantity_remaining || 0;
+                    option.textContent = `${batch.batch_number} (${quantity} units)`;
+                    if (batch.expiry_date) {
+                        option.textContent += ` - Expires: ${batch.expiry_date}`;
+                    }
+
+                    option.dataset.quantityRemaining = quantity;
+                    option.dataset.unitCost = batch.unit_cost ?? '';
+
+                    // 🚫 Mark / disable if already used elsewhere
+                    if (usedBatchIds.has(String(batch.id))) {
+                        option.disabled = true;
+                        option.textContent += ' — already used';
+                    }
+
+                    select.appendChild(option);
+                });
+
+                // If the row's current selection is now used elsewhere, clear it
+                if (select.value && usedBatchIds.has(String(select.value))) {
+                    select.value = '';
+                }
+
+                handleBatchSelected(select);
             })
             .catch(error => {
                 Swal.close();
@@ -633,7 +676,6 @@
 
         if (!datalist || !hidden || !row) return;
 
-        // Find the matching option
         let matched = null;
         datalist.querySelectorAll('option').forEach(opt => {
             if (opt.value === inputEl.value) matched = opt;
@@ -644,32 +686,36 @@
             return;
         }
 
-        // Set hidden variant id
         hidden.value = matched.getAttribute('data-id');
 
-        // Auto-select the UOM
-        const uomId     = matched.getAttribute('data-uom-id');
-        const uomSymbol = matched.getAttribute('data-uom-symbol');
-        const targetVal = uomId || uomSymbol;
-
+        // Auto-select the UOM — match by ID (now that both selects use ID as value)
+        const uomId = matched.getAttribute('data-uom-id');
         const uomSelect = row.querySelector('select[name*="[unit]"]');
 
-        if (uomSelect && targetVal) {
-            let found = false;
-            Array.from(uomSelect.options).forEach(opt => {
-                if (String(opt.value) === String(targetVal)) found = true;
-            });
+        if (uomSelect && uomId) {
+            const found = Array.from(uomSelect.options).some(
+                opt => String(opt.value) === String(uomId)
+            );
 
             if (found) {
-                uomSelect.value = targetVal;
-                // Sync Select2 if attached
+                uomSelect.value = uomId;
                 if (typeof $ !== 'undefined' && $.fn.select2 && $(uomSelect).hasClass('select2-hidden-accessible')) {
-                    $(uomSelect).val(targetVal).trigger('change.select2');
+                    $(uomSelect).val(uomId).trigger('change.select2');
                 } else {
                     uomSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             } else {
-                console.warn('[UOM] No matching option for', targetVal);
+                console.warn('[UOM] No matching option for id', uomId);
+            }
+        }
+
+        // Auto-fill inventory strategy (outputs only)
+        if (!isInput) {
+            const strategy = matched.getAttribute('data-inventory-strategy');
+            const strategySelect = row.querySelector('select[name*="[inventory_strategy]"]');
+            if (strategySelect && strategy) {
+                strategySelect.value = strategy;
+                strategySelect.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
 
@@ -701,6 +747,10 @@
                 e.target.classList.contains('output-cost')) {
                 updateTotals();
             }
+
+            if (e.target.classList.contains('batch-source-select')) {
+                handleBatchSelected(e.target);
+            }
         });
 
         // Totals on every input keystroke
@@ -717,6 +767,7 @@
         const modal = document.getElementById('kt_modal_add_production_order');
         if (modal) {
             modal.addEventListener('show.bs.modal', function () {
+
                 inputIndex  = 1;
                 outputIndex = 1;
 

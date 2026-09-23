@@ -141,7 +141,7 @@ class AppServiceProvider extends ServiceProvider
                     'categories' => Category::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'sub_categories' => ProductCategory::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'uoms' => UnitOfMeasure::where('tenant_id', $tenantId)->where('isActive', 1)->get(),
-                    'variants' => ProductVariant::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
+                    'variants' => ProductVariant::with('product')->where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'products_allocate' => Product::with('variants')->where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'currencies' => Currency::where('tenant_id', $tenantId)->where('is_active', 1)->get(),
                     'locations' => Location::where('tenant_id', $tenantId)->where('is_active', 1)->get(),

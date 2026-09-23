@@ -26,8 +26,8 @@ class PurchaseReceiptItem extends Model
     ];
 
     protected $casts = [
-        'quantity_received' => 'integer',
-        'quantity_remaining' => 'integer',
+        'quantity_received'  => 'decimal:2',
+        'quantity_remaining' => 'decimal:2',
         'expiry_date' => 'date',
     ];
 

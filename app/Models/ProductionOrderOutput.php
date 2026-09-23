@@ -84,9 +84,19 @@ class ProductionOrderOutput extends Model
         return $this->belongsTo(ProductionOrder::class);
     }
 
-    public function productVariant(): BelongsTo
+    public function productVariant()
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function variant()
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function getProductVariantAttribute()
+    {
+        return $this->variant;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────
