@@ -286,12 +286,23 @@ class BatchController extends Controller
             }
 
             $createdIds = [];
+            $usedBatchNumbers = [];
 
             foreach ($validated['splits'] as $i => $split) {
                 $location = Location::find($split['location_id']);
-                $suffix   = $split['suffix'] ?? strtoupper(preg_replace('/[^A-Z0-9]/i', '', $location->name ?? 'L' . $split['location_id']));
+                $baseSuffix = $split['suffix'] ?? strtoupper(preg_replace('/[^A-Z0-9]/i', '', $location->name ?? 'L' . $split['location_id']));
+                $attempt = 0;
+                $childBatchNumber = $this->buildSplitBatchNumber($parent->batch_number, $baseSuffix);
 
-                $childBatchNumber = $this->buildSplitBatchNumber($parent->batch_number, $suffix);
+                while (
+                    in_array($childBatchNumber, $usedBatchNumbers) ||
+                    PurchaseReceiptItem::where('batch_number', $childBatchNumber)->exists()
+                ) {
+                    $attempt++;
+                    $childBatchNumber = $this->buildSplitBatchNumber($parent->batch_number, $baseSuffix, $attempt);
+                    if ($attempt > 20) throw new \Exception('Unable to generate a unique split batch number.');
+                }
+                $usedBatchNumbers[] = $childBatchNumber;
 
                 $child = PurchaseReceiptItem::create([
                     'purchase_receipt_id'    => $parent->purchase_receipt_id,
@@ -357,13 +368,18 @@ class BatchController extends Controller
         }
     }
 
-    private function buildSplitBatchNumber(string $parentBatch, string $suffix): string
+    private function buildSplitBatchNumber(string $parentBatch, string $suffix, int $attempt = 0): string
     {
-        $suffix = strtoupper(trim($suffix));
-        $suffix = preg_replace('/[^A-Z0-9]/', '', $suffix);
-        $suffix = substr($suffix, 0, 30);
+        $suffix = strtoupper(preg_replace('/[^A-Z0-9]/', '', $suffix));
+        $suffix = substr($suffix, 0, 40);   // keep it bounded
 
-        return $parentBatch . '-' . $suffix;
+        $candidate = $parentBatch . '-' . $suffix;
+
+        if ($attempt > 0) {
+            $candidate .= '-' . ($attempt + 1);
+        }
+
+        return $candidate;
     }
 
     /**

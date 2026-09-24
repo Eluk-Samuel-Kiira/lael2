@@ -1511,135 +1511,165 @@
             console.error('Form not found for order:', orderId);
             Swal.fire({
                 title: '{{ __("passwords.error") }}',
-                text: 'Could not find production form. Please refresh the page and try again.',
+                text: '{{ __("passwords.form_not_found") }}',
                 icon: 'error',
-                confirmButtonColor: '#0d6efd'
+                confirmButtonColor: '#0d6efd',
             });
             return;
         }
 
-        const submitButton = form.querySelector('button.btn-success');
-        
-        // Show loading
-        if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> {{ __("passwords.processing") }}...';
-        }
-
-        // ✅ Get form data including batch and expiry
         const formData = new FormData(form);
-        
-        const data = {
-            outputs: [],
+
+        // ── Base payload ──────────────────────────────────────────────
+        const payload = {
+            outputs: {},        // object keyed by data-key
             complete: true,
             batch_number: formData.get('batch_number') || null,
-            expiry_date: formData.get('expiry_date') || null,
-            notes: formData.get('notes') || null
+            expiry_date:  formData.get('expiry_date')  || null,
+            notes:        formData.get('notes')        || null,
         };
 
-        // ✅ Collect output data - allow some to be 0
-        let hasQuantity = false;
+        // Multi-shop allocation (only present when rendered)
+        const locField  = document.getElementById(`output_location_${orderId}`);
+        const deptField = document.getElementById(`output_department_${orderId}`);
+        if (locField)  payload.output_location_id   = locField.value || null;
+        if (deptField) payload.output_department_id = deptField.value || null;
+
+        // ── Collect output rows ───────────────────────────────────────
         const errors = [];
-        let outputCount = 0;
+        let hasQuantity = false;
 
-        document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
-            outputCount++;
-            const outputId = input.dataset.outputId;
-            const actualQuantity = parseFloat(input.value) || 0;
-            
-            // ✅ Get defective quantity from the same row
-            const row = input.closest('.card-dashed');
-            const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
-            const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
+        form.querySelectorAll('.output-row').forEach(row => {
+            const key = row.dataset.key;   // numeric id OR "new_N"
 
-            // ✅ Get product name for error messages
-            const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
-            const productName = nameEl ? nameEl.textContent : 'Product';
+            const variantInput = row.querySelector('.output-variant-id')
+                            || row.querySelector('input[name*="[product_variant_id]"]');
+            const qtyInput  = row.querySelector('.actual-quantity-input');
+            const defInput  = row.querySelector('.defective-quantity-input');
+            const unitSel   = row.querySelector('.output-unit-select')
+                        || row.querySelector('select[name*="[unit]"]');
+            const stratSel  = row.querySelector('.output-strategy-select')
+                        || row.querySelector('select[name*="[inventory_strategy]"]');
 
-            // ✅ Track if any output has quantity > 0
-            if (actualQuantity > 0) {
-                hasQuantity = true;
+            const variantId = variantInput?.value || null;
+            const qty       = parseFloat(qtyInput?.value || 0) || 0;
+            const defective = parseFloat(defInput?.value || 0) || 0;
+
+            const name =
+                row.querySelector('.output-name-display')?.textContent?.trim()
+                || row.querySelector('.output-variant-search')?.value?.trim()
+                || '—';
+
+            // Skip completely blank new rows
+            if (key?.startsWith('new_') && !variantId && qty <= 0 && defective <= 0) {
+                return;
             }
 
-            // ✅ Validate: Actual quantity cannot be negative
-            if (actualQuantity < 0) {
-                errors.push(`"${productName}" - Actual quantity cannot be negative`);
+            if (!variantId) {
+                errors.push(`"${name}" — {{ __("passwords.select_a_product") }}`);
+                return;
+            }
+            if (qty < 0) {
+                errors.push(`"${name}" — {{ __("passwords.quantity_cannot_be_negative") }}`);
+            }
+            if (defective > qty) {
+                errors.push(
+                    `"${name}" — {{ __("passwords.defective_cannot_exceed_actual") }} ` +
+                    `(${defective} > ${qty})`
+                );
             }
 
-            // ✅ Validate: Defective quantity cannot exceed actual quantity
-            if (defectiveQuantity > actualQuantity) {
-                errors.push(`"${productName}" - Defective quantity (${defectiveQuantity}) cannot exceed actual quantity (${actualQuantity})`);
-            }
+            if (qty > 0) hasQuantity = true;
 
-            data.outputs.push({
-                output_id: outputId,
-                actual_quantity: actualQuantity,
-                defective_quantity: defectiveQuantity
-            });
+            // Key by the row's data-key so the controller sees
+            // { "123": {...}, "new_0": {...} } — NOT array indices.
+            payload.outputs[key] = {
+                product_variant_id: variantId,
+                actual_quantity:    qty,
+                defective_quantity: defective,
+                unit:               unitSel?.value  || null,
+                inventory_strategy: stratSel?.value || 'quantity',
+            };
         });
 
-        // ✅ Show specific validation errors
+        // ── Validation ────────────────────────────────────────────────
         if (errors.length > 0) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
                 html: errors.join('<br>'),
                 icon: 'warning',
-                confirmButtonColor: '#0d6efd'
+                confirmButtonColor: '#0d6efd',
             });
-            if (submitButton) {
-                submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-            }
             return;
         }
 
-        // ✅ Validate: At least one output must have quantity > 0
         if (!hasQuantity) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
                 text: '{{ __("passwords.enter_at_least_one_actual_quantity") }}',
                 icon: 'warning',
-                confirmButtonColor: '#0d6efd'
+                confirmButtonColor: '#0d6efd',
             });
-            if (submitButton) {
-                submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-            }
             return;
         }
 
-        // ✅ Show confirmation with summary including batch info
+        if (Object.keys(payload.outputs).length === 0) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("passwords.at_least_one_output_required") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd',
+            });
+            return;
+        }
+
+        // Multi-shop: location + department required
+        const isMultiShop = document.getElementById(`output_location_${orderId}`) !== null;
+        if (isMultiShop && (!payload.output_location_id || !payload.output_department_id)) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("passwords.output_allocation_required") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd',
+            });
+            return;
+        }
+
+        // ── Confirmation summary ──────────────────────────────────────
         let summaryHtml = '{{ __("passwords.complete_production_confirmation") }}<br><br>';
-        
-        document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
-            const actualQuantity = parseFloat(input.value) || 0;
-            
-            const row = input.closest('.card-dashed');
-            const defectiveInput = row ? row.querySelector('.defective-quantity-input') : null;
-            const defectiveQuantity = defectiveInput ? parseFloat(defectiveInput.value) || 0 : 0;
-            const nameEl = row ? row.querySelector('.fw-bold.mb-0') : null;
-            const productName = nameEl ? nameEl.textContent : 'Product';
-            
-            if (actualQuantity > 0) {
-                summaryHtml += `<strong>${productName}:</strong> ${actualQuantity} units`;
-                if (defectiveQuantity > 0) {
-                    summaryHtml += ` (${defectiveQuantity} defective)`;
-                }
-                summaryHtml += `<br>`;
+
+        Object.entries(payload.outputs).forEach(([key, o]) => {
+            if (o.actual_quantity <= 0) return;
+
+            const row = form.querySelector(`.output-row[data-key="${key}"]`);
+            const name =
+                row?.querySelector('.output-name-display')?.textContent?.trim()
+                || row?.querySelector('.output-variant-search')?.value?.trim()
+                || '—';
+
+            summaryHtml += `<strong>${escapeHtml(name)}:</strong> ${o.actual_quantity}`;
+            if (o.defective_quantity > 0) {
+                summaryHtml += ` <span class="text-danger">(${o.defective_quantity} {{ __("passwords.defective") }})</span>`;
             }
+            summaryHtml += '<br>';
         });
 
-        // ✅ Add batch and expiry info to confirmation
-        if (data.batch_number) {
-            summaryHtml += `<br><strong>{{ __("passwords.batch_number") }}:</strong> ${data.batch_number}`;
+        if (payload.batch_number) {
+            summaryHtml += `<br><strong>{{ __("passwords.batch_number") }}:</strong> ${escapeHtml(payload.batch_number)}`;
         }
-        if (data.expiry_date) {
-            summaryHtml += `<br><strong>{{ __("passwords.expiry_date") }}:</strong> ${data.expiry_date}`;
+        if (payload.expiry_date) {
+            summaryHtml += `<br><strong>{{ __("passwords.expiry_date") }}:</strong> ${escapeHtml(payload.expiry_date)}`;
         }
-        if (data.notes) {
-            summaryHtml += `<br><strong>{{ __("passwords.notes") }}:</strong> ${data.notes}`;
+        if (isMultiShop) {
+            const locName  = document.getElementById(`output_location_${orderId}`)?.selectedOptions[0]?.textContent || '';
+            const deptName = document.getElementById(`output_department_${orderId}`)?.selectedOptions[0]?.textContent || '';
+            summaryHtml += `<br><br><strong>{{ __("passwords.production_allocation") }}:</strong> ${escapeHtml(locName)} / ${escapeHtml(deptName)}`;
+        }
+        if (payload.notes) {
+            summaryHtml += `<br><strong>{{ __("passwords.notes") }}:</strong> ${escapeHtml(payload.notes)}`;
         }
 
+        // ── Confirm + submit ──────────────────────────────────────────
         Swal.fire({
             title: '{{ __("passwords.complete_production") }}',
             html: summaryHtml,
@@ -1656,25 +1686,22 @@
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         'Accept': 'application/json',
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(payload),
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        throw new Error(data.message);
-                    }
-                    return data;
-                })
-                .catch(error => {
-                    throw new Error(error.message);
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.success) throw new Error(d.message || '{{ __("passwords.production_complete_failed") }}');
+                    return d;
                 });
-            }
+            },
         })
-        .then((result) => {
+        .then(result => {
             if (result.isConfirmed && result.value) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById(`completeProductionModal${orderId}`));
+                const modal = bootstrap.Modal.getInstance(
+                    document.getElementById(`completeProductionModal${orderId}`)
+                );
                 if (modal) modal.hide();
 
                 Swal.fire({
@@ -1682,13 +1709,10 @@
                     text: result.value.message,
                     icon: 'success',
                     timer: 2000,
-                    showConfirmButton: false
+                    showConfirmButton: false,
                 }).then(() => {
-                    if (result.value.redirect) {
-                        window.location.href = result.value.redirect;
-                    } else {
-                        location.reload();
-                    }
+                    if (result.value.redirect) window.location.href = result.value.redirect;
+                    else location.reload();
                 });
             }
         })
@@ -1697,45 +1721,49 @@
                 title: '{{ __("passwords.error") }}',
                 text: error.message || '{{ __("passwords.production_complete_failed") }}',
                 icon: 'error',
-                confirmButtonColor: '#0d6efd'
+                confirmButtonColor: '#0d6efd',
             });
-        })
-        .finally(() => {
-            if (submitButton) {
-                submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="bi bi-check-circle me-2"></i> {{ __("passwords.complete_production") }}';
-            }
         });
     }
 
-    // ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', function() {
-        document.addEventListener('input', function(e) {
-            const target = e.target;
-            if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
-                updateProductionSummary();
-            }
+    
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('input', function (e) {
+        const t = e.target;
+        if (t.classList.contains('actual-quantity-input') ||
+            t.classList.contains('defective-quantity-input')) {
+            const form = t.closest('form[id^="completeProductionForm"]');
+            if (!form) return;
+            updateProductionSummary(form.id.replace('completeProductionForm', ''));
+        }
+    });
+
+    // Seed on load
+    document.querySelectorAll('form[id^="completeProductionForm"]').forEach(form => {
+        updateProductionSummary(form.id.replace('completeProductionForm', ''));
         });
     });
 
-    function updateProductionSummary() {
-        let totalProduced = 0;
+    function updateProductionSummary(orderId) {
+        let totalProduced  = 0;
         let totalDefective = 0;
-        
-        document.querySelectorAll('.actual-quantity-input').forEach(input => {
-            totalProduced += parseFloat(input.value) || 0;
-        });
-        
-        document.querySelectorAll('.defective-quantity-input').forEach(input => {
-            totalDefective += parseFloat(input.value) || 0;
-        });
-        
-        // Update displays if they exist
-        const producedDisplay = document.getElementById('total_produced_display');
-        const defectiveDisplay = document.getElementById('total_defective_display');
-        
-        if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
-        if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
+
+        document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`)
+            .forEach(i => totalProduced += parseFloat(i.value) || 0);
+
+        document.querySelectorAll(`#completeProductionForm${orderId} .defective-quantity-input`)
+            .forEach(i => totalDefective += parseFloat(i.value) || 0);
+
+        const p = document.getElementById(`total_produced_display_${orderId}`);
+        const d = document.getElementById(`total_defective_display_${orderId}`);
+        if (p) p.textContent = totalProduced.toFixed(2);
+        if (d) d.textContent = totalDefective.toFixed(2);
     }
 
     // ── CANCEL PRODUCTION ────────────────────────────────────────────────────────

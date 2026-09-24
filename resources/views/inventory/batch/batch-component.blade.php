@@ -16,7 +16,7 @@
                     <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('passwords.department')}}</th>
                     <th class="min-w-100px text-end">{{__('passwords.status')}}</th>
-                    <th class="min-w-100px text-end">{{__('passwords.action')}}</th>
+                    <th class="min-w-100px text-end">{{__('passwords.actions')}}</th>
                 </tr>
             </thead>
             <tbody class="text-gray-600 fw-semibold">
