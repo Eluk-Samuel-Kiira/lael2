@@ -12,6 +12,7 @@ use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
 {
+
     /**
      * Display a listing of the resource.
      */
@@ -19,7 +20,7 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view expense')) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -29,68 +30,88 @@ class ExpenseController extends Controller
             }
             abort(403);
         }
-        
-        // Get per_page from request, default to 15
+
+        // ── per_page handling ────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
             $perPage = 15;
         }
-        
-        // Build the query with relationships
-        $query = Expense::with(['tenant', 'paymentMethod', 'category']);
-        
-        // If user is NOT super_admin, filter by tenant
+
+        // ── Visibility rule ──────────────────────────────────────────
+        // super_admin / admin → see everything in their tenant
+        // everyone else        → only expenses they created
+        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+
+        // ── Build query ──────────────────────────────────────────────
+        $query = Expense::with([
+            'tenant',
+            'paymentMethod',
+            'category',
+            'location',
+            'department',
+        ]);
+
+        // Tenant filter — super_admin can cross tenants
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
-        
-        // Apply search if provided
+
+        // Non-admins see only their own expenses
+        if (!$isAdmin) {
+            $query->where('created_by', $user->id);
+        }
+
+        // ── Search ───────────────────────────────────────────────────
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+
+            $query->where(function ($q) use ($search) {
                 $q->where('vendor_name', 'like', "%{$search}%")
                 ->orWhere('expense_number', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%")
                 ->orWhere('payment_status', 'like', "%{$search}%")
                 ->orWhereHas('paymentMethod', fn($p) => $p->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"));
+                ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('location', fn($l) => $l->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('department', fn($d) => $d->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
+
+        // ── Paginate ─────────────────────────────────────────────────
         $expenses = $query->latest()->paginate($perPage);
-        
+
         // Preserve per_page and search in pagination links
-        $expenses->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        // ✅ Get active payment methods with location filtering
+        $expenses->appends([
+            'per_page' => $perPage,
+            'search'   => $request->search,
+        ]);
+
+        // ── Active payment methods with location filtering ───────────
         $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->when($user->location_id, function($query, $locationId) {
-                return $query->where(function($q) use ($locationId) {
+            ->when($user->location_id, function ($query, $locationId) {
+                return $query->where(function ($q) use ($locationId) {
                     $q->whereNull('location_id')
-                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string)$locationId)]);
+                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string) $locationId)]);
                 });
             })
             ->orderBy('name')
             ->get();
-        
+
+        // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
+
         if ($request->ajax() && $bladeToReload === 'reloadExpenseComponent') {
             return view('procurement.expense.component', [
-                'expenses' => $expenses,
+                'expenses'       => $expenses,
                 'PaymentMethods' => $activePaymentMethods,
             ])->render();
         }
-        
-        // Regular page load
+
+        // ── Regular page load ───────────────────────────────────────
         return view('procurement.expense-index', [
-            'expenses' => $expenses,
+            'expenses'       => $expenses,
             'PaymentMethods' => $activePaymentMethods,
         ]);
     }

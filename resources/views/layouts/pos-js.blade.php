@@ -1662,64 +1662,53 @@ document.addEventListener('click', e => { if (e.target.closest('#rcpt-print-btn'
             return response.json();
         })
         .then(data => {
-            btn.removeAttribute('data-kt-indicator'); 
+            btn.removeAttribute('data-kt-indicator');
             btn.disabled = false;
-            
-            if (data.success) {
-                toastr.success(data.message || '{{ __("pagination.payment_completed") }}');
 
-                // ── Clear resume state now that payment is done ───
-                window.resumedOrderId     = null;
-                window.resumedOrderNumber = null;
-                bargainDiscount            = 0;
+            if (!data.success) {
+                toastr.error(data.message || '{{ __("pagination.payment_failed") }}');
+                if (data.debug)  console.error('[Debug Info]', data.debug);
+                if (data.errors) console.error('[Validation Errors]', data.errors);
+                return;
+            }
 
+            toastr.success(data.message || '{{ __("pagination.payment_completed") }}');
+
+            window.resumedOrderId     = null;
+            window.resumedOrderNumber = null;
+            bargainDiscount           = 0;
+
+            try {
                 var payModalEl = g('paymentModal');
-                payModalEl.addEventListener('hidden.bs.modal', function onHidden() {
-                    payModalEl.removeEventListener('hidden.bs.modal', onHidden);
-                    window.generateMultiPaymentReceipt(data.order);
-                });
-                bootstrap.Modal.getInstance(payModalEl).hide();
+                if (payModalEl) {
+                    payModalEl.addEventListener('hidden.bs.modal', function onHidden() {
+                        payModalEl.removeEventListener('hidden.bs.modal', onHidden);
+                        if (typeof window.generateMultiPaymentReceipt === 'function') {
+                            window.generateMultiPaymentReceipt(data.order);
+                        }
+                    });
+
+                    var modalInstance = bootstrap.Modal.getInstance(payModalEl);
+                    if (modalInstance) modalInstance.hide();
+                    else new bootstrap.Modal(payModalEl).hide();
+                }
+
                 if (typeof clearCart === 'function') clearCart();
-            } else {
-                // ✅ Show the exact error message from server
-                var errorMessage = data.message || '{{ __("pagination.payment_failed") }}';
-                toastr.error(errorMessage);
-                
-                // ✅ If there's debug info, log it to console
-                if (data.debug) {
-                    console.error('[Debug Info]', data.debug);
-                }
-                
-                // ✅ If there are validation errors, show them
-                if (data.errors) {
-                    var errorList = Object.values(data.errors).flat().join('\n');
-                    console.error('[Validation Errors]', errorList);
-                }
+            } catch (postSuccessError) {
+                console.error('[processSplitPayments] post-success error:', postSuccessError);
             }
         })
         .catch(error => {
-            btn.removeAttribute('data-kt-indicator'); 
+            btn.removeAttribute('data-kt-indicator');
             btn.disabled = false;
-            
-            // ✅ Extract the error message
+
             var errorMessage = error.message || '{{ __("pagination.payment_error") }}';
-            
-            // ✅ Show the exact error to the user
             toastr.error(errorMessage);
-            
-            // ✅ Log detailed error to console
             console.error('[processSplitPayments] error:', error);
-            
-            // ✅ If there's debug info, log it
-            if (error.debug) {
-                console.error('[Debug Info]', error.debug);
-            }
-            
-            // ✅ If there are validation errors, log them
-            if (error.errors) {
-                console.error('[Validation Errors]', error.errors);
-            }
+            if (error.debug)  console.error('[Debug Info]', error.debug);
+            if (error.errors) console.error('[Validation Errors]', error.errors);
         });
+
     };
 
     document.addEventListener('click', function (e) {

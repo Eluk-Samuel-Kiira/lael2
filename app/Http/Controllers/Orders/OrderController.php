@@ -114,6 +114,12 @@ class OrderController extends Controller
             $perPage = 15;
         }
         
+        // ── Determine visibility scope ───────────────────────────────
+        // Super admins and admins see everything within their tenant.
+        // Everyone else sees only what they personally created.
+        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+
+
         // Build the query with relationships
         $query = Order::with([
             'orderItems',
@@ -127,6 +133,11 @@ class OrderController extends Controller
         // If user is NOT super_admin, filter by tenant
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $tenantId);
+        }
+
+        // Non-admins see only their own orders
+        if (!$isAdmin) {
+            $query->where('created_by', $user->id);
         }
         
         // Apply search if provided

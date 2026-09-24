@@ -16,6 +16,7 @@
                     <th class="min-w-125px">{{__('pagination.amount')}}</th> 
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
+                    <th class="min-w-125px">{{__('pagination.created_by')}}</th>
                     <th class="min-w-125px">{{__('pagination.approve')}}</th>
                     <th class="min-w-125px">{{__('pagination.payment_status')}}</th>
                     <th class="min-w-100px text-end">{{__('auth._actions')}}</th>
@@ -98,7 +99,16 @@
                                     </span>
                                 @endif
                             </td>
-                            <td>{{ $expense->created_at->format('d M Y, h:i a') }}</td>
+                            <td>
+                                <span class="badge badge-light-primary fw-bold px-3 py-2">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    {{ $expense->created_at->format('d M Y, h:i a') }}</td> 
+                                <span>
+                            <td>
+                                <span class="badge badge-light-warning fw-bold px-3 py-2">
+                                    {{ $expense->creator->name ?? 'N/A' }}
+                                </span>
+                            </td>
                             <td>
                                 @if($expense->approved_at)
                                     <span class="badge badge-success">

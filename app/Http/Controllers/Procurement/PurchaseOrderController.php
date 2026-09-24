@@ -884,9 +884,9 @@ class PurchaseOrderController extends Controller
             'selected_taxes' => 'nullable|array',
             'selected_taxes.*' => 'exists:taxes,id',
             'batch_number' => 'required|string|max:100',
-            'payment_method_id' => 'nullable|exists:payment_methods,id',
-            'payment_amount' => 'nullable|numeric|min:0',
-            'payment_date' => 'nullable|date',
+            'payment_method_id' => 'required_if:payment_amount,gt:0|nullable|exists:payment_methods,id',
+            'payment_amount'    => 'required|numeric|gt:0',
+            'payment_date'      => 'nullable|date',
         ]);
 
         // Generate batch number with incoming value + date + random
@@ -898,6 +898,37 @@ class PurchaseOrderController extends Controller
                 'success' => false,
                 'message' => __('passwords.cannot_receive_items_from_current_status'),
             ]);
+        }
+
+        // Check for over supply of the ordered quantities
+        $overReceipts = [];
+        foreach ($validated['items'] as $itemData) {
+            if (($itemData['quantity_received'] ?? 0) <= 0) continue;
+
+            $poi = PurchaseOrderItem::find($itemData['purchase_order_item_id']);
+            if (!$poi) continue;
+
+            $newTotal = (float) $poi->received_quantity + (float) $itemData['quantity_received'];
+            if ($newTotal > (float) $poi->quantity) {
+                $overReceipts[] = [
+                    'purchase_order_item_id' => $poi->id,
+                    'product_name'           => $poi->product_name,
+                    'ordered'                => (float) $poi->quantity,
+                    'previously_received'    => (float) $poi->received_quantity,
+                    'receiving_now'          => (float) $itemData['quantity_received'],
+                    'would_total'            => $newTotal,
+                    'over_by'                => $newTotal - (float) $poi->quantity,
+                ];
+            }
+        }
+
+        if (!empty($overReceipts) && !$request->boolean('allow_over_receipt')) {
+            return response()->json([
+                'success'          => false,
+                'requires_confirm' => true,
+                'message'          => __('passwords.over_receipt_warning'),
+                'over_receipts'    => $overReceipts,
+            ], 422);
         }
 
         DB::beginTransaction();
@@ -936,12 +967,6 @@ class PurchaseOrderController extends Controller
                     // Calculate item cost using the ACTUAL unit cost
                     $itemCost = $actualUnitCost * $quantityReceived;
                     $currentReceiptSubtotal += $itemCost;
-                    
-                    // Validate quantity doesn't exceed ordered quantity
-                    $newReceivedQuantity = $purchaseOrderItem->received_quantity + $quantityReceived;
-                    if ($newReceivedQuantity > $purchaseOrderItem->quantity) {
-                        throw new \Exception(__('passwords.cannot_receive_more_than_ordered'));
-                    }
 
                     // Get the variant from the purchase order item
                     $variant = ProductVariant::find($itemData['product_variant_id']);
@@ -1002,6 +1027,7 @@ class PurchaseOrderController extends Controller
                     }
 
                     // Update purchase order item received quantity
+                    $newReceivedQuantity = (float) $purchaseOrderItem->received_quantity + (float) $quantityReceived;
                     $purchaseOrderItem->received_quantity = $newReceivedQuantity;
                     $purchaseOrderItem->save();
 
@@ -1174,7 +1200,18 @@ class PurchaseOrderController extends Controller
                     throw new \Exception(__('pagination.payment_method_not_found'));
                 }
 
-                $paymentAmount = min((float) $validated['payment_amount'], $currentReceiptPayable);
+                $requestedAmount = (float) $validated['payment_amount'];
+                $paymentAmount   = min($requestedAmount, $currentReceiptPayable);
+
+                if ($paymentAmount < $requestedAmount) {
+                    \Log::info('[Receiving] Payment clamped to receipt payable', [
+                        'purchase_order_id'  => $purchaseOrder->id,
+                        'purchase_receipt_id'=> $purchaseReceipt->id,
+                        'requested'          => $requestedAmount,
+                        'receipt_payable'    => $currentReceiptPayable,
+                        'charged'            => $paymentAmount,
+                    ]);
+                }
 
                 $transactionLog = app('payment-transaction')->recordTransaction([
                     'user_id' => $user->id,

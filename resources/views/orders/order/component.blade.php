@@ -15,7 +15,7 @@
                     <th class="min-w-125px">{{__('passwords.order_number')}}</th>
                     <th class="min-w-125px">{{__('passwords._customer')}}</th>
                     <th class="min-w-125px">{{__('passwords.location')}}</th>
-                    <th class="min-w-125px">{{__('passwords._type')}}</th>
+                    <th class="min-w-125px">{{__('pagination.created_by')}}</th>
                     <th class="min-w-125px">{{__('passwords._status')}}</th>
                     <th class="min-w-125px">{{__('passwords._source')}}</th>
                     <th class="min-w-125px">{{__('passwords._amount')}}</th>
@@ -68,7 +68,7 @@
                         </td>
 
                         <td>
-                            <span class="badge badge-light-primary fw-bold fs-8 px-3 py-2">{{ ucwords($order->type) }}</span>
+                            <span class="badge badge-light-primary fw-bold fs-8 px-3 py-2">{{ ucwords($order->orderCreater->name) }}</span>
                         </td>
 
                         <td>

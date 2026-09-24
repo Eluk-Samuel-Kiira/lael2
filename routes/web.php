@@ -313,6 +313,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::post('/assign', [BatchController::class, 'assign'])->name('assign');
             Route::post('/unassign', [BatchController::class, 'unassign'])->name('unassign');
             Route::post('/details', [BatchController::class, 'details'])->name('details');
+            Route::post('/split', [BatchController::class, 'split'])->name('split');
         });
 
 

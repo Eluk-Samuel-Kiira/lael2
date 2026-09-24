@@ -16,6 +16,7 @@
                     <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('passwords.department')}}</th>
                     <th class="min-w-100px text-end">{{__('passwords.status')}}</th>
+                    <th class="min-w-100px text-end">{{__('passwords.action')}}</th>
                 </tr>
             </thead>
             <tbody class="text-gray-600 fw-semibold">
@@ -63,6 +64,24 @@
                                     <span class="badge badge-light-info">{{ __('passwords.available') }}</span>
                                 @endif
                             </td>
+                            <td class="text-end">
+                                @if($batch->location_id && $batch->department_id)
+                                    <span class="badge badge-light-success">{{ __('passwords.assigned') }}</span>
+                                @elseif($batch->location_id || $batch->department_id)
+                                    <span class="badge badge-light-warning">{{ __('passwords.partial') }}</span>
+                                @else
+                                    <span class="badge badge-light-info">{{ __('passwords.available') }}</span>
+                                @endif
+
+                                @can('edit inventory')
+                                    <button type="button"
+                                            class="btn btn-sm btn-light-primary ms-2"
+                                            onclick="openSplitBatchModal({{ $batch->id }}, '{{ $batch->batch_number }}', {{ (float) ($batch->quantity_remaining ?? $batch->quantity_received) }})">
+                                        <i class="bi bi-scissors"></i>
+                                    </button>
+                                @endcan
+                            </td>
+                            @include('inventory.batch.split-modal')
                         </tr>
                     @endforeach
                 @endif
