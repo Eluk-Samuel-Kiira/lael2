@@ -1,200 +1,15 @@
-{{-- resources/views/manufacturing/production-order/start-modal.blade.php --}}
-<!-- START PRODUCTION MODAL -->
-<div class="modal fade" id="startProductionModal{{ $order->id }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title text-white">
-                    <i class="bi bi-play-fill me-2"></i>
-                    {{ __('passwords.start_production') }} - {{ $order->production_number }} - 
-                    
-                    <div class="badge badge-light fw-bold">
-                        {{ $order->location->name ?? __('pagination._none') }}
-                    </div>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info d-flex align-items-center">
-                    <i class="bi bi-info-circle fs-2 me-3"></i>
-                    <div>
-                        <strong>{{ __('passwords.start_production_info') }}</strong><br>
-                        {{ __('passwords.start_production_info_text') }}
-                    </div>
-                    <div class="badge badge-light fw-bold">
-                        {{ $order->location->name ?? __('pagination._none') }}
-                    </div>
-                </div>
+@php
+    $isSingleShop = tenant_is_single_shop($order->tenant_id);
+    $uomsById     = $uoms->keyBy('id');
+@endphp
 
-                <!-- Input Summary -->
-                <div class="card card-flush bg-light-danger mb-4">
-                    <div class="card-header">
-                        <h6 class="card-title">
-                            <i class="bi bi-box-arrow-in-down me-2 text-danger"></i>
-                            {{ __('passwords.input_materials') }}
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        @foreach($order->inputs as $input)
-                            @php
-                                $variant     = $input->productVariant;
-                                $available   = $input->available_quantity;
-                                $needed      = (float) $input->planned_quantity;
-                                $isAvailable = $available >= $needed;
-                                $source      = $input->availability_source;
-                            @endphp
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span>
-                                    {{ $variant->name ?? 'N/A' }}
-                                    @if($input->purchase_receipt_item_id && $input->purchaseReceiptItem)
-                                        <small class="text-muted d-block">
-                                            <i class="bi bi-upc-scan me-1"></i>
-                                            {{ __('passwords.batch') }}: {{ $input->purchaseReceiptItem->batch_number }}
-                                        </small>
-                                    @elseif($source === 'batch_fifo')
-                                        <small class="text-muted d-block">
-                                            <i class="bi bi-stack me-1"></i>
-                                            {{ __('passwords.all_batches') }}
-                                        </small>
-                                    @elseif($source === 'serial')
-                                        <small class="text-muted d-block">
-                                            <i class="bi bi-hash me-1"></i>
-                                            {{ __('passwords.serial_numbers') }}
-                                        </small>
-                                    @endif
-                                </span>
-                                <span>
-                                    <span class="fw-bold {{ $isAvailable ? 'text-success' : 'text-danger' }}">
-                                        {{ number_format($available, 2) }}
-                                    </span>
-                                    / {{ number_format($needed, 2) }} {{ $input->unit }}
-                                    @if(!$isAvailable)
-                                        <span class="badge badge-danger ms-2">
-                                            <i class="bi bi-exclamation-triangle me-1"></i>
-                                            {{ __('passwords.insufficient_stock') }}
-                                        </span>
-                                    @else
-                                        <span class="badge badge-success ms-2">
-                                            <i class="bi bi-check-circle me-1"></i>
-                                            {{ __('passwords.available') }}
-                                        </span>
-                                    @endif
-                                </span>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-
-                <!-- ✅ ALWAYS SHOW FORM - Even when cost is 0 -->
-                <div class="card card-flush bg-light-primary mb-4">
-                    <div class="card-header">
-                        <h6 class="card-title">
-                            <i class="bi bi-credit-card me-2 text-primary"></i>
-                            {{ $order->estimated_cost > 0 ? __('payments.payment_information') : __('passwords.production_information') }}
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        @if($order->estimated_cost > 0)
-                            <div class="alert alert-warning">
-                                <i class="bi bi-info-circle me-2"></i>
-                                {{ __('passwords.start_production_payment_info') }}
-                            </div>
-                        @else
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle me-2"></i>
-                                {{ __('passwords.start_production_no_payment_info') }}
-                            </div>
-                        @endif
-
-                        {{-- ✅ FORM IS ALWAYS PRESENT --}}
-                        <form id="startProductionForm{{ $order->id }}">
-                            @csrf
-                            
-                            @if($order->estimated_cost > 0)
-                                <div class="mb-3">
-                                    <label class="form-label required">{{ __('payments.payment_method') }}</label>
-                                    <select name="payment_method_id" class="form-select" required>
-                                        <option value="">{{ __('payments.select_payment_method') }}</option>
-                                        @if(isset($paymentMethods) && $paymentMethods->count() > 0)
-                                            @foreach($paymentMethods as $method)
-                                                <option value="{{ $method->id }}">
-                                                    {{ $method->name }} 
-                                                    ({{ $method->account_number ?? 'N/A' }})
-                                                </option>
-                                            @endforeach
-                                        @else
-                                            <option value="" disabled>No payment methods available</option>
-                                        @endif
-                                    </select>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label required">{{ __('passwords.production_cost') }}</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">{{ currency_symbol() }}</span>
-                                        <input type="number" 
-                                               name="withdrawal_amount" 
-                                               class="form-control" 
-                                               value="{{ number_format($order->estimated_cost, 2) }}" 
-                                               min="0.01" 
-                                               step="0.01"
-                                               required>
-                                    </div>
-                                    <small class="text-muted">{{ __('passwords.estimated_cost') }}: {{ currency_symbol() }}{{ number_format($order->estimated_cost, 2) }}</small>
-                                </div>
-                            @else
-                                {{-- ✅ Hidden fields when cost is 0 --}}
-                                <input type="hidden" name="payment_method_id" value="">
-                                <input type="hidden" name="withdrawal_amount" value="0">
-                                <div class="alert alert-success">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    {{ __('passwords.no_payment_required') }}
-                                </div>
-                            @endif
-
-                            <div class="mb-3">
-                                <label class="form-label">{{ __('passwords.notes') }}</label>
-                                <textarea name="notes" class="form-control" rows="2" 
-                                    placeholder="{{ __('passwords.start_production_notes') }}"></textarea>
-                            </div>
-
-                            <input type="hidden" name="order_id" value="{{ $order->id }}">
-                            <input type="hidden" name="estimated_cost" value="{{ $order->estimated_cost }}">
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="d-flex justify-content-between border-top pt-4">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">
-                        <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
-                    </button>
-                    <button type="button" class="btn btn-warning" onclick="startProductionWithPayment({{ $order->id }})">
-                        <i class="bi bi-play-fill me-2"></i>
-                        {{ __('passwords.start_production') }}
-                        @if($order->estimated_cost > 0)
-                            <span class="badge bg-light text-dark ms-2">
-                                {{ currency_symbol() }}{{ number_format($order->estimated_cost, 2) }}
-                            </span>
-                        @endif
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-
-{{-- resources/views/manufacturing/production-order/complete-modal.blade.php --}}
 <div class="modal fade" id="completeProductionModal{{ $order->id }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-success">
                 <h5 class="modal-title text-white">
                     <i class="bi bi-check-circle me-2"></i>
-                    {{ __('passwords.complete_production') }} - {{ $order->production_number }} - 
-                    
+                    {{ __('passwords.complete_production') }} - {{ $order->production_number }} -
                     <div class="badge badge-light fw-bold">
                         {{ $order->location->name ?? __('pagination._none') }}
                     </div>
@@ -202,26 +17,17 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
 
-            {{-- max-height trimmed from 70vh to 60vh so the footer below
-                 always has guaranteed room, regardless of viewport height --}}
             <div class="modal-body scroll-y mx-5 my-7" style="max-height: 60vh; overflow-y: auto;">
 
                 <div class="alert alert-info d-flex align-items-center mb-5">
                     <i class="bi bi-info-circle fs-2 me-3"></i>
-                    <div>
-                        {{ __('passwords.complete_production_instruction') }}
-                    </div>
+                    <div>{{ __('passwords.complete_production_instruction') }}</div>
                 </div>
 
-                {{-- Form still wraps ALL fields (batch info, outputs, summary,
-                     notes) — only the action buttons moved out of it and into
-                     modal-footer below. JS reads this form by the same ID
-                     (completeProductionForm{{ $order->id }}), so nothing in
-                     pos-scripts.js needs to change. --}}
                 <form id="completeProductionForm{{ $order->id }}">
                     @csrf
 
-                    {{-- ─── BATCH & EXPIRY INFORMATION ─────────────────────────── --}}
+                    {{-- ─── BATCH & EXPIRY ─────────────────────────────────── --}}
                     <div class="card card-flush bg-light mb-6">
                         <div class="card-header">
                             <h3 class="card-title">
@@ -236,11 +42,8 @@
                                         {{ __('passwords.batch_number') }}
                                         <span class="text-muted fs-7">({{ __('passwords.auto_generated') }})</span>
                                     </label>
-                                    <input type="text"
-                                           name="batch_number"
-                                           class="form-control"
-                                           value="{{ $order->production_number }}-{{ date('Ymd') }}"
-                                           placeholder="{{ __('passwords.batch_number_auto') }}">
+                                    <input type="text" name="batch_number" class="form-control"
+                                           value="{{ $order->production_number }}-{{ date('Ymd') }}">
                                     <div class="form-text text-muted">
                                         <i class="bi bi-info-circle me-1"></i>
                                         {{ __('passwords.batch_number_generated_from_production') }}
@@ -251,11 +54,8 @@
                                         {{ __('passwords.expiry_date') }}
                                         <span class="text-muted fs-7">({{ __('passwords.optional') }})</span>
                                     </label>
-                                    <input type="date"
-                                           name="expiry_date"
-                                           class="form-control"
-                                           min="{{ date('Y-m-d') }}"
-                                           placeholder="{{ __('passwords.select_expiry_date') }}">
+                                    <input type="date" name="expiry_date" class="form-control"
+                                           min="{{ date('Y-m-d') }}">
                                     <div class="form-text text-muted">
                                         <i class="bi bi-info-circle me-1"></i>
                                         {{ __('passwords.expiry_date_optional') }}
@@ -265,13 +65,67 @@
                         </div>
                     </div>
 
-                    {{-- ─── OUTPUT PRODUCTS ────────────────────────────────────── --}}
+                    {{-- ─── ALLOCATION (multi-shop only) ───────────────────── --}}
+                    @if(!$isSingleShop)
+                        <div class="card card-flush bg-light-info mb-6">
+                            <div class="card-header">
+                                <h3 class="card-title">
+                                    <i class="bi bi-geo-alt me-2 text-info"></i>
+                                    {{ __('passwords.production_allocation') }}
+                                </h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info d-flex align-items-center mb-4">
+                                    <i class="bi bi-info-circle fs-2 me-3"></i>
+                                    <div>{{ __('passwords.production_allocation_instruction') }}</div>
+                                </div>
+
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label required">{{ __('passwords.location') }}</label>
+                                        <select name="output_location_id"
+                                                id="output_location_{{ $order->id }}"
+                                                class="form-select" required>
+                                            <option value="">—</option>
+                                            @foreach($locations as $loc)
+                                                <option value="{{ $loc->id }}">{{ $loc->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label required">{{ __('auth._department') }}</label>
+                                        <select name="output_department_id"
+                                                id="output_department_{{ $order->id }}"
+                                                class="form-select" required>
+                                            <option value="">—</option>
+                                            @foreach($departments as $dept)
+                                                <option value="{{ $dept->id }}"
+                                                        data-location-id="{{ $dept->location_id }}">
+                                                    {{ $dept->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- ─── OUTPUT PRODUCTS ────────────────────────────────── --}}
                     <div class="card card-flush mb-6">
                         <div class="card-header">
                             <h3 class="card-title">
                                 <i class="bi bi-box-arrow-out me-2 text-success"></i>
                                 {{ __('passwords.output_products') }}
                             </h3>
+                            <div class="card-toolbar">
+                                <button type="button"
+                                        class="btn btn-sm btn-light-primary"
+                                        onclick="addOutputRow({{ $order->id }})">
+                                    <i class="bi bi-plus-lg me-1"></i>
+                                    {{ __('passwords.add_output') }}
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
@@ -285,72 +139,96 @@
                                             <th class="min-w-120px text-center">{{ __('passwords.defective_quantity') }}</th>
                                             <th class="min-w-100px text-center">{{ __('passwords.unit') }}</th>
                                             <th class="min-w-100px text-center">{{ __('passwords.strategy') }}</th>
+                                            <th class="min-w-50px text-end"></th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        @foreach($order->outputs as $index => $output)
-                                       @php
-                                            $variant = $output->productVariant;
-                                            $planned = $output->planned_quantity;
-                                            $actual = $output->actual_quantity;
-                                            $defective = $output->defective_quantity;
-                                            $remaining = max(0, $planned - $actual);
-                                        @endphp
-                                        <tr>
-                                            <td class="ps-4">
-                                                <div class="d-flex flex-column">
-                                                    <span class="fw-bold text-gray-800">{{ $variant->name ?? 'Product' }}</span>
-                                                    <span class="text-muted fs-7">SKU: {{ $variant->sku ?? 'N/A' }}</span>
-                                                </div>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="fw-bold">{{ number_format($planned, 2) }}</span>
-                                            </td>
-                                            <td class="text-center">
-                                                @if($actual > 0)
-                                                    <span class="badge badge-success">{{ number_format($actual, 2) }}</span>
-                                                @else
-                                                    <span class="text-muted">0.00</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                <input type="number"
-                                                       name="outputs[{{ $output->id }}][actual_quantity]"
-                                                       class="form-control actual-quantity-input text-center"
-                                                       min="0"
-                                                       step="0.01"
-                                                       value="{{ $actual > 0 ? $actual : '' }}"
-                                                       placeholder="0.00"
-                                                       data-output-id="{{ $output->id }}"
-                                                       data-planned="{{ $planned }}"
-                                                       data-remaining="{{ $remaining }}">
-                                                <small class="text-muted fs-7">
-                                                    {{ __('passwords.max') }}: {{ number_format($planned, 2) }}
-                                                    @if($remaining > 0)
-                                                        <span class="text-warning">({{ __('passwords.remaining') }}: {{ number_format($remaining, 2) }})</span>
+                                    <tbody id="outputRowsContainer{{ $order->id }}">
+                                        @foreach($order->outputs as $output)
+                                            @php
+                                                $variant   = $output->productVariant;
+                                                $uom       = $uomsById[$output->unit] ?? null;
+                                                $planned   = $output->planned_quantity;
+                                                $actual    = $output->actual_quantity;
+                                                $defective = $output->defective_quantity;
+                                                $remaining = max(0, $planned - $actual);
+                                            @endphp
+                                            <tr class="output-row" data-key="{{ $output->id }}">
+                                                <td class="ps-4">
+                                                    <div class="d-flex flex-column">
+                                                        <span class="fw-bold text-gray-800 output-name-display">
+                                                            {{ $variant->name ?? '—' }}
+                                                        </span>
+                                                        <span class="text-muted fs-7">SKU: {{ $variant->sku ?? 'N/A' }}</span>
+                                                    </div>
+                                                    <input type="hidden"
+                                                           name="outputs[{{ $output->id }}][product_variant_id]"
+                                                           class="output-variant-id"
+                                                           value="{{ $output->product_variant_id }}">
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="fw-bold">{{ number_format($planned, 2) }}</span>
+                                                </td>
+                                                <td class="text-center">
+                                                    @if($actual > 0)
+                                                        <span class="badge badge-success">{{ number_format($actual, 2) }}</span>
+                                                    @else
+                                                        <span class="text-muted">0.00</span>
                                                     @endif
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <input type="number"
-                                                       name="outputs[{{ $output->id }}][defective_quantity]"
-                                                       class="form-control defective-quantity-input text-center"
-                                                       min="0"
-                                                       step="0.01"
-                                                       value="{{ $defective > 0 ? $defective : '' }}"
-                                                       placeholder="0.00"
-                                                       data-output-id="{{ $output->id }}">
-                                                <small class="text-muted fs-7">{{ __('passwords.defective') }}</small>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="badge badge-light-primary">{{ $output->unit }}</span>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="badge badge-light-{{ $output->inventory_strategy == 'batch' ? 'info' : ($output->inventory_strategy == 'serial' ? 'warning' : 'primary') }}">
-                                                    {{ ucfirst($output->inventory_strategy) }}
-                                                </span>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td>
+                                                    <input type="number"
+                                                           name="outputs[{{ $output->id }}][actual_quantity]"
+                                                           class="form-control actual-quantity-input text-center"
+                                                           min="0" step="0.01"
+                                                           value="{{ $actual > 0 ? $actual : '' }}"
+                                                           placeholder="0.00"
+                                                           data-output-id="{{ $output->id }}"
+                                                           data-planned="{{ $planned }}"
+                                                           data-remaining="{{ $remaining }}">
+                                                    <small class="text-muted fs-7">
+                                                        {{ __('passwords.max') }}: {{ number_format($planned, 2) }}
+                                                        @if($remaining > 0)
+                                                            <span class="text-warning">({{ __('passwords.remaining') }}: {{ number_format($remaining, 2) }})</span>
+                                                        @endif
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <input type="number"
+                                                           name="outputs[{{ $output->id }}][defective_quantity]"
+                                                           class="form-control defective-quantity-input text-center"
+                                                           min="0" step="0.01"
+                                                           value="{{ $defective > 0 ? $defective : '' }}"
+                                                           placeholder="0.00"
+                                                           data-output-id="{{ $output->id }}">
+                                                    <small class="text-muted fs-7">{{ __('passwords.defective') }}</small>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-primary">
+                                                        {{ $uom->name ?? $output->unit }}
+                                                        @if($uom?->symbol) ({{ $uom->symbol }}) @endif
+                                                    </span>
+                                                    <input type="hidden"
+                                                           name="outputs[{{ $output->id }}][unit]"
+                                                           class="output-unit-select"
+                                                           value="{{ $output->unit }}">
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $output->inventory_strategy == 'batch' ? 'info' : ($output->inventory_strategy == 'serial' ? 'warning' : 'primary') }}">
+                                                        {{ ucfirst($output->inventory_strategy) }}
+                                                    </span>
+                                                    <input type="hidden"
+                                                           name="outputs[{{ $output->id }}][inventory_strategy]"
+                                                           class="output-strategy-select"
+                                                           value="{{ $output->inventory_strategy }}">
+                                                </td>
+                                                <td class="text-end">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-icon btn-light-danger"
+                                                            onclick="removeOutputRow(this, {{ $order->id }})">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
@@ -358,7 +236,7 @@
                         </div>
                     </div>
 
-                    {{-- ─── PRODUCTION SUMMARY ──────────────────────────────────── --}}
+                    {{-- ─── PRODUCTION SUMMARY ─────────────────────────────── --}}
                     <div class="card card-flush bg-light-primary mb-6">
                         <div class="card-header">
                             <h3 class="card-title">
@@ -371,39 +249,37 @@
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <span class="text-muted d-block">{{ __('passwords.total_produced') }}</span>
-                                        {{-- ID includes {{ $order->id }} — JS must target
-                                             this exact suffixed ID, not a bare
-                                             "total_produced_display" --}}
-                                        <span class="fw-bold fs-2 text-success" id="total_produced_display_{{ $order->id }}">0.00</span>
+                                        <span class="fw-bold fs-2 text-success"
+                                              id="total_produced_display_{{ $order->id }}">0.00</span>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <span class="text-muted d-block">{{ __('passwords.total_defective') }}</span>
-                                        <span class="fw-bold fs-2 text-danger" id="total_defective_display_{{ $order->id }}">0.00</span>
+                                        <span class="fw-bold fs-2 text-danger"
+                                              id="total_defective_display_{{ $order->id }}">0.00</span>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="text-center">
                                         <span class="text-muted d-block">{{ __('passwords.total_cost') }}</span>
-                                        <span class="fw-bold fs-2 text-primary">{{ number_format($order->total_output_cost ?? 0, 2) }}</span>
+                                        <span class="fw-bold fs-2 text-primary">
+                                            {{ number_format($order->total_output_cost ?? 0, 2) }}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {{-- ─── NOTES ───────────────────────────────────────────────── ──}}
                     <div class="mb-2">
                         <label class="form-label">{{ __('passwords.production_notes') }}</label>
-                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.enter_production_notes') }}"></textarea>
+                        <textarea name="notes" class="form-control" rows="2"
+                                  placeholder="{{ __('passwords.enter_production_notes') }}"></textarea>
                     </div>
                 </form>
             </div>
 
-            {{-- ─── ACTION BUTTONS — moved into a real modal-footer, OUTSIDE
-                 the scrolling .modal-body, so they're always visible and
-                 never get scrolled out of view below a long outputs table --}}
             <div class="modal-footer d-flex justify-content-between align-items-center">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
@@ -416,46 +292,229 @@
                     </span>
                 </button>
             </div>
-
         </div>
     </div>
 </div>
 
+{{-- Row template used by addOutputRow() --}}
+<template id="outputRowTemplate{{ $order->id }}">
+    <tr class="output-row" data-key="__KEY__">
+        <td class="ps-4">
+            <input type="text"
+                   class="form-control output-variant-search"
+                   list="output_variant_list_{{ $order->id }}"
+                   placeholder="{{ __('passwords.type_or_select_product') }}"
+                   autocomplete="off">
+            <input type="hidden"
+                   name="outputs[__KEY__][product_variant_id]"
+                   class="output-variant-id"
+                   value="">
+            <div class="mt-1">
+                <span class="fw-bold text-gray-800 output-name-display d-none"></span>
+            </div>
+        </td>
+        <td class="text-center">
+            <span class="text-muted">—</span>
+        </td>
+        <td class="text-center">
+            <span class="text-muted">0.00</span>
+        </td>
+        <td>
+            <input type="number"
+                   name="outputs[__KEY__][actual_quantity]"
+                   class="form-control actual-quantity-input text-center"
+                   min="0" step="0.01"
+                   value=""
+                   placeholder="0.00"
+                   data-planned="0"
+                   data-remaining="0">
+        </td>
+        <td>
+            <input type="number"
+                   name="outputs[__KEY__][defective_quantity]"
+                   class="form-control defective-quantity-input text-center"
+                   min="0" step="0.01"
+                   value=""
+                   placeholder="0.00">
+        </td>
+        <td class="text-center">
+            <select name="outputs[__KEY__][unit]" class="form-select form-select-sm output-unit-select">
+                @foreach($uoms as $uom)
+                    <option value="{{ $uom->id }}">
+                        {{ $uom->name }}@if($uom->symbol) ({{ $uom->symbol }})@endif
+                    </option>
+                @endforeach
+            </select>
+        </td>
+        <td class="text-center">
+            <select name="outputs[__KEY__][inventory_strategy]"
+                    class="form-select form-select-sm output-strategy-select">
+                <option value="quantity">Quantity</option>
+                <option value="batch">Batch</option>
+                <option value="serial">Serial</option>
+            </select>
+        </td>
+        <td class="text-end">
+            <button type="button"
+                    class="btn btn-sm btn-icon btn-light-danger"
+                    onclick="removeOutputRow(this, {{ $order->id }})">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+
+{{-- Datalist for variant autocomplete --}}
+<datalist id="output_variant_list_{{ $order->id }}">
+    @foreach($variants as $variant)
+        <option value="{{ $variant->name }}"
+                data-id="{{ $variant->id }}"
+                data-uom-id="{{ $variant->weight_unit }}"
+                data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
+        </option>
+    @endforeach
+</datalist>
+
 <script>
-    // ── REAL-TIME SUMMARY UPDATE ──────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-    document.addEventListener('input', function(e) {
-        const target = e.target;
-        if (target.classList.contains('actual-quantity-input') || target.classList.contains('defective-quantity-input')) {
-            const form = target.closest('form[id^="completeProductionForm"]');
+// ── Real-time summary update ────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('input', function (e) {
+        const t = e.target;
+        if (t.classList.contains('actual-quantity-input') ||
+            t.classList.contains('defective-quantity-input')) {
+            const form = t.closest('form[id^="completeProductionForm"]');
             if (!form) return;
             const orderId = form.id.replace('completeProductionForm', '');
             updateProductionSummary(orderId);
         }
     });
+
+    // Seed summary on load for each visible form
+    document.querySelectorAll('form[id^="completeProductionForm"]').forEach(form => {
+        updateProductionSummary(form.id.replace('completeProductionForm', ''));
+    });
 });
 
 function updateProductionSummary(orderId) {
-    let totalProduced = 0;
+    let totalProduced  = 0;
     let totalDefective = 0;
 
-    // Scoped to THIS order's form only — no cross-contamination between
-    // multiple production-order modals open in the same DOM.
     document.querySelectorAll(`#completeProductionForm${orderId} .actual-quantity-input`).forEach(input => {
         totalProduced += parseFloat(input.value) || 0;
     });
-
     document.querySelectorAll(`#completeProductionForm${orderId} .defective-quantity-input`).forEach(input => {
         totalDefective += parseFloat(input.value) || 0;
     });
 
-    // Match the ACTUAL ids rendered in Blade — with the order suffix
-    const producedDisplay = document.getElementById(`total_produced_display_${orderId}`);
+    const producedDisplay  = document.getElementById(`total_produced_display_${orderId}`);
     const defectiveDisplay = document.getElementById(`total_defective_display_${orderId}`);
 
-    if (producedDisplay) producedDisplay.textContent = totalProduced.toFixed(2);
+    if (producedDisplay)  producedDisplay.textContent  = totalProduced.toFixed(2);
     if (defectiveDisplay) defectiveDisplay.textContent = totalDefective.toFixed(2);
 }
+
+// ── Add / remove output rows ────────────────────────────────
+let outputRowCounter = {};
+
+function addOutputRow(orderId) {
+    if (!outputRowCounter[orderId]) outputRowCounter[orderId] = 0;
+    const key = `new_${outputRowCounter[orderId]++}`;
+
+    const tpl = document.getElementById(`outputRowTemplate${orderId}`);
+    if (!tpl) return;
+
+    const html  = tpl.innerHTML.replace(/__KEY__/g, key);
+    const tbody = document.getElementById(`outputRowsContainer${orderId}`);
+    tbody.insertAdjacentHTML('beforeend', html);
+}
+
+function removeOutputRow(btn, orderId) {
+    const tbody = document.getElementById(`outputRowsContainer${orderId}`);
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('.output-row');
+    if (rows.length <= 1) {
+        Swal.fire({
+            title: '{{ __("passwords.validation_error") }}',
+            text: '{{ __("passwords.at_least_one_output_required") }}',
+            icon: 'warning',
+            confirmButtonColor: '#0d6efd',
+        });
+        return;
+    }
+
+    btn.closest('.output-row').remove();
+    updateProductionSummary(orderId);
+}
+
+// ── Variant autofill for newly added rows ───────────────────
+document.addEventListener('input', function (e) {
+    if (!e.target.classList.contains('output-variant-search')) return;
+
+    const row = e.target.closest('.output-row');
+    if (!row) return;
+
+    const form    = row.closest('form');
+    const orderId = form.id.replace('completeProductionForm', '');
+    const datalist = document.getElementById(`output_variant_list_${orderId}`);
+    if (!datalist) return;
+
+    let matched = null;
+    datalist.querySelectorAll('option').forEach(o => {
+        if (o.value === e.target.value) matched = o;
+    });
+
+    const hidden   = row.querySelector('.output-variant-id');
+    const display  = row.querySelector('.output-name-display');
+    const unitSel  = row.querySelector('.output-unit-select');
+    const stratSel = row.querySelector('.output-strategy-select');
+
+    if (!matched) {
+        if (hidden) hidden.value = '';
+        return;
+    }
+
+    if (hidden) hidden.value = matched.dataset.id;
+
+    const uomId = matched.dataset.uomId;
+    if (unitSel && uomId) {
+        const found = Array.from(unitSel.options).some(o => String(o.value) === String(uomId));
+        if (found) unitSel.value = uomId;
+    }
+
+    const strategy = matched.dataset.inventoryStrategy;
+    if (stratSel && strategy) stratSel.value = strategy;
+
+    if (display) {
+        display.textContent = matched.value;
+        display.classList.remove('d-none');
+    }
+});
+
+// ── Department filter by location (multi-shop) ──────────────
+document.addEventListener('change', function (e) {
+    const loc = e.target.closest('select[id^="output_location_"]');
+    if (!loc) return;
+
+    const orderId = loc.id.replace('output_location_', '');
+    const deptSel = document.getElementById(`output_department_${orderId}`);
+    if (!deptSel) return;
+
+    const locId = loc.value;
+
+    Array.from(deptSel.options).forEach(opt => {
+        if (!opt.value) return;
+        opt.hidden   = locId && String(opt.dataset.locationId) !== String(locId);
+        opt.disabled = opt.hidden;
+    });
+
+    const current = deptSel.options[deptSel.selectedIndex];
+    if (current && current.hidden) deptSel.value = '';
+});
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
 </script>
-
-

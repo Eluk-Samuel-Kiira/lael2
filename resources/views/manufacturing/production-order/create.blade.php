@@ -583,71 +583,95 @@
         if (!row) return;
 
         const hiddenInput = document.getElementById(`material_id_input_${index}`);
-        const variantId = hiddenInput ? hiddenInput.value : null;
-        if (!variantId) { /* ...existing Swal... */ return; }
+        const variantId   = hiddenInput ? hiddenInput.value : null;
+
+        // ── Guard: no material selected yet ───────────────────────────
+        if (!variantId) {
+            Swal.fire({
+                title: '{{ __("passwords.info") }}',
+                text: '{{ __("passwords.select_material_first") }}',
+                icon: 'info',
+                confirmButtonText: '{{ __("passwords.ok") ?? "OK" }}',
+                confirmButtonColor: '#0d6efd',
+            });
+            return;
+        }
 
         const locationId = getModalLocationId();
 
-        Swal.fire({ /* loading... */ });
+        // ── Loading state ─────────────────────────────────────────────
+        Swal.fire({
+            title: '{{ __("passwords.loading_batches") }}',
+            text: '{{ __("passwords.please_wait") }}',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+        });
 
+        // ── Request ───────────────────────────────────────────────────
         const url = new URL('/production-orders/available-batches', window.location.origin);
         url.searchParams.set('variant_id', variantId);
         if (locationId) url.searchParams.set('location_id', locationId);
 
         fetch(url)
-            .then(r => r.json())
+            .then(response => response.json())
             .then(data => {
                 Swal.close();
 
-                if (!(data.success && data.batches.length > 0)) {
-                    Swal.fire({ /* no batches */ });
-                    return;
+                if (data.success && Array.isArray(data.batches) && data.batches.length > 0) {
+                    const select = row.querySelector('.batch-source-select');
+                    if (!select) return;
+
+                    select.innerHTML = '<option value="">{{ __("passwords.no_batch") }}</option>';
+
+                    data.batches.forEach(batch => {
+                        const option = document.createElement('option');
+                        option.value = batch.id;
+
+                        const quantity = batch.quantity_remaining || 0;
+                        option.textContent = `${batch.batch_number} (${quantity} units)`;
+                        if (batch.expiry_date) {
+                            option.textContent += ` - Expires: ${batch.expiry_date}`;
+                        }
+
+                        option.dataset.quantityRemaining = quantity;
+                        option.dataset.unitCost          = batch.unit_cost ?? '';
+
+                        select.appendChild(option);
+                    });
+
+                    // Pre-select if a batch is already set (edit mode)
+                    handleBatchSelected(select);
+
+                    Swal.fire({
+                        title: '{{ __("passwords.success") }}',
+                        text: `{{ __("passwords.batches_loaded") }} ${data.batches.length}`,
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                    });
+
+                } else {
+                    Swal.fire({
+                        title: '{{ __("passwords.info") }}',
+                        text: '{{ __("passwords.no_batches_available") }}',
+                        icon: 'info',
+                        confirmButtonColor: '#0d6efd',
+                    });
                 }
-
-                const select = row.querySelector('.batch-source-select');
-                if (!select) return;
-
-                // 🔒 Batches already chosen by OTHER rows
-                const usedBatchIds = getUsedBatchIds(parseInt(index, 10));
-
-                select.innerHTML = '<option value="">{{ __("passwords.no_batch") }}</option>';
-                data.batches.forEach(batch => {
-                    const option = document.createElement('option');
-                    option.value = batch.id;
-
-                    const quantity = batch.quantity_remaining || 0;
-                    option.textContent = `${batch.batch_number} (${quantity} units)`;
-                    if (batch.expiry_date) {
-                        option.textContent += ` - Expires: ${batch.expiry_date}`;
-                    }
-
-                    option.dataset.quantityRemaining = quantity;
-                    option.dataset.unitCost = batch.unit_cost ?? '';
-
-                    // 🚫 Mark / disable if already used elsewhere
-                    if (usedBatchIds.has(String(batch.id))) {
-                        option.disabled = true;
-                        option.textContent += ' — already used';
-                    }
-
-                    select.appendChild(option);
-                });
-
-                // If the row's current selection is now used elsewhere, clear it
-                if (select.value && usedBatchIds.has(String(select.value))) {
-                    select.value = '';
-                }
-
-                handleBatchSelected(select);
             })
             .catch(error => {
                 Swal.close();
                 console.error('Error loading batches:', error);
+
                 Swal.fire({
                     title: '{{ __("passwords.error") }}',
                     text: '{{ __("passwords.failed_to_load_batches") }}',
                     icon: 'error',
-                    confirmButtonColor: '#0d6efd'
+                    confirmButtonColor: '#0d6efd',
                 });
             });
     }

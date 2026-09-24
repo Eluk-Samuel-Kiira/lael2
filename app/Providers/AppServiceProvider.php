@@ -66,11 +66,17 @@ class AppServiceProvider extends ServiceProvider
             ];
 
             if (Auth::check()) {
-                $user = Auth::user();
+                $user     = Auth::user();
                 $tenantId = $user->tenant_id;
 
-                // ✅ All locations this user can operate in (from location_user)
+                // ── Visibility rule ──────────────────────────────────────
+                $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+
+                // The locations this user can operate in
                 $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+                // The departments this user is attached to
+                $userDepartmentIds = $user->departments()->pluck('departments.id')->toArray();
 
                 // ✅ The location the user is currently operating in (if any)
                 $activeLocationId = session('current_location_id')

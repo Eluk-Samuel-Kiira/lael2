@@ -5,9 +5,10 @@ namespace App\Http\Controllers\Manufacturing;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\{ProductionOrder, ProductionOrderInput, ProductionOrderOutput, 
+use App\Models\{ProductionOrder, ProductionOrderInput, ProductionOrderOutput,
     ProductVariant, PurchaseReceiptItem, SerialNumber, Location, PaymentMethod,
-    SingleShopInventoryLog, BatchLog, Currency};
+    SingleShopInventoryLog, BatchLog, Currency,
+    InventoryItems, InventoryAdjustments, InventoryTransactions, Department};
 use Illuminate\Support\Facades\{Auth, DB};
 
 class ProductionOrderController extends Controller
@@ -150,12 +151,12 @@ class ProductionOrderController extends Controller
             }
 
             // ✅ Log for debugging
-            \Log::info('Production order cost calculation', [
-                'estimated_input_cost' => $estimatedInputCost,
-                'estimated_output_cost' => $estimatedOutputCost,
-                'total_estimated_cost' => $estimatedInputCost + $estimatedOutputCost,
-                'outputs' => $request->outputs,
-            ]);
+            // \Log::info('Production order cost calculation', [
+            //     'estimated_input_cost' => $estimatedInputCost,
+            //     'estimated_output_cost' => $estimatedOutputCost,
+            //     'total_estimated_cost' => $estimatedInputCost + $estimatedOutputCost,
+            //     'outputs' => $request->outputs,
+            // ]);
 
             $totalEstimatedCost = $estimatedInputCost + $estimatedOutputCost;
 
@@ -318,13 +319,13 @@ class ProductionOrderController extends Controller
                 $paymentMethod->current_balance -= $withdrawalAmount;
                 $paymentMethod->save();
 
-                \Log::info('[Production] Cost withdrawal recorded', [
-                    'production_order_id' => $productionOrder->id,
-                    'production_number' => $productionOrder->production_number,
-                    'amount' => $withdrawalAmount,
-                    'payment_method' => $paymentMethod->name,
-                    'transaction_ref' => $transactionLog->transaction_ref ?? null,
-                ]);
+                // \Log::info('[Production] Cost withdrawal recorded', [
+                //     'production_order_id' => $productionOrder->id,
+                //     'production_number' => $productionOrder->production_number,
+                //     'amount' => $withdrawalAmount,
+                //     'payment_method' => $paymentMethod->name,
+                //     'transaction_ref' => $transactionLog->transaction_ref ?? null,
+                // ]);
             }
 
             // ✅ STEP 3: CONSUME - All inputs (deplete master stock)
@@ -383,12 +384,12 @@ class ProductionOrderController extends Controller
             $strategy = $product?->resolvedInventoryStrategy() ?? 'quantity';
             $quantityNeeded = $input->planned_quantity;
 
-            \Log::info('[Production] Validating stock', [
-                'variant' => $variant->name,
-                'strategy' => $strategy,
-                'needed' => $quantityNeeded,
-                'available' => $variant->overal_quantity_at_hand ?? 0,
-            ]);
+            // \Log::info('[Production] Validating stock', [
+            //     'variant' => $variant->name,
+            //     'strategy' => $strategy,
+            //     'needed' => $quantityNeeded,
+            //     'available' => $variant->overal_quantity_at_hand ?? 0,
+            // ]);
 
             // ✅ BATCH STRATEGY: Check batch quantity_remaining
             if ($strategy === 'batch') {
@@ -448,12 +449,12 @@ class ProductionOrderController extends Controller
         $strategy = $product?->resolvedInventoryStrategy() ?? 'quantity';
         $quantity = $input->planned_quantity;
 
-        \Log::info('[Production] Consuming input', [
-            'variant' => $variant->name,
-            'strategy' => $strategy,
-            'quantity' => $quantity,
-            'current_stock' => $variant->overal_quantity_at_hand ?? 0,
-        ]);
+        // \Log::info('[Production] Consuming input', [
+        //     'variant' => $variant->name,
+        //     'strategy' => $strategy,
+        //     'quantity' => $quantity,
+        //     'current_stock' => $variant->overal_quantity_at_hand ?? 0,
+        // ]);
 
         // Update input with actual quantity
         $input->update([
@@ -545,7 +546,9 @@ class ProductionOrderController extends Controller
      */
     public function completeWithOutputs(Request $request, $id)
     {
-        $user = Auth::user();
+        // \Log::info($request->all());
+        // \Log::info($id);
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('complete production_orders')) {
@@ -566,21 +569,26 @@ class ProductionOrderController extends Controller
             ]);
         }
 
+        // ── Validate ──────────────────────────────────────────────────
         $validated = $request->validate([
-            'outputs' => 'required|array|min:1',
-            'outputs.*.output_id' => 'required|exists:production_order_outputs,id',
-            'outputs.*.actual_quantity' => 'required|numeric|min:0',
-            'outputs.*.defective_quantity' => 'nullable|numeric|min:0',
-            'batch_number' => 'nullable|string|max:100',
-            'expiry_date' => 'nullable|date|after_or_equal:today',
-            'notes' => 'nullable|string|max:500',
-            'complete' => 'boolean',
+            'outputs'                          => 'required|array|min:1',
+            'outputs.*.product_variant_id'     => 'required|exists:product_variants,id',
+            'outputs.*.actual_quantity'        => 'required|numeric|min:0',
+            'outputs.*.defective_quantity'     => 'nullable|numeric|min:0',
+            'outputs.*.inventory_strategy'     => 'required|in:quantity,batch,serial',
+            'outputs.*.unit'                   => 'nullable',
+            'batch_number'                     => 'nullable|string|max:100',
+            'expiry_date'                      => 'nullable|date|after_or_equal:today',
+            'notes'                            => 'nullable|string|max:500',
+            'complete'                         => 'boolean',
+            'output_location_id'               => 'nullable|integer|exists:locations,id',
+            'output_department_id'             => 'nullable|integer|exists:departments,id',
         ]);
 
-        // ✅ Check if at least one output has quantity > 0
+        // ── At least one output must have actual_quantity > 0 ─────────
         $hasQuantity = false;
-        foreach ($validated['outputs'] as $outputData) {
-            if ($outputData['actual_quantity'] > 0) {
+        foreach ($validated['outputs'] as $row) {
+            if (($row['actual_quantity'] ?? 0) > 0) {
                 $hasQuantity = true;
                 break;
             }
@@ -593,150 +601,187 @@ class ProductionOrderController extends Controller
             ]);
         }
 
+        // ── Multi-shop: require location + department ─────────────────
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $allocLocationId   = null;
+        $allocDepartmentId = null;
+
+        if (!$isSingleShop) {
+            $allocLocationId   = (int) $request->input('output_location_id');
+            $allocDepartmentId = (int) $request->input('output_department_id');
+
+            if (!$allocLocationId || !$allocDepartmentId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('passwords.output_allocation_required'),
+                ], 422);
+            }
+
+            $dept = Department::find($allocDepartmentId);
+            if (!$dept || (int) $dept->location_id !== $allocLocationId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('passwords.department_location_mismatch'),
+                ], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
             $totalActualQuantity = 0;
-            $batchNumber = $validated['batch_number'] ?? $productionOrder->production_number . '-' . date('Ymd');
-            $expiryDate = $validated['expiry_date'] ?? null;
+            $batchNumber = $validated['batch_number']
+                ?? $productionOrder->production_number . '-' . date('Ymd');
+            $expiryDate  = $validated['expiry_date'] ?? null;
 
-            // ✅ Update all outputs with actual quantities
-            foreach ($validated['outputs'] as $outputData) {
-                $output = ProductionOrderOutput::where('production_order_id', $id)
-                    ->where('id', $outputData['output_id'])
-                    ->first();
+            // ── 1. Block deletion of any output that already has production ──
+            $keptIds = collect($validated['outputs'])
+                ->keys()
+                ->filter(fn($k) => !is_string($k) || !str_starts_with((string)$k, 'new_'))
+                ->map(fn($k) => (int) $k)
+                ->values()
+                ->all();
 
-                if (!$output) {
-                    throw new \Exception("Output not found");
+            $blockedDeletes = ProductionOrderOutput::where('production_order_id', $productionOrder->id)
+                ->when(!empty($keptIds), fn($q) => $q->whereNotIn('id', $keptIds))
+                ->when(empty($keptIds),   fn($q) => $q)   // if nothing kept, all existing are candidates
+                ->where('actual_quantity', '>', 0)
+                ->get();
+
+            if ($blockedDeletes->isNotEmpty()) {
+                throw new \Exception(__('passwords.cannot_delete_produced_output'));
+            }
+
+            foreach ($validated['outputs'] as $key => $row) {
+                $isNew = is_string($key) && str_starts_with($key, 'new_');
+
+                if ($isNew) {
+                    // Create the output with ZERO actual/defective quantity so that
+                    // the "old actual" is genuinely zero and the subsequent update
+                    // produces a real difference for the allocator to act on.
+                    $variantForNew = ProductVariant::find($row['product_variant_id']);
+
+                    $output = ProductionOrderOutput::create([
+                        'production_order_id' => $productionOrder->id,
+                        'product_variant_id'  => $row['product_variant_id'],
+                        'planned_quantity'    => $row['actual_quantity'],
+                        'actual_quantity'     => 0,
+                        'defective_quantity'  => 0,
+                        'unit'                => $row['unit']
+                                                ?? $variantForNew?->weight_unit
+                                                ?? 'unit',
+                        'production_cost'     => 0,
+                        'selling_price'       => 0,
+                        'inventory_strategy'  => $row['inventory_strategy'],
+                    ]);
+
+                    $oldActual = 0.0;
+                } else {
+                    $output = ProductionOrderOutput::where('production_order_id', $productionOrder->id)
+                        ->where('id', (int) $key)
+                        ->first();
+
+                    if (!$output) {
+                        throw new \Exception("Output not found: {$key}");
+                    }
+
+                    $oldActual = (float) $output->actual_quantity;
                 }
 
                 $variant = $output->productVariant;
                 if (!$variant) {
-                    throw new \Exception("Product variant not found for output");
+                    throw new \Exception("Product variant not found for output {$output->id}");
                 }
 
-                $oldActual = $output->actual_quantity;
-                $newActual = $outputData['actual_quantity'];
+                $newActual          = (float) $row['actual_quantity'];
                 $quantityDifference = $newActual - $oldActual;
-                $defectiveQuantity = $outputData['defective_quantity'] ?? 0;
+                $defectiveQuantity  = (float) ($row['defective_quantity'] ?? 0);
 
-                // ✅ Update output record with batch info
+                $unit = $row['unit'] ?? $variant->weight_unit ?? $output->unit;
+                if (!$unit) {
+                    throw new \Exception(
+                        "Cannot resolve a unit of measure for '{$variant->name}' (output #{$output->id})."
+                    );
+                }
+
                 $output->update([
-                    'actual_quantity' => $newActual,
+                    'actual_quantity'    => $newActual,
                     'defective_quantity' => $defectiveQuantity,
-                    'batch_number' => $batchNumber,
-                    'expiry_date' => $expiryDate,
+                    'batch_number'       => $batchNumber,
+                    'expiry_date'        => $expiryDate,
+                    'inventory_strategy' => $row['inventory_strategy'],
+                    'unit'               => $unit,
                 ]);
 
-                // ✅ Only update inventory if there's a positive difference
-                if ($quantityDifference > 0) {
-                    // ✅ Update master stock (overal_quantity_at_hand)
-                    $beforeQty = $variant->overal_quantity_at_hand ?? 0;
-                    $afterQty = $beforeQty + $quantityDifference;
-                    
-                    $variant->overal_quantity_at_hand = $afterQty;
-                    $variant->save();
-
-                    // ✅ Audit trail
-                    SingleShopInventoryLog::create([
-                        'variant_id' => $variant->id,
-                        'order_id' => $productionOrder->id,
-                        'tenant_id' => $productionOrder->tenant_id,
-                        'created_by' => auth()->id(),
-                        'quantity_before' => $beforeQty,
-                        'quantity_after' => $afterQty,
-                        'quantity_change' => $quantityDifference,
-                        'reason' => 'production_output',
-                        'notes' => "Production output - Order #{$productionOrder->production_number} - {$variant->name}",
-                        'source' => 'production',
-                        'metadata' => [
-                            'production_order_id' => $productionOrder->id,
-                            'production_number' => $productionOrder->production_number,
-                            'output_id' => $output->id,
-                            'quantity_added' => $quantityDifference,
-                            'cost' => $output->production_cost,
-                            'inventory_strategy' => $output->inventory_strategy,
-                            'batch_number' => $batchNumber,
-                            'expiry_date' => $expiryDate,
-                        ],
-                    ]);
-
-                    // ✅ If batch strategy, create batch record
-                    if ($output->inventory_strategy === 'batch') {
-                        $unitCost = $output->production_cost / max(1, $quantityDifference);
-                        
-                        $batch = PurchaseReceiptItem::create([
-                            'purchase_receipt_id' => null,
-                            'purchase_order_item_id' => null,
-                            'quantity_received' => $quantityDifference,
-                            'quantity_remaining' => $quantityDifference,
-                            'unit_cost' => $unitCost,
-                            'batch_number' => $batchNumber,
-                            'expiry_date' => $expiryDate,
-                            'location_id' => $productionOrder->location_id,
-                            'tenant_id' => $productionOrder->tenant_id,
-                            'notes' => "Produced from production #{$productionOrder->production_number}",
-                        ]);
-
-                        BatchLog::create([
-                            'batch_id' => $batch->id,
-                            'batch_number' => $batch->batch_number,
-                            'variant_id' => $variant->id,
-                            'variant_name' => $variant->name,
-                            'variant_sku' => $variant->sku,
-                            'type' => 'produced',
-                            'quantity_change' => $quantityDifference,
-                            'quantity_before' => 0,
-                            'quantity_after' => $quantityDifference,
-                            'unit_cost' => $unitCost,
-                            'total_cost' => $output->production_cost,
-                            'production_order_id' => $productionOrder->id,
-                            'production_order_output_id' => $output->id,
-                            'tenant_id' => $productionOrder->tenant_id,
-                            'location_id' => $productionOrder->location_id,
-                            'expiry_date' => $expiryDate,
-                            'event_date' => now(),
-                            'performed_by' => auth()->id(),
-                            'metadata' => [
-                                'production_number' => $productionOrder->production_number,
-                                'batch_generated' => true,
-                            ],
-                        ]);
-                    }
-
-                    $totalActualQuantity += $quantityDifference;
+                if ($quantityDifference <= 0) {
+                    continue;
                 }
+
+                $this->allocateProductionOutput(
+                    $variant,
+                    $output,
+                    $productionOrder,
+                    $quantityDifference,
+                    $batchNumber,
+                    $expiryDate,
+                    $isSingleShop,
+                    $allocLocationId,
+                    $allocDepartmentId
+                );
+
+                $totalActualQuantity += $quantityDifference;
             }
 
-            // ✅ Update production order notes
-            if ($validated['notes']) {
-                $productionOrder->notes = ($productionOrder->notes ? $productionOrder->notes . "\n" : '') . $validated['notes'];
+            // ── 3. Delete outputs removed from the modal (safe ones only) ──
+            $stillKeptIds = array_map('intval', array_filter(
+                array_keys($validated['outputs']),
+                fn($k) => !is_string($k) || !str_starts_with((string)$k, 'new_')
+            ));
+
+            $orphanQuery = ProductionOrderOutput::where('production_order_id', $productionOrder->id);
+            if (!empty($stillKeptIds)) {
+                $orphanQuery->whereNotIn('id', $stillKeptIds);
+            }
+            $orphanQuery->where('actual_quantity', 0)->delete();
+
+            // ── 4. Update order notes ─────────────────────────────────────
+            if (!empty($validated['notes'])) {
+                $productionOrder->notes = ($productionOrder->notes
+                    ? $productionOrder->notes . "\n"
+                    : '') . $validated['notes'];
                 $productionOrder->save();
             }
 
-            // ✅ Complete the production order
+            // ── 5. Mark order complete ────────────────────────────────────
             $productionOrder->complete();
 
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'message' => __('passwords.production_completed'),
-                'reload' => true,
+                'success'     => true,
+                'message'     => __('passwords.production_completed'),
+                'reload'      => true,
                 'componentId' => 'reloadProductionComponent',
-                'redirect' => route('production-orders.index'),
+                'redirect'    => route('production-orders.index'),
                 'data' => [
                     'total_output_quantity' => $productionOrder->outputs->sum('actual_quantity'),
-                    'inventory_updated' => $totalActualQuantity > 0,
-                    'batch_number' => $batchNumber,
-                    'expiry_date' => $expiryDate,
+                    'inventory_updated'     => $totalActualQuantity > 0,
+                    'batch_number'          => $batchNumber,
+                    'expiry_date'           => $expiryDate,
                 ],
             ]);
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Production completion failed: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
+                'trace'               => $e->getTraceAsString(),
                 'production_order_id' => $id,
             ]);
             return response()->json([
@@ -745,7 +790,156 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
-    
+
+    /**
+     * Allocate a newly produced quantity of a variant.
+     *
+     * - Always bumps the tenant-wide tally (variant.overal_quantity_at_hand).
+     * - Single-shop: logs to SingleShopInventoryLog.
+     * - Multi-shop: creates/finds an InventoryItems row for (variant, location, department),
+     *   increments quantity_allocated, logs to InventoryAdjustments + InventoryTransactions.
+     * - For batch strategy: creates a PurchaseReceiptItem batch tied to the right location.
+     */
+    private function allocateProductionOutput(
+        ProductVariant $variant,
+        ProductionOrderOutput $output,
+        ProductionOrder $productionOrder,
+        float $quantity,
+        string $batchNumber,
+        ?string $expiryDate,
+        bool $isSingleShop,
+        ?int $allocLocationId,
+        ?int $allocDepartmentId
+    ): void {
+        $beforeOverall = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $afterOverall  = $beforeOverall + $quantity;
+
+        $variant->overal_quantity_at_hand = $afterOverall;
+        $variant->save();
+
+        // ── Single-shop ───────────────────────────────────────────────
+        if ($isSingleShop) {
+            SingleShopInventoryLog::create([
+                'variant_id'      => $variant->id,
+                'order_id'        => $productionOrder->id,
+                'tenant_id'       => $productionOrder->tenant_id,
+                'created_by'      => auth()->id(),
+                'quantity_before' => $beforeOverall,
+                'quantity_after'  => $afterOverall,
+                'quantity_change' => $quantity,
+                'reason'          => 'production_output',
+                'notes'           => "Produced in #{$productionOrder->production_number} - {$variant->name}",
+                'source'          => 'production',
+                'metadata'        => [
+                    'mode'              => 'single_shop',
+                    'production_number' => $productionOrder->production_number,
+                    'output_id'         => $output->id,
+                    'batch_number'      => $batchNumber,
+                    'expiry_date'       => $expiryDate,
+                ],
+            ]);
+        }
+        // ── Multi-shop ────────────────────────────────────────────────
+        else {
+            $item = InventoryItems::firstOrCreate(
+                [
+                    'variant_id'    => $variant->id,
+                    'location_id'   => $allocLocationId,
+                    'department_id' => $allocDepartmentId,
+                    'tenant_id'     => $productionOrder->tenant_id,
+                ],
+                [
+                    'quantity_allocated' => 0,
+                    'quantity_on_hand'   => 0,
+                    'created_by'         => auth()->id(),
+                ]
+            );
+
+            $beforeAlloc = (int) $item->quantity_allocated;
+            $item->quantity_allocated = $beforeAlloc + (int) $quantity;
+            $item->save();
+
+            InventoryAdjustments::create([
+                'inventory_id'    => $item->id,
+                'quantity_before' => $beforeAlloc,
+                'quantity_after'  => $item->quantity_allocated,
+                'reason'          => 'production_output',
+                'notes'           => "Allocated {$quantity} of {$variant->name} from #{$productionOrder->production_number}",
+                'created_by'      => auth()->id(),
+                'tenant_id'       => $productionOrder->tenant_id,
+            ]);
+
+            InventoryTransactions::create([
+                'inventory_id'   => $item->id,
+                'quantity'       => (int) $quantity,
+                'reference_id'   => $productionOrder->id,
+                'reference_type' => 'production_order',
+                'type'           => 'transfer_in',
+                'notes'          => "Production output #{$productionOrder->production_number}",
+                'created_by'     => auth()->id(),
+                'tenant_id'      => $productionOrder->tenant_id,
+            ]);
+
+            // \Log::info('[Production] Output allocated to shop', [
+            //     'production_order_id' => $productionOrder->id,
+            //     'inventory_id'        => $item->id,
+            //     'variant_id'          => $variant->id,
+            //     'location_id'         => $allocLocationId,
+            //     'department_id'       => $allocDepartmentId,
+            //     'quantity'            => $quantity,
+            //     'before'              => $beforeAlloc,
+            //     'after'               => $item->quantity_allocated,
+            // ]);
+        }
+
+        // ── Batch strategy: create the batch record ───────────────────
+        if ($output->inventory_strategy === 'batch') {
+            $unitCost = $output->production_cost > 0
+                ? $output->production_cost / max(1, $output->actual_quantity)
+                : 0;
+
+            $batch = PurchaseReceiptItem::create([
+                'purchase_receipt_id'    => null,
+                'purchase_order_item_id' => null,
+                'quantity_received'      => $quantity,
+                'quantity_remaining'     => $quantity,
+                'unit_cost'              => $unitCost,
+                'batch_number'           => $batchNumber,
+                'expiry_date'            => $expiryDate,
+                'location_id'            => $isSingleShop ? $productionOrder->location_id : $allocLocationId,
+                'department_id'          => $isSingleShop ? null                        : $allocDepartmentId,
+                'tenant_id'              => $productionOrder->tenant_id,
+                'notes'                  => "Produced from production #{$productionOrder->production_number}",
+            ]);
+
+            BatchLog::create([
+                'batch_id'                    => $batch->id,
+                'batch_number'                => $batch->batch_number,
+                'variant_id'                  => $variant->id,
+                'variant_name'                => $variant->name,
+                'variant_sku'                 => $variant->sku,
+                'type'                        => 'produced',
+                'quantity_change'             => $quantity,
+                'quantity_before'             => 0,
+                'quantity_after'              => $quantity,
+                'unit_cost'                   => $unitCost,
+                'total_cost'                  => $unitCost * $quantity,
+                'production_order_id'         => $productionOrder->id,
+                'production_order_output_id'  => $output->id,
+                'tenant_id'                   => $productionOrder->tenant_id,
+                'location_id'                 => $isSingleShop ? $productionOrder->location_id : $allocLocationId,
+                'department_id'               => $isSingleShop ? null                        : $allocDepartmentId,
+                'expiry_date'                 => $expiryDate,
+                'event_date'                  => now(),
+                'performed_by'                => auth()->id(),
+                'metadata' => [
+                    'production_number' => $productionOrder->production_number,
+                    'batch_generated'   => true,
+                ],
+            ]);
+        }
+    }
+        
 
     public function cancel(Request $request, $id)
     {
@@ -963,17 +1157,17 @@ class ProductionOrderController extends Controller
 
                     $totalActualQuantity += $quantityDifference;
 
-                    \Log::info('[Production] Output inventory updated', [
-                        'production_order_id' => $productionOrder->id,
-                        'production_number' => $productionOrder->production_number,
-                        'variant_id' => $variant->id,
-                        'variant_name' => $variant->name,
-                        'quantity_added' => $quantityDifference,
-                        'total_actual' => $newActual,
-                        'old_actual' => $oldActual,
-                        'before_qty' => $beforeQty,
-                        'after_qty' => $afterQty,
-                    ]);
+                    // \Log::info('[Production] Output inventory updated', [
+                    //     'production_order_id' => $productionOrder->id,
+                    //     'production_number' => $productionOrder->production_number,
+                    //     'variant_id' => $variant->id,
+                    //     'variant_name' => $variant->name,
+                    //     'quantity_added' => $quantityDifference,
+                    //     'total_actual' => $newActual,
+                    //     'old_actual' => $oldActual,
+                    //     'before_qty' => $beforeQty,
+                    //     'after_qty' => $afterQty,
+                    // ]);
                 }
 
                 // ✅ Update output record
