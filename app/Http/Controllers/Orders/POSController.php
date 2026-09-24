@@ -134,7 +134,7 @@ class POSController extends Controller
 
             // ✅ Resolve from location_user (not users.location_id)
             $userLocationId = $this->resolveUserLocationId($request, $user);
-            \Log::info($userLocationId);
+            // \Log::info($userLocationId);
 
             if (!$userLocationId) {
                 return redirect()
@@ -318,6 +318,8 @@ class POSController extends Controller
         }
 
         $user_departments = $user->departments()->get();
+
+        // \Log::info($products);
 
         return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
     }
@@ -639,27 +641,39 @@ class POSController extends Controller
         ]);
     }
 
+    
     /**
-     * Resolve the location from the selected department.
+     * Resolve the location_id for a given department.
      *
-     * A department belongs to exactly one location. The user must be
-     * assigned to that location (via location_user) for access.
+     * Priority for department source:
+     *   1. explicit $departmentId argument
+     *   2. request('department')
      *
-     * Returns:
-     *   int   → the location_id to use
-     *   null  → user has no valid access (caller must return empty results)
+     * Priority for user access check:
+     *   user must be assigned to the department's location (via location_user).
+     *
+     * Returns null when:
+     *   - no department could be found anywhere
+     *   - department has no location
+     *   - user lacks access to that location
      */
-    private function resolveUserLocationId(Request $request, $user): ?int
+    private function resolveUserLocationId(Request $request, $user, ?int $departmentId = null): ?int
     {
-        $departmentId = $request->input('department');
+        // Resolve department from explicit arg → request → user's assigned
+        $departmentId = $departmentId
+            ?? $request->input('department')
+            ?? $request->input('department_id');
 
-        // No department selected → nothing to resolve
+        // Last resort: user's own department (from users.department_id, if present)
+        if (empty($departmentId) && !empty($user->department_id)) {
+            $departmentId = (int) $user->department_id;
+        }
+
         if (empty($departmentId)) {
             \Log::info('[resolveUserLocationId] no department supplied');
             return null;
         }
 
-        // Look up the department and its location
         $department = \App\Models\Department::find($departmentId);
 
         if (!$department) {
@@ -676,28 +690,60 @@ class POSController extends Controller
             return null;
         }
 
-        // ✅ Authoritative check: does the user have this location?
         $hasAccess = $user->locations()
             ->where('locations.id', $department->location_id)
             ->exists();
 
-        // \Log::info('[resolveUserLocationId] department → location', [
-        //     'user_id'       => $user->id,
-        //     'department_id' => $departmentId,
-        //     'location_id'   => $department->location_id,
-        //     'has_access'    => $hasAccess,
-        //     'assigned_ids'  => $user->locations()->pluck('locations.id')->toArray(),
-        // ]);
-
         if (!$hasAccess) {
-            return null;    // caller should return zero products
+            \Log::warning('[resolveUserLocationId] no access to location', [
+                'user_id'       => $user->id,
+                'department_id' => $departmentId,
+                'location_id'   => $department->location_id,
+            ]);
+            return null;
         }
 
         return (int) $department->location_id;
     }
 
+    /**
+     * Determine the department_id for an order from cart items.
+     * All items must share the same department (multi-department carts aren't
+     * supported for a single POS order); otherwise the first item wins and a
+     * warning is logged.
+     */
+    private function resolveCartDepartmentId(array $cartData, Request $request, $user): ?int
+    {
+        $items = $cartData['items'] ?? [];
+
+        $deptIds = collect($items)
+            ->pluck('department_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($deptIds->count() > 1) {
+            \Log::warning('[resolveCartDepartmentId] multiple departments in cart', [
+                'department_ids' => $deptIds->all(),
+                'user_id'        => $user->id,
+            ]);
+        }
+
+        if ($deptIds->isNotEmpty()) {
+            return (int) $deptIds->first();
+        }
+
+        // Fall back to request-level department if items don't carry one
+        return (int) ($request->input('department')
+            ?? $request->input('department_id')
+            ?? $user->department_id
+            ?? 0) ?: null;
+    }
+
     public function processPayment(Request $request)
     {
+        // \Log::info($request->all());
+
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
@@ -765,15 +811,26 @@ class POSController extends Controller
             }
 
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-            $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
+            // ── Resolve department & location from the cart ───────────────────
+            $cartDepartmentId = $this->resolveCartDepartmentId($cartData, $request, $user);
+
+            $orderLocationId = $this->resolveUserLocationId($request, $user, $cartDepartmentId);
+
+            if (!$orderLocationId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('pagination.no_location_assigned')
+                        ?? 'Could not resolve a valid location for the selected department.',
+                ], 422);
+            }
 
 
             $order = Order::create([
                 'tenant_id' => $tenantId,
                 'customer_id' => $customerId,
                 'customer_name' => $customerName,
-                'location_id' => $orderLocationId,                                       
-                'department_id' => $request->input('department') ?? $user->department_id ?? 1,
+                'location_id'    => $orderLocationId,
+                'department_id'  => $cartDepartmentId, 
                 'order_number' => $orderNumber,
                 'type' => 'sale',
                 'status' => 'confirmed',
@@ -1108,6 +1165,9 @@ class POSController extends Controller
 
     public function processSplitPayment(Request $request)
     {
+        
+        // \Log::info($request->all());
+
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
@@ -1308,7 +1368,7 @@ class POSController extends Controller
                 if ($strategy === 'recipe') {
                     $this->validateRecipeIngredients($product, $item->quantity);
                 } else {
-                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id);
+                    $this->checkIngredientStock($variant, $item->quantity, $order->tenant_id, $item, $order);
                 }
             }
 
@@ -1830,17 +1890,20 @@ class POSController extends Controller
             }
 
             // ✅ Check stock BEFORE depleting
-            $this->checkIngredientStock($ingredientVariant, $requiredQuantity, $order->tenant_id);
+            $this->checkIngredientStock($ingredientVariant, $requiredQuantity, $order->tenant_id, $ingredientItem, $order);
 
             // ✅ Deplete using the correct shop mode
             $ingredientItem = (object) [
                 'variant_id' => $ingredientVariant->id,
-                'quantity' => $requiredQuantity,
-                'name' => $ingredientVariant->name,
-                'price' => 0,
-                'tax_total' => 0,
-                'discount' => 0,
-                'total' => 0,
+                'quantity'   => $requiredQuantity,
+                'name'       => $ingredientVariant->name,
+                'price'      => 0,
+                'tax_total'  => 0,
+                'discount'   => 0,
+                'total'      => 0,
+                'batch_id'   => null,
+                'serial_id'  => null,
+                'inventory_data' => null,   // recipe ingredients don't carry inventory_data
             ];
 
             $this->depleteInventoryByStrategy($ingredientVariant, $ingredientItem, $order);
@@ -2073,9 +2136,7 @@ class POSController extends Controller
         $user     = Auth::user();
         $tenantId = $order->tenant_id;
 
-        $inventoryData = is_object($item) && property_exists($item, 'inventory_data')
-            ? json_decode($item->inventory_data, true)
-            : [];
+        $inventoryData = $this->extractInventoryData($item);
 
         $inventoryId  = $inventoryData['inventory_id']  ?? null;
         $departmentId = $inventoryData['department_id']
@@ -2086,8 +2147,25 @@ class POSController extends Controller
 
         $quantity = is_object($item) ? ($item->quantity ?? 0) : ($item['quantity'] ?? 0);
 
+        \Log::info('[POS] depleteMultiQuantity resolve', [
+            'variant'      => $variant->name,
+            'item_id'      => $item->id ?? null,
+            'inventory_id' => $inventoryId,
+            'location_id'  => $locationId,
+            'department_id'=> $departmentId,
+        ]);
+
         // ✅ 1. By inventory_id (most direct)
-        $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
+        $inventory = $inventoryId ? InventoryItems::find((int) $inventoryId) : null;
+
+        if ($inventory) {
+            \Log::info('[POS] depleteMultiQuantity using inventory_id', [
+                'inventory_id' => $inventory->id,
+                'location_id'  => $inventory->location_id,
+                'department_id'=> $inventory->department_id,
+                'available'    => $inventory->quantity_allocated,
+            ]);
+        }
 
         // ✅ 2. By variant + department + location
         if (!$inventory && $locationId && $departmentId) {
@@ -2178,11 +2256,7 @@ class POSController extends Controller
 
         // Inventory data
         $inventoryData = [];
-        if (is_object($item) && property_exists($item, 'inventory_data')) {
-            $inventoryData = json_decode($item->inventory_data, true);
-        } elseif (is_array($item) && isset($item['inventory_data'])) {
-            $inventoryData = json_decode($item['inventory_data'], true);
-        }
+        $inventoryData = $this->extractInventoryData($item);
 
         $inventoryId  = $inventoryData['inventory_id']  ?? null;
         $departmentId = $inventoryData['department_id'] ?? null;
@@ -2380,7 +2454,7 @@ class POSController extends Controller
         $user     = Auth::user();
         $tenantId = $order->tenant_id;
 
-        $inventoryData = json_decode($item->inventory_data, true) ?? [];
+        $inventoryData = $this->extractInventoryData($item);
         $inventoryId   = $inventoryData['inventory_id']  ?? null;
         $departmentId  = $inventoryData['department_id'] ?? null;
 
@@ -2571,108 +2645,113 @@ class POSController extends Controller
     /**
      * Check if an ingredient/variant has enough stock (for non-recipe items)
      */
-    private function checkIngredientStock($variant, $requiredQuantity, $tenantId)
+    private function checkIngredientStock($variant, $requiredQuantity, $tenantId, $item = null, $order = null)
     {
         $product = $variant->product;
         if (!$product) {
             throw new \Exception("Product not found for variant '{$variant->name}'");
         }
 
-        $strategy = $product->resolvedInventoryStrategy();
+        $strategy     = $product->resolvedInventoryStrategy();
         $isSingleShop = tenant_is_single_shop($tenantId);
-
-        // \Log::info('checkIngredientStock called', [
-        //     'variant_id' => $variant->id,
-        //     'variant_name' => $variant->name,
-        //     'strategy' => $strategy,
-        //     'required_quantity' => $requiredQuantity,
-        //     'is_single_shop' => $isSingleShop
-        // ]);
 
         if ($strategy === 'recipe') {
             throw new \Exception("Nested recipes are not allowed. '{$variant->name}' is a recipe product.");
         }
 
-        // ✅ FOR BATCH PRODUCTS - Check batches regardless of single or multi shop
+        // ── BATCH STRATEGY (unchanged) ────────────────────────────────
         if ($strategy === 'batch') {
-            // Get ALL batches with their quantities for this variant
             $batches = PurchaseReceiptItem::query()
                 ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
                 ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
                 ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
                 ->where('purchase_orders.tenant_id', $tenantId)
                 ->where('purchase_order_items.product_variant_id', $variant->id)
-                ->where(function($q) {
+                ->where(function ($q) {
                     $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
                     ->orWhereNull('purchase_receipt_items.quantity_remaining');
                 })
                 ->select('purchase_receipt_items.*')
                 ->get();
 
-            $totalAvailable = $batches->sum(function($batch) {
-                return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-            });
-
-            // \Log::info('Batch strategy stock check', [
-            //     'variant' => $variant->name,
-            //     'total_available' => $totalAvailable,
-            //     'required' => $requiredQuantity,
-            //     'batches_count' => $batches->count(),
-            //     'batches' => $batches->map(function($batch) {
-            //         return [
-            //             'id' => $batch->id,
-            //             'batch_number' => $batch->batch_number,
-            //             'quantity_remaining' => $batch->quantity_remaining,
-            //             'quantity_received' => $batch->quantity_received,
-            //             'effective' => $batch->quantity_remaining ?? $batch->quantity_received,
-            //             'location_id' => $batch->location_id,
-            //             'department_id' => $batch->department_id,
-            //         ];
-            //     })->toArray()
-            // ]);
+            $totalAvailable = $batches->sum(fn($b) => $b->quantity_remaining ?? $b->quantity_received ?? 0);
 
             if ($totalAvailable < $requiredQuantity) {
                 throw new \Exception("Insufficient batch stock for {$variant->name}. Available: {$totalAvailable}, Required: {$requiredQuantity}");
             }
-            
             return true;
         }
 
-        // ✅ FOR QUANTITY PRODUCTS
+        // ── SINGLE SHOP ───────────────────────────────────────────────
         if ($isSingleShop) {
-            // SINGLE SHOP - Check overal_quantity_at_hand
             $available = $variant->overal_quantity_at_hand ?? 0;
-            // \Log::info('Single shop quantity stock check', [
-            //     'variant' => $variant->name,
-            //     'overal_quantity_at_hand' => $available,
-            //     'required' => $requiredQuantity
-            // ]);
             if ($available < $requiredQuantity) {
                 throw new \Exception("Insufficient stock for {$variant->name}. Available: {$available}, Required: {$requiredQuantity}");
             }
-        } else {
-            // MULTI SHOP - Check inventory_items
-            $inventory = InventoryItems::where('variant_id', $variant->id)
-                ->where('tenant_id', $tenantId)
-                ->first();
+            return true;
+        }
 
-            if (!$inventory) {
-                throw new \Exception("No inventory allocation found for {$variant->name}");
-            }
+        // ── MULTI SHOP — resolve the SAME inventory row depletion will use ──
+        $inventoryData = $this->extractInventoryData($item);
 
-            // \Log::info('Multi-shop quantity stock check', [
-            //     'variant' => $variant->name,
-            //     'inventory_id' => $inventory->id,
-            //     'available' => $inventory->quantity_allocated,
-            //     'required' => $requiredQuantity
-            // ]);
+        $inventoryId  = $inventoryData['inventory_id']  ?? null;
+        $departmentId = $inventoryData['department_id']
+            ?? (is_object($item) ? ($item->department_id ?? null) : null)
+            ?? ($order->department_id ?? null);
+        $locationId   = $inventoryData['location_id'] ?? ($order->location_id ?? null);
 
-            if ($inventory->quantity_allocated < $requiredQuantity) {
-                throw new \Exception("Insufficient stock for {$variant->name}. Available: {$inventory->quantity_allocated}, Required: {$requiredQuantity}");
+        // \Log::info('[POS] resolve inventory', [
+        //     'variant'      => $variant->name,
+        //     'item_id'      => $item->id ?? null,
+        //     'raw_type'     => gettype($item->inventory_data),
+        //     'inventory_id' => $inventoryId,
+        //     'location_id'  => $locationId,
+        //     'department_id'=> $departmentId,
+        // ]);
+
+        $inventory = null;
+
+        if ($inventoryId) {
+            $inventory = InventoryItems::find((int) $inventoryId);
+            if ($inventory) {
+                // \Log::info('[POS] Resolved by inventory_data.inventory_id', [
+                //     'inventory_id'  => $inventory->id,
+                //     'location_id'   => $inventory->location_id,
+                //     'department_id' => $inventory->department_id,
+                //     'available'     => $inventory->quantity_allocated,
+                // ]);
             }
         }
 
         return true;
+    }
+
+    private function extractInventoryData($item): array
+    {
+        if (!$item) {
+            return [];
+        }
+
+        // Read the raw, uncast, un-accessor-ed value straight from attributes
+        $raw = $item->getRawOriginal('inventory_data');
+
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        // First decode
+        $decoded = json_decode($raw, true);
+
+        // If the first decode returned a string, it was double-encoded
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**

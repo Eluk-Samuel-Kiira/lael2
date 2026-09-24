@@ -199,10 +199,9 @@
                                                     name="items[{{ $item->id }}][quantity_received]"
                                                     class="form-control receiving-quantity"
                                                     min="0"
-                                                    max="{{ $pending }}"
                                                     value="0"
-                                                    data-unit-cost="{{ $item->unit_cost }}"
                                                     data-pending="{{ $pending }}"
+                                                    data-unit-cost="{{ $item->unit_cost }}"
                                                     oninput="updateItemsTotal({{ $order->id }})">
                                                 <small class="text-muted fs-7">{{ __('passwords.max') }}: {{ $pending }}</small>
                                             </td>
@@ -283,7 +282,9 @@
                                                 step="0.01"
                                                 min="0"
                                                 max="0"
-                                                value="0">
+                                                value="0"
+                                                onblur="if (this.value === '') this.value = '0';"
+                                                oninput="updateItemsTotal({{ $order->id }})">
                                         </div>
                                         <div class="form-text text-muted">
                                             {{ __('passwords.max_payment') }}: <span id="payment_max_display_{{ $order->id }}">0.00</span> {{ currency_symbol() }}
@@ -579,9 +580,11 @@
         const formData = new FormData(form);
         formData.append('status', status);
 
-        // Don't submit a zero payment as if it were a real payment attempt
+        // Always send payment_amount — even when 0 — so the backend can record intent.
+        formData.set('payment_amount', String(Math.max(0, paymentAmount)));
+
+        // Only send method/date if there's actually a payment.
         if (paymentAmount <= 0) {
-            formData.delete('payment_amount');
             formData.delete('payment_method_id');
             formData.delete('payment_date');
         }
@@ -613,9 +616,32 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.success) {
-                        throw new Error(data.message);
+                    if (!data.success && data.requires_confirm) {
+                        // Show the confirmation dialog with the over-receipt details
+                        return Swal.fire({
+                            title: '{{ __("passwords.over_receipt_title") }}',
+                            html: buildOverReceiptHtml(data.over_receipts),
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: '{{ __("passwords.yes_receive_more") }}',
+                            cancelButtonText: '{{ __("passwords.cancel") }}',
+                            confirmButtonColor: '#dc3545',
+                        }).then(result => {
+                            if (!result.isConfirmed) return null;
+
+                            // Resubmit with the confirmation flag
+                            formData.append('allow_over_receipt', '1');
+                            return fetch(`/purchase-orders/${orderId}/receive-items`, {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                    'Accept': 'application/json',
+                                },
+                                body: formData
+                            }).then(r => r.json());
+                        });
                     }
+                    if (!data.success) throw new Error(data.message);
                     return data;
                 });
             }
@@ -641,6 +667,51 @@
                 confirmButtonColor: '#0d6efd'
             });
         });
+    }
+
+    function buildOverReceiptHtml(overReceipts) {
+        if (!Array.isArray(overReceipts) || overReceipts.length === 0) {
+            return '<p>No over-receipt details available.</p>';
+        }
+
+        const fmt = (n) => Number(n || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        });
+
+        const rows = overReceipts.map(r => `
+            <tr>
+                <td class="text-start">${r.product_name ?? '—'}</td>
+                <td class="text-end">${fmt(r.ordered)}</td>
+                <td class="text-end">${fmt(r.previously_received)}</td>
+                <td class="text-end">${fmt(r.receiving_now)}</td>
+                <td class="text-end text-danger fw-bold">+${fmt(r.over_by)}</td>
+            </tr>
+        `).join('');
+
+        return `
+            <div class="text-start mb-3">
+                <p class="mb-2">The following items exceed the ordered quantity:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Ordered</th>
+                                <th class="text-end">Received</th>
+                                <th class="text-end">Now</th>
+                                <th class="text-end">Over By</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <p class="text-danger mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Are you sure you want to proceed?
+                </p>
+            </div>
+        `;
     }
 
     // ── Initialize on modal show ──

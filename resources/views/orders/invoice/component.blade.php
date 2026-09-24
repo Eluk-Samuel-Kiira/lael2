@@ -15,6 +15,7 @@
                     <th class="min-w-125px">{{__('payments.issue_date')}}</th>
                     <th class="min-w-125px">{{__('payments.due_date')}}</th>
                     <th class="min-w-125px">{{__('payments.amount')}}</th>
+                    <th class="min-w-125px">{{__('pagination.created_by')}}</th>
                     <th class="min-w-125px">{{__('payments.status')}}</th>
                     <th class="min-w-125px text-end">{{__('payments.actions')}}</th>
                 </tr>
@@ -90,6 +91,12 @@
                                         <span class="badge badge-light-warning mt-1">{{ __('payments.balance_due') }}: {{ number_format($invoice->balance_due, 2) }}</span>
                                     @endif
                                 </div>
+                            </td>
+                            
+                            <td>
+                                <span class="badge badge-light-warning fw-bold px-3 py-2">
+                                    {{ $invoice->createdBy->name ?? 'N/A' }}
+                                </span>
                             </td>
                             <td>
                                 @php

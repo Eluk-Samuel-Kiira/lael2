@@ -29,29 +29,53 @@ class InvoiceController extends Controller
             abort(403);
         }
 
+        // ── Visibility rule ─────────────────────────────────────────
+        // super_admin / admin → see everything (in their tenant)
+        // everyone else        → only invoices they created
+        //                        OR that belong to orders they created
+        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+
         $query = Invoice::with(['order', 'customer'])
             ->where('tenant_id', $tenantId)
             ->latest();
 
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('invoice_number', 'like', "%{$search}%")
-                  ->orWhere('billing_name', 'like', "%{$search}%")
-                  ->orWhere('billing_email', 'like', "%{$search}%")
-                  ->orWhere('billing_phone', 'like', "%{$search}%");
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
             });
         }
 
+        // ── Search ──────────────────────────────────────────────────
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                ->orWhere('billing_name', 'like', "%{$search}%")
+                ->orWhere('billing_email', 'like', "%{$search}%")
+                ->orWhere('billing_phone', 'like', "%{$search}%");
+            });
+        }
+
+        // ── Status filter ───────────────────────────────────────────
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
 
-        // Update overdue invoices using the scope
-        Invoice::where('tenant_id', $tenantId)
+        // ── Mark overdue (scoped so non-admins don't accidentally update others' rows) ──
+        $overdueQuery = Invoice::where('tenant_id', $tenantId)
             ->outstanding()
-            ->whereDate('due_date', '<', now())
-            ->update(['status' => Invoice::STATUS_OVERDUE]);
+            ->whereDate('due_date', '<', now());
 
+        if (!$isAdmin) {
+            $overdueQuery->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
+            });
+        }
+
+        $overdueQuery->update(['status' => Invoice::STATUS_OVERDUE]);
+
+        // ── Pagination ──────────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
@@ -60,6 +84,7 @@ class InvoiceController extends Controller
 
         $invoices = $query->paginate($perPage)->withQueryString();
 
+        // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
 
         if ($request->ajax() && $bladeToReload === 'reloadInvoiceComponent') {

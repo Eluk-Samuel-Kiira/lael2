@@ -220,6 +220,152 @@ class BatchController extends Controller
         }
     }
 
+    public function split(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'batch_id'                => 'required|exists:purchase_receipt_items,id',
+            'splits'                  => 'required|array|min:2',
+            'splits.*.quantity'       => 'required|numeric|gt:0',
+            'splits.*.location_id'    => 'required|exists:locations,id',
+            'splits.*.department_id'  => 'required|exists:departments,id',
+            'splits.*.suffix'         => 'nullable|string|max:50',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Load the parent batch, scoped to tenant + batch-strategy products only
+            $parent = PurchaseReceiptItem::query()
+                ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+                ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+                ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+                ->join('product_variants', 'purchase_order_items.product_variant_id', '=', 'product_variants.id')
+                ->join('products', 'product_variants.product_id', '=', 'products.id')
+                ->where('purchase_orders.tenant_id', $tenantId)
+                ->where('products.inventory_strategy', 'batch')
+                ->where('purchase_receipt_items.id', $validated['batch_id'])
+                ->select('purchase_receipt_items.*')
+                ->firstOrFail();
+
+            $parentQty = (float) ($parent->quantity_remaining ?? $parent->quantity_received ?? 0);
+            $splitQty  = collect($validated['splits'])->sum(fn($s) => (float) $s['quantity']);
+
+            if ($splitQty > $parentQty) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('passwords.split_exceeds_available_quantity'),
+                    'debug'   => ['parent_qty' => $parentQty, 'split_qty' => $splitQty],
+                ], 422);
+            }
+
+            // Validate each split's department belongs to its location
+            foreach ($validated['splits'] as $i => $split) {
+                $dept = Department::find($split['department_id']);
+                if (!$dept || (int) $dept->location_id !== (int) $split['location_id']) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('passwords.department_location_mismatch'),
+                        'debug'   => [
+                            'row' => $i,
+                            'department_id' => $split['department_id'],
+                            'department_location_id' => $dept?->location_id,
+                            'chosen_location_id' => $split['location_id'],
+                        ],
+                    ], 422);
+                }
+            }
+
+            $createdIds = [];
+
+            foreach ($validated['splits'] as $i => $split) {
+                $location = Location::find($split['location_id']);
+                $suffix   = $split['suffix'] ?? strtoupper(preg_replace('/[^A-Z0-9]/i', '', $location->name ?? 'L' . $split['location_id']));
+
+                $childBatchNumber = $this->buildSplitBatchNumber($parent->batch_number, $suffix);
+
+                $child = PurchaseReceiptItem::create([
+                    'purchase_receipt_id'    => $parent->purchase_receipt_id,
+                    'purchase_order_item_id' => $parent->purchase_order_item_id,
+                    'quantity_received'      => $split['quantity'],
+                    'quantity_remaining'     => $split['quantity'],
+                    'unit_cost'              => $parent->unit_cost,
+                    'batch_number'           => $childBatchNumber,
+                    'expiry_date'            => $parent->expiry_date,
+                    'location_id'            => $split['location_id'],
+                    'department_id'          => $split['department_id'],
+                    'tenant_id'              => $tenantId,
+                    // 'parent_batch_id'     => $parent->id,   // only if you add this column
+                ]);
+
+                $createdIds[] = $child->id;
+
+                // Log each split as a transfer
+                $this->logBatchSplit($parent, $child, $split, $user, $tenantId);
+            }
+
+            // Handle the parent: reduce or delete
+            $leftover = $parentQty - $splitQty;
+
+            if ($leftover <= 0) {
+                $parent->quantity_remaining = 0;
+                $parent->save();
+                // OR: $parent->delete(); — pick one policy. See notes below.
+            } else {
+                $parent->quantity_remaining = $leftover;
+                $parent->save();
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success'   => true,
+                'message'   => __('passwords.batch_split_success', ['count' => count($createdIds)]),
+                'reload'    => true,
+                'data' => [
+                    'parent_id'      => $parent->id,
+                    'parent_leftover'=> $leftover,
+                    'children'       => $createdIds,
+                ],
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Batch split failed: ' . $e->getMessage(), [
+                'request' => $request->all(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.split_failed') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function buildSplitBatchNumber(string $parentBatch, string $suffix): string
+    {
+        $suffix = strtoupper(trim($suffix));
+        $suffix = preg_replace('/[^A-Z0-9]/', '', $suffix);
+        $suffix = substr($suffix, 0, 30);
+
+        return $parentBatch . '-' . $suffix;
+    }
+
     /**
      * Unassign batches (remove location/department)
      */
@@ -379,6 +525,7 @@ class BatchController extends Controller
         }
     }
 
+
     /**
      * Log batch unassignment to BatchLog table
      */
@@ -435,6 +582,64 @@ class BatchController extends Controller
         } catch (\Exception $e) {
             \Log::error('Failed to log batch unassignment: ' . $e->getMessage(), [
                 'batch_id' => $batch->id,
+            ]);
+        }
+    }
+
+    /**
+     * Log a batch split event to BatchLog.
+     * Called once per child batch created during a split.
+     */
+    private function logBatchSplit($parent, $child, array $split, $user, int $tenantId): void
+    {
+        try {
+            // Resolve variant via the parent's purchase order item
+            $variant = optional($parent->purchaseOrderItem)->productVariant;
+
+            // Resolve purchase order via the parent's receipt
+            $purchaseOrder = optional($parent->purchaseReceipt)->purchaseOrder;
+
+            BatchLog::create([
+                'batch_id'              => $child->id,
+                'batch_number'          => $child->batch_number,
+                'variant_id'            => $variant?->id,
+                'variant_name'          => $variant?->name ?? 'Unknown',
+                'variant_sku'           => $variant?->sku  ?? 'Unknown',
+
+                'type'                  => BatchLog::TYPE_TRANSFERRED,
+                'quantity_change'       => 0,
+                'quantity_before'       => 0,
+                'quantity_after'        => $child->quantity_remaining,
+                'unit_cost'             => $child->unit_cost ?? 0,
+                'total_cost'            => ($child->unit_cost ?? 0) * $child->quantity_remaining,
+
+                'purchase_order_id'     => $purchaseOrder?->id,
+                'purchase_order_number' => $purchaseOrder?->po_number,
+                'purchase_receipt_id'   => $child->purchase_receipt_id,
+                'supplier_id'           => $purchaseOrder?->supplier_id,
+                'supplier_name'         => optional(optional($purchaseOrder)->supplier)->name,
+
+                'tenant_id'             => $tenantId,
+                'location_id'           => $child->location_id,
+                'department_id'         => $child->department_id,
+                'expiry_date'           => $child->expiry_date,
+
+                'event_date'            => now(),
+                'performed_by'          => $user->id,
+
+                'metadata' => [
+                    'action'              => 'split',
+                    'parent_batch_id'     => $parent->id,
+                    'parent_batch_number' => $parent->batch_number,
+                    'split_quantity'      => (float) $split['quantity'],
+                    'split_by'            => $user->name,
+                    'split_at'            => now()->toDateTimeString(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to log batch split: ' . $e->getMessage(), [
+                'child_id'  => $child->id  ?? null,
+                'parent_id' => $parent->id ?? null,
             ]);
         }
     }
