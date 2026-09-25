@@ -60,162 +60,226 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"></i>
+                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
+                                <div class="card-toolbar">
+                                    <span class="badge badge-light-info fs-7">
+                                        <i class="ki-duotone ki-calendar-8 fs-4 me-1"></i>
+                                        {{ \Carbon\Carbon::parse($startDate)->format('d M Y') }}
+                                        &mdash;
+                                        {{ \Carbon\Carbon::parse($endDate)->format('d M Y') }}
+                                    </span>
+                                </div>
                             </div>
+
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.by-employee') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Date range --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-12">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text"><i class="ki-duotone ki-calendar-8 fs-2"></i></span>
-                                                    <input type="date" class="form-control" name="start_date" value="{{ $startDate }}" required>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control"
+                                                        name="start_date" value="{{ $startDate }}" required>
                                                 </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light"><i class="ki-duotone ki-calendar-8 fs-2"></i></span>
-                                                    <input type="date" class="form-control" name="end_date" value="{{ $endDate }}" required>
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-1">
+                                                    {{ __('accounting.to') }}
+                                                </span>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
+                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
+                                                    </span>
+                                                    <input type="date" class="form-control"
+                                                        name="end_date" value="{{ $endDate }}" required>
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        <div class="flex-grow-1">
+                                    </div>
+
+                                    {{-- Row 2: Employee + Location + Requires Approval + Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.employee') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text"><i class="ki-duotone ki-user fs-2"></i></span>
-                                                <select class="form-select" name="employee_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="employee_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_employees') }}</option>
                                                     @foreach($employees as $employee)
-                                                        <option value="{{ $employee->id }}" {{ $employeeId == $employee->id ? 'selected' : '' }}>
+                                                        <option value="{{ $employee->id }}"
+                                                                {{ (string) $employeeId === (string) $employee->id ? 'selected' : '' }}>
                                                             {{ $employee->first_name }} {{ $employee->last_name }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.requires_approval') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text"><i class="ki-duotone ki-shield-tick fs-2"></i></span>
-                                                <select class="form-select" name="requires_approval">
-                                                    <option value="">{{ __('accounting.all_statuses') }}</option>
-                                                    <option value="1" {{ $requiresApproval == '1' ? 'selected' : '' }}>{{ __('accounting.yes') }}</option>
-                                                    <option value="0" {{ $requiresApproval == '0' ? 'selected' : '' }}>{{ __('accounting.no') }}</option>
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.requires_approval') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="requires_approval" data-control="select2">
+                                                    <option value=""  {{ ($requiresApproval === null || $requiresApproval === '') ? 'selected' : '' }}>{{ __('accounting.all_statuses') }}</option>
+                                                    <option value="1" {{ $requiresApproval === '1' ? 'selected' : '' }}>{{ __('accounting.yes') }}</option>
+                                                    <option value="0" {{ $requiresApproval === '0' ? 'selected' : '' }}>{{ __('accounting.no') }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-xl-3 d-flex align-items-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2 w-100">
                                                 <button type="submit" class="btn btn-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1"></i>
-                                                    <span>{{ __('accounting.apply_filters') }}</span>
+                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.by-employee') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1"></i>
-                                                    <span>{{ __('accounting.clear_filters') }}</span>
+                                                <a href="{{ route('reports.expenses.by-employee') }}"
+                                                class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
+                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
+                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
                                                 </a>
                                             </div>
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $employeeId
+                                            ? ['label' => __('accounting.employee'), 'value' => trim(
+                                                ($employees->firstWhere('id', $employeeId)?->first_name ?? '') . ' ' .
+                                                ($employees->firstWhere('id', $employeeId)?->last_name ?? '')
+                                            )]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                        ($requiresApproval !== null && $requiresApproval !== '')
+                                            ? ['label' => __('accounting.requires_approval'), 'value' => $requiresApproval === '1' ? __('accounting.yes') : __('accounting.no')]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.by-employee') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Summary Statistics --}}
                 @if($employeeBreakdown->count() > 0)
-                @php
-                    $totalExpenses = $employeeBreakdown->sum('grand_total');
-                    $totalEmployees = $employeeBreakdown->count();
-                    $totalTransactions = $employeeBreakdown->sum('expense_count');
-                    $totalTax = $employeeBreakdown->sum('total_tax');
-                    $avgPerEmployee = $totalEmployees > 0 ? $totalExpenses / $totalEmployees : 0;
-                    $topEmployee = $employeeBreakdown->first();
-                @endphp
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary"></i>
-                                    <h3 class="fw-bold m-0">{{ __('accounting.employee_summary') }}</h3>
+                    @php
+                        $totalExpenses     = (float) $employeeBreakdown->sum('grand_total');
+                        $totalEmployees    = $employeeBreakdown->count();
+                        $totalTransactions = $employeeBreakdown->sum('expense_count');
+                        $totalTax          = (float) $employeeBreakdown->sum('total_tax');
+                        $avgPerEmployee    = $totalEmployees > 0 ? $totalExpenses / $totalEmployees : 0;
+                        $topEmployee       = $employeeBreakdown->first();
+
+                        $stats = [
+                            ['color' => 'primary',   'icon' => 'ki-user',         'label' => 'total_employees',       'value' => $totalEmployees,                          'money' => false],
+                            ['color' => 'success',   'icon' => 'ki-receipt',      'label' => 'total_transactions',    'value' => number_format($totalTransactions),        'money' => false],
+                            ['color' => 'info',      'icon' => 'ki-chart-simple', 'label' => 'grand_total',           'value' => $totalExpenses,                           'money' => true],
+                            ['color' => 'warning',   'icon' => 'ki-receipt-tax',  'label' => 'total_tax',             'value' => $totalTax,                                'money' => true],
+                            ['color' => 'danger',    'icon' => 'ki-calculator',   'label' => 'average_per_employee',  'value' => $avgPerEmployee,                          'money' => true],
+                            ['color' => 'secondary', 'icon' => 'ki-ranking',      'label' => 'top_employee',          'value' => $topEmployee->employee_name ?? 'N/A',     'money' => false],
+                        ];
+                    @endphp
+
+                    <div class="row mb-6">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header border-0">
+                                    <div class="card-title d-flex align-items-center">
+                                        <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                            <span class="path1"></span>
+                                            <span class="path2"></span>
+                                        </i>
+                                        <h3 class="fw-bold m-0">{{ __('accounting.employee_summary') }}</h3>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-user fs-2tx text-primary"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">{{ $totalEmployees }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.total_employees') }}</div>
+                                <div class="card-body pt-0">
+                                    <div class="row g-6">
+                                        @foreach($stats as $stat)
+                                            <div class="col-md-6 col-lg-2">
+                                                <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                    <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                        <div class="mb-4">
+                                                            <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                <span class="path1"></span>
+                                                                <span class="path2"></span>
+                                                            </i>
+                                                        </div>
+                                                        <div class="mb-1">
+                                                            <span class="fs-2 fw-bold text-gray-800">
+                                                                @if($stat['money'])
+                                                                    {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                                @else
+                                                                    {{ $stat['value'] }}
+                                                                @endif
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-gray-600 fw-semibold fs-7">
+                                                            {{ __('accounting.' . $stat['label']) }}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-receipt fs-2tx text-success"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">{{ number_format($totalTransactions) }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.total_transactions') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-chart-simple fs-2tx text-info"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">${{ number_format($totalExpenses, 2) }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.grand_total') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-receipt-tax fs-2tx text-warning"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">${{ number_format($totalTax, 2) }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.total_tax') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-calculator fs-2tx text-danger"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">${{ number_format($avgPerEmployee, 2) }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.average_per_employee') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-secondary border border-secondary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4"><i class="ki-duotone ki-ranking fs-2tx text-secondary"></i></div>
-                                                <div class="mb-1"><span class="fs-1 fw-bold text-gray-800">{{ $topEmployee->employee_name ?? 'N/A' }}</span></div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('accounting.top_employee') }}</div>
-                                            </div>
-                                        </div>
+                                        @endforeach
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
                 @endif
 
                 {{-- Employee Breakdown Table --}}
@@ -260,7 +324,15 @@
                                                         <i class="ki-duotone ki-user fs-2"></i>
                                                     </div>
                                                 </div>
-                                                <span class="fw-bold">{{ $employee->employee_name }}</span>
+                                                <div class="d-flex justify-content-start flex-column">
+                                                    <span class="text-gray-800 fw-bold">{{ $employee->employee_name }}</span>
+                                                    @if($employee->department)
+                                                        <small class="text-muted">
+                                                            <i class="ki-duotone ki-briefcase fs-5 me-1"></i>
+                                                            {{ $employee->department }}
+                                                        </small>
+                                                    @endif
+                                                </div>
                                             </div>
                                         </td>
                                         <td>{{ $employee->department ?? 'N/A' }}</td>
@@ -295,9 +367,19 @@
                                 <tfoot class="table-light">
                                     <tr class="fw-bold">
                                         <td colspan="4" class="text-end">{{ __('accounting.total') }}:</td>
-                                        <td class="text-end text-success">{{ currency_symbol() }}{{ number_format($employeeBreakdown->sum('grand_total'), 2) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($employeeBreakdown->avg('average_expense'), 2) }}</td>
-                                        <td class="text-end text-danger">{{ currency_symbol() }}{{ number_format($employeeBreakdown->max('max_expense'), 2) }}</td>
+                                        <td class="text-end text-success">
+                                            {{ currency_symbol() }} {{ number_format($employeeBreakdown->sum('grand_total'), 2) }}
+                                        </td>
+                                        <td class="text-end">
+                                            @php
+                                                $totalCount = $employeeBreakdown->sum('expense_count');
+                                                $overallAvg = $totalCount > 0 ? $employeeBreakdown->sum('grand_total') / $totalCount : 0;
+                                            @endphp
+                                            {{ currency_symbol() }} {{ number_format($overallAvg, 2) }}
+                                        </td>
+                                        <td class="text-end text-danger">
+                                            {{ currency_symbol() }} {{ number_format($employeeBreakdown->max('max_expense'), 2) }}
+                                        </td>
                                         <td colspan="2"></td>
                                     </tr>
                                 </tfoot>
@@ -390,8 +472,22 @@
             chart: { type: 'line', height: 400, toolbar: { show: true } },
             stroke: { width: 3, curve: 'smooth' },
             xaxis: { categories: monthLabels, labels: { rotate: -45 } },
-            yaxis: { title: { text: 'Amount ($)' }, labels: { formatter: (val) => '$' + val.toLocaleString() } },
-            tooltip: { y: { formatter: (val) => '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2}) } },
+            yaxis: {
+            title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
+            labels: {
+                formatter: function (val) {
+                    return '{{ currency_symbol() }}' + val.toLocaleString();
+                }
+            }
+        },
+        tooltip: {
+            y: {
+                formatter: function (val) {
+                    return '{{ currency_symbol() }}' +
+                        val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+            }
+        },
             legend: { position: 'top', horizontalAlign: 'center' },
             markers: { size: 5 },
             grid: { borderColor: '#f1f1f1' }

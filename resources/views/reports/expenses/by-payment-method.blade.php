@@ -61,7 +61,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -73,67 +75,87 @@
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
+                                <div class="card-toolbar">
+                                    <span class="badge badge-light-info fs-7">
+                                        <i class="ki-duotone ki-calendar-8 fs-4 me-1"></i>
+                                        {{ \Carbon\Carbon::parse($startDate)->format('d M Y') }}
+                                        &mdash;
+                                        {{ \Carbon\Carbon::parse($endDate)->format('d M Y') }}
+                                    </span>
+                                </div>
                             </div>
+
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.by-payment-method') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Date range --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-12">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
+                                                <div class="input-group">
                                                     <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('accounting.start_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="start_date" value="{{ $startDate }}" required>
                                                 </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-1">
+                                                    {{ __('accounting.to') }}
+                                                </span>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('accounting.end_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="end_date" value="{{ $endDate }}" required>
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Payment Method --}}
-                                        <div class="flex-grow-1">
+                                    </div>
+
+                                    {{-- Row 2: Payment method + Location + Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-xl-4">
                                             <label class="form-label fw-semibold">{{ __('accounting.payment_method') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-credit-card fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="payment_method_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="payment_method_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_payment_methods') }}</option>
                                                     @foreach($paymentMethods as $method)
-                                                        <option value="{{ $method->id }}" 
-                                                                {{ $paymentMethodId == $method->id ? 'selected' : '' }}
+                                                        <option value="{{ $method->id }}"
+                                                                {{ (string) $paymentMethodId === (string) $method->id ? 'selected' : '' }}
                                                                 data-type="{{ $method->type }}">
-                                                            {{ $method->name }}
-                                                            @if($method->is_default)
-                                                                ({{ __('accounting.default') }})
-                                                            @endif
+                                                            {{ $method->name }}@if($method->is_default) ({{ __('accounting.default') }})@endif
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+
+                                        <div class="col-xl-4">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-xl-4 d-flex align-items-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2 w-100">
+                                                <button type="submit" class="btn btn-primary flex-grow-1">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.by-payment-method') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.by-payment-method') }}"
+                                                class="btn btn-light btn-active-light-primary flex-grow-1">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -142,6 +164,38 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $paymentMethodId
+                                            ? ['label' => __('accounting.payment_method'), 'value' => $paymentMethods->firstWhere('id', $paymentMethodId)?->name]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.by-payment-method') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -163,44 +217,69 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
+                                @if($methodBreakdown->count() > 0)
                                     @php
                                         $totalTransactions = $methodBreakdown->sum('transaction_count');
-                                        $totalAmount = $methodBreakdown->sum('grand_total');
-                                        $totalTax = $methodBreakdown->sum('total_tax');
-                                        $totalCategories = $methodBreakdown->sum('categories_used');
-                                        $totalVendors = $methodBreakdown->sum('vendors_used');
-                                        $avgTransaction = $totalTransactions > 0 ? $totalAmount / $totalTransactions : 0;
+                                        $totalAmount       = (float) $methodBreakdown->sum('grand_total');
+                                        $totalTax          = (float) $methodBreakdown->sum('total_tax');
+                                        $avgTransaction    = $totalTransactions > 0 ? $totalAmount / $totalTransactions : 0;
+
+                                        $stats = [
+                                            ['color' => 'primary',   'icon' => 'ki-credit-card',   'label' => 'total_payment_methods', 'value' => $methodBreakdown->count(),                            'money' => false],
+                                            ['color' => 'success',   'icon' => 'ki-receipt',       'label' => 'total_transactions',    'value' => number_format($totalTransactions),                    'money' => false],
+                                            ['color' => 'info',      'icon' => 'ki-chart-simple',  'label' => 'grand_total',           'value' => $totalAmount,                                         'money' => true],
+                                            ['color' => 'warning',   'icon' => 'ki-receipt-tax',   'label' => 'total_tax',             'value' => $totalTax,                                            'money' => true],
+                                            ['color' => 'danger',    'icon' => 'ki-calculator',    'label' => 'average_transaction',   'value' => $avgTransaction,                                      'money' => true],
+                                            ['color' => 'secondary', 'icon' => 'ki-ranking',       'label' => 'top_payment_method',    'value' => $methodBreakdown->first()->method_name ?? 'N/A',       'money' => false],
+                                        ];
                                     @endphp
-                                    @foreach([
-                                        ['key' => 'total_methods', 'color' => 'primary', 'icon' => 'ki-credit-card', 'label' => 'total_payment_methods', 'value' => $methodBreakdown->count()],
-                                        ['key' => 'total_transactions', 'color' => 'success', 'icon' => 'ki-receipt', 'label' => 'total_transactions', 'value' => $totalTransactions],
-                                        ['key' => 'total_amount', 'color' => 'info', 'icon' => 'ki-chart-simple', 'label' => 'grand_total', 'value' => '$' . number_format($totalAmount, 2)],
-                                        ['key' => 'total_tax', 'color' => 'warning', 'icon' => 'ki-receipt-tax', 'label' => 'total_tax', 'value' => '$' . number_format($totalTax, 2)],
-                                        ['key' => 'avg_transaction', 'color' => 'danger', 'icon' => 'ki-calculator', 'label' => 'average_transaction', 'value' => '$' . number_format($avgTransaction, 2)],
-                                        ['key' => 'top_method', 'color' => 'secondary', 'icon' => 'ki-ranking', 'label' => 'top_payment_method', 'value' => $methodBreakdown->first()->method_name ?? 'N/A']
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
+
+                                    <div class="row mb-6">
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header border-0">
+                                                    <div class="card-title d-flex align-items-center">
+                                                        <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                                            <span class="path1"></span>
+                                                            <span class="path2"></span>
+                                                        </i>
+                                                        <h3 class="fw-bold m-0">{{ __('accounting.payment_method_summary') }}</h3>
+                                                    </div>
                                                 </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('accounting.' . $stat['label']) }}
+                                                <div class="card-body pt-0">
+                                                    <div class="row g-6">
+                                                        @foreach($stats as $stat)
+                                                            <div class="col-md-6 col-lg-2">
+                                                                <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                                    <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                                        <div class="mb-4">
+                                                                            <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                                <span class="path1"></span>
+                                                                                <span class="path2"></span>
+                                                                            </i>
+                                                                        </div>
+                                                                        <div class="mb-1">
+                                                                            <span class="fs-2 fw-bold text-gray-800">
+                                                                                @if($stat['money'])
+                                                                                    {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                                                @else
+                                                                                    {{ $stat['value'] }}
+                                                                                @endif
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="text-gray-600 fw-semibold fs-7">
+                                                                            {{ __('accounting.' . $stat['label']) }}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    @endforeach
+                                @endif
                                 </div>
                             </div>
                         </div>
@@ -314,18 +393,10 @@
                                                     <td>
                                                         <span class="badge badge-light-primary">{{ $method->transaction_count }}</span>
                                                     </td>
-                                                    <td>
-                                                        <span class="text-gray-800 fw-semibold">${{ number_format($method->total_amount, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-success">${{ number_format($method->grand_total, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600">${{ number_format($method->average_transaction, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-danger">${{ number_format($method->max_transaction, 2) }}</span>
-                                                    </td>
+                                                    <td><span class="text-gray-800 fw-semibold">{{ currency_symbol() }} {{ number_format($method->total_amount, 2) }}</span></td>
+                                                    <td><span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($method->grand_total, 2) }}</span></td>
+                                                    <td><span class="text-gray-600">{{ currency_symbol() }} {{ number_format($method->average_transaction, 2) }}</span></td>
+                                                    <td><span class="text-danger">{{ currency_symbol() }} {{ number_format($method->max_transaction, 2) }}</span></td>
                                                     <td>
                                                         <span class="badge badge-light-info">{{ $method->categories_used }}</span>
                                                     </td>
@@ -439,7 +510,7 @@
                                                                 <td class="text-end">
                                                                     <span class="badge badge-light-primary">{{ $category->transaction_count }}</span>
                                                                 </td>
-                                                                <td class="text-end fw-semibold">${{ number_format($category->total_amount, 2) }}</td>
+                                                                <td class="text-end fw-semibold">{{ currency_symbol() }} {{ number_format($category->total_amount, 2) }}</td>
                                                             </tr>
                                                             @endforeach
                                                             @if($categories->count() > 5)
@@ -459,7 +530,7 @@
                                                                     <span class="badge badge-light-primary">{{ $categories->sum('transaction_count') }}</span>
                                                                 </td>
                                                                 <td class="text-end text-success fw-bold">
-                                                                    ${{ number_format($categories->sum('total_amount'), 2) }}
+                                                                    {{ currency_symbol() }} {{ number_format($categories->sum('total_amount'), 2) }}
                                                                 </td>
                                                             </tr>
                                                         </tfoot>
@@ -570,22 +641,19 @@
                 width: 3,
                 curve: 'smooth'
             },
-            xaxis: {
-                categories: monthLabels,
+            yaxis: {
+                title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
                 labels: {
-                    rotate: -45,
-                    style: {
-                        fontSize: '12px'
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' + val.toLocaleString();
                     }
                 }
             },
-            yaxis: {
-                title: {
-                    text: 'Amount ($)'
-                },
-                labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
+            tooltip: {
+                y: {
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' +
+                            val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 }
             },

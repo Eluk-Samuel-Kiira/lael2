@@ -61,7 +61,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}    
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -73,66 +75,86 @@
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
+                                <div class="card-toolbar">
+                                    <span class="badge badge-light-info fs-7">
+                                        <i class="ki-duotone ki-calendar-8 fs-4 me-1"></i>
+                                        {{ \Carbon\Carbon::parse($startDate)->format('d M Y') }}
+                                        &mdash;
+                                        {{ \Carbon\Carbon::parse($endDate)->format('d M Y') }}
+                                    </span>
+                                </div>
                             </div>
+
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.by-category') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-lg-row gap-4 gap-lg-6">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Date range + Category --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-6">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
+                                                <div class="input-group">
                                                     <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('accounting.start_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="start_date" value="{{ $startDate }}" required>
                                                 </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-1">
+                                                    {{ __('accounting.to') }}
+                                                </span>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('accounting.end_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="end_date" value="{{ $endDate }}" required>
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Specific Category --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.specific_category') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-category fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="category_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="category_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_categories') }}</option>
-                                                    @foreach($categories as $category)
-                                                        <option value="{{ $category->id }}" 
-                                                                {{ request('category_id') == $category->id ? 'selected' : '' }}>
-                                                            {{ $category->name }}
-                                                            @if($category->code)
-                                                                ({{ $category->code }})
-                                                            @endif
+                                                    @foreach($expenseCategories as $category)
+                                                        <option value="{{ $category->id }}"
+                                                                {{ (string) $categoryId === (string) $category->id ? 'selected' : '' }}>
+                                                            {{ $category->name }}@if($category->code) ({{ $category->code }})@endif
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Row 2: Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-12 d-flex justify-content-end">
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                <button type="submit" class="btn btn-primary">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.by-category') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.by-category') }}"
+                                                class="btn btn-light btn-active-light-primary">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -141,11 +163,43 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $categoryId
+                                            ? ['label' => __('accounting.category'), 'value' => $categories->firstWhere('id', $categoryId)?->name]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.by-category') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
                 </div>
-
+                
                 {{-- Summary Statistics --}}
                 @if($categoryBreakdown->count() > 0)
                 <div class="row mb-6">
@@ -162,36 +216,39 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'category_count', 'color' => 'primary', 'icon' => 'ki-category', 'label' => 'total_categories', 'value' => $categoryBreakdown->count()],
-                                        ['key' => 'total_expenses', 'color' => 'success', 'icon' => 'ki-dollar', 'label' => 'total_expenses', 'value' => $categoryBreakdown->sum('expense_count')],
-                                        ['key' => 'grand_total', 'color' => 'info', 'icon' => 'ki-chart-simple', 'label' => 'grand_total_amount', 'value' => '$' . number_format($totalExpenses, 2)],
-                                        ['key' => 'total_tax', 'color' => 'warning', 'icon' => 'ki-receipt-tax', 'label' => 'total_tax', 'value' => '$' . number_format($categoryBreakdown->sum('total_tax'), 2)],
-                                        ['key' => 'avg_amount', 'color' => 'danger', 'icon' => 'ki-calculator', 'label' => 'average_per_category', 'value' => '$' . number_format($categoryBreakdown->avg('average_amount'), 2)],
-                                        ['key' => 'top_category', 'color' => 'secondary', 'icon' => 'ki-ranking', 'label' => 'top_category', 'value' => $categoryBreakdown->first()->category_name ?? 'N/A']
-                                    ] as $stat)
+                                @foreach([
+                                    ['key' => 'category_count', 'color' => 'primary', 'icon' => 'ki-category', 'label' => 'total_categories',   'value' => $categoryBreakdown->count(),                                       'money' => false],
+                                    ['key' => 'total_expenses', 'color' => 'success', 'icon' => 'ki-dollar',   'label' => 'total_expenses',     'value' => $categoryBreakdown->sum('expense_count'),                          'money' => false],
+                                    ['key' => 'grand_total',    'color' => 'info',    'icon' => 'ki-chart-simple', 'label' => 'grand_total_amount', 'value' => $totalExpenses,                                                 'money' => true],
+                                    ['key' => 'total_tax',      'color' => 'warning', 'icon' => 'ki-receipt-tax','label' => 'total_tax',          'value' => $categoryBreakdown->sum('total_tax'),                              'money' => true],
+                                    ['key' => 'avg_amount',     'color' => 'danger',  'icon' => 'ki-calculator','label' => 'average_per_category','value' => $categoryBreakdown->avg('average_amount'),                        'money' => true],
+                                    ['key' => 'top_category',   'color' => 'secondary','icon' => 'ki-ranking',  'label' => 'top_category',       'value' => $categoryBreakdown->first()->category_name ?? 'N/A',               'money' => false],
+                                ] as $stat)
                                     <div class="col-md-6 col-lg-2">
                                         <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
                                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                                 <div class="mb-4">
                                                     <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
                                                     </i>
                                                 </div>
                                                 <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
+                                                    <span class="fs-2 fw-bold text-gray-800">
+                                                        @if($stat['money'])
+                                                            {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                        @else
+                                                            {{ $stat['value'] }}
+                                                        @endif
                                                     </span>
                                                 </div>
-                                                <div class="text-gray-600 fw-semibold">
+                                                <div class="text-gray-600 fw-semibold fs-7">
                                                     {{ __('accounting.' . $stat['label']) }}
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    @endforeach
+                                @endforeach
                                 </div>
                             </div>
                         </div>
@@ -276,22 +333,22 @@
                                                         <span class="badge badge-light-primary">{{ $category->expense_count }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="text-gray-800 fw-semibold">${{ number_format($category->total_amount, 2) }}</span>
+                                                        <span class="text-gray-800 fw-semibold">{{ currency_symbol() }} {{ number_format($category->total_amount, 2) }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="text-info">${{ number_format($category->total_tax, 2) }}</span>
+                                                        <span class="text-info">{{ currency_symbol() }} {{ number_format($category->total_tax, 2) }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="fw-bold text-success">${{ number_format($category->grand_total, 2) }}</span>
+                                                        <span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($category->grand_total, 2) }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="text-gray-600">${{ number_format($category->average_amount, 2) }}</span>
+                                                        <span class="text-gray-600">{{ currency_symbol() }} {{ number_format($category->average_amount, 2) }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="text-danger">${{ number_format($category->max_amount, 2) }}</span>
+                                                        <span class="text-danger">{{ currency_symbol() }} {{ number_format($category->max_amount, 2) }}</span>
                                                     </td>
                                                     <td>
-                                                        <span class="text-secondary">${{ number_format($category->min_amount, 2) }}</span>
+                                                        <span class="text-secondary">{{ currency_symbol() }} {{ number_format($category->min_amount, 2) }}</span>
                                                     </td>
                                                     <td>
                                                         <div class="d-flex align-items-center">
@@ -324,11 +381,11 @@
                                         </i>
                                         <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
                                         <p class="text-muted fs-6">{{ __('accounting.no_expenses_found_for_categories') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date', 'category_id']))
-                                        <a href="{{ route('reports.expenses.by-category') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters_view_all') }}
-                                        </a>
+                                        @if(request()->filled('category_id') || request()->filled('location_id'))
+                                            <a href="{{ route('reports.expenses.by-category') }}" class="btn btn-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-2"></i>
+                                                {{ __('accounting.clear_filters_view_all') }}
+                                            </a>
                                         @endif
                                     </div>
                                 </div>
@@ -394,7 +451,7 @@
                                                         $monthlyTotal = $monthlyDataMatrix[$monthKey][$categoryName] ?? 0;
                                                     @endphp
                                                     <td class="text-end">
-                                                        <span class="text-gray-800 fw-semibold">${{ number_format($monthlyTotal, 2) }}</span>
+                                                        <span class="text-gray-800 fw-semibold">{{ currency_symbol() }} {{ number_format($monthlyTotal, 2) }}</span>
                                                     </td>
                                                 @endforeach
                                             </tr>
@@ -408,7 +465,7 @@
                                                         $total = $categoryTotals[$categoryName] ?? 0;
                                                     @endphp
                                                     <td class="text-end">
-                                                        <span class="text-success fw-bold">${{ number_format($total, 2) }}</span>
+                                                        <span class="text-success fw-bold">{{ currency_symbol() }} {{ number_format($total, 2) }}</span>
                                                     </td>
                                                 @endforeach
                                             </tr>
@@ -469,11 +526,14 @@
                 labels: { rotate: -45, style: { fontSize: '11px' } }
             },
             yaxis: {
-                title: { text: 'Amount ($)' },
-                labels: { formatter: (val) => '$' + val.toLocaleString() }
+                title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
+                labels: { formatter: (val) => '{{ currency_symbol() }}' + val.toLocaleString() }
             },
             tooltip: {
-                y: { formatter: (val) => '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2}) }
+                y: {
+                    formatter: (val) => '{{ currency_symbol() }}' +
+                        val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                }
             },
             legend: { position: 'top', horizontalAlign: 'center', fontSize: '12px' },
             markers: { size: 4 },

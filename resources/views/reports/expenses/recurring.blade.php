@@ -61,7 +61,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -76,73 +78,77 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.recurring') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6">
-                                        {{-- Frequency --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Frequency + Category + Status + Location --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.frequency') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-repeat fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="frequency">
+                                            <div class="input-group">
+                                                <select class="form-select" name="frequency" data-control="select2">
                                                     <option value="">{{ __('accounting.all_frequencies') }}</option>
                                                     @foreach($frequencies as $key => $name)
-                                                        <option value="{{ $key }}" {{ $frequency == $key ? 'selected' : '' }}>
+                                                        <option value="{{ $key }}"
+                                                                {{ (string) $frequency === (string) $key ? 'selected' : '' }}>
                                                             {{ __($name) }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Category --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.category') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-category fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="category_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="category_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_categories') }}</option>
-                                                    @foreach($categories as $category)
-                                                        <option value="{{ $category->id }}" {{ $categoryId == $category->id ? 'selected' : '' }}>
-                                                            {{ $category->name }}
+                                                    @foreach($expenseCategories as $category)
+                                                        <option value="{{ $category->id }}"
+                                                                {{ (string) $categoryId === (string) $category->id ? 'selected' : '' }}>
+                                                            {{ $category->name }}@if($category->code) ({{ $category->code }})@endif
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Status --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.status') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-status fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="status">
-                                                    <option value="active" {{ $status == 'active' ? 'selected' : '' }}>
-                                                        {{ __('accounting.active') }}
-                                                    </option>
-                                                    <option value="upcoming" {{ $status == 'upcoming' ? 'selected' : '' }}>
-                                                        {{ __('accounting.upcoming') }} (7 days)
-                                                    </option>
-                                                    <option value="overdue" {{ $status == 'overdue' ? 'selected' : '' }}>
-                                                        {{ __('accounting.overdue') }}
-                                                    </option>
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.status') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="status" data-control="select2">
+                                                    <option value="active"   {{ $status === 'active'   ? 'selected' : '' }}>{{ __('accounting.active') }}</option>
+                                                    <option value="upcoming" {{ $status === 'upcoming' ? 'selected' : '' }}>{{ __('accounting.upcoming') }} (7 {{ __('accounting.days') }})</option>
+                                                    <option value="overdue"  {{ $status === 'overdue'  ? 'selected' : '' }}>{{ __('accounting.overdue') }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Row 2: Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-12 d-flex justify-content-end">
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                <button type="submit" class="btn btn-primary">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.recurring') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.recurring') }}"
+                                                class="btn btn-light btn-active-light-primary">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -151,6 +157,44 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $frequency
+                                            ? ['label' => __('accounting.frequency'), 'value' => __($frequencies[$frequency] ?? $frequency)]
+                                            : null,
+                                        $categoryId
+                                            ? ['label' => __('accounting.category'), 'value' => $categories->firstWhere('id', $categoryId)?->name]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                        ($status && $status !== 'active')
+                                            ? ['label' => __('accounting.status'), 'value' => __($status)]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.recurring') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -172,42 +216,69 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
+                                @if($recurringExpenses->count() > 0)
                                     @php
-                                        $totalRecurring = $recurringExpenses->count();
-                                        $totalMonthly = $recurringExpenses->sum('total_amount');
-                                        $totalUpcoming = $upcomingNext30Days->count();
-                                        $totalUpcomingAmount = $upcomingNext30Days->sum('total_amount');
+                                        $totalRecurring       = $recurringExpenses->count();
+                                        $totalMonthly         = (float) $recurringExpenses->sum('total_amount');
+                                        $totalUpcoming        = $upcomingNext30Days->count();
+                                        $totalUpcomingAmount  = (float) $upcomingNext30Days->sum('total_amount');
+
+                                        $stats = [
+                                            ['color' => 'primary',   'icon' => 'ki-repeat',       'label' => 'total_recurring_expenses', 'value' => $totalRecurring,                                                     'money' => false],
+                                            ['color' => 'success',   'icon' => 'ki-dollar',       'label' => 'total_monthly_recurring',  'value' => $totalMonthly,                                                       'money' => true],
+                                            ['color' => 'info',      'icon' => 'ki-chart-simple', 'label' => 'annual_projection',        'value' => (float) $annualProjection,                                           'money' => true],
+                                            ['color' => 'warning',   'icon' => 'ki-calendar-8',   'label' => 'upcoming_30_days',         'value' => $totalUpcoming,                                                      'money' => false],
+                                            ['color' => 'danger',    'icon' => 'ki-dollar',       'label' => 'upcoming_amount',          'value' => $totalUpcomingAmount,                                                'money' => true],
+                                            ['color' => 'secondary', 'icon' => 'ki-calculator',   'label' => 'average_recurring',        'value' => $totalRecurring > 0 ? $totalMonthly / $totalRecurring : 0,           'money' => true],
+                                        ];
                                     @endphp
-                                    @foreach([
-                                        ['key' => 'total_recurring', 'color' => 'primary', 'icon' => 'ki-repeat', 'label' => 'total_recurring_expenses', 'value' => $totalRecurring],
-                                        ['key' => 'total_monthly', 'color' => 'success', 'icon' => 'ki-dollar', 'label' => 'total_monthly_recurring', 'value' => '$' . number_format($totalMonthly, 2)],
-                                        ['key' => 'annual_projection', 'color' => 'info', 'icon' => 'ki-chart-simple', 'label' => 'annual_projection', 'value' => '$' . number_format($annualProjection, 2)],
-                                        ['key' => 'upcoming_30_days', 'color' => 'warning', 'icon' => 'ki-calendar-8', 'label' => 'upcoming_30_days', 'value' => $totalUpcoming],
-                                        ['key' => 'upcoming_amount', 'color' => 'danger', 'icon' => 'ki-dollar', 'label' => 'upcoming_amount', 'value' => '$' . number_format($totalUpcomingAmount, 2)],
-                                        ['key' => 'avg_recurring', 'color' => 'secondary', 'icon' => 'ki-calculator', 'label' => 'average_recurring', 'value' => '$' . number_format($totalRecurring > 0 ? $totalMonthly / $totalRecurring : 0, 2)]
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
+
+                                    <div class="row mb-6">
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header border-0">
+                                                    <div class="card-title d-flex align-items-center">
+                                                        <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                                            <span class="path1"></span>
+                                                            <span class="path2"></span>
+                                                        </i>
+                                                        <h3 class="fw-bold m-0">{{ __('accounting.recurring_summary') }}</h3>
+                                                    </div>
                                                 </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('accounting.' . $stat['label']) }}
+                                                <div class="card-body pt-0">
+                                                    <div class="row g-6">
+                                                        @foreach($stats as $stat)
+                                                            <div class="col-md-6 col-lg-2">
+                                                                <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                                    <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                                        <div class="mb-4">
+                                                                            <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                                <span class="path1"></span>
+                                                                                <span class="path2"></span>
+                                                                            </i>
+                                                                        </div>
+                                                                        <div class="mb-1">
+                                                                            <span class="fs-2 fw-bold text-gray-800">
+                                                                                @if($stat['money'])
+                                                                                    {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                                                @else
+                                                                                    {{ $stat['value'] }}
+                                                                                @endif
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="text-gray-600 fw-semibold fs-7">
+                                                                            {{ __('accounting.' . $stat['label']) }}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    @endforeach
+                                @endif
                                 </div>
                             </div>
                         </div>
@@ -339,12 +410,8 @@
                                                         <span class="text-muted">{{ __('accounting.not_set') }}</span>
                                                         @endif
                                                     </td>
-                                                    <td>
-                                                        <span class="fw-bold text-success">${{ number_format($expense->total_amount, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-info">${{ number_format($annualTotal, 2) }}</span>
-                                                    </td>
+                                                    <td><span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($expense->total_amount, 2) }}</span></td>
+                                                    <td><span class="fw-bold text-info">{{ currency_symbol() }} {{ number_format($annualTotal, 2) }}</span></td>
                                                     <td>
                                                         @if($expense->paymentMethod)
                                                             <span class="badge badge-light-primary">
@@ -482,7 +549,7 @@
                                                 </div>
                                                 <div class="border-top border-gray-300 pt-2 mt-2">
                                                     <span class="fs-4 fw-bold text-gray-700 d-block">
-                                                        ${{ number_format($data['total_monthly'], 2) }}
+                                                        {{ currency_symbol() }} {{ number_format($data['total_monthly'], 2) }}
                                                     </span>
                                                     <small class="text-gray-600 fw-semibold d-block mt-1">
                                                         {{ __('accounting.monthly_total') }}
@@ -490,7 +557,7 @@
                                                 </div>
                                                 <div class="border-top border-gray-300 pt-2 mt-2">
                                                     <span class="fs-4 fw-bold text-success d-block">
-                                                        ${{ number_format($data['total_annual'], 2) }}
+                                                        {{ currency_symbol() }} {{ number_format($data['total_annual'], 2) }}
                                                     </span>
                                                     <small class="text-gray-600 fw-semibold d-block mt-1">
                                                         {{ __('accounting.annual_projection') }}
@@ -578,7 +645,7 @@
                                                     @endif
                                                 </td>
                                                 <td>
-                                                    <span class="fw-bold text-success">${{ number_format($expense->total_amount, 2) }}</span>
+                                                    <span class="fw-bold text-success"> {{ currency_symbol() }} {{ number_format($expense->total_amount, 2) }}</span>
                                                 </td>
                                                 <td>
                                                     <span class="badge badge-light-primary">
@@ -691,37 +758,29 @@
             yaxis: [
                 {
                     seriesName: '{{ __("accounting.projected_amount") }}',
-                    title: {
-                        text: 'Amount ($)'
-                    },
+                    title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
                     labels: {
-                        formatter: function(val) {
-                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 0});
+                        formatter: function (val) {
+                            return '{{ currency_symbol() }}' + val.toLocaleString(undefined, { minimumFractionDigits: 0 });
                         }
                     }
                 },
                 {
                     seriesName: '{{ __("accounting.expense_count") }}',
                     opposite: true,
-                    title: {
-                        text: '{{ __("accounting.expense_count") }}'
-                    },
-                    labels: {
-                        formatter: function(val) {
-                            return val.toFixed(0);
-                        }
-                    }
+                    title: { text: '{{ __("accounting.expense_count") }}' },
+                    labels: { formatter: function (val) { return val.toFixed(0); } }
                 }
             ],
             tooltip: {
                 y: [
                     {
-                        formatter: function(val) {
-                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        formatter: function (val) {
+                            return '{{ currency_symbol() }}' + val.toLocaleString(undefined, { minimumFractionDigits: 2 });
                         }
                     },
                     {
-                        formatter: function(val) {
+                        formatter: function (val) {
                             return val + ' {{ __("accounting.expenses") }}';
                         }
                     }

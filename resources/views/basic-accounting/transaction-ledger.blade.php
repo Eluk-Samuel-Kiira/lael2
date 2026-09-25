@@ -187,9 +187,9 @@
                     </div>
                 </div>
                 
-                <!-- Summary Stats -->
                 <div class="row g-5 g-xl-8 mb-8">
-                    <!-- Total Transactions -->
+
+                    {{-- Total Transactions --}}
                     <div class="col-sm-6 col-xl-3">
                         <div class="card card-flush h-md-100">
                             <div class="card-header pt-7">
@@ -200,56 +200,134 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="d-flex flex-stack">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.total_pages') }}</span>
-                                    <span class="fw-bold text-gray-700">{{ $transactions->lastPage() }}</span>
+                                    <span class="text-gray-500 fw-semibold fs-7">
+                                        <span class="text-success fw-bold">{{ $inflowCount }}</span>
+                                        {{ __('accounting.in') }} /
+                                        <span class="text-danger fw-bold">{{ $outflowCount }}</span>
+                                        {{ __('accounting.out') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Total Amount -->
+
+                    {{-- Total Inflow --}}
                     <div class="col-sm-6 col-xl-3">
-                        <div class="card card-flush h-md-100">
+                        <div class="card card-flush h-md-100 bg-light-success">
                             <div class="card-header pt-7">
                                 <div class="card-title d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-gray-800">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
-                                    <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.total_amount') }}</span>
+                                    <span class="fs-2hx fw-bold text-success">
+                                        +{{ number_format($inflowTotal, 2) }} {{ currency_symbol() }}
+                                    </span>
+                                    <span class="text-gray-600 fw-semibold fs-6">{{ __('accounting.total_inflow') }}</span>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
                                 <div class="d-flex flex-stack">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.total_value') }}</span>
-                                    <span class="fw-bold text-gray-700">{{ number_format($totalAmount, 2) }} {{ currency_symbol() }}</span>
+                                    <span class="text-gray-600 fw-semibold fs-7">
+                                        {{ __('accounting.deposits_transfers_in_refunds') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Average Transaction -->
+
+                    {{-- Total Outflow --}}
                     <div class="col-sm-6 col-xl-3">
+                        <div class="card card-flush h-md-100 bg-light-danger">
+                            <div class="card-header pt-7">
+                                <div class="card-title d-flex flex-column">
+                                    <span class="fs-2hx fw-bold text-danger">
+                                        -{{ number_format($outflowTotal, 2) }} {{ currency_symbol() }}
+                                    </span>
+                                    <span class="text-gray-600 fw-semibold fs-6">{{ __('accounting.total_outflow') }}</span>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="d-flex flex-stack">
+                                    <span class="text-gray-600 fw-semibold fs-7">
+                                        {{ __('accounting.withdrawals_transfers_out_fees') }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Net Change --}}
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="card card-flush h-md-100 {{ $netChange >= 0 ? 'bg-light-primary' : 'bg-light-warning' }}">
+                            <div class="card-header pt-7">
+                                <div class="card-title d-flex flex-column">
+                                    <span class="fs-2hx fw-bold {{ $netChange >= 0 ? 'text-primary' : 'text-warning' }}">
+                                        {{ $netChange >= 0 ? '+' : '-' }}{{ number_format(abs($netChange), 2) }} {{ currency_symbol() }}
+                                    </span>
+                                    <span class="text-gray-600 fw-semibold fs-6">{{ __('accounting.net_change') }}</span>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="d-flex flex-stack">
+                                    <span class="text-gray-600 fw-semibold fs-7">
+                                        {{ __('accounting.inflow_minus_outflow') }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {{-- Second row: current balance + average + date range --}}
+                <div class="row g-5 g-xl-8 mb-8">
+
+                    {{-- Current Total Balance --}}
+                    <div class="col-sm-6 col-xl-4">
+                        <div class="card card-flush h-md-100 bg-light-info">
+                            <div class="card-header pt-7">
+                                <div class="card-title d-flex flex-column">
+                                    <span class="fs-2hx fw-bold text-info">
+                                        {{ number_format($currentTotalBalance, 2) }} {{ currency_symbol() }}
+                                    </span>
+                                    <span class="text-gray-600 fw-semibold fs-6">{{ __('accounting.current_total_balance') }}</span>
+                                </div>
+                            </div>
+                            <div class="card-body pt-0">
+                                <div class="d-flex flex-stack">
+                                    <span class="text-gray-600 fw-semibold fs-7">
+                                        {{ __('accounting.across_active_payment_methods') }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Average per Transaction --}}
+                    <div class="col-sm-6 col-xl-4">
                         <div class="card card-flush h-md-100">
                             <div class="card-header pt-7">
                                 <div class="card-title d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-gray-800">{{ number_format($averageAmount, 2) }} {{ currency_symbol() }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800">
+                                        {{ number_format($averageAmount, 2) }} {{ currency_symbol() }}
+                                    </span>
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.average_transaction') }}</span>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
                                 <div class="d-flex flex-stack">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.per_transaction') }}</span>
-                                    <span class="fw-bold text-gray-700">{{ number_format($averageAmount, 2) }} {{ currency_symbol() }}</span>
+                                    <span class="text-gray-500 fw-semibold fs-7">
+                                        {{ __('accounting.based_on_absolute_movement') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Date Range -->
-                    <div class="col-sm-6 col-xl-3">
+
+                    {{-- Date Range --}}
+                    <div class="col-sm-6 col-xl-4">
                         <div class="card card-flush h-md-100">
                             <div class="card-header pt-7">
                                 <div class="card-title d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-gray-800 fs-3">
-                                        {{ \Carbon\Carbon::parse($filters['start_date'])->format('M d') }} - 
+                                    <span class="fs-3 fw-bold text-gray-800">
+                                        {{ \Carbon\Carbon::parse($filters['start_date'])->format('M d') }} —
                                         {{ \Carbon\Carbon::parse($filters['end_date'])->format('M d, Y') }}
                                     </span>
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.date_range') }}</span>
@@ -257,12 +335,14 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="d-flex flex-stack">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.selected_period') }}</span>
-                                    <span class="fw-bold text-gray-700">{{ $transactions->count() }} {{ __('accounting.transactions') }}</span>
+                                    <span class="text-gray-500 fw-semibold fs-7">
+                                        {{ $transactions->count() }} {{ __('accounting.transactions') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </div>
+
                 </div>
                 
                 <!-- Transactions Table -->

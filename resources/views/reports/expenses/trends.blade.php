@@ -62,7 +62,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -77,72 +79,75 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.trends') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6">
-                                        {{-- Period --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Period + Year + Category + Location --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.period') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="period" id="periodSelect">
-                                                    <option value="monthly" {{ $period == 'monthly' ? 'selected' : '' }}>
-                                                        {{ __('accounting.monthly') }}
-                                                    </option>
-                                                    <option value="quarterly" {{ $period == 'quarterly' ? 'selected' : '' }}>
-                                                        {{ __('accounting.quarterly') }}
-                                                    </option>
-                                                    <option value="yearly" {{ $period == 'yearly' ? 'selected' : '' }}>
-                                                        {{ __('accounting.yearly') }}
-                                                    </option>
+                                            <div class="input-group">
+                                                <select class="form-select" name="period" id="periodSelect" data-control="select2">
+                                                    <option value="monthly"   {{ $period === 'monthly'   ? 'selected' : '' }}>{{ __('accounting.monthly') }}</option>
+                                                    <option value="quarterly" {{ $period === 'quarterly' ? 'selected' : '' }}>{{ __('accounting.quarterly') }}</option>
+                                                    <option value="yearly"    {{ $period === 'yearly'    ? 'selected' : '' }}>{{ __('accounting.yearly') }}</option>
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Year --}}
-                                        <div class="flex-grow-1" id="yearField">
+
+                                        <div class="col-xl-3" id="yearField">
                                             <label class="form-label fw-semibold">{{ __('accounting.year') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="year">
+                                            <div class="input-group">
+                                                <select class="form-select" name="year" data-control="select2">
                                                     @foreach($years as $y)
-                                                        <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>
+                                                        <option value="{{ $y }}" {{ (int) $year === (int) $y ? 'selected' : '' }}>
                                                             {{ $y }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Category --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.category') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-category fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="category_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="category_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_categories') }}</option>
                                                     @foreach($categories as $category)
-                                                        <option value="{{ $category->id }}" {{ $categoryId == $category->id ? 'selected' : '' }}>
-                                                            {{ $category->name }}
+                                                        <option value="{{ $category->id }}"
+                                                                {{ (string) $categoryId === (string) $category->id ? 'selected' : '' }}>
+                                                            {{ $category->name }}@if($category->code) ({{ $category->code }})@endif
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Row 2: Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-12 d-flex justify-content-end">
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+                                                <button type="submit" class="btn btn-primary">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.trends') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.trends') }}"
+                                                class="btn btn-light btn-active-light-primary">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -151,6 +156,44 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        ($period !== 'monthly')
+                                            ? ['label' => __('accounting.period'), 'value' => __($period)]
+                                            : null,
+                                        $categoryId
+                                            ? ['label' => __('accounting.category'), 'value' => $categories->firstWhere('id', $categoryId)?->name]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                        ($period !== 'yearly' && (int) $year !== (int) date('Y'))
+                                            ? ['label' => __('accounting.year'), 'value' => $year]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.trends') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -178,52 +221,84 @@
                                     </h3>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
+                            @if(!empty($trendData))
                                 @php
-                                    $currentTotal = collect($trendData)->sum('current_year') ?? collect($trendData)->sum('total');
-                                    $previousTotal = collect($trendData)->sum('previous_year');
-                                    $totalExpenses = collect($trendData)->sum('expense_count') ?? collect($trendData)->sum('expense_count');
-                                    $averageAmount = $currentTotal / (count($trendData) ?: 1);
-                                    
-                                    // Calculate growth if previous year data exists
-                                    $growthRate = 0;
-                                    if ($previousTotal > 0) {
-                                        $growthRate = (($currentTotal - $previousTotal) / $previousTotal) * 100;
-                                    }
+                                    $currentTotal  = (float) collect($trendData)->sum('current_year')
+                                        ?: (float) collect($trendData)->sum('total');
+                                    $previousTotal = (float) collect($trendData)->sum('previous_year');
+                                    $totalExpenses = collect($trendData)->sum('expense_count');
+                                    $averageAmount = count($trendData) > 0 ? $currentTotal / count($trendData) : 0;
+
+                                    $growthRate = $previousTotal > 0
+                                        ? (($currentTotal - $previousTotal) / $previousTotal) * 100
+                                        : 0;
+
+                                    $stats = [
+                                        ['color' => 'primary',   'icon' => 'ki-chart-up',    'label' => 'total_expenses',        'value' => $currentTotal,                                              'money' => true],
+                                        ['color' => $growthRate >= 0 ? 'success' : 'danger',
+                                                                'icon' => 'ki-growth',      'label' => 'growth_rate',           'value' => number_format($growthRate, 1) . '%',                        'money' => false],
+                                        ['color' => 'info',      'icon' => 'ki-receipt',     'label' => 'expense_count',         'value' => $totalExpenses,                                             'money' => false],
+                                        ['color' => 'warning',   'icon' => 'ki-calculator',  'label' => 'average_amount',        'value' => $averageAmount,                                             'money' => true],
+                                        ['color' => 'secondary', 'icon' => 'ki-calendar',    'label' => 'previous_year_total',   'value' => $previousTotal,                                             'money' => true],
+                                        ['color' => $currentTotal >= $previousTotal ? 'danger' : 'success',
+                                                                'icon' => 'ki-chart',       'label' => 'variance',              'value' => abs($currentTotal - $previousTotal),                        'money' => true],
+                                    ];
                                 @endphp
-                                <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'total_expenses', 'color' => 'primary', 'icon' => 'ki-chart-up', 'label' => 'total_expenses', 'value' => '$' . number_format($currentTotal, 2)],
-                                        ['key' => 'growth_rate', 'color' => $growthRate >= 0 ? 'success' : 'danger', 'icon' => 'ki-growth', 'label' => 'growth_rate', 'value' => number_format($growthRate, 1) . '%'],
-                                        ['key' => 'expense_count', 'color' => 'info', 'icon' => 'ki-receipt', 'label' => 'expense_count', 'value' => $totalExpenses],
-                                        ['key' => 'average_amount', 'color' => 'warning', 'icon' => 'ki-calculator', 'label' => 'average_amount', 'value' => '$' . number_format($averageAmount, 2)],
-                                        ['key' => 'previous_year', 'color' => 'secondary', 'icon' => 'ki-calendar', 'label' => 'previous_year_total', 'value' => '$' . number_format($previousTotal, 2)],
-                                        ['key' => 'variance', 'color' => $currentTotal >= $previousTotal ? 'danger' : 'success', 'icon' => 'ki-chart', 'label' => 'variance', 'value' => '$' . number_format(abs($currentTotal - $previousTotal), 2)]
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
+
+                                <div class="row mb-6">
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header border-0">
+                                                <div class="card-title d-flex align-items-center">
+                                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
                                                     </i>
+                                                    <h3 class="fw-bold m-0">
+                                                        @if($period === 'monthly')
+                                                            {{ __('accounting.monthly_trends_summary') }} {{ $year }}
+                                                        @elseif($period === 'quarterly')
+                                                            {{ __('accounting.quarterly_trends_summary') }} {{ $year }}
+                                                        @else
+                                                            {{ __('accounting.yearly_trends_summary') }}
+                                                        @endif
+                                                    </h3>
                                                 </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('accounting.' . $stat['label']) }}
+                                            </div>
+                                            <div class="card-body pt-0">
+                                                <div class="row g-6">
+                                                    @foreach($stats as $stat)
+                                                        <div class="col-md-6 col-lg-2">
+                                                            <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                                    <div class="mb-4">
+                                                                        <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                            <span class="path1"></span>
+                                                                            <span class="path2"></span>
+                                                                        </i>
+                                                                    </div>
+                                                                    <div class="mb-1">
+                                                                        <span class="fs-2 fw-bold text-gray-800">
+                                                                            @if($stat['money'])
+                                                                                {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                                            @else
+                                                                                {{ $stat['value'] }}
+                                                                            @endif
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="text-gray-600 fw-semibold fs-7">
+                                                                        {{ __('accounting.' . $stat['label']) }}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    @endforeach
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    @endforeach
                                 </div>
-                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -338,10 +413,10 @@
                                                             {{ $monthNames[$month] }}
                                                         </td>
                                                         <td>
-                                                            <span class="fw-bold text-success">${{ number_format($data['current_year'], 2) }}</span>
+                                                            <span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($data['current_year'], 2) }}</span>
                                                         </td>
                                                         <td>
-                                                            <span class="fw-semibold text-gray-600">${{ number_format($data['previous_year'], 2) }}</span>
+                                                            <span class="fw-semibold text-gray-600">{{ currency_symbol() }} {{ number_format($data['previous_year'], 2) }}</span>
                                                         </td>
                                                         <td>
                                                             @php
@@ -360,7 +435,7 @@
                                                         </td>
                                                         @if(isset($movingAverages) && isset($movingAverages[$month]))
                                                         <td>
-                                                            <span class="fw-semibold text-primary">${{ number_format($movingAverages[$month], 2) }}</span>
+                                                            <span class="fw-semibold text-primary"> {{ currency_symbol() }} {{ number_format($movingAverages[$month], 2) }}</span>
                                                         </td>
                                                         @endif
                                                         @if(isset($momGrowth) && isset($momGrowth[$month]))
@@ -405,7 +480,7 @@
                                                             {{ $monthNames[$data['start_month']] }} - {{ $monthNames[$data['end_month']] }}
                                                         </td>
                                                         <td>
-                                                            <span class="fw-bold text-success">${{ number_format($data['total'], 2) }}</span>
+                                                            <span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($data['total'], 2) }}</span>
                                                         </td>
                                                         <td>
                                                             @php
@@ -434,7 +509,7 @@
                                                             {{ $yearData['year'] }}
                                                         </td>
                                                         <td>
-                                                            <span class="fw-bold text-success">${{ number_format($yearData['total'], 2) }}</span>
+                                                            <span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($yearData['total'], 2) }}</span>
                                                         </td>
                                                         <td>
                                                             <span class="badge badge-light-info">
@@ -442,7 +517,7 @@
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <span class="fw-semibold text-gray-600">${{ number_format($yearData['average'], 2) }}</span>
+                                                            <span class="fw-semibold text-gray-600">{{ currency_symbol() }} {{ number_format($yearData['average'], 2) }}</span>
                                                         </td>
                                                         <td>
                                                             @php
@@ -510,31 +585,38 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($categoryTrends as $categoryName => $monthlyData)
-                                            @php
-                                                $categoryTotal = $monthlyData->sum('monthly_total');
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4 fw-semibold">
-                                                    <span class="badge badge-light-primary">{{ $categoryName }}</span>
-                                                </td>
-                                                @for($month = 1; $month <= 12; $month++)
-                                                    @php
-                                                        $monthData = $monthlyData->firstWhere('month', $month);
-                                                        $amount = $monthData ? $monthData->monthly_total : 0;
-                                                    @endphp
-                                                    <td class="text-center">
-                                                        @if($amount > 0)
-                                                            <span class="fw-semibold text-gray-700">${{ number_format($amount, 0) }}</span>
-                                                        @else
-                                                            <span class="text-muted">-</span>
-                                                        @endif
+                                            @foreach($categoryTrends as $catData)
+                                                @php
+                                                    // Each $catData is a stdClass with:
+                                                    //   ->category_name  (string)
+                                                    //   ->monthly_data   (array keyed by month number 1..12)
+                                                    //   ->total          (float, precomputed)
+                                                    $categoryName  = $catData->category_name;
+                                                    $monthlyData   = $catData->monthly_data;
+                                                    $categoryTotal = $catData->total;
+                                                @endphp
+                                                <tr>
+                                                    <td class="ps-4 fw-semibold">
+                                                        <span class="badge badge-light-primary">{{ $categoryName }}</span>
                                                     </td>
-                                                @endfor
-                                                <td class="text-end fw-bold text-success">
-                                                    ${{ number_format($categoryTotal, 2) }}
-                                                </td>
-                                            </tr>
+
+                                                    @for($month = 1; $month <= 12; $month++)
+                                                        @php $amount = $monthlyData[$month] ?? 0; @endphp
+                                                        <td class="text-center">
+                                                            @if($amount > 0)
+                                                                <span class="fw-semibold text-gray-700">
+                                                                    {{ currency_symbol() }} {{ number_format($amount, 0) }}
+                                                                </span>
+                                                            @else
+                                                                <span class="text-muted">-</span>
+                                                            @endif
+                                                        </td>
+                                                    @endfor
+
+                                                    <td class="text-end fw-bold text-success">
+                                                        {{ currency_symbol() }} {{ number_format($categoryTotal, 2) }}
+                                                    </td>
+                                                </tr>
                                             @endforeach
                                         </tbody>
                                     </table>
@@ -611,19 +693,17 @@
                     }
                 },
                 yaxis: {
-                    title: {
-                        text: 'Amount ($)'
-                    },
+                    title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
                     labels: {
-                        formatter: function(val) {
-                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 0});
+                        formatter: function (val) {
+                            return '{{ currency_symbol() }}' + val.toLocaleString(undefined, { minimumFractionDigits: 0 });
                         }
                     }
                 },
                 tooltip: {
                     y: {
-                        formatter: function(val) {
-                            return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        formatter: function (val) {
+                            return '{{ currency_symbol() }}' + val.toLocaleString(undefined, { minimumFractionDigits: 2 });
                         }
                     }
                 },

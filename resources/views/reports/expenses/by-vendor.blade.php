@@ -61,7 +61,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -73,85 +75,100 @@
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
+                                <div class="card-toolbar">
+                                    <span class="badge badge-light-info fs-7">
+                                        <i class="ki-duotone ki-calendar-8 fs-4 me-1"></i>
+                                        {{ \Carbon\Carbon::parse($startDate)->format('d M Y') }}
+                                        &mdash;
+                                        {{ \Carbon\Carbon::parse($endDate)->format('d M Y') }}
+                                    </span>
+                                </div>
                             </div>
+
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.by-vendor') }}" id="filterForm">
-                                    {{-- First Row --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Date range --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-12">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
+                                                <div class="input-group">
                                                     <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('accounting.start_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="start_date" value="{{ $startDate }}" required>
                                                 </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
+                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-1">
+                                                    {{ __('accounting.to') }}
+                                                </span>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('accounting.end_date') }}">
+                                                    <input type="date" class="form-control"
+                                                        name="end_date" value="{{ $endDate }}" required>
                                                 </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Vendor Name --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.vendor_name') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-shop fs-2"></i>
-                                                </span>
-                                                <input type="text" class="form-control" name="vendor_name" 
-                                                    value="{{ $vendorName }}" 
-                                                    placeholder="{{ __('accounting.search_vendor') }}"
-                                                    maxlength="200">
                                             </div>
                                         </div>
                                     </div>
 
-                                    {{-- Second Row --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
-                                        {{-- Category --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.category') }}</label>
-                                            <div class="input-group w-100">
+                                    {{-- Row 2: Vendor + Category + Payment method + Location --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.vendor_name') }}</label>
+                                            <div class="input-group">
                                                 <span class="input-group-text">
-                                                    <i class="ki-duotone ki-category fs-2"></i>
+                                                    <i class="ki-duotone ki-shop fs-2"></i>
                                                 </span>
-                                                <select class="form-select" name="category_id">
+                                                <input type="text" class="form-control"
+                                                    name="vendor_name"
+                                                    value="{{ $vendorName }}"
+                                                    placeholder="{{ __('accounting.search_vendor') }}"
+                                                    maxlength="200">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.category') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="category_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_categories') }}</option>
-                                                    @foreach($categories as $category)
-                                                        <option value="{{ $category->id }}" 
-                                                                {{ $categoryId == $category->id ? 'selected' : '' }}>
+                                                    @foreach($expenseCategories as $category)
+                                                        <option value="{{ $category->id }}"
+                                                                {{ (string) $categoryId === (string) $category->id ? 'selected' : '' }}>
                                                             {{ $category->name }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Payment Method --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.payment_method') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-credit-card fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="payment_method_id">
+                                            <div class="input-group">
+                                                <select class="form-select" name="payment_method_id" data-control="select2">
                                                     <option value="">{{ __('accounting.all_payment_methods') }}</option>
                                                     @foreach($paymentMethods as $method)
-                                                        <option value="{{ $method->id }}" 
-                                                                {{ $paymentMethodId == $method->id ? 'selected' : '' }}>
-                                                            {{ $method->name }}
+                                                        <option value="{{ $method->id }}"
+                                                                {{ (string) $paymentMethodId === (string) $method->id ? 'selected' : '' }}>
+                                                            {{ $method->name }}@if($method->is_default) ({{ __('accounting.default') }})@endif
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
                                                         </option>
                                                     @endforeach
                                                 </select>
@@ -159,45 +176,39 @@
                                         </div>
                                     </div>
 
-                                    {{-- Third Row --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 mb-4">
-                                        {{-- Min Amount --}}
-                                        <div class="flex-grow-1">
+                                    {{-- Row 3: Min + Max + Actions --}}
+                                    <div class="row g-4">
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.min_amount') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-dollar fs-2"></i>
-                                                </span>
-                                                <input type="number" class="form-control" name="min_amount" 
-                                                    value="{{ $minAmount }}" 
+                                            <div class="input-group">
+                                                <span class="input-group-text">{{ currency_symbol() }}</span>
+                                                <input type="number" class="form-control"
+                                                    name="min_amount" value="{{ $minAmount }}"
                                                     placeholder="{{ __('accounting.minimum_amount') }}"
                                                     step="0.01" min="0">
                                             </div>
                                         </div>
-                                        
-                                        {{-- Max Amount --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.max_amount') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-dollar fs-2"></i>
-                                                </span>
-                                                <input type="number" class="form-control" name="max_amount" 
-                                                    value="{{ $maxAmount }}" 
+                                            <div class="input-group">
+                                                <span class="input-group-text">{{ currency_symbol() }}</span>
+                                                <input type="number" class="form-control"
+                                                    name="max_amount" value="{{ $maxAmount }}"
                                                     placeholder="{{ __('accounting.maximum_amount') }}"
                                                     step="0.01" min="0">
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+
+                                        <div class="col-xl-6 d-flex align-items-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2 w-100">
+                                                <button type="submit" class="btn btn-primary flex-grow-1">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.by-vendor') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.by-vendor') }}"
+                                                class="btn btn-light btn-active-light-primary flex-grow-1">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -206,6 +217,50 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $vendorName
+                                            ? ['label' => __('accounting.vendor_name'), 'value' => $vendorName]
+                                            : null,
+                                        $categoryId
+                                            ? ['label' => __('accounting.category'), 'value' => $categories->firstWhere('id', $categoryId)?->name]
+                                            : null,
+                                        $paymentMethodId
+                                            ? ['label' => __('accounting.payment_method'), 'value' => $paymentMethods->firstWhere('id', $paymentMethodId)?->name]
+                                            : null,
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                        ($minAmount !== null && $minAmount !== '')
+                                            ? ['label' => __('accounting.min_amount'), 'value' => currency_symbol() . ' ' . number_format((float) $minAmount, 2)]
+                                            : null,
+                                        ($maxAmount !== null && $maxAmount !== '')
+                                            ? ['label' => __('accounting.max_amount'), 'value' => currency_symbol() . ' ' . number_format((float) $maxAmount, 2)]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.by-vendor') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -227,36 +282,45 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'total_vendors', 'color' => 'primary', 'icon' => 'ki-shop', 'label' => 'total_vendors', 'value' => $summary['total_vendors']],
-                                        ['key' => 'total_transactions', 'color' => 'success', 'icon' => 'ki-receipt', 'label' => 'total_transactions', 'value' => $summary['total_transactions']],
-                                        ['key' => 'total_amount', 'color' => 'info', 'icon' => 'ki-chart-simple', 'label' => 'grand_total', 'value' => '$' . number_format($summary['total_amount'], 2)],
-                                        ['key' => 'total_tax', 'color' => 'warning', 'icon' => 'ki-receipt-tax', 'label' => 'total_tax', 'value' => '$' . number_format($summary['total_tax'], 2)],
-                                        ['key' => 'avg_transaction', 'color' => 'danger', 'icon' => 'ki-calculator', 'label' => 'average_transaction', 'value' => '$' . number_format($summary['avg_transaction'], 2)],
-                                        ['key' => 'largest_single', 'color' => 'secondary', 'icon' => 'ki-arrow-up', 'label' => 'largest_transaction', 'value' => '$' . number_format($summary['largest_single'], 2)]
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">
-                                                    {{ __('accounting.' . $stat['label']) }}
+                                    @php
+                                        $stats = [
+                                            ['color' => 'primary',   'icon' => 'ki-shop',         'label' => 'total_vendors',       'value' => $summary['total_vendors'],       'money' => false],
+                                            ['color' => 'success',   'icon' => 'ki-receipt',      'label' => 'total_transactions',  'value' => $summary['total_transactions'],  'money' => false],
+                                            ['color' => 'info',      'icon' => 'ki-chart-simple', 'label' => 'grand_total',         'value' => $summary['total_amount'],        'money' => true],
+                                            ['color' => 'warning',   'icon' => 'ki-receipt-tax',  'label' => 'total_tax',           'value' => $summary['total_tax'],           'money' => true],
+                                            ['color' => 'danger',    'icon' => 'ki-calculator',   'label' => 'average_transaction', 'value' => $summary['avg_transaction'],     'money' => true],
+                                            ['color' => 'secondary', 'icon' => 'ki-arrow-up',     'label' => 'largest_transaction', 'value' => $summary['largest_single'],      'money' => true],
+                                        ];
+                                    @endphp
+
+                                    <div class="row g-6">
+                                        @foreach($stats as $stat)
+                                            <div class="col-md-6 col-lg-2">
+                                                <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                    <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                        <div class="mb-4">
+                                                            <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                <span class="path1"></span>
+                                                                <span class="path2"></span>
+                                                            </i>
+                                                        </div>
+                                                        <div class="mb-1">
+                                                            <span class="fs-2 fw-bold text-gray-800">
+                                                                @if($stat['money'])
+                                                                    {{ currency_symbol() }} {{ number_format($stat['value'], 2) }}
+                                                                @else
+                                                                    {{ $stat['value'] }}
+                                                                @endif
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-gray-600 fw-semibold fs-7">
+                                                            {{ __('accounting.' . $stat['label']) }}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        @endforeach
                                     </div>
-                                    @endforeach
                                 </div>
                             </div>
                         </div>
@@ -351,24 +415,12 @@
                                                     <td>
                                                         <span class="badge badge-light-primary">{{ $vendor->transaction_count }}</span>
                                                     </td>
-                                                    <td>
-                                                        <span class="text-gray-800 fw-semibold">${{ number_format($vendor->total_amount, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-info">${{ number_format($vendor->total_tax, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-success">${{ number_format($vendor->grand_total, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-gray-600">${{ number_format($vendor->average_transaction, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-danger">${{ number_format($vendor->largest_transaction, 2) }}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-secondary">${{ number_format($vendor->smallest_transaction, 2) }}</span>
-                                                    </td>
+                                                    <td><span class="text-gray-800 fw-semibold">{{ currency_symbol() }} {{ number_format($vendor->total_amount, 2) }}</span></td>
+                                                    <td><span class="text-info">{{ currency_symbol() }} {{ number_format($vendor->total_tax, 2) }}</span></td>
+                                                    <td><span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($vendor->grand_total, 2) }}</span></td>
+                                                    <td><span class="text-gray-600">{{ currency_symbol() }} {{ number_format($vendor->average_transaction, 2) }}</span></td>
+                                                    <td><span class="text-danger">{{ currency_symbol() }} {{ number_format($vendor->largest_transaction, 2) }}</span></td>
+                                                    <td><span class="text-secondary">{{ currency_symbol() }} {{ number_format($vendor->smallest_transaction, 2) }}</span></td>
                                                     <td>
                                                         <span class="badge badge-light-info">{{ $vendor->categories_used }}</span>
                                                     </td>
@@ -403,11 +455,11 @@
                                         </i>
                                         <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
                                         <p class="text-muted fs-6">{{ __('accounting.no_expenses_found_for_vendors') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date', 'vendor_name', 'category_id', 'payment_method_id']))
-                                        <a href="{{ route('reports.expenses.by-vendor') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters_view_all') }}
-                                        </a>
+                                        @if(request()->filled('vendor_name') || request()->filled('category_id') || request()->filled('payment_method_id') || request()->filled('location_id') || request()->filled('min_amount') || request()->filled('max_amount'))
+                                            <a href="{{ route('reports.expenses.by-vendor') }}" class="btn btn-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-2"></i>
+                                                {{ __('accounting.clear_filters_view_all') }}
+                                            </a>
                                         @endif
                                     </div>
                                 </div>
@@ -491,12 +543,8 @@
                                                 <td>
                                                     <span class="badge badge-light-primary">{{ $topVendor->transaction_count }}</span>
                                                 </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">${{ number_format($topVendor->monthly_total, 2) }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-gray-600">${{ number_format($topVendor->monthly_average, 2) }}</span>
-                                                </td>
+                                                <td><span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($topVendor->monthly_total, 2) }}</span></td>
+                                                <td><span class="text-gray-600">{{ currency_symbol() }} {{ number_format($topVendor->monthly_average, 2) }}</span></td>
                                             </tr>
                                             @endforeach
                                         </tbody>
@@ -603,19 +651,18 @@
                 }
             },
             yaxis: {
-                title: {
-                    text: 'Amount ($)'
-                },
+                title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
                 labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' + val.toLocaleString();
                     }
                 }
             },
             tooltip: {
                 y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' +
+                            val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 }
             },
@@ -653,14 +700,16 @@
 @endif
 
 <script>
-    // Amount range validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const minAmount = parseFloat(document.querySelector('[name="min_amount"]').value) || 0;
-        const maxAmount = parseFloat(document.querySelector('[name="max_amount"]').value) || 0;
-        
+    document.getElementById('filterForm')?.addEventListener('submit', function (e) {
+        const minEl = document.querySelector('[name="min_amount"]');
+        const maxEl = document.querySelector('[name="max_amount"]');
+        const minAmount = parseFloat(minEl?.value) || 0;
+        const maxAmount = parseFloat(maxEl?.value) || 0;
+
         if (minAmount > 0 && maxAmount > 0 && minAmount > maxAmount) {
             e.preventDefault();
-            alert('{{ __("accounting.min_amount_cannot_exceed_max") }}');
+            toastr.warning('{{ __("accounting.min_amount_cannot_exceed_max") }}');
+            minEl?.focus();
             return false;
         }
     });
