@@ -29,28 +29,48 @@
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
+
+                <!-- Search -->
                 <div class="w-100 w-sm-250px">
-                    <!-- Search Component -->
-                    <x-liveblade-search 
+                    <x-liveblade-search
                         id="expenseSearchInput"
                         componentId="reloadExpenseComponent"
                         route="{{ route('expense.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('passwords.expense')}}"
+                        placeholder="{{ __('auth._search') }} {{ __('passwords.expense') }}"
                     />
                 </div>
 
+                <!-- Location filter -->
+                @if(isset($locations) && $locations->count() > 0)
+                    <div class="w-100 w-sm-200px">
+                        <select id="expenseLocationFilter"
+                                class="form-select form-select-solid"
+                                data-control="select2"
+                                data-placeholder="{{ __('passwords.all_locations') }}"
+                                data-allow-clear="true"
+                                onchange="filterExpensesByLocation(this.value)">
+                            <option value="">{{ __('passwords.all_locations') }}</option>
+                            @foreach($locations as $loc)
+                                <option value="{{ $loc->id }}"
+                                        @selected((int) request('location_id') === (int) $loc->id)>
+                                    {{ $loc->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
                 @can('create expense')
-                <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_expense">
-                    <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                    <span class="d-none d-sm-inline">{{__('passwords.expense_new')}}</span>
-                    <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
-                </button>
+                    <button type="button" class="btn btn-primary flex-shrink-0"
+                            data-bs-toggle="modal"
+                            data-bs-target="#kt_modal_add_expense">
+                        <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
+                        <span class="d-none d-sm-inline">{{ __('passwords.expense_new') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('auth._add') }}</span>
+                    </button>
                 @endcan
 
-                <!-- Modal include - KEPT INSIDE the actions div for functionality -->
                 @include('procurement.expense.create')
             </div>
         </div>
