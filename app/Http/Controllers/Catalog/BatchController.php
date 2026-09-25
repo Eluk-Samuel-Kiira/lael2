@@ -20,15 +20,19 @@ class BatchController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view inventory')) {
             abort(403, __('payments.not_authorized'));
         }
 
-        $search = $request->get('search');
-        $locationId = $request->get('location_id');
+        // ── Visibility rule ─────────────────────────────────────────
+        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        $search       = $request->get('search');
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $perPage = $request->get('per_page', 15);
+        $perPage      = $request->get('per_page', 15);
 
         $query = PurchaseReceiptItem::query()
             ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
@@ -39,10 +43,10 @@ class BatchController extends Controller
             ->leftJoin('locations', 'purchase_receipt_items.location_id', '=', 'locations.id')
             ->leftJoin('departments', 'purchase_receipt_items.department_id', '=', 'departments.id')
             ->where('purchase_orders.tenant_id', $tenantId)
-            ->where('products.inventory_strategy', 'batch') // ✅ ONLY BATCH STRATEGY
-            ->where(function($q) {
+            ->where('products.inventory_strategy', 'batch')
+            ->where(function ($q) {
                 $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
-                  ->orWhereNull('purchase_receipt_items.quantity_remaining');
+                ->orWhereNull('purchase_receipt_items.quantity_remaining');
             })
             ->select(
                 'purchase_receipt_items.*',
@@ -54,35 +58,51 @@ class BatchController extends Controller
                 'departments.name as department_name'
             );
 
+        // ── Non-admins: only batches at their assigned locations ────
+        if (!$isAdmin) {
+            if (empty($userLocationIds)) {
+                // User has no locations assigned → return nothing
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('purchase_receipt_items.location_id', $userLocationIds);
+            }
+        }
+
+        // ── Search ──────────────────────────────────────────────────
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('purchase_receipt_items.batch_number', 'like', "%{$search}%")
-                  ->orWhere('product_variants.name', 'like', "%{$search}%")
-                  ->orWhere('product_variants.sku', 'like', "%{$search}%")
-                  ->orWhere('products.name', 'like', "%{$search}%");
+                ->orWhere('product_variants.name', 'like', "%{$search}%")
+                ->orWhere('product_variants.sku', 'like', "%{$search}%")
+                ->orWhere('products.name', 'like', "%{$search}%");
             });
         }
 
+        // ── Location filter (only meaningful for admins) ────────────
         if ($locationId) {
-            $query->where('purchase_receipt_items.location_id', $locationId);
+            // For non-admins, ensure the requested location is within their allowed set
+            if ($isAdmin || in_array((int) $locationId, $userLocationIds, true)) {
+                $query->where('purchase_receipt_items.location_id', $locationId);
+            }
         }
 
+        // ── Department filter ───────────────────────────────────────
         if ($departmentId) {
             $query->where('purchase_receipt_items.department_id', $departmentId);
         }
 
         $batches = $query->orderBy('purchase_receipt_items.created_at', 'desc')->paginate($perPage);
 
-        // Debug log to verify only batch products are returned
-        // Log::info('Batch Products Only:', [
-        //     'count' => $batches->count(),
-        //     'strategies' => $query->pluck('inventory_strategy')->unique()->toArray()
-        // ]);
-
-        $locations = Location::where('tenant_id', $tenantId)
+        // ── Locations list for the filter dropdown ──────────────────
+        $locationsQuery = Location::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
 
         $departments = Department::where('tenant_id', $tenantId)
             ->where('isActive', true)
@@ -90,7 +110,7 @@ class BatchController extends Controller
             ->get();
 
         $summary = [
-            'total_batches' => $query->count(),
+            'total_batches'  => $query->count(),
             'total_quantity' => $query->sum('purchase_receipt_items.quantity_remaining') ?? 0,
         ];
 

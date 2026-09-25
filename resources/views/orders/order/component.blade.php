@@ -692,11 +692,6 @@
             <div class="print-actions no-print">
                 <button class="btn btn-primary" onclick="window.print()">🖨️ {{ __('passwords.print_invoice') }}</button>
                 <button class="btn btn-secondary" onclick="window.close()">✕ {{ __('passwords.close_window') }}</button>
-                <button class="btn btn-light-primary btn-sm flex-grow-1"
-                    data-bs-toggle="modal" data-bs-target="#sendOrderModal{{ $order->id }}">
-                    <i class="ki-duotone ki-sms fs-4 me-2"><span class="path1"></span><span class="path2"></span></i>
-                    {{ __('passwords.send_receipt') }}
-                </button>
             </div>
             <script>window.onload=function(){window.focus();};<\/script>
         </body></html>`);

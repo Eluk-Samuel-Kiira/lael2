@@ -134,6 +134,51 @@
                         margin-top: 4px;
                         white-space: nowrap;
                     }
+
+                    /* ============================================================
+                       VARIANT NAME — fixed-height zone so the card size never
+                       changes; the name always wraps in full (no "...") and the
+                       auto-fit script (below) shrinks the font just enough to
+                       keep it inside 2 lines, on both mobile and desktop.
+                       ============================================================ */
+                    .variant-item .variant-name-wrap {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100%;
+                        height: 48px;      /* fixed zone height — keeps every card the same size */
+                        min-height: 48px;
+                        max-height: 48px;
+                        overflow: hidden;
+                        margin: 0 auto;
+                    }
+
+                    .variant-item .variant-name {
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        overflow: hidden;
+                        white-space: normal;
+                        word-break: break-word;
+                        text-align: center;
+                        line-height: 1.2;
+                        font-weight: 700;
+                        color: #3f4254;
+                        width: 100%;
+                        cursor: pointer;
+                        font-size: 1rem; /* starting size, auto-fit script shrinks this as needed */
+                    }
+
+                    @media (max-width: 575.98px) {
+                        .variant-item .variant-name-wrap {
+                            height: 42px;
+                            min-height: 42px;
+                            max-height: 42px;
+                        }
+                        .variant-item .variant-name {
+                            font-size: 0.9rem;
+                        }
+                    }
                 </style>
 
                 <!--begin::Tab Content-->
@@ -234,11 +279,13 @@
 
                                             <div class="mb-2">
                                                 <div class="text-center">
-                                                    <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
-                                                        data-bs-toggle="tooltip" 
-                                                        title="{{ $variant->name ?? $product->name }}">
-                                                        {{ \Illuminate\Support\Str::words($variant->name ?? $product->name, 2, '...') }}
-                                                    </span>
+                                                    <div class="variant-name-wrap">
+                                                        <span class="variant-name"
+                                                            data-bs-toggle="tooltip"
+                                                            title="{{ $variant->name ?? $product->name }}">
+                                                            {{ $variant->name ?? $product->name }}
+                                                        </span>
+                                                    </div>
                                                     <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
                                                         {{ $variant->quantity_available ?? 0 }} {{__('pagination._available')}}
                                                     </span>
@@ -266,6 +313,69 @@
                     @endforeach
                 </div>
                 <!--end::Tab Content-->
+
+                <script>
+                    // ============================================================
+                    // VARIANT NAME AUTO-FIT
+                    // Keeps the FULL variant name visible (never truncated with
+                    // "...") by shrinking the font size just enough for the text
+                    // to fit inside the fixed-height .variant-name-wrap zone.
+                    // Card size never changes because the wrap height is fixed
+                    // via CSS; only the font size inside it adapts.
+                    // ============================================================
+                    function fitVariantName(el) {
+                        if (!el) return;
+                        const wrap = el.closest('.variant-name-wrap');
+                        if (!wrap) return;
+
+                        const maxHeight = wrap.clientHeight;
+                        if (!maxHeight) return; // not yet laid out (e.g. hidden tab)
+
+                        const isMobile = window.innerWidth < 576;
+                        const baseFontSize = isMobile ? 14.4 : 16; // px, matches CSS starting sizes
+                        const minFontSize = 8.5; // px floor so text stays legible
+
+                        let fontSize = baseFontSize;
+                        el.style.fontSize = fontSize + 'px';
+
+                        // Shrink in small steps until the (2-line-clamped) text fits
+                        let guard = 0;
+                        while (el.scrollHeight > maxHeight && fontSize > minFontSize && guard < 40) {
+                            fontSize -= 0.5;
+                            el.style.fontSize = fontSize + 'px';
+                            guard++;
+                        }
+                    }
+
+                    function fitAllVariantNames(scope) {
+                        (scope || document).querySelectorAll('.variant-name').forEach(fitVariantName);
+                    }
+
+                    document.addEventListener('DOMContentLoaded', function () {
+                        fitAllVariantNames();
+                    });
+
+                    // Re-fit on resize (e.g. desktop <-> mobile width changes)
+                    let variantNameResizeTimeout = null;
+                    window.addEventListener('resize', function () {
+                        clearTimeout(variantNameResizeTimeout);
+                        variantNameResizeTimeout = setTimeout(function () {
+                            fitAllVariantNames();
+                        }, 200);
+                    });
+
+                    // Re-fit whenever a tab becomes visible (a hidden tab has 0
+                    // height, so its names couldn't be measured/fitted before)
+                    document.addEventListener('DOMContentLoaded', function () {
+                        document.querySelectorAll('[data-bs-toggle="tab"], [data-bs-toggle="pill"]').forEach(function (trigger) {
+                            trigger.addEventListener('shown.bs.tab', function () {
+                                const targetSelector = trigger.getAttribute('href') || trigger.getAttribute('data-bs-target');
+                                const pane = targetSelector ? document.querySelector(targetSelector) : null;
+                                fitAllVariantNames(pane || document);
+                            });
+                        });
+                    });
+                </script>
 
                 <script>
                     function filterVariants(searchTerm) {
@@ -512,6 +622,11 @@
                         if (searchInput) {
                             searchInput.value = '';
                         }
+
+                        // ✅ Re-fit variant names now that the original cards are back
+                        if (typeof fitAllVariantNames === 'function') {
+                            fitAllVariantNames(tabContent);
+                        }
                     }
 
 
@@ -630,6 +745,12 @@
                             // Update product pills - hide all and show only found products
                             updateProductPills(foundProductIds, products.length);
                         }
+
+                        // ✅ Now that cards are in the DOM (and the active tab pane is
+                        // visible), fit every variant name's font size to its box.
+                        if (typeof fitAllVariantNames === 'function') {
+                            fitAllVariantNames(tabContent);
+                        }
                     }
 
                     function createVariantCardWithStrategy(variant, product, isSingleShop, strategy, isRecipe, batches = [], serials = [], quantityAvailable = 0) {
@@ -699,11 +820,10 @@
                         const hasBatches = strategy === 'batch' && batches && batches.length > 0;
                         const hasSerials = strategy === 'serial' && serials && serials.length > 0;
 
-                        // ✅ Build display name with variant info
-                        let displayName = variant.name || product.name;
-                        if (displayName.length > 20) {
-                            displayName = displayName.substring(0, 20) + '...';
-                        }
+                        // ✅ Always show the FULL variant/product name — the CSS
+                        // fixed-height zone + fitVariantName() JS handle sizing,
+                        // so we never chop it with substring/"...".
+                        const fullName = variant.name || product.name;
 
                         card.innerHTML = `
                             <!-- ✅ Inventory Strategy Badge -->
@@ -750,16 +870,18 @@
                             <div class="card-body text-center">
                                 <img src="${imageUrl}" 
                                     class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                    alt="${variant.name || product.name}"
+                                    alt="${fullName}"
                                     onerror="this.src='{{ asset('assets/media/stock/ecommerce/2.png') }}'" />
 
                                 <div class="mb-2">
                                     <div class="text-center">
-                                        <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
-                                            data-bs-toggle="tooltip" 
-                                            title="${variant.name || product.name}">
-                                            ${displayName}
-                                        </span>
+                                        <div class="variant-name-wrap">
+                                            <span class="variant-name"
+                                                data-bs-toggle="tooltip"
+                                                title="${fullName}">
+                                                ${fullName}
+                                            </span>
+                                        </div>
                                         <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
                                             ${quantityAvailable} {{ __('pagination._available') }}
                                         </span>
@@ -936,6 +1058,9 @@
                         const hasTaxes = variant.applicable_taxes && variant.applicable_taxes.length > 0;
                         const hasPromos = variant.applicable_promotions && variant.applicable_promotions.length > 0;
 
+                        // ✅ Show the FULL variant/product name — no substring truncation.
+                        const fullName = variant.name || product.name;
+
                         card.innerHTML = `
                             ${hasTaxes ? `
                                 <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm">
@@ -954,16 +1079,18 @@
                             <div class="card-body text-center">
                                 <img src="${imageUrl}" 
                                     class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                    alt="${variant.name || product.name}"
+                                    alt="${fullName}"
                                     onerror="this.src='{{ asset('assets/media/stock/ecommerce/2.png') }}'" />
 
                                 <div class="mb-2">
                                     <div class="text-center">
-                                        <span class="fw-bold text-gray-800 cursor-pointer text-hover-primary fs-3 fs-xl-1"
-                                            data-bs-toggle="tooltip" 
-                                            title="${variant.name || product.name}">
-                                            ${(variant.name || product.name).length > 20 ? (variant.name || product.name).substring(0, 20) + '...' : (variant.name || product.name)}
-                                        </span>
+                                        <div class="variant-name-wrap">
+                                            <span class="variant-name"
+                                                data-bs-toggle="tooltip"
+                                                title="${fullName}">
+                                                ${fullName}
+                                            </span>
+                                        </div>
                                         <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
                                             ${variant.quantity_available || 0} {{__('pagination._available')}}
                                         </span>
@@ -975,6 +1102,10 @@
                                 </span>
                             </div>
                         `;
+
+                        if (typeof fitVariantName === 'function') {
+                            fitVariantName(card.querySelector('.variant-name'));
+                        }
 
                         return card;
                     }
@@ -1111,4 +1242,3 @@
 @include('orders.pos.pause-buy')
 @include('orders.pos.payment-mode')
 @endcan
-

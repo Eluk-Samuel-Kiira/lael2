@@ -225,71 +225,100 @@
 <div class="modal fade" id="viewInvoiceModal{{ $invoice->id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-primary">
-                <h5 class="modal-title text-white fw-bold mb-0">
-                    <i class="bi bi-file-earmark-text me-2"></i>
-                    {{ __('payments.invoice_details') }} — {{ $invoice->invoice_number }}
-                </h5>
+
+            {{-- ─── HEADER ────────────────────────────────────────────── --}}
+            <div class="modal-header bg-primary py-4">
+                <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-file-earmark-text fs-2 text-white"></i>
+                    <div>
+                        <h4 class="modal-title text-white fw-bold mb-0">
+                            {{ __('payments.invoice_details') }}
+                        </h4>
+                        <span class="text-white opacity-75 fs-7">
+                            {{ $invoice->invoice_number }}
+                        </span>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">
-                {{-- Invoice Header --}}
-                <div class="row g-4 mb-4">
+
+            {{-- ─── BODY ──────────────────────────────────────────────── --}}
+            <div class="modal-body scroll-y px-5 py-6" style="max-height: 70vh; overflow-y: auto;">
+
+                {{-- ── Customer & Invoice Meta ───────────────────────── --}}
+                <div class="row g-5 mb-6">
                     <div class="col-md-7">
-                        <div class="d-flex align-items-start gap-3">
-                            {{-- Customer Initial - Smaller and cleaner --}}
-                            <div class="symbol symbol-40px flex-shrink-0">
+                        <div class="d-flex align-items-start gap-4">
+                            <div class="symbol symbol-50px">
                                 <div class="symbol-label bg-light-primary text-primary fw-bold fs-3">
                                     {{ strtoupper(substr($invoice->billing_name, 0, 1)) }}
                                 </div>
                             </div>
-                            <div class="flex-grow-1 min-width-0">
-                                <h4 class="fw-bold mb-1 text-truncate">{{ $invoice->billing_name }}</h4>
-                                <div class="text-muted fs-7">
+                            <div class="flex-grow-1 min-w-0">
+                                <h5 class="fw-bold text-gray-800 mb-1 text-truncate">
+                                    {{ $invoice->billing_name }}
+                                </h5>
+
+                                <div class="d-flex flex-wrap gap-3 fs-7 text-muted">
                                     @if($invoice->billing_email)
-                                        <i class="bi bi-envelope me-1"></i>{{ $invoice->billing_email }}
+                                        <span><i class="bi bi-envelope me-1"></i>{{ $invoice->billing_email }}</span>
                                     @endif
                                     @if($invoice->billing_phone)
-                                        <span class="ms-2"><i class="bi bi-phone me-1"></i>{{ $invoice->billing_phone }}</span>
+                                        <span><i class="bi bi-phone me-1"></i>{{ $invoice->billing_phone }}</span>
                                     @endif
                                 </div>
+
                                 @if($invoice->billing_address)
-                                    <div class="text-muted fs-7 mt-1">
+                                    <div class="fs-7 text-muted mt-1">
                                         <i class="bi bi-geo-alt me-1"></i>{{ $invoice->billing_address }}
                                     </div>
                                 @endif
+
                                 @if($invoice->tax_id)
-                                    <div class="text-muted fs-7 mt-1">
-                                        <span class="badge badge-light-secondary">TIN: {{ $invoice->tax_id }}</span>
+                                    <div class="mt-2">
+                                        <span class="badge badge-light-dark">TIN: {{ $invoice->tax_id }}</span>
                                     </div>
                                 @endif
                             </div>
                         </div>
                     </div>
+
                     <div class="col-md-5">
-                        <div class="bg-light rounded-3 p-3">
-                            <div class="row g-2">
+                        <div class="bg-light rounded-3 p-4">
+                            <div class="row g-4">
                                 <div class="col-6">
-                                    <div class="text-muted fs-7">{{ __('payments.invoice_number') }}</div>
-                                    <div class="fw-bold fs-6">{{ $invoice->invoice_number }}</div>
+                                    <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">
+                                        {{ __('payments.invoice_number') }}
+                                    </div>
+                                    <div class="fw-bold text-gray-800 fs-7">{{ $invoice->invoice_number }}</div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="text-muted fs-7">{{ __('payments.status') }}</div>
-                                    <span class="badge badge-{{ $invoice->status_color }} fw-bold px-3 py-2">
+                                    <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">
+                                        {{ __('payments.status') }}
+                                    </div>
+                                    <span class="badge badge-light-{{ $invoice->status_color }}">
                                         <i class="bi {{ $invoice->status_icon }} me-1"></i>
                                         {{ $invoice->status_label }}
                                     </span>
                                 </div>
                                 <div class="col-6">
-                                    <div class="text-muted fs-7">{{ __('payments.issue_date') }}</div>
-                                    <div class="fw-semibold">{{ $invoice->issue_date->format('d M Y, h:i A') }}</div>
+                                    <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">
+                                        {{ __('payments.issue_date') }}
+                                    </div>
+                                    <div class="fw-semibold text-gray-800 fs-7">
+                                        {{ $invoice->issue_date->format('d M Y, h:i A') }}
+                                    </div>
                                 </div>
                                 <div class="col-6">
-                                    <div class="text-muted fs-7">{{ __('payments.due_date') }}</div>
-                                    <div class="fw-semibold {{ $invoice->isOverdue() ? 'text-danger' : '' }}">
+                                    <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">
+                                        {{ __('payments.due_date') }}
+                                    </div>
+                                    <div class="fw-semibold fs-7 {{ $invoice->isOverdue() ? 'text-danger' : 'text-gray-800' }}">
                                         {{ $invoice->due_date ? $invoice->due_date->format('d M Y') : '—' }}
                                         @if($invoice->isOverdue())
-                                            <span class="badge badge-danger ms-1">{{ __('payments.overdue') }}</span>
+                                            <span class="badge badge-light-danger ms-1">
+                                                {{ __('payments.overdue') }}
+                                            </span>
                                         @endif
                                     </div>
                                 </div>
@@ -298,232 +327,464 @@
                     </div>
                 </div>
 
-                {{-- Order Reference --}}
+                {{-- ── Order Reference ───────────────────────────────── --}}
                 @if($invoice->order)
-                <div class="bg-light-info rounded-3 p-3 mb-4">
-                    <div class="row g-3 align-items-center">
-                        <div class="col-md-3">
-                            <span class="text-muted fs-7">{{ __('payments.order_reference') }}</span>
-                            <div class="fw-bold fs-6">
-                                <a href="{{ route('orders.show', $invoice->order->id) }}" class="text-primary">
-                                    #{{ $invoice->order->order_number }}
-                                </a>
+                    <div class="notice d-flex bg-light-info rounded border-info border border-dashed mb-6 p-4">
+                        <i class="bi bi-receipt fs-2 text-info me-4"></i>
+                        <div class="d-flex flex-stack flex-grow-1 flex-wrap">
+                            <div class="row g-4 flex-grow-1">
+                                <div class="col-sm-3">
+                                    <div class="text-muted fs-8 fw-semibold text-uppercase">
+                                        {{ __('payments.order_reference') }}
+                                    </div>
+                                    <a href="{{ route('orders.show', $invoice->order->id) }}"
+                                       class="fw-bold text-primary">
+                                        #{{ $invoice->order->order_number }}
+                                    </a>
+                                </div>
+                                <div class="col-sm-3">
+                                    <div class="text-muted fs-8 fw-semibold text-uppercase">
+                                        {{ __('payments.order_status') }}
+                                    </div>
+                                    <span class="badge badge-light-{{ $invoice->order->status == 'completed' ? 'success' : ($invoice->order->status == 'cancelled' ? 'danger' : 'warning') }}">
+                                        {{ ucfirst($invoice->order->status) }}
+                                    </span>
+                                </div>
+                                <div class="col-sm-3">
+                                    <div class="text-muted fs-8 fw-semibold text-uppercase">
+                                        {{ __('payments.location') }}
+                                    </div>
+                                    <div class="fw-bold text-gray-800">
+                                        {{ $invoice->order->correct_location->name ?? '—' }}
+                                    </div>
+                                </div>
+                                <div class="col-sm-3">
+                                    <div class="text-muted fs-8 fw-semibold text-uppercase">
+                                        {{ __('payments.department') }}
+                                    </div>
+                                    <div class="fw-bold text-gray-800">
+                                        {{ $invoice->order->department->name ?? '—' }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <span class="text-muted fs-7">{{ __('payments.order_status') }}</span>
-                            <div>
-                                <span class="badge badge-{{ $invoice->order->status == 'completed' ? 'success' : ($invoice->order->status == 'cancelled' ? 'danger' : 'warning') }}">
-                                    {{ ucfirst($invoice->order->status) }}
+                    </div>
+                @endif
+
+                {{-- ── Order Items ───────────────────────────────────── --}}
+                @if($invoice->order && $invoice->order->orderItems->count() > 0)
+
+                    {{-- Desktop: full table --}}
+                    <div class="d-none d-md-block table-responsive mb-6">
+                        <table class="table table-row-dashed table-row-gray-200 align-middle gs-0 gy-3">
+                            <thead>
+                                <tr class="fw-bold text-muted bg-light">
+                                    <th class="ps-4 min-w-30px text-center">#</th>
+                                    <th class="min-w-180px">{{ __('payments.item') }}</th>
+                                    <th class="min-w-80px text-center">{{ __('payments.sku') }}</th>
+                                    <th class="min-w-100px text-end">{{ __('payments.unit_price') }}</th>
+                                    <th class="min-w-70px text-center">{{ __('payments.qty') }}</th>
+                                    <th class="min-w-100px text-end">{{ __('payments.discount') }}</th>
+                                    <th class="min-w-100px text-end">{{ __('payments.tax') }}</th>
+                                    <th class="pe-4 min-w-120px text-end">{{ __('payments.total') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($invoice->order->orderItems as $index => $item)
+                                    <tr>
+                                        <td class="ps-4 text-center text-muted fw-semibold">
+                                            {{ $index + 1 }}
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-gray-800">{{ $item->item_name }}</div>
+                                            @if($item->variant)
+                                                <div class="text-muted fs-8">
+                                                    {{ $item->variant->name ?? '' }}
+                                                </div>
+                                            @endif
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-light">{{ $item->sku ?? '—' }}</span>
+                                        </td>
+                                        <td class="text-end fw-semibold text-gray-800">
+                                            {{ currency_symbol() }} {{ number_format($item->unit_price, 2) }}
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-light-primary">{{ $item->quantity }}</span>
+                                        </td>
+                                        <td class="text-end">
+                                            @if($item->discount > 0)
+                                                <span class="text-danger fw-semibold">
+                                                    -{{ currency_symbol() }} {{ number_format($item->discount, 2) }}
+                                                </span>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-end">
+                                            @if($item->tax_amount > 0)
+                                                <span class="text-warning fw-semibold">
+                                                    {{ currency_symbol() }} {{ number_format($item->tax_amount, 2) }}
+                                                </span>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </td>
+                                        <td class="pe-4 text-end fw-bold text-gray-800">
+                                            {{ currency_symbol() }} {{ number_format($item->total_price, 2) }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot class="fw-bold bg-light">
+                                <tr>
+                                    <td colspan="7" class="ps-4 text-end text-gray-700">
+                                        {{ __('payments.subtotal') }}
+                                    </td>
+                                    <td class="pe-4 text-end text-gray-800">
+                                        {{ currency_symbol() }} {{ number_format($invoice->subtotal, 2) }}
+                                    </td>
+                                </tr>
+                                @if($invoice->discount_total > 0)
+                                    <tr>
+                                        <td colspan="7" class="ps-4 text-end text-danger">
+                                            {{ __('payments.discount') }}
+                                        </td>
+                                        <td class="pe-4 text-end text-danger">
+                                            -{{ currency_symbol() }} {{ number_format($invoice->discount_total, 2) }}
+                                        </td>
+                                    </tr>
+                                @endif
+                                @if($invoice->tax_total > 0)
+                                    <tr>
+                                        <td colspan="7" class="ps-4 text-end text-warning">
+                                            {{ __('payments.tax') }}
+                                        </td>
+                                        <td class="pe-4 text-end text-warning">
+                                            {{ currency_symbol() }} {{ number_format($invoice->tax_total, 2) }}
+                                        </td>
+                                    </tr>
+                                @endif
+                                <tr class="fs-5">
+                                    <td colspan="7" class="ps-4 text-end text-primary">
+                                        {{ __('payments.grand_total') }}
+                                    </td>
+                                    <td class="pe-4 text-end text-primary fw-bold">
+                                        {{ currency_symbol() }} {{ number_format($invoice->total, 2) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    {{-- Mobile: stacked cards --}}
+                    <div class="d-md-none mb-6">
+                        @foreach($invoice->order->orderItems as $index => $item)
+                            <div class="border border-gray-300 border-dashed rounded-3 p-4 mb-3">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div class="flex-grow-1 min-w-0">
+                                        <div class="fw-bold text-gray-800 text-truncate">
+                                            {{ $item->item_name }}
+                                        </div>
+                                        @if($item->sku)
+                                            <span class="badge badge-light fs-8 mt-1">{{ $item->sku }}</span>
+                                        @endif
+                                    </div>
+                                    <span class="badge badge-light-primary ms-2">
+                                        ×{{ $item->quantity }}
+                                    </span>
+                                </div>
+
+                                <div class="d-flex justify-content-between fs-7 mb-2">
+                                    <span class="text-muted">{{ __('payments.unit_price') }}</span>
+                                    <span class="fw-semibold text-gray-800">
+                                        {{ currency_symbol() }} {{ number_format($item->unit_price, 2) }}
+                                    </span>
+                                </div>
+
+                                @if($item->discount > 0)
+                                    <div class="d-flex justify-content-between fs-7 mb-2">
+                                        <span class="text-muted">{{ __('payments.discount') }}</span>
+                                        <span class="fw-semibold text-danger">
+                                            -{{ currency_symbol() }} {{ number_format($item->discount, 2) }}
+                                        </span>
+                                    </div>
+                                @endif
+
+                                @if($item->tax_amount > 0)
+                                    <div class="d-flex justify-content-between fs-7 mb-2">
+                                        <span class="text-muted">{{ __('payments.tax') }}</span>
+                                        <span class="fw-semibold text-warning">
+                                            {{ currency_symbol() }} {{ number_format($item->tax_amount, 2) }}
+                                        </span>
+                                    </div>
+                                @endif
+
+                                <div class="separator separator-dashed my-2"></div>
+
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-bold text-gray-800 fs-7">{{ __('payments.total') }}</span>
+                                    <span class="fw-bold text-gray-800 fs-6">
+                                        {{ currency_symbol() }} {{ number_format($item->total_price, 2) }}
+                                    </span>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        {{-- Mobile totals --}}
+                        <div class="bg-light-primary rounded-3 p-4">
+                            <div class="d-flex justify-content-between fs-7 mb-2">
+                                <span class="text-muted">{{ __('payments.subtotal') }}</span>
+                                <span class="fw-semibold text-gray-800">
+                                    {{ currency_symbol() }} {{ number_format($invoice->subtotal, 2) }}
+                                </span>
+                            </div>
+                            @if($invoice->discount_total > 0)
+                                <div class="d-flex justify-content-between fs-7 mb-2">
+                                    <span class="text-muted">{{ __('payments.discount') }}</span>
+                                    <span class="fw-semibold text-danger">
+                                        -{{ currency_symbol() }} {{ number_format($invoice->discount_total, 2) }}
+                                    </span>
+                                </div>
+                            @endif
+                            @if($invoice->tax_total > 0)
+                                <div class="d-flex justify-content-between fs-7 mb-2">
+                                    <span class="text-muted">{{ __('payments.tax') }}</span>
+                                    <span class="fw-semibold text-warning">
+                                        {{ currency_symbol() }} {{ number_format($invoice->tax_total, 2) }}
+                                    </span>
+                                </div>
+                            @endif
+                            <div class="separator separator-dashed my-2"></div>
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold text-primary fs-6">{{ __('payments.grand_total') }}</span>
+                                <span class="fw-bold text-primary fs-5">
+                                    {{ currency_symbol() }} {{ number_format($invoice->total, 2) }}
                                 </span>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <span class="text-muted fs-7">{{ __('payments.location') }}</span>
-                            <div class="fw-semibold">{{ $invoice->order->correct_location->name ?? 'N/A' }}</div>
-                        </div>
-                        <div class="col-md-3">
-                            <span class="text-muted fs-7">{{ __('payments.department') }}</span>
-                            <div class="fw-semibold">{{ $invoice->order->department->name ?? 'N/A' }}</div>
-                        </div>
                     </div>
-                </div>
                 @endif
 
-                {{-- Order Items Table - Fixed right alignment --}}
-                @if($invoice->order && $invoice->order->orderItems->count() > 0)
-                <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-hover align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="text-center" style="width: 50px;">#</th>
-                                <th class="text-start" style="min-width: 180px;">{{ __('payments.item') }}</th>
-                                <th class="text-center" style="width: 100px;">{{ __('payments.sku') }}</th>
-                                <th class="text-end" style="width: 120px;">{{ __('payments.unit_price') }}</th>
-                                <th class="text-center" style="width: 70px;">{{ __('payments.qty') }}</th>
-                                <th class="text-end" style="width: 120px;">{{ __('payments.discount') }}</th>
-                                <th class="text-end" style="width: 120px;">{{ __('payments.tax') }}</th>
-                                <th class="text-end" style="width: 140px; min-width: 140px;">{{ __('payments.total') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($invoice->order->orderItems as $index => $item)
-                            <tr>
-                                <td class="text-center">{{ $index + 1 }}</td>
-                                <td class="text-start">
-                                    <div class="fw-semibold">{{ $item->item_name }}</div>
-                                    @if($item->variant)
-                                        <span class="text-muted fs-7">Variant: {{ $item->variant->name ?? 'N/A' }}</span>
-                                    @endif
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-light-secondary">{{ $item->sku ?? '—' }}</span>
-                                </td>
-                                <td class="text-end fw-semibold">{{ currency_symbol() }} {{ number_format($item->unit_price, 2) }}</td>
-                                <td class="text-center">
-                                    <span class="badge badge-light-primary">{{ $item->quantity }}</span>
-                                </td>
-                                <td class="text-end">
-                                    @if($item->discount > 0)
-                                        <span class="text-danger">{{ currency_symbol() }} {{ number_format($item->discount, 2) }}</span>
-                                    @else
-                                        <span class="text-muted">—</span>
-                                    @endif
-                                </td>
-                                <td class="text-end">
-                                    @if($item->tax_amount > 0)
-                                        <span class="text-warning">{{ currency_symbol() }} {{ number_format($item->tax_amount, 2) }}</span>
-                                    @else
-                                        <span class="text-muted">—</span>
-                                    @endif
-                                </td>
-                                <td class="text-end fw-bold">{{ currency_symbol() }} {{ number_format($item->total_price, 2) }}</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot class="bg-light fw-bold">
-                            <tr>
-                                <td colspan="7" class="text-end pe-3">{{ __('payments.subtotal') }}</td>
-                                <td class="text-end pe-3">{{ currency_symbol() }} {{ number_format($invoice->subtotal, 2) }}</td>
-                            </tr>
-                            @if($invoice->discount_total > 0)
-                            <tr>
-                                <td colspan="7" class="text-end pe-3 text-danger">{{ __('payments.discount') }}</td>
-                                <td class="text-end pe-3 text-danger">-{{ currency_symbol() }} {{ number_format($invoice->discount_total, 2) }}</td>
-                            </tr>
-                            @endif
-                            @if($invoice->tax_total > 0)
-                            <tr>
-                                <td colspan="7" class="text-end pe-3 text-warning">{{ __('payments.tax') }}</td>
-                                <td class="text-end pe-3 text-warning">{{ currency_symbol() }} {{ number_format($invoice->tax_total, 2) }}</td>
-                            </tr>
-                            @endif
-                            <tr class="fs-5">
-                                <td colspan="7" class="text-end pe-3 text-primary">{{ __('payments.grand_total') }}</td>
-                                <td class="text-end pe-3 text-primary fw-bold">{{ currency_symbol() }} {{ number_format($invoice->total, 2) }}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-                @endif
-
-                {{-- Payment Summary --}}
-                <div class="row g-3 mb-4">
+                {{-- ── Payment Summary ───────────────────────────────── --}}
+                <div class="row g-3 mb-6">
                     <div class="col-md-3 col-6">
-                        <div class="bg-light-primary rounded-3 p-3 text-center">
-                            <div class="text-muted fs-7">{{ __('payments.total_amount') }}</div>
-                            <div class="fs-4 fw-bold text-primary">{{ currency_symbol() }} {{ number_format($invoice->total, 2) }}</div>
+                        <div class="bg-light-primary rounded-3 p-4 text-center h-100">
+                            <div class="text-muted fs-8 fw-semibold text-uppercase mb-1">
+                                {{ __('payments.total_amount') }}
+                            </div>
+                            <div class="fs-4 fw-bold text-primary">
+                                {{ currency_symbol() }} {{ number_format($invoice->total, 2) }}
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6">
-                        <div class="bg-light-success rounded-3 p-3 text-center">
-                            <div class="text-muted fs-7">{{ __('payments.amount_paid') }}</div>
-                            <div class="fs-4 fw-bold text-success">{{ currency_symbol() }} {{ number_format($invoice->amount_paid, 2) }}</div>
+                        <div class="bg-light-success rounded-3 p-4 text-center h-100">
+                            <div class="text-muted fs-8 fw-semibold text-uppercase mb-1">
+                                {{ __('payments.amount_paid') }}
+                            </div>
+                            <div class="fs-4 fw-bold text-success">
+                                {{ currency_symbol() }} {{ number_format($invoice->amount_paid, 2) }}
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6">
-                        <div class="bg-light-danger rounded-3 p-3 text-center">
-                            <div class="text-muted fs-7">{{ __('payments.balance_due') }}</div>
-                            <div class="fs-4 fw-bold text-danger">{{ currency_symbol() }} {{ number_format($invoice->balance_due, 2) }}</div>
+                        <div class="bg-light-danger rounded-3 p-4 text-center h-100">
+                            <div class="text-muted fs-8 fw-semibold text-uppercase mb-1">
+                                {{ __('payments.balance_due') }}
+                            </div>
+                            <div class="fs-4 fw-bold text-danger">
+                                {{ currency_symbol() }} {{ number_format($invoice->balance_due, 2) }}
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6">
-                        <div class="bg-light-info rounded-3 p-3 text-center">
-                            <div class="text-muted fs-7">{{ __('payments.payment_status') }}</div>
+                        <div class="bg-light-info rounded-3 p-4 text-center h-100">
+                            <div class="text-muted fs-8 fw-semibold text-uppercase mb-1">
+                                {{ __('payments.payment_status') }}
+                            </div>
                             <div class="fs-6 fw-bold">
                                 @if($invoice->isPaid())
-                                    <span class="text-success"><i class="bi bi-check-circle me-1"></i>{{ __('payments.paid') }}</span>
+                                    <span class="text-success">
+                                        <i class="bi bi-check-circle me-1"></i>{{ __('payments.paid') }}
+                                    </span>
                                 @elseif($invoice->isPartiallyPaid())
-                                    <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>{{ __('payments.partial') }}</span>
+                                    <span class="text-warning">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>{{ __('payments.partial') }}
+                                    </span>
                                 @else
-                                    <span class="text-danger"><i class="bi bi-x-circle me-1"></i>{{ __('payments.unpaid') }}</span>
+                                    <span class="text-danger">
+                                        <i class="bi bi-x-circle me-1"></i>{{ __('payments.unpaid') }}
+                                    </span>
                                 @endif
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Payment History --}}
+                {{-- ── Payment History ───────────────────────────────── --}}
                 @if($invoice->payments && $invoice->payments->count() > 0)
-                <div class="mb-4">
-                    <h6 class="fw-bold mb-3">{{ __('payments.payment_history') }}</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered">
-                            <thead class="bg-light">
-                                <tr>
-                                    <th class="text-start">{{ __('payments.date') }}</th>
-                                    <th class="text-end">{{ __('payments.amount') }}</th>
-                                    <th class="text-start">{{ __('payments.method') }}</th>
-                                    <th class="text-start">{{ __('payments.transaction_id') }}</th>
-                                    <th class="text-center">{{ __('payments.status') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($invoice->payments as $payment)
-                                <tr>
-                                    <td class="text-start">{{ $payment->created_at->format('d M Y, h:i A') }}</td>
-                                    <td class="text-end fw-bold">{{ currency_symbol() }} {{ number_format($payment->amount, 2) }}</td>
-                                    <td class="text-start">{{ $payment->paymentMethod->name ?? 'N/A' }}</td>
-                                    <td class="text-start"><span class="badge badge-light-secondary">{{ $payment->transaction_id ?? '—' }}</span></td>
-                                    <td class="text-center">
-                                        <span class="badge badge-{{ $payment->status == 'completed' ? 'success' : ($payment->status == 'pending' ? 'warning' : 'danger') }}">
+                    <div class="mb-6">
+                        <h6 class="fw-bold text-gray-800 mb-3">
+                            <i class="bi bi-clock-history me-2 text-primary"></i>
+                            {{ __('payments.payment_history') }}
+                            <span class="badge badge-light-primary ms-1">{{ $invoice->payments->count() }}</span>
+                        </h6>
+
+                        {{-- Desktop table --}}
+                        <div class="d-none d-md-block table-responsive">
+                            <table class="table table-row-dashed align-middle">
+                                <thead>
+                                    <tr class="fw-bold text-muted bg-light fs-7 text-uppercase">
+                                        <th class="ps-4">{{ __('payments.date') }}</th>
+                                        <th class="text-end">{{ __('payments.amount') }}</th>
+                                        <th>{{ __('payments.method') }}</th>
+                                        <th>{{ __('payments.transaction_id') }}</th>
+                                        <th class="pe-4 text-center">{{ __('payments.status') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($invoice->payments as $payment)
+                                        <tr>
+                                            <td class="ps-4 text-gray-800">
+                                                {{ $payment->created_at->format('d M Y, h:i A') }}
+                                            </td>
+                                            <td class="text-end fw-bold text-success">
+                                                {{ currency_symbol() }} {{ number_format($payment->amount, 2) }}
+                                            </td>
+                                            <td class="text-gray-700">
+                                                {{ $payment->paymentMethod->name ?? '—' }}
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-light">
+                                                    {{ $payment->transaction_id ?? '—' }}
+                                                </span>
+                                            </td>
+                                            <td class="pe-4 text-center">
+                                                <span class="badge badge-light-{{ $payment->status == 'completed' ? 'success' : ($payment->status == 'pending' ? 'warning' : 'danger') }}">
+                                                    {{ ucfirst($payment->status) }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {{-- Mobile list --}}
+                        <div class="d-md-none">
+                            @foreach($invoice->payments as $payment)
+                                <div class="border border-gray-300 border-dashed rounded-3 p-4 mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted fs-8">
+                                            {{ $payment->created_at->format('d M Y, h:i A') }}
+                                        </span>
+                                        <span class="badge badge-light-{{ $payment->status == 'completed' ? 'success' : ($payment->status == 'pending' ? 'warning' : 'danger') }}">
                                             {{ ucfirst($payment->status) }}
                                         </span>
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                                    </div>
+                                    <div class="d-flex justify-content-between fs-7 mb-1">
+                                        <span class="text-muted">{{ __('payments.method') }}</span>
+                                        <span class="fw-semibold text-gray-800">
+                                            {{ $payment->paymentMethod->name ?? '—' }}
+                                        </span>
+                                    </div>
+                                    @if($payment->transaction_id)
+                                        <div class="d-flex justify-content-between fs-7 mb-1">
+                                            <span class="text-muted">{{ __('payments.transaction_id') }}</span>
+                                            <span class="fw-semibold text-gray-800 text-truncate"
+                                                  style="max-width: 60%;">
+                                                {{ $payment->transaction_id }}
+                                            </span>
+                                        </div>
+                                    @endif
+                                    <div class="separator separator-dashed my-2"></div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted fs-7">{{ __('payments.amount') }}</span>
+                                        <span class="fw-bold text-success">
+                                            {{ currency_symbol() }} {{ number_format($payment->amount, 2) }}
+                                        </span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
-                </div>
                 @endif
 
-                {{-- Notes & Terms --}}
+                {{-- ── Notes & Terms ─────────────────────────────────── --}}
                 @if($invoice->notes || $invoice->terms)
-                <div class="row g-3">
-                    @if($invoice->notes)
-                    <div class="col-md-6">
-                        <div class="bg-light p-3 rounded-3">
-                            <h6 class="fw-bold mb-2"><i class="bi bi-sticky me-1"></i>{{ __('payments.notes') }}</h6>
-                            <p class="mb-0 text-muted">{{ $invoice->notes }}</p>
-                        </div>
+                    <div class="row g-4">
+                        @if($invoice->notes)
+                            <div class="col-md-6">
+                                <div class="bg-light rounded-3 p-4 h-100">
+                                    <h6 class="fw-bold text-gray-800 mb-2">
+                                        <i class="bi bi-sticky me-1 text-warning"></i>
+                                        {{ __('payments.notes') }}
+                                    </h6>
+                                    <p class="mb-0 text-muted fs-7">{{ $invoice->notes }}</p>
+                                </div>
+                            </div>
+                        @endif
+                        @if($invoice->terms)
+                            <div class="col-md-6">
+                                <div class="bg-light rounded-3 p-4 h-100">
+                                    <h6 class="fw-bold text-gray-800 mb-2">
+                                        <i class="bi bi-file-text me-1 text-info"></i>
+                                        {{ __('payments.terms_conditions') }}
+                                    </h6>
+                                    <p class="mb-0 text-muted fs-7">{{ $invoice->terms }}</p>
+                                </div>
+                            </div>
+                        @endif
                     </div>
-                    @endif
-                    @if($invoice->terms)
-                    <div class="col-md-6">
-                        <div class="bg-light p-3 rounded-3">
-                            <h6 class="fw-bold mb-2"><i class="bi bi-file-text me-1"></i>{{ __('payments.terms_conditions') }}</h6>
-                            <p class="mb-0 text-muted">{{ $invoice->terms }}</p>
-                        </div>
-                    </div>
-                    @endif
+                @endif
+
+            </div>{{-- /modal-body --}}
+
+            {{-- ─── FOOTER ────────────────────────────────────────────── --}}
+            <div class="modal-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-2"></i>{{ __('payments.close') }}
+                </button>
+
+                <div class="d-flex flex-wrap gap-2">
+                    @can('download invoice')
+                        <a href="{{ route('invoices.pdf', $invoice->id) }}"
+                           target="_blank"
+                           class="btn btn-light-primary">
+                            <i class="bi bi-file-pdf me-1"></i>
+                            {{ __('payments.download_pdf') }}
+                        </a>
+                    @endcan
+
+                    @can('send invoice')
+                        @if($invoice->status !== 'void' && $invoice->status !== 'paid')
+                            <button type="button"
+                                    class="btn btn-success"
+                                    data-bs-dismiss="modal"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#sendInvoiceModal{{ $invoice->id }}">
+                                <i class="bi bi-envelope me-1"></i>
+                                {{ __('payments.send_invoice') }}
+                            </button>
+                        @endif
+                    @endcan
+
+                    @can('record invoice payment')
+                        @if(!in_array($invoice->status, ['void', 'paid', 'cancelled']))
+                            <button type="button"
+                                    class="btn btn-primary"
+                                    data-bs-dismiss="modal"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#recordPaymentModal{{ $invoice->id }}">
+                                <i class="bi bi-cash-coin me-1"></i>
+                                {{ __('payments.record_payment') }}
+                            </button>
+                        @endif
+                    @endcan
                 </div>
-                @endif
             </div>
-            <div class="modal-footer">
-                @can('download invoice')
-                <a href="{{ route('invoices.pdf', $invoice->id) }}" target="_blank" class="btn btn-secondary">
-                    <i class="bi bi-file-pdf me-1"></i>{{ __('payments.download_pdf') }}
-                </a>
-                @endcan
-                @can('send invoice')
-                @if($invoice->status !== 'void' && $invoice->status !== 'paid')
-                <button type="button" class="btn btn-success" data-bs-dismiss="modal" 
-                        data-bs-toggle="modal" data-bs-target="#sendInvoiceModal{{ $invoice->id }}">
-                    <i class="bi bi-envelope me-1"></i>{{ __('payments.send_invoice') }}
-                </button>
-                @endif
-                @endcan
-                @can('record invoice payment')
-                @if(!in_array($invoice->status, ['void', 'paid', 'cancelled']))
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal"
-                        data-bs-toggle="modal" data-bs-target="#recordPaymentModal{{ $invoice->id }}">
-                    <i class="bi bi-cash-coin me-1"></i>{{ __('payments.record_payment') }}
-                </button>
-                @endif
-                @endcan
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('payments.close') }}</button>
-            </div>
+
         </div>
     </div>
 </div>

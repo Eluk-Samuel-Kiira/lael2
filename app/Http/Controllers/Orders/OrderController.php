@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Orders;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Order;
+use App\Models\{ Order, Location };
 use App\Mail\OrderReceiptMail;
 use App\Services\MessagingService;
 use Illuminate\Support\Facades\{ Auth, DB, Mail, Log };
@@ -92,9 +92,9 @@ class OrderController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view order')) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -104,52 +104,46 @@ class OrderController extends Controller
             }
             abort(403);
         }
-        
-        // Get per_page from request, default to 15
+
+        // ── Visibility rule ─────────────────────────────────────────
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ── Pagination ──────────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
             $perPage = 15;
         }
-        
-        // ── Determine visibility scope ───────────────────────────────
-        // Super admins and admins see everything within their tenant.
-        // Everyone else sees only what they personally created.
-        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
 
-
-        // Build the query with relationships
+        // ── Base query ──────────────────────────────────────────────
         $query = Order::with([
             'orderItems',
             'customer',
             'orderCreater',
             'location',
             'department',
-            'orderPayments'
+            'orderPayments',
         ]);
-        
-        // If user is NOT super_admin, filter by tenant
+
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $tenantId);
         }
 
-        // Non-admins see only their own orders
         if (!$isAdmin) {
             $query->where('created_by', $user->id);
         }
-        
-        // Apply search if provided
+
+        // ── Search ──────────────────────────────────────────────────
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('order_number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%")
                 ->orWhere('status', 'like', "%{$search}%")
                 ->orWhere('type', 'like', "%{$search}%")
                 ->orWhere('source', 'like', "%{$search}%")
-                ->orWhereHas('customer', function($c) use ($search) {
+                ->orWhereHas('customer', function ($c) use ($search) {
                     $c->where('first_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
@@ -158,25 +152,52 @@ class OrderController extends Controller
                 ->orWhereHas('orderCreater', fn($cr) => $cr->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
+
+        // ── Location filter ─────────────────────────────────────────
+        if ($request->filled('location_id')) {
+            $requestedLocationId = (int) $request->input('location_id');
+
+            // Admins can filter by any tenant location.
+            // Non-admins may only filter within their own assigned locations.
+            $allowedToFilter = $isAdmin
+                || in_array($requestedLocationId, $userLocationIds, true);
+
+            if ($allowedToFilter) {
+                $query->where('location_id', $requestedLocationId);
+            }
+        }
+
+        // ── Paginate ────────────────────────────────────────────────
         $orders = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $orders->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
+        $orders->appends([
+            'per_page'    => $perPage,
+            'search'      => $request->search,
+            'location_id' => $request->location_id,
+        ]);
+
+        // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
         if ($request->ajax() && $bladeToReload === 'ordersIndexTable') {
             return view('orders.order.component', [
                 'orders' => $orders,
             ])->render();
         }
-        
-        // Regular page load
+
+        // ── Locations for the filter dropdown ───────────────────────
+        // Admins see every tenant location. Non-admins see only theirs.
+        $locationsQuery = Location::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name');
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
         return view('orders.order-index', [
-            'orders' => $orders,
+            'orders'    => $orders,
+            'locations' => $locations,
         ]);
     }
 

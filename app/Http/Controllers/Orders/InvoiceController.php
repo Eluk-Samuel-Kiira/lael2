@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Orders;
 
 use App\Http\Controllers\Controller;
 use App\Models\{ Invoice, Order, OrderPayment, ProductVariant, InventoryAdjustments,
-                    InventoryTransactions, SingleShopInventoryLog, PaymentMethod, Currency, 
+                    InventoryTransactions, SingleShopInventoryLog, PaymentMethod, Currency, Location,
                     InvoicePayment, InventoryItems, PurchaseReceiptItem, BatchLog, SerialNumber };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ Auth, DB, Log, Mail };
@@ -16,7 +16,7 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view invoice')) {
@@ -29,13 +29,15 @@ class InvoiceController extends Controller
             abort(403);
         }
 
-        // ── Visibility rule ─────────────────────────────────────────
-        // super_admin / admin → see everything (in their tenant)
-        // everyone else        → only invoices they created
-        //                        OR that belong to orders they created
-        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
 
-        $query = Invoice::with(['order', 'customer'])
+        // Eager-load department.location so correct_location resolves without N+1
+        $query = Invoice::with([
+                'order.location',
+                'order.department.location',
+                'customer',
+            ])
             ->where('tenant_id', $tenantId)
             ->latest();
 
@@ -46,7 +48,6 @@ class InvoiceController extends Controller
             });
         }
 
-        // ── Search ──────────────────────────────────────────────────
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('invoice_number', 'like', "%{$search}%")
@@ -56,12 +57,30 @@ class InvoiceController extends Controller
             });
         }
 
-        // ── Status filter ───────────────────────────────────────────
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
 
-        // ── Mark overdue (scoped so non-admins don't accidentally update others' rows) ──
+        // ── Location filter — mirrors the `correct_location` accessor ──
+        if ($request->filled('location_id')) {
+            $requestedLocationId = (int) $request->input('location_id');
+
+            $allowedToFilter = $isAdmin
+                || in_array($requestedLocationId, $userLocationIds, true);
+
+            if ($allowedToFilter) {
+                $query->whereHas('order', function ($oq) use ($requestedLocationId) {
+                    $oq->where(function ($inner) use ($requestedLocationId) {
+                        // Match if the order's department lives at that location
+                        $inner->whereHas('department', fn($dq) => $dq->where('location_id', $requestedLocationId))
+                            // OR the order itself is at that location
+                            ->orWhere('location_id', $requestedLocationId);
+                    });
+                });
+            }
+        }
+
+        // ── Mark overdue (scoped) ───────────────────────────────────
         $overdueQuery = Invoice::where('tenant_id', $tenantId)
             ->outstanding()
             ->whereDate('due_date', '<', now());
@@ -72,29 +91,44 @@ class InvoiceController extends Controller
                 ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
             });
         }
-
         $overdueQuery->update(['status' => Invoice::STATUS_OVERDUE]);
 
-        // ── Pagination ──────────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
             $perPage = 15;
         }
 
-        $invoices = $query->paginate($perPage)->withQueryString();
+        $invoices = $query->paginate($perPage)
+            ->appends([
+                'search'      => $request->search,
+                'status'      => $request->status,
+                'location_id' => $request->location_id,
+                'per_page'    => $perPage,
+            ]);
 
-        // ── AJAX partial reload ─────────────────────────────────────
+        $locationsQuery = Location::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name');
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
         $bladeToReload = $request->query('bladeFileToReload');
 
         if ($request->ajax() && $bladeToReload === 'reloadInvoiceComponent') {
             return view('orders.invoice.component', [
-                'invoices' => $invoices,
+                'invoices'  => $invoices,
+                'locations' => $locations,
             ])->render();
         }
 
         return view('orders.invoice-index', [
-            'invoices' => $invoices,
+            'invoices'  => $invoices,
+            'locations' => $locations,
         ]);
     }
 

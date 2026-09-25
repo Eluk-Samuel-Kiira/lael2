@@ -29,25 +29,37 @@
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
+
+                {{-- Search --}}
                 <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
+                    <x-liveblade-search
                         id="invoiceSearchInput"
                         componentId="reloadInvoiceComponent"
                         route="{{ route('invoices.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('payments.invoice')}}"
+                        placeholder="{{ __('auth._search') }} {{ __('payments.invoice') }}"
                     />
                 </div>
 
-                <!-- @can('create invoice')
-                <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_create_invoice">
-                    <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                    <span class="d-none d-sm-inline">{{__('passwords.create_invoice')}}</span>
-                    <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
-                </button>
-                @endcan -->
+                {{-- Location filter --}}
+                @if(isset($locations) && $locations->count() > 0)
+                    <div class="w-100 w-sm-200px">
+                        <select id="invoiceLocationFilter"
+                                class="form-select form-select-solid"
+                                data-control="select2"
+                                data-placeholder="{{ __('passwords.all_locations') }}"
+                                data-allow-clear="true"
+                                onchange="filterInvoicesByLocation(this.value)">
+                            <option value="">{{ __('passwords.all_locations') }}</option>
+                            @foreach($locations as $loc)
+                                <option value="{{ $loc->id }}"
+                                        @selected((int) request('location_id') === (int) $loc->id)>
+                                    {{ $loc->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
 
             </div>
         </div>
@@ -65,6 +77,37 @@
         </div>
     </div>
     @endif
+
+    <script>
+        function filterInvoicesByLocation(locationId) {
+            const url = new URL(window.location.href);
+
+            if (locationId) {
+                url.searchParams.set('location_id', locationId);
+            } else {
+                url.searchParams.delete('location_id');
+            }
+
+            url.searchParams.delete('page');
+
+            const searchInput = document.getElementById('invoiceSearchInput');
+            if (searchInput && searchInput.value) {
+                url.searchParams.set('search', searchInput.value);
+            } else {
+                url.searchParams.delete('search');
+            }
+
+            // Preserve the current status filter if any
+            const statusFilter = document.getElementById('invoiceStatusFilter');
+            if (statusFilter && statusFilter.value) {
+                url.searchParams.set('status', statusFilter.value);
+            } else {
+                url.searchParams.delete('status');
+            }
+
+            window.location.href = url.toString();
+        }
+    </script>
     
     @endsection
 </x-app-layout>

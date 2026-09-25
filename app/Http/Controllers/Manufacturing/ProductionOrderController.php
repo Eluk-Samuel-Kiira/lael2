@@ -16,7 +16,7 @@ class ProductionOrderController extends Controller
 
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view production_orders')) {
@@ -29,51 +29,95 @@ class ProductionOrderController extends Controller
             abort(403);
         }
 
+        // ── Visibility rule ─────────────────────────────────────────
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ── Pagination ──────────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
             $perPage = 15;
         }
 
-        $query = ProductionOrder::with(['inputs.productVariant', 'outputs.productVariant', 'createdBy', 'location'])
+        // ── Base query ──────────────────────────────────────────────
+        $query = ProductionOrder::with([
+                'inputs.productVariant',
+                'outputs.productVariant',
+                'createdBy',
+                'location',
+            ])
             ->where('tenant_id', $tenantId);
 
+        // ── Non-admins: only orders at their assigned locations ─────
+        if (!$isAdmin) {
+            if (empty($userLocationIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('location_id', $userLocationIds);
+            }
+        }
+
+        // ── Search ──────────────────────────────────────────────────
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('production_number', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%")
-                    ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
+                ->orWhere('status', 'like', "%{$search}%")
+                ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
 
+        // ── Location filter (admins) ────────────────────────────────
+        if ($request->filled('location_id')) {
+            $requestedLocationId = (int) $request->input('location_id');
+
+            // Non-admins can only filter within their own locations
+            if ($isAdmin || in_array($requestedLocationId, $userLocationIds, true)) {
+                $query->where('location_id', $requestedLocationId);
+            }
+        }
+
         $productionOrders = $query->latest()->paginate($perPage);
-        $productionOrders->appends(['per_page' => $perPage, 'search' => $request->search]);
+        $productionOrders->appends([
+            'per_page'    => $perPage,
+            'search'      => $request->search,
+            'location_id' => $request->location_id,
+        ]);
 
+        // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
-
         if ($request->ajax() && $bladeToReload === 'reloadProductionComponent') {
             return view('manufacturing.production-order.component', [
                 'productionOrders' => $productionOrders,
             ])->render();
         }
 
+        // ── Dropdown data ───────────────────────────────────────────
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->get();
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
+
+        $locationsQuery = Location::where('tenant_id', $tenantId);
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->get();
 
         return view('manufacturing.production-index', [
             'productionOrders' => $productionOrders,
-            'variants' => $variants,
-            'locations' => $locations,
-            'paymentMethods' => $paymentMethods,
+            'variants'         => $variants,
+            'locations'        => $locations,
+            'paymentMethods'   => $paymentMethods,
         ]);
     }
+
 
     public function store(Request $request)
     {
