@@ -10,11 +10,11 @@
                             <input class="form-check-input" type="checkbox" data-kt-check="true" data-kt-check-target="#kt_table_users .form-check-input" value="1" />
                         </div>
                     </th>
-                    <th class="min-w-125px">{{__('pagination.expense_id')}}</th>
                     <th class="min-w-125px">{{__('payments.description')}}</th>
                     <th class="min-w-125px">{{__('auth.supplier')}}</th>
                     <th class="min-w-125px">{{__('pagination.amount')}}</th> 
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
+                    <th class="min-w-125px">{{__('passwords.location')}}</th>
                     <th class="min-w-125px">{{__('auth.created_at')}}</th>
                     <th class="min-w-125px">{{__('pagination.created_by')}}</th>
                     <th class="min-w-125px">{{__('pagination.approve')}}</th>
@@ -30,9 +30,6 @@
                                 <div class="form-check form-check-sm form-check-custom form-check-solid">
                                     <input class="form-check-input" type="checkbox" value="1" />
                                 </div>
-                            </td>
-                            <td>
-                                <div class="badge badge-light fw-bold">{{__('payments._id')}}{{ $expense->id }}</div>
                             </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $expense->description }}</div>
@@ -101,9 +98,15 @@
                             </td>
                             <td>
                                 <span class="badge badge-light-primary fw-bold px-3 py-2">
+                                    {{ $expense->location->name ?? 'N/A' }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-light-primary fw-bold px-3 py-2">
                                     <i class="bi bi-calendar3 me-1"></i>
-                                    {{ $expense->created_at->format('d M Y, h:i a') }}</td> 
+                                    {{ $expense->created_at->format('d M Y, h:i a') }} 
                                 <span>
+                            </td>
                             <td>
                                 <span class="badge badge-light-warning fw-bold px-3 py-2">
                                     {{ $expense->creator->name ?? 'N/A' }}

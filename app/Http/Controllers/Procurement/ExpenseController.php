@@ -18,7 +18,7 @@ class ExpenseController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view expense')) {
@@ -31,19 +31,18 @@ class ExpenseController extends Controller
             abort(403);
         }
 
-        // ── per_page handling ────────────────────────────────────────
+        // ── Visibility rule ──────────────────────────────────────────
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ── per_page ─────────────────────────────────────────────────
         $perPage = $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
         if (!in_array($perPage, $allowedPerPage)) {
             $perPage = 15;
         }
 
-        // ── Visibility rule ──────────────────────────────────────────
-        // super_admin / admin → see everything in their tenant
-        // everyone else        → only expenses they created
-        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
-
-        // ── Build query ──────────────────────────────────────────────
+        // ── Query ────────────────────────────────────────────────────
         $query = Expense::with([
             'tenant',
             'paymentMethod',
@@ -52,12 +51,10 @@ class ExpenseController extends Controller
             'department',
         ]);
 
-        // Tenant filter — super_admin can cross tenants
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', current_tenant_id());
         }
 
-        // Non-admins see only their own expenses
         if (!$isAdmin) {
             $query->where('created_by', $user->id);
         }
@@ -78,16 +75,40 @@ class ExpenseController extends Controller
             });
         }
 
+        // ── Location filter ──────────────────────────────────────────
+        if ($request->filled('location_id')) {
+            $requestedLocationId = (int) $request->input('location_id');
+
+            $allowedToFilter = $isAdmin
+                || in_array($requestedLocationId, $userLocationIds, true);
+
+            if ($allowedToFilter) {
+                $query->where('location_id', $requestedLocationId);
+            }
+        }
+
+        // ── Department filter (optional) ────────────────────────────
+        if ($request->filled('department_id')) {
+            $query->where('department_id', (int) $request->input('department_id'));
+        }
+
+        // ── Status filter (optional) ────────────────────────────────
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->input('payment_status'));
+        }
+
         // ── Paginate ─────────────────────────────────────────────────
         $expenses = $query->latest()->paginate($perPage);
 
-        // Preserve per_page and search in pagination links
         $expenses->appends([
-            'per_page' => $perPage,
-            'search'   => $request->search,
+            'per_page'       => $perPage,
+            'search'         => $request->search,
+            'location_id'    => $request->location_id,
+            'department_id'  => $request->department_id,
+            'payment_status' => $request->payment_status,
         ]);
 
-        // ── Active payment methods with location filtering ───────────
+        // ── Payment methods (scoped for non-admins) ─────────────────
         $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->when($user->location_id, function ($query, $locationId) {
@@ -99,6 +120,17 @@ class ExpenseController extends Controller
             ->orderBy('name')
             ->get();
 
+        // ── Locations for the filter dropdown ───────────────────────
+        $locationsQuery = Location::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name');
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get();
+
         // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
 
@@ -106,13 +138,14 @@ class ExpenseController extends Controller
             return view('procurement.expense.component', [
                 'expenses'       => $expenses,
                 'PaymentMethods' => $activePaymentMethods,
+                'locations'      => $locations,
             ])->render();
         }
 
-        // ── Regular page load ───────────────────────────────────────
         return view('procurement.expense-index', [
             'expenses'       => $expenses,
             'PaymentMethods' => $activePaymentMethods,
+            'locations'      => $locations,
         ]);
     }
 

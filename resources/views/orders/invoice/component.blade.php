@@ -84,13 +84,12 @@
                                 @endif
                             </td>
                             <td>
-                                <div class="d-flex flex-column">
-                                    <span class="fw-bold text-gray-800 fs-5">{{ number_format($invoice->total, 2) }}</span>
-                                    <span class="text-muted fs-7">{{ $invoice->currency }}</span>
-                                    @if($invoice->balance_due > 0 && $invoice->balance_due < $invoice->total)
-                                        <span class="badge badge-light-warning mt-1">{{ __('payments.balance_due') }}: {{ number_format($invoice->balance_due, 2) }}</span>
-                                    @endif
-                                </div>
+                                <span class="fw-bold text-gray-800">{{ format_currency($invoice->total) }}</span>
+                                @if($invoice->balance_due > 0)
+                                    <small class="d-block text-danger fs-8">
+                                        ↳ {{ __('payments.balance_due') }}: {{ format_currency($invoice->balance_due) }}
+                                    </small>
+                                @endif
                             </td>
                             
                             <td>

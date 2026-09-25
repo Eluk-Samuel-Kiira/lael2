@@ -29,17 +29,37 @@
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
-            <div class="d-flex align-items-stretch align-items-sm-center w-100 w-md-auto">
-                <!-- Search Bar -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
+
+                <!-- Search -->
                 <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
+                    <x-liveblade-search
                         id="orderSearchInput"
                         componentId="ordersIndexTable"
                         route="{{ route('orders.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('passwords.orders')}}"
+                        placeholder="{{ __('auth._search') }} {{ __('passwords.orders') }}"
                     />
                 </div>
+
+                <!-- Location filter -->
+                @if(isset($locations) && $locations->count() > 0)
+                    <div class="w-100 w-sm-200px">
+                        <select id="orderLocationFilter"
+                                class="form-select form-select-solid"
+                                data-control="select2"
+                                data-placeholder="{{ __('passwords.all_locations') }}"
+                                data-allow-clear="true"
+                                onchange="filterOrdersByLocation(this.value)">
+                            <option value="">{{ __('passwords.all_locations') }}</option>
+                            @foreach($locations as $loc)
+                                <option value="{{ $loc->id }}"
+                                        @selected((int) request('location_id') === (int) $loc->id)>
+                                    {{ $loc->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
             </div>
         </div>
     </div>
@@ -57,6 +77,28 @@
             </div>
         </div>
     </div>
+    <script>
+        function filterOrdersByLocation(locationId) {
+            const url = new URL(window.location.href);
+
+            if (locationId) {
+                url.searchParams.set('location_id', locationId);
+            } else {
+                url.searchParams.delete('location_id');
+            }
+
+            url.searchParams.delete('page');
+
+            const searchInput = document.getElementById('orderSearchInput');
+            if (searchInput && searchInput.value) {
+                url.searchParams.set('search', searchInput.value);
+            } else {
+                url.searchParams.delete('search');
+            }
+
+            window.location.href = url.toString();
+        }
+    </script>
     @endif
     
     @endsection

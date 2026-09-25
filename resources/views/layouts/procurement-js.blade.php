@@ -1992,7 +1992,39 @@
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
 
-   
+    function filterExpensesByLocation(locationId) {
+        const url = new URL(window.location.href);
+
+        if (locationId) {
+            url.searchParams.set('location_id', locationId);
+        } else {
+            url.searchParams.delete('location_id');
+        }
+
+        url.searchParams.delete('page');
+
+        // Preserve search input if any
+        const searchInput = document.getElementById('expenseSearchInput');
+        if (searchInput && searchInput.value) {
+            url.searchParams.set('search', searchInput.value);
+        } else {
+            url.searchParams.delete('search');
+        }
+
+        // Preserve department / status filters if present
+        ['department_id', 'payment_status'].forEach(key => {
+            const el = url.searchParams.get(key);
+            if (!el) return;
+            // only preserve if the source filter still exists on the page
+            const filterEl = document.getElementById('expense' + key.replace('_id','').replace('payment_status','Status') + 'Filter');
+            if (filterEl && filterEl.value) {
+                url.searchParams.set(key, filterEl.value);
+            }
+        });
+
+        window.location.href = url.toString();
+    }
+    
 </script>
 
 <!-- Expenses continue  -->

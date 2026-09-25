@@ -23,21 +23,43 @@
             </div>
 
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
+
                 <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
+                    <x-liveblade-search
                         id="productionOrderSearchInput"
                         componentId="reloadProductionComponent"
                         route="{{ route('production-orders.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('passwords.production_orders')}}"
+                        placeholder="{{ __('auth._search') }} {{ __('passwords.production_orders') }}"
                     />
                 </div>
 
+                @if($locations->count() > 0)
+                    <div class="w-100 w-sm-200px">
+                        <select id="productionLocationFilter"
+                                class="form-select form-select-solid"
+                                data-control="select2"
+                                data-placeholder="{{ __('passwords.all_locations') }}"
+                                data-allow-clear="true"
+                                onchange="filterProductionByLocation(this.value)">
+                            <option value="">{{ __('passwords.all_locations') }}</option>
+                            @foreach($locations as $loc)
+                                <option value="{{ $loc->id }}"
+                                        @selected((int) request('location_id') === (int) $loc->id)>
+                                    {{ $loc->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
                 @can('create production_orders')
-                <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_production_order">
-                    <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                    <span class="d-none d-sm-inline">{{__('passwords.new_production_order')}}</span>
-                    <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
-                </button>
+                    <button type="button" class="btn btn-primary flex-shrink-0"
+                            data-bs-toggle="modal"
+                            data-bs-target="#kt_modal_add_production_order">
+                        <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
+                        <span class="d-none d-sm-inline">{{ __('passwords.new_production_order') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('auth._add') }}</span>
+                    </button>
                 @endcan
 
                 @include('manufacturing.production-order.create')
@@ -56,5 +78,27 @@
         </div>
     </div>
  
+    <script>
+        function filterProductionByLocation(locationId) {
+            const url = new URL(window.location.href);
+
+            if (locationId) {
+                url.searchParams.set('location_id', locationId);
+            } else {
+                url.searchParams.delete('location_id');
+            }
+
+            url.searchParams.delete('page');
+
+            const searchInput = document.getElementById('productionOrderSearchInput');
+            if (searchInput && searchInput.value) {
+                url.searchParams.set('search', searchInput.value);
+            } else {
+                url.searchParams.delete('search');
+            }
+
+            window.location.href = url.toString();
+        }
+    </script>
     @endsection
 </x-app-layout>

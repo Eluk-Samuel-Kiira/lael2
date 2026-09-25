@@ -29,27 +29,45 @@
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
             <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
+
+                {{-- Search --}}
                 <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
+                    <x-liveblade-search
                         id="batchSearchInput"
                         componentId="reloadBatchComponent"
                         route="{{ route('batches.index') }}"
-                        placeholder="{{__('passwords.search_batches')}}"
+                        placeholder="{{ __('passwords.search_batches') }}"
                     />
                 </div>
 
+                {{-- Location filter --}}
+                @if($locations->count() > 0)
+                    <div class="w-100 w-sm-200px">
+                        <select id="batchLocationFilter"
+                                class="form-select form-select-solid"
+                                data-control="select2"
+                                data-placeholder="{{ __('passwords.all_locations') }}"
+                                data-allow-clear="true"
+                                onchange="filterBatchesByLocation(this.value)">
+                            <option value="">{{ __('passwords.all_locations') }}</option>
+                            @foreach($locations as $loc)
+                                <option value="{{ $loc->id }}" @selected((int) $locationId === (int) $loc->id)>
+                                    {{ $loc->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
                 @can('edit inventory')
-                <button type="button" class="btn btn-primary flex-shrink-0" onclick="assignSelectedBatches()">
-                    <i class="ki-duotone ki-tag fs-2 me-2 me-sm-3"></i>
-                    <span class="d-none d-sm-inline">{{__('passwords.assign_batches')}}</span>
-                    <span class="d-inline d-sm-none">{{__('passwords.assign')}}</span>
-                </button>
+                    <button type="button" class="btn btn-primary flex-shrink-0" onclick="assignSelectedBatches()">
+                        <i class="ki-duotone ki-tag fs-2 me-2 me-sm-3"></i>
+                        <span class="d-none d-sm-inline">{{ __('passwords.assign_batches') }}</span>
+                        <span class="d-inline d-sm-none">{{ __('passwords.assign') }}</span>
+                    </button>
                 @endcan
 
-                <!-- Modal include -->
                 @include('inventory.batch.assign-modal')
             </div>
         </div>
@@ -61,10 +79,35 @@
                 <div id="status"></div>
                 <div class="card">
                     @include('inventory.batch.batch-component')
+
                 </div>
             </div>
         </div>
     </div>
+    <script>
+        function filterBatchesByLocation(locationId) {
+            const url = new URL(window.location.href);
+
+            if (locationId) {
+                url.searchParams.set('location_id', locationId);
+            } else {
+                url.searchParams.delete('location_id');
+            }
+
+            // Reset to first page when filtering
+            url.searchParams.delete('page');
+
+            // If your search input has a value, preserve it
+            const searchInput = document.getElementById('batchSearchInput');
+            if (searchInput && searchInput.value) {
+                url.searchParams.set('search', searchInput.value);
+            } else {
+                url.searchParams.delete('search');
+            }
+
+            window.location.href = url.toString();
+        }
+    </script>
     
     @endsection
 </x-app-layout>
