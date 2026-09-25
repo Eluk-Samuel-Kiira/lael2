@@ -62,7 +62,9 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- ═══════════════════════════════════════════════════════════
+                    FILTERS
+                ═══════════════════════════════════════════════════════════ --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -77,50 +79,59 @@
                             </div>
                             <div class="card-body pt-0">
                                 <form method="GET" action="{{ route('reports.expenses.budget-vs-actual') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6">
-                                        {{-- Year Selection --}}
-                                        <div class="flex-grow-1">
+
+                                    {{-- Row 1: Year + Month + Location --}}
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-xl-3">
                                             <label class="form-label required fw-semibold">{{ __('accounting.year') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="year" required>
+                                            <div class="input-group">
+                                                <select class="form-select" name="year" data-control="select2" required>
                                                     @foreach($years as $y)
-                                                        <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>
+                                                        <option value="{{ $y }}" {{ (int) $year === (int) $y ? 'selected' : '' }}>
                                                             {{ $y }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Month Selection --}}
-                                        <div class="flex-grow-1">
+
+                                        <div class="col-xl-3">
                                             <label class="form-label required fw-semibold">{{ __('accounting.month') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="month" required>
+                                            <div class="input-group">
+                                                <select class="form-select" name="month" data-control="select2" required>
                                                     @foreach($months as $key => $name)
-                                                        <option value="{{ $key }}" {{ $month == $key ? 'selected' : '' }}>
+                                                        <option value="{{ $key }}" {{ (int) $month === (int) $key ? 'selected' : '' }}>
                                                             {{ __($name) }}
                                                         </option>
                                                     @endforeach
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
+
+                                        <div class="col-xl-3">
+                                            <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
+                                            <div class="input-group">
+                                                <select class="form-select" name="location_id" data-control="select2">
+                                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                                    @foreach($locations as $location)
+                                                        <option value="{{ $location->id }}"
+                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
+                                                            {{ $location->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-xl-3 d-flex align-items-end">
+                                            <div class="d-flex flex-column flex-sm-row gap-2 w-100">
+                                                <button type="submit" class="btn btn-primary flex-grow-1">
                                                     <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.budget-vs-actual') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <a href="{{ route('reports.expenses.budget-vs-actual') }}"
+                                                class="btn btn-light btn-active-light-primary flex-grow-1">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
@@ -129,6 +140,42 @@
                                         </div>
                                     </div>
                                 </form>
+
+                                {{-- Active filter chips --}}
+                                @php
+                                    $activeFilters = array_filter([
+                                        $locationId
+                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
+                                            : null,
+                                        // Year/month are required, so only show them as "active" if they differ from defaults
+                                        ((int) $year !== (int) date('Y'))
+                                            ? ['label' => __('accounting.year'), 'value' => $year]
+                                            : null,
+                                        ((int) $month !== (int) date('m'))
+                                            ? ['label' => __('accounting.month'), 'value' => __($months[$month] ?? '')]
+                                            : null,
+                                    ]);
+                                @endphp
+
+                                @if(count($activeFilters) > 0)
+                                    <div class="separator separator-dashed my-4"></div>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="text-muted fw-semibold me-2">
+                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
+                                            {{ __('accounting.active_filters') }}:
+                                        </span>
+                                        @foreach($activeFilters as $filter)
+                                            <span class="badge badge-light-primary fs-7">
+                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
+                                            </span>
+                                        @endforeach
+                                        <a href="{{ route('reports.expenses.budget-vs-actual') }}"
+                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
+                                            <i class="ki-duotone ki-cross fs-5"></i>
+                                            {{ __('accounting.clear_all') }}
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -150,75 +197,120 @@
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @php
-                                        $totalVarianceMonthly = $summary['total_budget_monthly'] - $summary['total_actual_monthly'];
-                                        $totalVarianceAnnual = $summary['total_budget_annual'] - $summary['total_actual_annual'];
-                                        $variancePercentageMonthly = $summary['total_budget_monthly'] > 0 ? ($totalVarianceMonthly / $summary['total_budget_monthly']) * 100 : 0;
-                                        $variancePercentageAnnual = $summary['total_budget_annual'] > 0 ? ($totalVarianceAnnual / $summary['total_budget_annual']) * 100 : 0;
-                                    @endphp
-                                    
-                                    @foreach([
-                                        ['key' => 'total_budget', 'color' => 'primary', 'icon' => 'ki-dollar', 'label' => 'total_budget', 
-                                        'monthly_value' => '$' . number_format($summary['total_budget_monthly'], 2),
-                                        'annual_value' => '$' . number_format($summary['total_budget_annual'], 2)],
-                                        
-                                        ['key' => 'total_actual', 'color' => 'info', 'icon' => 'ki-chart-simple', 'label' => 'total_actual',
-                                        'monthly_value' => '$' . number_format($summary['total_actual_monthly'], 2),
-                                        'annual_value' => '$' . number_format($summary['total_actual_annual'], 2)],
-                                        
-                                        ['key' => 'total_variance', 'color' => $totalVarianceMonthly >= 0 ? 'success' : 'danger', 
-                                        'icon' => 'ki-arrow-up', 'label' => 'total_variance',
-                                        'monthly_value' => '$' . number_format(abs($totalVarianceMonthly), 2) . ' ' . ($totalVarianceMonthly >= 0 ? __('accounting.under_budget') : __('accounting.over_budget')),
-                                        'annual_value' => '$' . number_format(abs($totalVarianceAnnual), 2) . ' ' . ($totalVarianceAnnual >= 0 ? __('accounting.under_budget') : __('accounting.over_budget'))],
-                                        
-                                        ['key' => 'variance_percentage', 'color' => $variancePercentageMonthly >= 0 ? 'success' : 'danger', 
-                                        'icon' => 'ki-percentage', 'label' => 'variance_percentage',
-                                        'monthly_value' => number_format(abs($variancePercentageMonthly), 1) . '% ' . ($variancePercentageMonthly >= 0 ? __('accounting.under') : __('accounting.over')),
-                                        'annual_value' => number_format(abs($variancePercentageAnnual), 1) . '% ' . ($variancePercentageAnnual >= 0 ? __('accounting.under') : __('accounting.over'))],
-                                        
-                                        ['key' => 'categories_under', 'color' => 'success', 'icon' => 'ki-check-circle', 'label' => 'categories_under_budget',
-                                        'monthly_value' => $summary['under_budget_count'],
-                                        'annual_value' => 'N/A'],
-                                        
-                                        ['key' => 'categories_over', 'color' => 'danger', 'icon' => 'ki-warning-circle', 'label' => 'categories_over_budget',
-                                        'monthly_value' => $summary['over_budget_count'],
-                                        'annual_value' => 'N/A']
-                                    ] as $index => $stat)
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-3">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
-                                                </div>
-                                                <div class="mb-2">
-                                                    <span class="fs-2 fw-bold text-gray-800 d-block">
-                                                        {{ $stat['monthly_value'] }}
-                                                    </span>
-                                                    <small class="text-gray-600 fw-semibold d-block mt-1">
-                                                        {{ __('accounting.monthly') }}
-                                                    </small>
-                                                </div>
-                                                @if($stat['annual_value'] != 'N/A')
-                                                <div class="border-top border-gray-300 pt-2 mt-2">
-                                                    <span class="fs-4 fw-bold text-gray-700 d-block">
-                                                        {{ $stat['annual_value'] }}
-                                                    </span>
-                                                    <small class="text-gray-600 fw-semibold d-block mt-1">
-                                                        {{ __('accounting.annual') }}
-                                                    </small>
-                                                </div>
-                                                @endif
-                                                <div class="text-gray-600 fw-semibold mt-3">
-                                                    {{ __('accounting.' . $stat['label']) }}
+                                    @if(count($budgetData) > 0)
+                                        @php
+                                            $totalVarianceMonthly     = $summary['total_budget_monthly'] - $summary['total_actual_monthly'];
+                                            $totalVarianceAnnual      = $summary['total_budget_annual'] - $summary['total_actual_annual'];
+                                            $variancePercentageMonthly = $summary['total_budget_monthly'] > 0
+                                                ? ($totalVarianceMonthly / $summary['total_budget_monthly']) * 100
+                                                : 0;
+                                            $variancePercentageAnnual  = $summary['total_budget_annual'] > 0
+                                                ? ($totalVarianceAnnual / $summary['total_budget_annual']) * 100
+                                                : 0;
+
+                                            $sym = currency_symbol();
+
+                                            $stats = [
+                                                [
+                                                    'color' => 'primary',
+                                                    'icon'  => 'ki-dollar',
+                                                    'label' => 'total_budget',
+                                                    'monthly_value' => $sym . ' ' . number_format($summary['total_budget_monthly'], 2),
+                                                    'annual_value'  => $sym . ' ' . number_format($summary['total_budget_annual'], 2),
+                                                ],
+                                                [
+                                                    'color' => 'info',
+                                                    'icon'  => 'ki-chart-simple',
+                                                    'label' => 'total_actual',
+                                                    'monthly_value' => $sym . ' ' . number_format($summary['total_actual_monthly'], 2),
+                                                    'annual_value'  => $sym . ' ' . number_format($summary['total_actual_annual'], 2),
+                                                ],
+                                                [
+                                                    'color' => $totalVarianceMonthly >= 0 ? 'success' : 'danger',
+                                                    'icon'  => 'ki-arrow-up',
+                                                    'label' => 'total_variance',
+                                                    'monthly_value' => $sym . ' ' . number_format(abs($totalVarianceMonthly), 2) . ' ' . ($totalVarianceMonthly >= 0 ? __('accounting.under_budget') : __('accounting.over_budget')),
+                                                    'annual_value'  => $sym . ' ' . number_format(abs($totalVarianceAnnual), 2) . ' ' . ($totalVarianceAnnual >= 0 ? __('accounting.under_budget') : __('accounting.over_budget')),
+                                                ],
+                                                [
+                                                    'color' => $variancePercentageMonthly >= 0 ? 'success' : 'danger',
+                                                    'icon'  => 'ki-percentage',
+                                                    'label' => 'variance_percentage',
+                                                    'monthly_value' => number_format(abs($variancePercentageMonthly), 1) . '% ' . ($variancePercentageMonthly >= 0 ? __('accounting.under') : __('accounting.over')),
+                                                    'annual_value'  => number_format(abs($variancePercentageAnnual), 1) . '% ' . ($variancePercentageAnnual >= 0 ? __('accounting.under') : __('accounting.over')),
+                                                ],
+                                                [
+                                                    'color' => 'success',
+                                                    'icon'  => 'ki-check-circle',
+                                                    'label' => 'categories_under_budget',
+                                                    'monthly_value' => $summary['under_budget_count'],
+                                                    'annual_value'  => 'N/A',
+                                                ],
+                                                [
+                                                    'color' => 'danger',
+                                                    'icon'  => 'ki-warning-circle',
+                                                    'label' => 'categories_over_budget',
+                                                    'monthly_value' => $summary['over_budget_count'],
+                                                    'annual_value'  => 'N/A',
+                                                ],
+                                            ];
+                                        @endphp
+
+                                        <div class="row mb-6">
+                                            <div class="col-12">
+                                                <div class="card">
+                                                    <div class="card-header border-0">
+                                                        <div class="card-title d-flex align-items-center">
+                                                            <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                                                <span class="path1"></span>
+                                                                <span class="path2"></span>
+                                                            </i>
+                                                            <h3 class="fw-bold m-0">{{ __('accounting.budget_summary') }}</h3>
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-body pt-0">
+                                                        <div class="row g-6">
+                                                            @foreach($stats as $stat)
+                                                                <div class="col-md-6 col-lg-2">
+                                                                    <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                                                        <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                                            <div class="mb-3">
+                                                                                <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
+                                                                                    <span class="path1"></span>
+                                                                                    <span class="path2"></span>
+                                                                                </i>
+                                                                            </div>
+                                                                            <div class="mb-2">
+                                                                                <span class="fs-2 fw-bold text-gray-800 d-block">
+                                                                                    {{ $stat['monthly_value'] }}
+                                                                                </span>
+                                                                                <small class="text-gray-600 fw-semibold d-block mt-1">
+                                                                                    {{ __('accounting.monthly') }}
+                                                                                </small>
+                                                                            </div>
+                                                                            @if($stat['annual_value'] !== 'N/A')
+                                                                                <div class="border-top border-gray-300 pt-2 mt-2">
+                                                                                    <span class="fs-4 fw-bold text-gray-700 d-block">
+                                                                                        {{ $stat['annual_value'] }}
+                                                                                    </span>
+                                                                                    <small class="text-gray-600 fw-semibold d-block mt-1">
+                                                                                        {{ __('accounting.annual') }}
+                                                                                    </small>
+                                                                                </div>
+                                                                            @endif
+                                                                            <div class="text-gray-600 fw-semibold mt-3 fs-7">
+                                                                                {{ __('accounting.' . $stat['label']) }}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    @endforeach
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -297,33 +389,33 @@
                                                         </div>
                                                     </td>
                                                     <td>
-                                                        <span class="text-primary fw-bold">${{ number_format($data['budget_monthly'], 2) }}</span>
+                                                        <span class="text-primary fw-bold">{{ currency_symbol() }} {{ number_format($data['budget_monthly'], 2) }}</span>
                                                         <div class="mt-1">
                                                             <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: ${{ number_format($data['budget_annual'], 2) }}
+                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format($data['budget_annual'], 2) }}
                                                             </small>
                                                         </div>
                                                     </td>
                                                     <td>
-                                                        <span class="text-info fw-bold">${{ number_format($data['actual_monthly'], 2) }}</span>
+                                                        <span class="text-info fw-bold">{{ currency_symbol() }} {{ number_format($data['actual_monthly'], 2) }}</span>
                                                         <div class="mt-1">
                                                             <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: ${{ number_format($data['actual_annual'], 2) }}
+                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format($data['actual_annual'], 2) }}
                                                             </small>
                                                         </div>
                                                     </td>
                                                     <td>
                                                         <span class="fw-bold text-{{ $statusColor }}">
-                                                            ${{ number_format(abs($varianceMonthly), 2) }}
+                                                            {{ currency_symbol() }} {{ number_format(abs($varianceMonthly), 2) }}
                                                             @if($varianceMonthly > 0)
-                                                            <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
+                                                                <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
                                                             @elseif($varianceMonthly < 0)
-                                                            <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
+                                                                <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
                                                             @endif
                                                         </span>
                                                         <div class="mt-1">
                                                             <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: ${{ number_format(abs($data['variance_annual']), 2) }}
+                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format(abs($data['variance_annual']), 2) }}
                                                             </small>
                                                         </div>
                                                     </td>
@@ -370,14 +462,14 @@
                                             <tfoot class="fw-bold bg-light">
                                                 <tr>
                                                     <td class="ps-4">{{ __('accounting.total') }}</td>
-                                                    <td class="text-primary">${{ number_format($summary['total_budget_monthly'], 2) }}</td>
-                                                    <td class="text-info">${{ number_format($summary['total_actual_monthly'], 2) }}</td>
+                                                    <td class="text-primary">{{ currency_symbol() }} {{ number_format($summary['total_budget_monthly'], 2) }}</td>
+                                                    <td class="text-info">{{ currency_symbol() }} {{ number_format($summary['total_actual_monthly'], 2) }}</td>
                                                     <td class="text-{{ $totalVarianceMonthly >= 0 ? 'success' : 'danger' }}">
-                                                        ${{ number_format(abs($totalVarianceMonthly), 2) }}
+                                                        {{ currency_symbol() }} {{ number_format(abs($totalVarianceMonthly), 2) }}
                                                         @if($totalVarianceMonthly > 0)
-                                                        <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
+                                                            <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
                                                         @elseif($totalVarianceMonthly < 0)
-                                                        <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
+                                                            <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
                                                         @endif
                                                     </td>
                                                     <td class="text-{{ $variancePercentageMonthly >= 0 ? 'success' : 'danger' }}">
@@ -657,19 +749,18 @@
                 }
             },
             yaxis: {
-                title: {
-                    text: 'Amount ($)'
-                },
+                title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
                 labels: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString();
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' + val.toLocaleString();
                     }
                 }
             },
             tooltip: {
                 y: {
-                    formatter: function(val) {
-                        return '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    formatter: function (val) {
+                        return '{{ currency_symbol() }}' +
+                            val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                 }
             },

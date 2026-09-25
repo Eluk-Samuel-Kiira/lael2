@@ -228,8 +228,37 @@ class AccountingController extends Controller
                 return $transaction;
             });
         
-        $totalAmount = $transactions->sum('amount');
-        $averageAmount = $transactions->count() > 0 ? $totalAmount / $transactions->count() : 0;
+        // Separate inflows and outflows from the paginated collection
+        $inflowTypes  = ['DEPOSIT', 'TRANSFER_IN', 'REFUND'];
+        $outflowTypes = ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'];
+
+        $inflowTotal  = (float) $transactions->getCollection()
+            ->whereIn('transaction_type', $inflowTypes)
+            ->sum('amount');
+
+        $outflowTotal = (float) $transactions->getCollection()
+            ->whereIn('transaction_type', $outflowTypes)
+            ->sum('amount');
+
+        $netChange = $inflowTotal - $outflowTotal;
+
+        // Absolute amount moved (regardless of direction)
+        $totalMoved = $inflowTotal + $outflowTotal;
+
+        // Counts per direction
+        $inflowCount  = $transactions->getCollection()->whereIn('transaction_type', $inflowTypes)->count();
+        $outflowCount = $transactions->getCollection()->whereIn('transaction_type', $outflowTypes)->count();
+
+        // Average of the absolute movement per transaction
+        $averageAmount = $transactions->count() > 0
+            ? $totalMoved / $transactions->count()
+            : 0;
+
+        // Current total balance across all active payment methods for this tenant.
+        // This is the "how much money do we actually have right now" number.
+        $currentTotalBalance = (float) PaymentMethod::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->sum('current_balance');
         
         $recentTransactions = PaymentTransactionLog::where('tenant_id', $tenantId)
             ->where('status', 'COMPLETED')
@@ -269,10 +298,12 @@ class AccountingController extends Controller
         $displayEndDate = $filters['end_date'];
         
         return view('basic-accounting.transaction-ledger', compact(
-            'transactions', 'filters', 'paymentMethods', 
+            'transactions', 'filters', 'paymentMethods',
             'transactionTypes', 'categories', 'displayStartDate', 'displayEndDate',
-            'totalAmount', 'averageAmount', 'recentTransactions',
-            'locations', 'users'
+            'inflowTotal', 'outflowTotal', 'netChange', 'totalMoved',
+            'inflowCount', 'outflowCount',
+            'averageAmount', 'recentTransactions',
+            'locations', 'users', 'currentTotalBalance'
         ));
     }
 
