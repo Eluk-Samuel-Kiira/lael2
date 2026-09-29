@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
+use App\Models\PurchaseReceiptItem;
 
 class ProductionOrderReportController extends Controller
 {
@@ -96,7 +97,7 @@ class ProductionOrderReportController extends Controller
             'completedBy',
             'paymentMethod'
         ])
-        ->where('tenant_id', $tenantId);
+        ->where('tenant_id', $tenantId)->latest();
         
         // Date range filter
         if ($startDate && $endDate) {
@@ -265,6 +266,7 @@ class ProductionOrderReportController extends Controller
     {
         $tenantId = $this->getTenantId();
         $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $purchaseOrderItems = $this->resolveProductionPOItems($orderId);
         
         $order = ProductionOrder::with([
             'inputs.productVariant.product.category',
@@ -342,14 +344,101 @@ class ProductionOrderReportController extends Controller
         ];
         
         return response()->json([
-            'order' => $order,
-            'metrics' => $metrics,
-            'input_stats' => $inputStats,
-            'output_stats' => $outputStats,
-            'inventory_logs' => $inventoryLogs,
-            'batch_logs' => $batchLogs,
-            'is_single_shop' => $isSingleShop,
+            'order'                => $order,
+            'metrics'              => $metrics,
+            'input_stats'          => $inputStats,
+            'output_stats'         => $outputStats,
+            'inventory_logs'       => $inventoryLogs,
+            'batch_logs'           => $batchLogs,
+            'purchase_order_items' => $purchaseOrderItems,   // ← new
+            'is_single_shop'       => $isSingleShop,
         ]);
+    }
+
+    /**
+     * Walk the batch logs of this production order and resolve every
+     * purchase order item that contributed raw material to it.
+     *
+     * Groups by PO item, sums the consumed quantity, and computes a
+     * subtotal at the PO's unit cost. Returns a flat list with the
+     * PO context attached for display.
+     */
+    private function resolveProductionPOItems(int $productionOrderId): array
+    {
+        // 1. Get all depletion logs for this production order that
+        //    carry a purchase_order_id (i.e. came from a purchased batch).
+        $depletionLogs = BatchLog::query()
+            ->where('production_order_id', $productionOrderId)
+            ->where('type', BatchLog::TYPE_DEPLETED)
+            ->whereNotNull('purchase_order_id')
+            ->get();
+
+        if ($depletionLogs->isEmpty()) {
+            return [];
+        }
+
+        // 2. Resolve the receipt item → PO item for each depletion log.
+        //    The batch_id on the log points to purchase_receipt_items.
+        $receiptItemIds = $depletionLogs->pluck('batch_id')->filter()->unique()->values();
+
+        $receiptItems = PurchaseReceiptItem::query()
+            ->whereIn('id', $receiptItemIds)
+            ->with([
+                'purchaseOrderItem.productVariant',
+                'purchaseOrderItem.purchaseOrder.supplier',
+            ])
+            ->get()
+            ->keyBy('id');
+
+        // 3. Group the depletion logs by PO item and sum quantities.
+        $grouped = [];
+
+        foreach ($depletionLogs as $log) {
+            $receiptItem = $receiptItems->get($log->batch_id);
+            $poItem      = $receiptItem?->purchaseOrderItem;
+
+            if (!$poItem) {
+                continue;
+            }
+
+            $key = $poItem->id;
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'po_item_id'          => $poItem->id,
+                    'purchase_order_id'   => $poItem->purchase_order_id,
+                    'po_number'           => $poItem->purchaseOrder?->po_number,
+                    'supplier_id'         => $poItem->purchaseOrder?->supplier_id,
+                    'supplier_name'       => $poItem->purchaseOrder?->supplier?->name,
+                    'product_name'        => $poItem->product_name,
+                    'sku'                 => $poItem->sku,
+                    'unit_cost'           => (float) $poItem->unit_cost,
+                    'ordered_quantity'    => (int) $poItem->quantity,
+                    'received_quantity'   => (int) $poItem->received_quantity,
+                    'consumed_quantity'   => 0.0,
+                    'batches'             => [],
+                ];
+            }
+
+            $consumed = abs((float) $log->quantity_change);
+            $grouped[$key]['consumed_quantity'] += $consumed;
+            $grouped[$key]['batches'][] = [
+                'batch_id'         => $log->batch_id,
+                'batch_number'     => $log->batch_number,
+                'quantity_consumed'=> $consumed,
+                'unit_cost'        => (float) $log->unit_cost,
+                'total_cost'       => (float) $log->total_cost,
+                'event_date'       => optional($log->event_date)->toDateTimeString(),
+            ];
+        }
+
+        // 4. Compute totals per PO item.
+        return collect($grouped)
+            ->map(function ($row) {
+                $row['subtotal'] = round($row['consumed_quantity'] * $row['unit_cost'], 2);
+                return $row;
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -2618,200 +2707,275 @@ class ProductionOrderReportController extends Controller
      */
     public function batchTracking(Request $request)
     {
-        $tenantId = $this->getTenantId();
+        $tenantId     = $this->getTenantId();
         $isSingleShop = $this->isTenantSingleShop($tenantId);
-        
-        // ─── Filter Parameters ──────────────────────────────────────────
-        $startDate = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
-        $locationId = $request->get('location_id');
-        $variantId = $request->get('variant_id');
-        $batchType = $request->get('batch_type', 'all'); // all, produced, consumed
-        $perPage = (int)$request->get('per_page', 15);
-        
-        // ─── Get Production Orders ──────────────────────────────────────
-        $query = ProductionOrder::with([
-            'inputs.productVariant.product.category',
-            'outputs.productVariant.product.category',
-            'location',
-            'createdBy'
-        ])
-        ->where('tenant_id', $tenantId)
-        ->whereBetween('created_at', [
-            Carbon::parse($startDate)->startOfDay(),
-            Carbon::parse($endDate)->endOfDay()
-        ]);
-        
+
+        // ─── Filters ────────────────────────────────────────────────────
+        $startDate    = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
+        $endDate      = $request->get('end_date',   now()->format('Y-m-d'));
+        $locationId   = $request->get('location_id');
+        $variantId    = $request->get('variant_id');
+        $batchType    = $request->get('batch_type', 'all');
+        $search       = trim((string) $request->get('search', ''));
+        $perPage      = (int) $request->get('per_page', 15);
+
+        // ─── Base order query (for ID filtering) ────────────────────────
+        $orderQuery = ProductionOrder::query()
+            ->where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay(),
+            ]);
+
         if ($locationId) {
-            $query->where('location_id', $locationId);
+            $orderQuery->where('location_id', $locationId);
         }
-        
         if ($variantId) {
-            $query->whereHas('inputs', function($q) use ($variantId) {
-                $q->where('product_variant_id', $variantId);
-            })->orWhereHas('outputs', function($q) use ($variantId) {
-                $q->where('product_variant_id', $variantId);
+            $orderQuery->where(function ($q) use ($variantId) {
+                $q->whereHas('inputs',  fn($s) => $s->where('product_variant_id', $variantId))
+                ->orWhereHas('outputs', fn($s) => $s->where('product_variant_id', $variantId));
             });
         }
-        
-        $orders = $query->get();
-        $completedOrders = $orders->where('status', ProductionOrder::STATUS_COMPLETED);
-        
-        // ─── Get Batch Logs ─────────────────────────────────────────────
-        $batchLogs = BatchLog::where('tenant_id', $tenantId)
-            ->whereIn('production_order_id', $orders->pluck('id'))
-            ->whereIn('type', ['produced', 'consumed'])
-            ->orderBy('event_date', 'desc')
-            ->get();
-        
-        // ─── Filter Batch Logs by Type ──────────────────────────────────
+
+        $orderIds = $orderQuery->pluck('id');
+
+        // ─── Batch logs ─────────────────────────────────────────────────
+        $batchLogsQuery = BatchLog::query()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('production_order_id', $orderIds)
+            ->with([
+                'variant',
+                'performedBy',
+                // Polymorphic-ish context — loaded lazily below if needed
+            ])
+            ->orderByDesc('event_date')
+            ->orderByDesc('id');
+
+        // Type filter
         if ($batchType === 'produced') {
-            $batchLogs = $batchLogs->where('type', 'produced');
+            $batchLogsQuery->where('type', BatchLog::TYPE_PRODUCED);
         } elseif ($batchType === 'consumed') {
-            $batchLogs = $batchLogs->where('type', 'consumed');
+            $batchLogsQuery->whereIn('type', [BatchLog::TYPE_DEPLETED, 'consumed']);
+        } elseif ($batchType === 'received') {
+            $batchLogsQuery->where('type', BatchLog::TYPE_RECEIVED);
+        } elseif ($batchType === 'transferred') {
+            $batchLogsQuery->whereIn('type', [BatchLog::TYPE_TRANSFERRED, BatchLog::TYPE_ASSIGNED, BatchLog::TYPE_UNASSIGNED]);
+        } elseif ($batchType === 'adjusted') {
+            $batchLogsQuery->where('type', BatchLog::TYPE_ADJUSTED);
         }
-        
-        // ─── Batch Summary ──────────────────────────────────────────────
-        $producedBatches = $batchLogs->where('type', 'produced');
-        $consumedBatches = $batchLogs->where('type', 'consumed');
-        
-        $totalProducedQty = $producedBatches->sum('quantity_change');
-        $totalConsumedQty = abs($consumedBatches->sum('quantity_change'));
-        $netBatchQty = $totalProducedQty - $totalConsumedQty;
-        
-        $totalProducedCost = $producedBatches->sum('total_cost');
-        $totalConsumedCost = $consumedBatches->sum('total_cost');
-        $netBatchCost = $totalProducedCost - $totalConsumedCost;
-        
+
+        // Search across batch number, variant, PO, production number
+        if ($search !== '') {
+            $batchLogsQuery->where(function ($q) use ($search) {
+                $q->where('batch_number',           'like', "%{$search}%")
+                ->orWhere('variant_name',         'like', "%{$search}%")
+                ->orWhere('variant_sku',          'like', "%{$search}%")
+                ->orWhere('purchase_order_number','like', "%{$search}%")
+                ->orWhere('supplier_name',        'like', "%{$search}%");
+            });
+        }
+
+        $allBatchLogs = $batchLogsQuery->get();
+
+        // ─── Summary ────────────────────────────────────────────────────
+        $producedLogs = $allBatchLogs->where('type', BatchLog::TYPE_PRODUCED);
+        $consumedLogs = $allBatchLogs->whereIn('type', [BatchLog::TYPE_DEPLETED, 'consumed']);
+
+        $totalProducedQty  = (float) $producedLogs->sum('quantity_change');
+        $totalConsumedQty  = (float) abs($consumedLogs->sum('quantity_change'));
+        $totalProducedCost = (float) $producedLogs->sum('total_cost');
+        $totalConsumedCost = (float) $consumedLogs->sum('total_cost');
+
         $batchSummary = [
-            'total_batches' => $batchLogs->count(),
-            'produced_batches' => $producedBatches->count(),
-            'consumed_batches' => $consumedBatches->count(),
-            'total_produced_quantity' => $totalProducedQty,
-            'total_consumed_quantity' => $totalConsumedQty,
-            'net_batch_quantity' => $netBatchQty,
-            'total_produced_cost' => $totalProducedCost,
-            'total_consumed_cost' => $totalConsumedCost,
-            'net_batch_cost' => $netBatchCost,
-            'unique_batch_numbers' => $batchLogs->pluck('batch_number')->unique()->count(),
-            'unique_variants' => $batchLogs->pluck('variant_id')->unique()->count(),
+            'total_batches'            => $allBatchLogs->count(),
+            'produced_batches'         => $producedLogs->count(),
+            'consumed_batches'         => $consumedLogs->count(),
+            'received_batches'         => $allBatchLogs->where('type', BatchLog::TYPE_RECEIVED)->count(),
+            'transferred_batches'      => $allBatchLogs->whereIn('type', [BatchLog::TYPE_TRANSFERRED, BatchLog::TYPE_ASSIGNED, BatchLog::TYPE_UNASSIGNED])->count(),
+            'adjusted_batches'         => $allBatchLogs->where('type', BatchLog::TYPE_ADJUSTED)->count(),
+            'total_produced_quantity'  => $totalProducedQty,
+            'total_consumed_quantity'  => $totalConsumedQty,
+            'net_batch_quantity'       => $totalProducedQty - $totalConsumedQty,
+            'total_produced_cost'      => $totalProducedCost,
+            'total_consumed_cost'      => $totalConsumedCost,
+            'net_batch_cost'           => $totalProducedCost - $totalConsumedCost,
+            'unique_batch_numbers'     => $allBatchLogs->pluck('batch_number')->filter()->unique()->count(),
+            'unique_variants'          => $allBatchLogs->pluck('variant_id')->filter()->unique()->count(),
+            'unique_suppliers'         => $allBatchLogs->pluck('supplier_id')->filter()->unique()->count(),
+            'unique_purchase_orders'   => $allBatchLogs->pluck('purchase_order_id')->filter()->unique()->count(),
+            'avg_unit_cost'            => $allBatchLogs->where('unit_cost', '>', 0)->avg('unit_cost') ?? 0,
         ];
-        
-        // ─── Batch Logs with Details ────────────────────────────────────
-        $batchLogsWithDetails = $batchLogs->map(function($log) {
-            $order = ProductionOrder::find($log->production_order_id);
-            $variant = ProductVariant::find($log->variant_id);
-            
-            return (object)[
-                'id' => $log->id,
-                'batch_number' => $log->batch_number,
-                'batch_id' => $log->batch_id,
-                'type' => $log->type,
-                'type_label' => $log->type === 'produced' ? __('pagination.produced') : __('pagination.consumed'),
-                'type_color' => $log->type === 'produced' ? 'success' : 'danger',
-                'type_icon' => $log->type === 'produced' ? 'ki-exit' : 'ki-enter',
-                'variant_id' => $log->variant_id,
-                'variant_name' => $variant ? $variant->name : $log->variant_name,
-                'variant_sku' => $variant ? $variant->sku : $log->variant_sku,
-                'quantity_change' => $log->quantity_change,
-                'quantity_before' => $log->quantity_before,
-                'quantity_after' => $log->quantity_after,
-                'unit_cost' => $log->unit_cost,
-                'total_cost' => $log->total_cost,
-                'expiry_date' => $log->expiry_date,
-                'event_date' => $log->event_date,
-                'production_order_id' => $log->production_order_id,
-                'production_number' => $order ? $order->production_number : 'N/A',
-                'location_id' => $log->location_id,
-                'department_id' => $log->department_id,
-                'performed_by' => $log->performedBy ? $log->performedBy->name : 'System',
-                'metadata' => $log->metadata,
+
+        // ─── Enrich each log row ────────────────────────────────────────
+        $enrichedLogs = $allBatchLogs->map(function ($log) {
+            $change    = (float) $log->quantity_change;
+            $direction = $change > 0 ? 'in' : ($change < 0 ? 'out' : 'neutral');
+
+            // Source label — PO trumps production, production trumps nothing
+            $sourceType  = 'unknown';
+            $sourceLabel = null;
+            $sourceSub   = null;
+
+            if ($log->purchase_order_id) {
+                $sourceType  = 'purchase_order';
+                $sourceLabel = $log->purchase_order_number ?: "#{$log->purchase_order_id}";
+                $sourceSub   = $log->supplier_name;
+            } elseif ($log->production_order_id) {
+                $sourceType  = 'production_order';
+                $sourceLabel = "PRD-#{$log->production_order_id}";
+                $sourceSub   = $log->metadata['production_number'] ?? null;
+            }
+
+            // Consumed vs produced cost, normalized to positive
+            $unitCost  = (float) ($log->unit_cost ?? 0);
+            $totalCost = (float) ($log->total_cost ?? 0);
+
+            return (object) [
+                'id'                => $log->id,
+                'batch_id'          => $log->batch_id,
+                'batch_number'      => $log->batch_number,
+                'type'              => $log->type,
+                'type_label'        => $log->type_label,
+                'type_color'        => $log->type_color,
+                'type_icon'         => $log->type_icon,
+                'direction'         => $direction,
+                'variant_id'        => $log->variant_id,
+                'variant_name'      => $log->variant_name ?: $log->variant?->name,
+                'variant_sku'       => $log->variant_sku  ?: $log->variant?->sku,
+                'quantity_change'   => $change,
+                'quantity_before'   => (float) $log->quantity_before,
+                'quantity_after'    => (float) $log->quantity_after,
+                'unit_cost'         => $unitCost,
+                'total_cost'        => $totalCost,
+                'expiry_date'       => $log->expiry_date,
+                'event_date'        => $log->event_date,
+                'performed_by'      => $log->performedBy?->name,
+                'source_type'       => $sourceType,
+                'source_label'      => $sourceLabel,
+                'source_sub'        => $sourceSub,
+                'production_order_id'        => $log->production_order_id,
+                'production_order_input_id'  => $log->production_order_input_id,
+                'production_order_output_id' => $log->production_order_output_id,
+                'production_number'          => $log->metadata['production_number'] ?? null,
+                'purchase_order_id'          => $log->purchase_order_id,
+                'location_id'       => $log->location_id,
+                'department_id'     => $log->department_id,
+                'metadata'          => $log->metadata,
             ];
         });
-        
-        // ─── Apply Pagination ────────────────────────────────────────────
-        $paginatedBatches = $this->paginateCollection($batchLogsWithDetails, $perPage, 'page');
-        
-        // ─── Batch by Variant ────────────────────────────────────────────
-        $batchByVariant = $batchLogsWithDetails->groupBy('variant_id')->map(function($items, $variantId) {
-            $first = $items->first();
-            $produced = $items->where('type', 'produced');
-            $consumed = $items->where('type', 'consumed');
-            
-            return (object)[
-                'variant_id' => $variantId,
-                'variant_name' => $first->variant_name,
-                'variant_sku' => $first->variant_sku,
-                'produced_count' => $produced->count(),
-                'consumed_count' => $consumed->count(),
-                'produced_quantity' => $produced->sum('quantity_change'),
-                'consumed_quantity' => abs($consumed->sum('quantity_change')),
-                'net_quantity' => $produced->sum('quantity_change') - abs($consumed->sum('quantity_change')),
-                'produced_cost' => $produced->sum('total_cost'),
-                'consumed_cost' => $consumed->sum('total_cost'),
-                'net_cost' => $produced->sum('total_cost') - $consumed->sum('total_cost'),
-                'unique_batches' => $items->pluck('batch_number')->unique()->count(),
-            ];
-        })->values();
-        
-        // ─── Batch by Month ──────────────────────────────────────────────
-        $batchByMonth = $batchLogsWithDetails->groupBy(function($log) {
-            return $log->event_date ? Carbon::parse($log->event_date)->format('Y-m') : 'unknown';
-        })->map(function($items, $month) {
-            $produced = $items->where('type', 'produced');
-            $consumed = $items->where('type', 'consumed');
-            
-            return (object)[
-                'month' => $month !== 'unknown' ? Carbon::parse($month . '-01')->format('M Y') : 'Unknown',
-                'produced_count' => $produced->count(),
-                'consumed_count' => $consumed->count(),
-                'produced_quantity' => $produced->sum('quantity_change'),
-                'consumed_quantity' => abs($consumed->sum('quantity_change')),
-                'produced_cost' => $produced->sum('total_cost'),
-                'consumed_cost' => $consumed->sum('total_cost'),
-            ];
-        })->sortKeys()->values();
-        
-        // ─── Top Batches ──────────────────────────────────────────────────
-        $topProducedBatches = $batchLogsWithDetails
-            ->where('type', 'produced')
+
+        // ─── Top produced / consumed ────────────────────────────────────
+        $topProducedBatches = $enrichedLogs
+            ->where('type', BatchLog::TYPE_PRODUCED)
             ->sortByDesc('quantity_change')
             ->take(10)
             ->values();
-        
-        $topConsumedBatches = $batchLogsWithDetails
-            ->where('type', 'consumed')
-            ->sortByDesc('quantity_change')
+
+        $topConsumedBatches = $enrichedLogs
+            ->whereIn('type', [BatchLog::TYPE_DEPLETED, 'consumed'])
+            ->sortByDesc(fn($r) => abs($r->quantity_change))
             ->take(10)
             ->values();
-        
-        // ─── Batch Status Summary ───────────────────────────────────────
+
+        // ─── Variant summary ────────────────────────────────────────────
+        $batchByVariant = $enrichedLogs
+            ->groupBy('variant_id')
+            ->map(function ($items, $variantId) {
+                $first    = $items->first();
+                $produced = $items->where('type', BatchLog::TYPE_PRODUCED);
+                $consumed = $items->whereIn('type', [BatchLog::TYPE_DEPLETED, 'consumed']);
+
+                $producedQty  = (float) $produced->sum('quantity_change');
+                $consumedQty  = (float) abs($consumed->sum('quantity_change'));
+                $producedCost = (float) $produced->sum('total_cost');
+                $consumedCost = (float) $consumed->sum('total_cost');
+
+                return (object) [
+                    'variant_id'        => $variantId,
+                    'variant_name'      => $first->variant_name,
+                    'variant_sku'       => $first->variant_sku,
+                    'produced_count'    => $produced->count(),
+                    'consumed_count'    => $consumed->count(),
+                    'produced_quantity' => $producedQty,
+                    'consumed_quantity' => $consumedQty,
+                    'net_quantity'      => $producedQty - $consumedQty,
+                    'produced_cost'     => $producedCost,
+                    'consumed_cost'     => $consumedCost,
+                    'net_cost'          => $producedCost - $consumedCost,
+                    'avg_unit_cost'     => $items->where('unit_cost', '>', 0)->avg('unit_cost') ?? 0,
+                    'unique_batches'    => $items->pluck('batch_number')->filter()->unique()->count(),
+                    'order_count'       => $items->pluck('production_order_id')->filter()->unique()->count(),
+                ];
+            })
+            ->sortByDesc(fn($r) => abs($r->net_quantity))
+            ->values();
+
+        // ─── Monthly summary ────────────────────────────────────────────
+        $batchByMonth = $enrichedLogs
+            ->filter(fn($r) => $r->event_date)
+            ->groupBy(fn($r) => Carbon::parse($r->event_date)->format('Y-m'))
+            ->map(function ($items, $monthKey) {
+                $produced = $items->where('type', BatchLog::TYPE_PRODUCED);
+                $consumed = $items->whereIn('type', [BatchLog::TYPE_DEPLETED, 'consumed']);
+
+                $producedQty  = (float) $produced->sum('quantity_change');
+                $consumedQty  = (float) abs($consumed->sum('quantity_change'));
+
+                return (object) [
+                    'month'             => Carbon::parse($monthKey . '-01')->format('M Y'),
+                    'month_key'         => $monthKey,
+                    'produced_count'    => $produced->count(),
+                    'consumed_count'    => $consumed->count(),
+                    'produced_quantity' => $producedQty,
+                    'consumed_quantity' => $consumedQty,
+                    'net_quantity'      => $producedQty - $consumedQty,
+                    'produced_cost'     => (float) $produced->sum('total_cost'),
+                    'consumed_cost'     => (float) $consumed->sum('total_cost'),
+                ];
+            })
+            ->sortKeysDesc()
+            ->values();
+
+        // ─── Batch status ───────────────────────────────────────────────
+        // Determine which batches are still active vs depleted by looking
+        // at the most recent log per batch.
+        $latestPerBatch = $enrichedLogs
+            ->sortByDesc('event_date')
+            ->unique(fn($r) => $r->batch_id);
+
         $batchStatus = [
-            'active' => $batchLogsWithDetails->where('quantity_after', '>', 0)->count(),
-            'depleted' => $batchLogsWithDetails->where('quantity_after', '<=', 0)->count(),
-            'expired' => $batchLogsWithDetails->filter(function($log) {
-                return $log->expiry_date && Carbon::parse($log->expiry_date)->lt(now());
+            'active'   => $latestPerBatch->filter(fn($r) => $r->quantity_after > 0)->count(),
+            'depleted' => $latestPerBatch->filter(fn($r) => $r->quantity_after <= 0)->count(),
+            'expired'  => $latestPerBatch->filter(function ($r) {
+                return $r->expiry_date && Carbon::parse($r->expiry_date)->isPast();
             })->count(),
         ];
-        
-        // ─── Get Filter Options ──────────────────────────────────────────
+
+        // ─── Paginate the enriched rows ─────────────────────────────────
+        $paginatedBatches = $this->paginateCollection($enrichedLogs, $perPage, 'page');
+
+        // ─── Filter options ─────────────────────────────────────────────
         $locations = Location::where('tenant_id', $tenantId)->get();
-        $variants = ProductVariant::where('tenant_id', $tenantId)
+        $variants  = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with('product')
             ->orderBy('name')
             ->get(['id', 'name', 'sku']);
-        
+
         $batchTypes = [
-            ['value' => 'all', 'label' => __('pagination.all_batches')],
-            ['value' => 'produced', 'label' => __('pagination.produced_batches')],
-            ['value' => 'consumed', 'label' => __('pagination.consumed_batches')],
+            ['value' => 'all',         'label' => __('pagination.all_batches')],
+            ['value' => 'produced',    'label' => __('pagination.produced_batches')],
+            ['value' => 'consumed',    'label' => __('pagination.consumed_batches')],
+            ['value' => 'received',    'label' => __('pagination.received_batches')],
+            ['value' => 'transferred', 'label' => __('pagination.transferred_batches')],
+            ['value' => 'adjusted',    'label' => __('pagination.adjusted_batches')],
         ];
-        
+
         return view('reports.production.batch-tracking', compact(
             'batchSummary',
             'paginatedBatches',
-            'batchLogsWithDetails',
+            'allBatchLogs',
+            'enrichedLogs',
             'batchByVariant',
             'batchByMonth',
             'topProducedBatches',
@@ -2825,6 +2989,7 @@ class ProductionOrderReportController extends Controller
             'locationId',
             'variantId',
             'batchType',
+            'search',
             'perPage',
             'isSingleShop'
         ));
