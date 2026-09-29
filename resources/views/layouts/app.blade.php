@@ -34,6 +34,46 @@
         </script>
         {{-- laravel LiveBlade.js library --}}
 		@include('layouts.liveblade-imports') 
+
+		<style>
+			/* ── Reports mega-dropdown: cap height + inner scroll ─────────── */
+
+			/* The Reports dropdown wrapper (right-start, w-lg-300px) */
+			.menu-sub-lg-dropdown.w-lg-300px {
+				max-height: calc(100vh - 40px);
+				overflow-y: auto;
+				overflow-x: hidden;
+				overscroll-behavior: contain;
+				scrollbar-width: thin;
+				scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+			}
+
+			/* WebKit scrollbar — subtle, Metronic-ish */
+			.menu-sub-lg-dropdown.w-lg-300px::-webkit-scrollbar {
+				width: 6px;
+			}
+
+			.menu-sub-lg-dropdown.w-lg-300px::-webkit-scrollbar-track {
+				background: transparent;
+			}
+
+			.menu-sub-lg-dropdown.w-lg-300px::-webkit-scrollbar-thumb {
+				background: rgba(0, 0, 0, 0.18);
+				border-radius: 3px;
+			}
+
+			.menu-sub-lg-dropdown.w-lg-300px::-webkit-scrollbar-thumb:hover {
+				background: rgba(0, 0, 0, 0.3);
+			}
+
+			/* Small viewport safety net — let the drawer handle scrolling on mobile */
+			@media (max-width: 991.98px) {
+				.menu-sub-lg-dropdown.w-lg-300px {
+					max-height: none;
+					overflow-y: visible;
+				}
+			}
+		</style>
     </head>
 	@php
 		use Illuminate\Support\Str;

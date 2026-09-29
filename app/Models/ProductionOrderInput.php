@@ -17,6 +17,7 @@ class ProductionOrderInput extends Model
 
     protected $fillable = [
         'production_order_id',
+        'production_order_output_id',
         'product_variant_id',
         'purchase_receipt_item_id',
         'inventory_item_id',

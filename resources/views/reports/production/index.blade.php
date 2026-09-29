@@ -513,7 +513,7 @@
 
 {{-- View Details Modal --}}
 <div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable mw-950px">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title" id="detailsModalLabel">
@@ -541,7 +541,7 @@
 
 {{-- View Logs Modal --}}
 <div class="modal fade" id="logsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable mw-950px">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="modal-title">
@@ -561,7 +561,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('pagination.close') }}</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                    {{ __('pagination.close') }}
+                </button>
             </div>
         </div>
     </div>
@@ -763,8 +765,8 @@ function viewDetails(orderId) {
 // ─── View Logs ──────────────────────────────────────────────────
 function viewLogs(orderId) {
     const modal = new bootstrap.Modal(document.getElementById('logsModal'));
-    const body = document.getElementById('logsModalBody');
-    
+    const body  = document.getElementById('logsModalBody');
+
     body.innerHTML = `
         <div class="text-center py-10">
             <div class="spinner-border text-primary" role="status">
@@ -772,45 +774,223 @@ function viewLogs(orderId) {
             </div>
         </div>
     `;
-    
+
     modal.show();
-    
+
     const url = `/reports/production/detail/${orderId}`;
-    
+    const currency = '{{ currency_symbol() }}';
+
     fetch(url)
         .then(response => response.json())
         .then(data => {
             let html = '';
-            
-            // ─── Inventory Logs ─────────────────────────────────────────
+
+            // ─── Purchase Order Items ───────────────────────────────
             html += `
-                <h6 class="fw-bold mb-3">Inventory Logs</h6>
+                <h6 class="fw-bold mb-3">
+                    <i class="ki-duotone ki-shop fs-3 me-2 text-success"></i>
+                    Purchase Order Items
+                </h6>
+            `;
+
+            if (data.purchase_order_items && data.purchase_order_items.length > 0) {
+                const poTotal = data.purchase_order_items.reduce(
+                    (sum, r) => sum + (r.subtotal || 0), 0
+                );
+
+                html += `
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>PO Number</th>
+                                    <th>Supplier</th>
+                                    <th>Product</th>
+                                    <th class="text-end">Ordered</th>
+                                    <th class="text-end">Received</th>
+                                    <th class="text-end">Consumed</th>
+                                    <th class="text-end">Unit Cost</th>
+                                    <th class="text-end">Subtotal</th>
+                                    <th>Batches</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                data.purchase_order_items.forEach(row => {
+                    const batchChips = (row.batches || []).map(b => `
+                        <span class="badge badge-light-dark me-1 mb-1" title="${b.quantity_consumed} consumed @ ${currency}${Number(b.unit_cost).toFixed(2)}">
+                            ${b.batch_number} &times; ${b.quantity_consumed}
+                        </span>
+                    `).join('');
+
+                    html += `
+                        <tr>
+                            <td><span class="badge badge-light-success">${row.po_number || '-'}</span></td>
+                            <td>${row.supplier_name || '-'}</td>
+                            <td>
+                                <div class="fw-bold text-gray-800">${row.product_name || '-'}</div>
+                                ${row.sku ? `<small class="text-muted">SKU: ${row.sku}</small>` : ''}
+                            </td>
+                            <td class="text-end">${row.ordered_quantity}</td>
+                            <td class="text-end">${row.received_quantity}</td>
+                            <td class="text-end fw-bold text-danger">${row.consumed_quantity}</td>
+                            <td class="text-end">${currency}${Number(row.unit_cost).toFixed(2)}</td>
+                            <td class="text-end fw-bold">${currency}${Number(row.subtotal).toFixed(2)}</td>
+                            <td>${batchChips || '<span class="text-muted">-</span>'}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                            <tfoot class="bg-light fw-bold">
+                                <tr>
+                                    <td colspan="7" class="text-end">Total Cost of PO Items</td>
+                                    <td class="text-end text-success">${currency}${poTotal.toFixed(2)}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="alert alert-light-info d-flex align-items-center mb-4">
+                        <i class="ki-duotone ki-information fs-2 me-3"></i>
+                        <div class="fs-7">No purchase order data linked to this production run.</div>
+                    </div>
+                `;
+            }
+
+            // ─── Batch Logs ─────────────────────────────────────────
+            html += `
+                <h6 class="fw-bold mb-3 mt-4">
+                    <i class="ki-duotone ki-archive fs-3 me-2 text-primary"></i>
+                    Batch Logs
+                </h6>
                 <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-striped">
+                    <table class="table table-bordered table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>Batch Number</th>
+                                <th>Variant</th>
+                                <th>Type</th>
+                                <th class="text-end">Change</th>
+                                <th class="text-end">Before</th>
+                                <th class="text-end">After</th>
+                                <th class="text-end">Unit Cost</th>
+                                <th class="text-end">Total Cost</th>
+                                <th>Source</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            if (data.batch_logs && data.batch_logs.length > 0) {
+                const typeColors = {
+                    'received':    'success',
+                    'depleted':    'danger',
+                    'produced':    'info',
+                    'expired':     'warning',
+                    'adjusted':    'secondary',
+                    'transferred': 'primary',
+                    'assigned':    'primary',
+                    'unassigned':  'secondary',
+                };
+
+                data.batch_logs.forEach(log => {
+                    let sourceHtml = '-';
+
+                    if (log.type === 'produced' && log.production_order_id) {
+                        sourceHtml = `
+                            <span class="badge badge-light-info">
+                                <i class="ki-duotone ki-industry fs-5 me-1"></i>
+                                Production
+                            </span>
+                        `;
+                    } else if (log.purchase_order_number) {
+                        sourceHtml = `
+                            <span class="badge badge-light-success">
+                                <i class="ki-duotone ki-shop fs-5 me-1"></i>
+                                ${log.purchase_order_number}
+                            </span>
+                            ${log.supplier_name ? `<div class="text-muted fs-8">${log.supplier_name}</div>` : ''}
+                        `;
+                    } else if (log.production_order_id) {
+                        sourceHtml = `<span class="badge badge-light-secondary">Production #${log.production_order_id}</span>`;
+                    }
+
+                    const change = Number(log.quantity_change || 0);
+                    const unitCost = Number(log.unit_cost || 0);
+                    const totalCost = Number(log.total_cost || 0);
+
+                    html += `
+                        <tr>
+                            <td><span class="badge badge-light-dark">${log.batch_number}</span></td>
+                            <td>${log.variant?.name || log.variant_name || 'N/A'}</td>
+                            <td>
+                                <span class="badge badge-light-${typeColors[log.type] || 'secondary'}">
+                                    ${log.type}
+                                </span>
+                            </td>
+                            <td class="text-end ${change >= 0 ? 'text-success' : 'text-danger'} fw-bold">
+                                ${change >= 0 ? '+' : ''}${change}
+                            </td>
+                            <td class="text-end">${log.quantity_before}</td>
+                            <td class="text-end">${log.quantity_after}</td>
+                            <td class="text-end">${currency}${unitCost.toFixed(2)}</td>
+                            <td class="text-end fw-bold">${currency}${totalCost.toFixed(2)}</td>
+                            <td>${sourceHtml}</td>
+                            <td class="text-muted fs-7">${log.event_date || '-'}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += `
+                    <tr>
+                        <td colspan="10" class="text-center text-muted">No batch logs found</td>
+                    </tr>
+                `;
+            }
+
+            html += `</tbody></table></div>`;
+
+            // ─── Inventory Logs ─────────────────────────────────────
+            html += `
+                <h6 class="fw-bold mb-3 mt-4">
+                    <i class="ki-duotone ki-chart-simple fs-3 me-2 text-warning"></i>
+                    Inventory Logs
+                </h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped align-middle">
                         <thead>
                             <tr>
                                 <th>Variant</th>
-                                <th>Change</th>
-                                <th>Before</th>
-                                <th>After</th>
+                                <th class="text-end">Change</th>
+                                <th class="text-end">Before</th>
+                                <th class="text-end">After</th>
                                 <th>Reason</th>
                                 <th>Date</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
-            
+
             if (data.inventory_logs && data.inventory_logs.length > 0) {
                 data.inventory_logs.forEach(log => {
-                    const changeColor = log.quantity_change >= 0 ? 'success' : 'danger';
+                    const change = Number(log.quantity_change || 0);
                     html += `
                         <tr>
                             <td>${log.variant?.name || 'N/A'}</td>
-                            <td class="text-${changeColor} fw-bold">${log.quantity_change >= 0 ? '+' : ''}${log.quantity_change}</td>
-                            <td>${log.quantity_before}</td>
-                            <td>${log.quantity_after}</td>
+                            <td class="text-end ${change >= 0 ? 'text-success' : 'text-danger'} fw-bold">
+                                ${change >= 0 ? '+' : ''}${change}
+                            </td>
+                            <td class="text-end">${log.quantity_before}</td>
+                            <td class="text-end">${log.quantity_after}</td>
                             <td><span class="badge badge-light-info">${log.reason}</span></td>
-                            <td>${log.created_at}</td>
+                            <td class="text-muted fs-7">${log.created_at || '-'}</td>
                         </tr>
                     `;
                 });
@@ -821,67 +1001,9 @@ function viewLogs(orderId) {
                     </tr>
                 `;
             }
-            
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            // ─── Batch Logs ────────────────────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3">Batch Logs</h6>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Batch Number</th>
-                                <th>Variant</th>
-                                <th>Type</th>
-                                <th>Change</th>
-                                <th>Before</th>
-                                <th>After</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            if (data.batch_logs && data.batch_logs.length > 0) {
-                data.batch_logs.forEach(log => {
-                    const typeColors = {
-                        'received': 'success',
-                        'consumed': 'danger',
-                        'produced': 'info',
-                        'expired': 'warning',
-                        'adjusted': 'secondary'
-                    };
-                    html += `
-                        <tr>
-                            <td><span class="badge badge-light-dark">${log.batch_number}</span></td>
-                            <td>${log.variant?.name || log.variant_name || 'N/A'}</td>
-                            <td><span class="badge badge-light-${typeColors[log.type] || 'secondary'}">${log.type}</span></td>
-                            <td class="${log.quantity_change >= 0 ? 'text-success' : 'text-danger'} fw-bold">${log.quantity_change >= 0 ? '+' : ''}${log.quantity_change}</td>
-                            <td>${log.quantity_before}</td>
-                            <td>${log.quantity_after}</td>
-                            <td>${log.event_date}</td>
-                        </tr>
-                    `;
-                });
-            } else {
-                html += `
-                    <tr>
-                        <td colspan="7" class="text-center text-muted">No batch logs found</td>
-                    </tr>
-                `;
-            }
-            
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
+
+            html += `</tbody></table></div>`;
+
             body.innerHTML = html;
         })
         .catch(error => {

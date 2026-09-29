@@ -18,6 +18,7 @@ class BatchLog extends Model
     const TYPE_EXPIRED = 'expired';
     const TYPE_ASSIGNED = 'assigned';
     const TYPE_UNASSIGNED = 'unassigned'; 
+    const TYPE_PRODUCED = 'produced';
 
 
     protected $fillable = [
@@ -63,6 +64,11 @@ class BatchLog extends Model
         
         // Additional metadata
         'metadata',
+
+        'production_order_id',
+        'production_order_input_id',
+        'production_order_output_id',
+
     ];
 
     protected $casts = [
@@ -201,6 +207,7 @@ class BatchLog extends Model
             self::TYPE_ASSIGNED => 'Assigned',  // ✅ ADD THIS
             self::TYPE_UNASSIGNED => 'Unassigned',  // ✅ ADD THIS
             self::TYPE_EXPIRED => 'Expired',
+            self::TYPE_PRODUCED => 'Produced',
         ][$this->type] ?? ucfirst($this->type);
     }
 
@@ -214,6 +221,7 @@ class BatchLog extends Model
             self::TYPE_ASSIGNED => 'primary',  // ✅ ADD THIS - Blue
             self::TYPE_UNASSIGNED => 'secondary',  // ✅ ADD THIS - Gray
             self::TYPE_EXPIRED => 'secondary',
+            self::TYPE_PRODUCED => 'info',
         ][$this->type] ?? 'primary';
     }
 
@@ -225,6 +233,7 @@ class BatchLog extends Model
             self::TYPE_ADJUSTED => 'fa-pencil',
             self::TYPE_TRANSFERRED => 'fa-arrow-right',
             self::TYPE_EXPIRED => 'fa-clock',
+            self::TYPE_PRODUCED => 'fa-industry',
         ][$this->type] ?? 'fa-circle';
     }
 
