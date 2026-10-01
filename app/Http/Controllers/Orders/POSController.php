@@ -976,9 +976,20 @@ class POSController extends Controller
             ]);
         }
 
-        $isSingleShop    = tenant_is_single_shop($tenantId);
-        $orderNumber     = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
-        $orderLocationId = $this->resolveUserLocationId($request, $user) ?? 1;
+        $isSingleShop = tenant_is_single_shop($tenantId);
+        $orderNumber  = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(6));
+
+        // ✅ Resolve department from the cart items, then location from that department
+        $orderDepartmentId = $this->resolveCartDepartmentId($cartData, $request, $user);
+
+        $orderLocationId = $this->resolveUserLocationId($request, $user, $orderDepartmentId);
+
+        if (!$orderDepartmentId || !$orderLocationId) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.no_location_assigned'),
+            ], 422);
+        }
 
         $maxAttempts = 3;
 
@@ -992,7 +1003,7 @@ class POSController extends Controller
                     'customer_id'               => $customerId,
                     'customer_name'             => $customerName,
                     'location_id'               => $orderLocationId,
-                    'department_id'             => $request->input('department') ?? $user->department_id ?? 1,
+                    'department_id'             => $orderDepartmentId,
                     'order_number'              => $orderNumber,
                     'type'                      => 'sale',
                     'status'                    => 'confirmed',
@@ -1125,6 +1136,7 @@ class POSController extends Controller
             'message' => __('pagination.invoice_generation_failed'),
         ], 500);
     }
+    
 
     private function buildInventoryDataForInvoice($item, $variant, $isSingleShop, $user): array
     {
