@@ -74,6 +74,11 @@ class UserSeeder extends Seeder
                 'view customer',
                 'edit customer',
                 'delete customer',
+
+                'view customer-group',
+                'create customer-group',
+                'edit customer-group',
+                'delete customer-group',
             ],
             'Unit of Measure (UOM)' => [
                 'create uom',

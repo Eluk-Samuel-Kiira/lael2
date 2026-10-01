@@ -74,7 +74,7 @@
 
                 <!-- POS -->
                 @if (tenant_can('pos'))
-                @canany(['view order', 'view pos', 'view invoices'])
+                @canany(['view order', 'view pos', 'view invoices', 'customer', 'view customer-group'])
                 <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -91,6 +91,7 @@
                         <span class="menu-arrow"></span>
                     </span>
 
+                    
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('pos.index') }}')">
@@ -101,7 +102,7 @@
                             </a>
                         </div>
                     </div>
-
+                    
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('orders.index') }}')">
@@ -123,6 +124,31 @@
                             </a>
                         </div>
                     </div>
+
+                    @can('view customer')
+                    <div class="menu-sub menu-sub-accordion">
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('customer.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">{{ __('passwords.customer_index') }}</span>
+                            </a>
+                        </div>
+                    </div>
+                    @endcan
+                    @can('view customer-group')
+                    <div class="menu-sub menu-sub-accordion">
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('customer-group.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">{{ __('passwords.customer_group_index') }}</span>
+                            </a>
+                        </div>
+                    </div>
+                    @endcan
                 </div>
                 @endcanany
                 @endif

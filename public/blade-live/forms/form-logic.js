@@ -22,6 +22,7 @@ function getCsrf() {
     return (meta?.getAttribute('content') || input?.value || '').trim();
 }
 
+
 /**
  * Return a debounced version of fn that fires after `wait` ms of silence.
  * @param {Function} fn
@@ -56,6 +57,18 @@ function esc(val) {
 // ─── formLogic ───────────────────────────────────────────────────────────────
 
 const formLogic = {
+
+    async _withLoading(componentId, promise) {
+        if (componentId) LiveBladeResponse.startLoading(componentId);
+        try {
+            const ok = await promise;
+            return ok;
+        } finally {
+            // On success, fetchAndReloadComponent takes over (the token logic handles it).
+            // On failure, clear the overlay.
+            if (componentId) LiveBladeResponse.stopLoading(componentId);
+        }
+    },
 
     // ── Error display ────────────────────────────────────────────────────────
 

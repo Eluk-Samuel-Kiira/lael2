@@ -3660,3 +3660,79 @@
         }
     }
  </script>
+
+
+<!-- cutomer  -->
+ <script>
+    // ─── Customer: create ─────────────────────────────────────────────
+function submitCustomerForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+
+    if (!form || !submitButton) {
+        console.error('Form or button not found:', formId, submitButtonId);
+        return;
+    }
+
+    const formData = Object.fromEntries(new FormData(form));
+    formData._method = method;
+    formData.routeName = url;
+
+    LiveBlade.toggleButtonLoading(submitButton, true);
+    handleFormSubmission(formData, submitButton, discardButtonId);
+}
+
+// ─── Customer: update ─────────────────────────────────────────────
+function updateCustomer(uniqueId) {
+    const submitButton = document.getElementById('editCustomerButton' + uniqueId);
+    LiveBlade.toggleButtonLoading(submitButton, true);
+
+    const form = document.getElementById('kt_modal_edit_customer_form' + uniqueId);
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    const updateUrl = '{{ route('customer.update', ['customer' => ':id']) }}'.replace(':id', uniqueId);
+
+    handleEditResponse(data, updateUrl, uniqueId, submitButton);
+}
+
+// ─── Customer: status toggle ──────────────────────────────────────
+function updateCustomerStatus(uniqueId, selectedStatus) {
+    const updateRoute = '/customer-status/' + uniqueId;
+    LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
+}
+ </script>
+
+ <script>
+    // ─── Customer Group: create ───────────────────────────────────────
+function submitCustomerGroupForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+
+    if (!form || !submitButton) {
+        console.error('Form or button not found:', formId, submitButtonId);
+        return;
+    }
+
+    const formData = Object.fromEntries(new FormData(form));
+    formData._method = method;
+    formData.routeName = url;
+
+    LiveBlade.toggleButtonLoading(submitButton, true);
+    handleFormSubmission(formData, submitButton, discardButtonId);
+}
+
+// ─── Customer Group: update ───────────────────────────────────────
+function updateCustomerGroup(uniqueId) {
+    const submitButton = document.getElementById('editCustomerGroupButton' + uniqueId);
+    LiveBlade.toggleButtonLoading(submitButton, true);
+
+    const form = document.getElementById('kt_modal_edit_customer_group_form' + uniqueId);
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    const updateUrl = '/customer-group/' + uniqueId;
+
+    handleEditResponse(data, updateUrl, uniqueId, submitButton);
+}
+ </script>

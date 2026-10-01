@@ -31,15 +31,17 @@ class AddNewPermissions extends Command
      */
     protected $newPermissions = [
         
-        'Payment Method Management' => [
-            'create payment method',
-            'view payment method',
-            'edit payment method',
-            'delete payment method',
-            'update payment method',
-            'update current balance',
-            'transfer between payment methods',
-            'invoice reports',
+        
+        'Customer Management' => [
+            'create customer',
+            'view customer',
+            'edit customer',
+            'delete customer',
+
+            'view customer-group',
+            'create customer-group',
+            'edit customer-group',
+            'delete customer-group',
         ],
     ];
 
