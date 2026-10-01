@@ -362,6 +362,7 @@ return [
     'all_types' => 'All Types',
     'allowed_files' => 'Allowed file types: png, jpg, jpeg.',
     'Annual' => 'Annual',
+    '_contact' => 'Contact',
     'app_contact' => 'App Contact',
     'app_currency' => 'App Currency',
     'app_email' => 'App Email',

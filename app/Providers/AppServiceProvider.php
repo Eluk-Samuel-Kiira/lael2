@@ -55,6 +55,7 @@ class AppServiceProvider extends ServiceProvider
                 'currencies' => collect(),
                 'locations' => collect(),
                 'customers' => collect(),
+                'customerGroups' => collect(),
                 'taxes' => collect(),
                 'globalPaymentMethods' => collect(),
                 'promotions' => collect(),
@@ -141,6 +142,9 @@ class AppServiceProvider extends ServiceProvider
                         ->whereNot('name', 'super_admin')
                         ->with('permissions')
                         ->latest()
+                        ->get(),
+                    'customerGroups' => \App\Models\CustomerGroup::where('tenant_id', $tenantId)
+                        ->orderBy('name')
                         ->get(),
                     'permissions' => Permission::regular()->get(),
                     'departments' => Department::where('tenant_id', $tenantId)->where('isActive', 1)->get(),

@@ -97,6 +97,24 @@ const LiveBladeResponse = (() => {
                     display: block; font-size: .8rem;
                     color: var(--bs-danger, #dc3545); margin-top: 3px;
                 }
+
+                /* Loading overlay */
+                .lb-loading-host { position: relative; min-height: 120px; }
+                .lb-loading-host > .lb-loading-overlay {
+                    position: absolute; inset: 0; z-index: 10;
+                    display: flex; align-items: center; justify-content: center;
+                    background: rgba(var(--bs-body-bg-rgb, 255,255,255), .65);
+                    backdrop-filter: blur(1px);
+                    cursor: progress;
+                    animation: lb-fade-in .15s ease-out;
+                }
+                .lb-loading-host > :not(.lb-loading-overlay) { opacity: .55; transition: opacity .15s; }
+
+                /* New content entrance */
+                .lb-fade-in { animation: lb-fade-in .25s ease-out; }
+                @keyframes lb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+
             </style>
         `;
         document.body.appendChild(shell);
@@ -195,6 +213,62 @@ const LiveBladeResponse = (() => {
         modal.show();
     }
 
+
+    // Tracks the latest reload per component so stale responses are ignored
+    const _reloadTokens = {};
+
+    function _setLoading(componentId, on) {
+        const el = document.getElementById(componentId);
+        if (!el) return;
+
+        if (on) {
+            _ensureShell();
+            if (el.classList.contains('lb-loading-host')) return;
+            el.classList.add('lb-loading-host');
+            el.inert = true; // blocks mouse, keyboard and focus
+            const overlay = document.createElement('div');
+            overlay.className = 'lb-loading-overlay';
+            overlay.innerHTML = `<div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading…</span>
+                                </div>`;
+            el.appendChild(overlay);
+        } else {
+            el.classList.remove('lb-loading-host');
+            el.inert = false;
+            el.querySelector(':scope > .lb-loading-overlay')?.remove();
+        }
+    }
+
+    /**
+     * Gracefully close every open modal inside `container` and wait until
+     * Bootstrap has finished, then remove any orphaned backdrop.
+     */
+    async function _closeModals(container) {
+        const open = container.querySelectorAll('.modal.show');
+
+        await Promise.all([...open].map(el => new Promise(resolve => {
+            const inst = bootstrap.Modal.getInstance(el);
+            if (!inst) return resolve();
+            el.addEventListener('hidden.bs.modal', resolve, { once: true });
+            inst.hide();
+            setTimeout(resolve, 600); // safety net if the event never fires
+        })));
+
+        // Dispose instances that are about to be destroyed
+        container.querySelectorAll('.modal').forEach(el => {
+            bootstrap.Modal.getInstance(el)?.dispose();
+        });
+
+        // If no modal remains open anywhere, wipe leftovers
+        if (!document.querySelector('.modal.show')) {
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        }
+    }
+
+
     // ─── Public API ──────────────────────────────────────────────────────────
 
     return {
@@ -237,52 +311,60 @@ const LiveBladeResponse = (() => {
 
         // ── Component reload ─────────────────────────────────────────────────
 
-        /**
-         * Fetch a fresh render of a blade component and swap its innerHTML.
-         * @param {Object} response   Must include redirect, componentId
-         */
-        fetchAndReloadComponent(response) {
+        startLoading(componentId) { _setLoading(componentId, true); },
+        stopLoading(componentId)  { _setLoading(componentId, false); },
+
+        async fetchAndReloadComponent(response) {
             if (!response.componentId) return;
 
-            const container = document.getElementById(response.componentId);
+            const id = response.componentId;
+            const container = document.getElementById(id);
             if (!container) {
-                this.displayErrorMessage(`Component #${response.componentId} not found in DOM`);
+                this.displayErrorMessage(`Component #${id} not found in DOM`);
                 return;
             }
 
-            const csrfInput = document.querySelector('input[name="_token"], meta[name="csrf-token"]');
-            const csrf = csrfInput
-                ? (csrfInput.value || csrfInput.getAttribute('content'))
-                : '';
+            const token = (_reloadTokens[id] = (_reloadTokens[id] || 0) + 1);
+            this.startLoading(id);
 
-            const url = `${response.redirect}?bladeFileToReload=${encodeURIComponent(response.componentId)}`;
+            try {
+                const csrfEl = document.querySelector('meta[name="csrf-token"], input[name="_token"]');
+                const csrf = csrfEl ? (csrfEl.value || csrfEl.getAttribute('content')) : '';
 
-            fetch(url, {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: { 'X-CSRF-TOKEN': csrf },
-            })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.text();
-            })
-            .then(html => {
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const fresh = doc.getElementById(response.componentId);
-                if (fresh) {
-                    container.innerHTML = fresh.innerHTML;
-                    // Re-initialise any page scripts that rely on the new DOM so important
-                    if (typeof window.initializeComponentScripts === 'function') {
-                        window.initializeComponentScripts();
+                const res = await fetch(
+                    `${response.redirect}?bladeFileToReload=${encodeURIComponent(id)}`,
+                    {
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-TOKEN': csrf,
+                            'X-Requested-With': 'XMLHttpRequest', // so $request->ajax() is true
+                        },
                     }
-                } else {
-                    this.displayErrorMessage(`Could not locate #${response.componentId} in the fetched response.`);
-                }
-            })
-            .catch(err => {
+                );
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const html = await res.text();
+
+                // A newer reload started while we waited → drop this one
+                if (token !== _reloadTokens[id]) return;
+
+                const fresh = new DOMParser().parseFromString(html, 'text/html').getElementById(id);
+                if (!fresh) throw new Error(`Could not locate #${id} in the fetched response.`);
+
+                await _closeModals(container);          // 1. clean modals first
+                container.innerHTML = fresh.innerHTML;  // 2. swap (also removes the overlay)
+
+                container.classList.add('lb-fade-in');
+                container.addEventListener('animationend',
+                    () => container.classList.remove('lb-fade-in'), { once: true });
+
+                window.initializeComponentScripts?.();
+            } catch (err) {
                 console.error('[LiveBlade] Component reload failed:', err);
                 this.displayErrorMessage(`Component reload failed: ${err.message}`);
-            });
+            } finally {
+                if (token === _reloadTokens[id]) this.stopLoading(id);
+            }
         },
 
         // ── Feedback messages ────────────────────────────────────────────────

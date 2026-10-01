@@ -32,7 +32,7 @@ Route::get('/get-departments', [DependentController::class, 'getDepartmentsByLoc
 
 
 
-use App\Http\Controllers\Orders\InvoiceController;
+use App\Http\Controllers\Orders\{ InvoiceController, CustomerController };
 // Invoice Routes
 Route::prefix('invoices')->name('invoices.')->group(function () {
     Route::get('/', [InvoiceController::class, 'index'])->name('index');
@@ -85,6 +85,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 
+Route::resource('customer', CustomerController::class);
+Route::post('/customer-status/{id}', [CustomerController::class, 'updateStatus'])
+    ->name('updateCustomerStatus');
+
+use App\Http\Controllers\Orders\CustomerGroupController;
+Route::resource('customer-group', CustomerGroupController::class);
 
 
 // Route::get('/debug/batches', function() {
