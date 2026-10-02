@@ -7,7 +7,7 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -20,13 +20,9 @@
                                         {{ __('pagination.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.production_batch_tracking') }}</li>
                             </ul>
                         </div>
@@ -41,7 +37,7 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filter --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -124,6 +120,7 @@
                     </div>
                 </div>
 
+                {{-- Primary summary cards --}}
                 <div class="row g-6 mb-6">
                     {{-- Total Batches --}}
                     <div class="col-md-6 col-lg-2">
@@ -144,7 +141,7 @@
                         </div>
                     </div>
 
-                    {{-- Produced --}}
+                    {{-- Produced (KG) --}}
                     <div class="col-md-6 col-lg-2">
                         <div class="card card-flush bg-light-success border border-success border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
@@ -154,16 +151,19 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-2 fw-bold text-success">{{ number_format($batchSummary['total_produced_quantity'], 1) }}</span>
-                                <span class="text-gray-600 fw-semibold fs-7">{{ __('pagination.produced_quantity') }}</span>
+                                <span class="fs-2 fw-bold text-success">
+                                    {{ number_format($batchSummary['total_produced_kg'], 0) }}
+                                </span>
+                                <span class="text-gray-600 fw-semibold fs-7">Produced (kg)</span>
                                 <span class="text-muted fs-8">
-                                    {{ $batchSummary['produced_batches'] }} {{ __('pagination.logs') }}
+                                    {{ number_format($batchSummary['total_produced_quantity'], 0) }} units ·
+                                    {{ $batchSummary['produced_batches'] }} logs
                                 </span>
                             </div>
                         </div>
                     </div>
 
-                    {{-- Consumed --}}
+                    {{-- Consumed (KG) --}}
                     <div class="col-md-6 col-lg-2">
                         <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
@@ -173,32 +173,34 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-2 fw-bold text-danger">{{ number_format($batchSummary['total_consumed_quantity'], 1) }}</span>
-                                <span class="text-gray-600 fw-semibold fs-7">{{ __('pagination.consumed_quantity') }}</span>
+                                <span class="fs-2 fw-bold text-danger">
+                                    {{ number_format($batchSummary['total_consumed_kg'], 0) }}
+                                </span>
+                                <span class="text-gray-600 fw-semibold fs-7">Consumed (kg)</span>
                                 <span class="text-muted fs-8">
-                                    {{ $batchSummary['consumed_batches'] }} {{ __('pagination.logs') }}
+                                    {{ number_format($batchSummary['total_consumed_quantity'], 0) }} units ·
+                                    {{ $batchSummary['consumed_batches'] }} logs
                                 </span>
                             </div>
                         </div>
                     </div>
 
-                    {{-- Net Quantity --}}
+                    {{-- Net KG --}}
+                    @php $netColor = $batchSummary['net_batch_kg'] >= 0 ? 'success' : 'warning'; @endphp
                     <div class="col-md-6 col-lg-2">
-                        <div class="card card-flush bg-light-{{ $batchSummary['net_batch_quantity'] >= 0 ? 'success' : 'warning' }} border border-{{ $batchSummary['net_batch_quantity'] >= 0 ? 'success' : 'warning' }} border-dashed h-100">
+                        <div class="card card-flush bg-light-{{ $netColor }} border border-{{ $netColor }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
-                                    <i class="ki-duotone ki-calculator fs-2tx text-{{ $batchSummary['net_batch_quantity'] >= 0 ? 'success' : 'warning' }}">
+                                    <i class="ki-duotone ki-calculator fs-2tx text-{{ $netColor }}">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-2 fw-bold text-{{ $batchSummary['net_batch_quantity'] >= 0 ? 'success' : 'warning' }}">
-                                    {{ $batchSummary['net_batch_quantity'] >= 0 ? '+' : '' }}{{ number_format($batchSummary['net_batch_quantity'], 1) }}
+                                <span class="fs-2 fw-bold text-{{ $netColor }}">
+                                    {{ $batchSummary['net_batch_kg'] >= 0 ? '+' : '' }}{{ number_format($batchSummary['net_batch_kg'], 0) }}
                                 </span>
-                                <span class="text-gray-600 fw-semibold fs-7">{{ __('pagination.net_quantity') }}</span>
-                                <span class="text-muted fs-8">
-                                    {{ __('pagination.produced_minus_consumed') }}
-                                </span>
+                                <span class="text-gray-600 fw-semibold fs-7">Net (kg)</span>
+                                <span class="text-muted fs-8">produced − consumed</span>
                             </div>
                         </div>
                     </div>
@@ -214,11 +216,11 @@
                                     </i>
                                 </div>
                                 <span class="fs-2 fw-bold text-success">
-                                    {{ currency_symbol() }}{{ number_format($batchSummary['total_produced_cost'], 2) }}
+                                    {{ currency_symbol() }} {{ number_format($batchSummary['total_produced_cost'], 0) }}
                                 </span>
                                 <span class="text-gray-600 fw-semibold fs-7">{{ __('pagination.produced_cost') }}</span>
                                 <span class="text-muted fs-8">
-                                    {{ __('pagination.avg_unit') }}: {{ currency_symbol() }}{{ number_format($batchSummary['avg_unit_cost'], 2) }}
+                                    Avg: {{ currency_symbol() }} {{ number_format($batchSummary['avg_unit_cost_per_kg'], 0) }}/kg
                                 </span>
                             </div>
                         </div>
@@ -235,18 +237,18 @@
                                     </i>
                                 </div>
                                 <span class="fs-2 fw-bold text-danger">
-                                    {{ currency_symbol() }}{{ number_format($batchSummary['total_consumed_cost'], 2) }}
+                                    {{ currency_symbol() }} {{ number_format($batchSummary['total_consumed_cost'], 0) }}
                                 </span>
                                 <span class="text-gray-600 fw-semibold fs-7">{{ __('pagination.consumed_cost') }}</span>
                                 <span class="text-muted fs-8">
-                                    {{ $batchSummary['unique_purchase_orders'] }} {{ __('pagination.purchase_orders') }}
+                                    {{ $batchSummary['unique_purchase_orders'] }} POs
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Secondary row: batch status + supplier/variant counts --}}
+                {{-- Secondary: batch status + supplier/variant counts --}}
                 <div class="row g-6 mb-6">
                     <div class="col-md-3">
                         <div class="card card-flush bg-light-success">
@@ -309,55 +311,8 @@
                     </div>
                 </div>
 
-                {{-- Batch Status --}}
+                {{-- Charts --}}
                 <div class="row g-6 mb-6">
-                    <div class="col-md-4">
-                        <div class="card card-flush bg-light-success border border-success border-dashed">
-                            <div class="card-body d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="text-muted">{{ __('pagination.active_batches') }}</span>
-                                    <div class="fs-2 fw-bold text-success">{{ $batchStatus['active'] }}</div>
-                                </div>
-                                <i class="ki-duotone ki-check-circle fs-2tx text-success">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card card-flush bg-light-danger border border-danger border-dashed">
-                            <div class="card-body d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="text-muted">{{ __('pagination.depleted_batches') }}</span>
-                                    <div class="fs-2 fw-bold text-danger">{{ $batchStatus['depleted'] }}</div>
-                                </div>
-                                <i class="ki-duotone ki-cross-circle fs-2tx text-danger">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card card-flush bg-light-warning border border-warning border-dashed">
-                            <div class="card-body d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="text-muted">{{ __('pagination.expired_batches') }}</span>
-                                    <div class="fs-2 fw-bold text-warning">{{ $batchStatus['expired'] }}</div>
-                                </div>
-                                <i class="ki-duotone ki-clock fs-2tx text-warning">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Charts Section --}}
-                <div class="row g-6 mb-6">
-                    {{-- Monthly Batch Trends --}}
                     <div class="col-lg-8">
                         <div class="card">
                             <div class="card-header border-0">
@@ -374,8 +329,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Batch by Variant --}}
                     <div class="col-lg-4">
                         <div class="card">
                             <div class="card-header border-0">
@@ -394,11 +347,11 @@
                     </div>
                 </div>
 
-                {{-- Top Batches --}}
+                {{-- Top produced / consumed --}}
                 <div class="row g-6 mb-6">
-                    {{-- Top Produced Batches --}}
+                    {{-- Top produced --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-exit fs-2 me-2 text-success">
@@ -408,196 +361,52 @@
                                     <h3 class="fw-bold m-0">{{ __('pagination.top_produced_batches') }}</h3>
                                 </div>
                             </div>
-                            <div class="card-body p-0">
+                            <div class="card-body pt-0">
                                 <div class="table-responsive">
                                     <table class="table table-row-bordered table-row-dashed gy-3 align-middle">
                                         <thead>
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
-                                                <th class="ps-4 min-w-60px">#</th>
-                                                <th class="min-w-140px">{{ __('pagination.event_date') }}</th>
-                                                <th class="min-w-180px">{{ __('pagination.batch_product') }}</th>
-                                                <th class="min-w-140px">{{ __('pagination.type') }}</th>
-                                                <th class="min-w-180px">{{ __('pagination.source') }}</th>
-                                                <th class="text-center min-w-120px">{{ __('pagination.movement') }}</th>
-                                                <th class="text-center min-w-100px">{{ __('pagination.balance') }}</th>
-                                                <th class="text-end min-w-120px">{{ __('pagination.unit_cost') }}</th>
-                                                <th class="text-end min-w-120px">{{ __('pagination.total_cost') }}</th>
-                                                <th class="min-w-120px">{{ __('pagination.expiry') }}</th>
-                                                <th class="pe-4 min-w-140px">{{ __('pagination.performed_by') }}</th>
+                                                <th>#</th>
+                                                <th>{{ __('pagination.batch_number') }}</th>
+                                                <th>{{ __('pagination.product') }}</th>
+                                                <th class="text-center">Qty</th>
+                                                <th class="text-center">KG</th>
+                                                <th class="text-center">Cost</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($paginatedBatches as $index => $batch)
-                                                @php
-                                                    $isNegative = $batch->quantity_change < 0;
-                                                    $isPositive = $batch->quantity_change > 0;
-                                                    $rowAccent  = $batch->type === 'produced' ? 'success'
-                                                                : ($batch->type === 'depleted' ? 'danger'
-                                                                : ($batch->type === 'received' ? 'info'
-                                                                : 'secondary'));
-                                                    $expired    = $batch->expiry_date && \Carbon\Carbon::parse($batch->expiry_date)->isPast();
-                                                    $expiringSoon = !$expired
-                                                        && $batch->expiry_date
-                                                        && \Carbon\Carbon::parse($batch->expiry_date)->diffInDays(now()) <= 30;
-                                                @endphp
-                                                <tr>
-                                                    <td class="ps-4 text-muted fw-semibold">
-                                                        {{ $paginatedBatches->firstItem() + $index }}
-                                                    </td>
-
-                                                    <td>
-                                                        <div class="fw-semibold text-gray-800">
-                                                            {{ $batch->event_date ? \Carbon\Carbon::parse($batch->event_date)->format('d M Y') : '-' }}
-                                                        </div>
-                                                        <small class="text-muted">
-                                                            {{ $batch->event_date ? \Carbon\Carbon::parse($batch->event_date)->format('H:i') : '' }}
-                                                        </small>
-                                                    </td>
-
-                                                    <td>
-                                                        <div class="d-flex flex-column">
-                                                            <span class="fw-bold text-gray-800">{{ $batch->variant_name ?? 'N/A' }}</span>
-                                                            @if($batch->variant_sku)
-                                                                <small class="text-muted">SKU: {{ $batch->variant_sku }}</small>
-                                                            @endif
-                                                            <span class="badge badge-light-{{ $rowAccent }} badge-sm mt-1 align-self-start">
-                                                                {{ $batch->batch_number }}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-
-                                                    <td>
-                                                        <span class="badge badge-light-{{ $batch->type_color }} d-inline-flex align-items-center gap-1">
-                                                            <i class="ki-duotone {{ $batch->type_icon }} fs-5"></i>
-                                                            {{ $batch->type_label }}
-                                                        </span>
-                                                    </td>
-
-                                                    <td>
-                                                        @if($batch->source_type === 'purchase_order')
-                                                            <div class="d-flex flex-column">
-                                                                <span class="badge badge-light-info badge-sm align-self-start">
-                                                                    <i class="ki-duotone ki-shop fs-5 me-1"></i>
-                                                                    {{ $batch->source_label }}
-                                                                </span>
-                                                                @if($batch->source_sub)
-                                                                    <small class="text-muted mt-1">{{ $batch->source_sub }}</small>
-                                                                @endif
-                                                            </div>
-                                                        @elseif($batch->source_type === 'production_order')
-                                                            <div class="d-flex flex-column">
-                                                                <span class="badge badge-light-primary badge-sm align-self-start">
-                                                                    <i class="ki-duotone ki-industry fs-5 me-1"></i>
-                                                                    {{ $batch->source_label }}
-                                                                </span>
-                                                                @if($batch->source_sub)
-                                                                    <small class="text-muted mt-1">{{ $batch->source_sub }}</small>
-                                                                @endif
-                                                            </div>
-                                                        @else
-                                                            <span class="text-muted">-</span>
-                                                        @endif
-                                                    </td>
-
-                                                    <td class="text-center">
-                                                        <div class="d-flex flex-column align-items-center">
-                                                            <span class="fw-bold {{ $isPositive ? 'text-success' : ($isNegative ? 'text-danger' : 'text-muted') }}">
-                                                                {{ $isPositive ? '+' : '' }}{{ number_format($batch->quantity_change, 1) }}
-                                                            </span>
-                                                            <small class="text-muted">
-                                                                {{ number_format($batch->quantity_before, 1) }}
-                                                                <i class="ki-duotone ki-arrow-right fs-6 mx-1"></i>
-                                                                {{ number_format($batch->quantity_after, 1) }}
-                                                            </small>
-                                                        </div>
-                                                    </td>
-
-                                                    <td class="text-center">
-                                                        <span class="badge badge-light-{{ $batch->quantity_after > 0 ? 'success' : 'danger' }}">
-                                                            {{ number_format($batch->quantity_after, 1) }}
-                                                        </span>
-                                                    </td>
-
-                                                    <td class="text-end">
-                                                        <span class="text-gray-800">{{ currency_symbol() }}{{ number_format($batch->unit_cost, 2) }}</span>
-                                                    </td>
-
-                                                    <td class="text-end fw-bold">
-                                                        <span class="text-{{ $batch->type === 'produced' ? 'success' : 'danger' }}">
-                                                            {{ currency_symbol() }}{{ number_format($batch->total_cost, 2) }}
-                                                        </span>
-                                                    </td>
-
-                                                    <td>
-                                                        @if($batch->expiry_date)
-                                                            <span class="badge badge-light-{{ $expired ? 'danger' : ($expiringSoon ? 'warning' : 'success') }}">
-                                                                {{ \Carbon\Carbon::parse($batch->expiry_date)->format('d M Y') }}
-                                                            </span>
-                                                            @if($expired)
-                                                                <small class="text-danger d-block mt-1">Expired</small>
-                                                            @elseif($expiringSoon)
-                                                                <small class="text-warning d-block mt-1">Expiring soon</small>
-                                                            @endif
-                                                        @else
-                                                            <span class="text-muted">-</span>
-                                                        @endif
-                                                    </td>
-
-                                                    <td class="pe-4">
-                                                        @if($batch->performed_by)
-                                                            <div class="d-flex align-items-center gap-2">
-                                                                <div class="symbol symbol-25px symbol-circle">
-                                                                    <div class="symbol-label bg-light-primary">
-                                                                        <span class="fs-8 fw-bold text-primary">
-                                                                            {{ strtoupper(substr($batch->performed_by, 0, 1)) }}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <span class="text-gray-700 fs-7">{{ $batch->performed_by }}</span>
-                                                            </div>
-                                                        @else
-                                                            <span class="text-muted">System</span>
-                                                        @endif
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                        <tfoot class="bg-light fw-bold">
+                                            @forelse($topProducedBatches as $index => $batch)
                                             <tr>
-                                                <td colspan="5" class="ps-4 text-end">
-                                                    {{ __('pagination.totals') }}:
+                                                <td>{{ $index + 1 }}</td>
+                                                <td><span class="badge badge-light-success">{{ $batch->batch_number }}</span></td>
+                                                <td>
+                                                    <div class="fw-bold">{{ $batch->variant_name }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $batch->variant_sku }}
+                                                        @if($batch->weight > 0) · {{ $batch->weight }} kg @endif
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">{{ number_format($batch->quantity_change, 0) }}</td>
+                                                <td class="text-center fw-bold text-success">
+                                                    {{ number_format($batch->quantity_change_kg, 0) }}
                                                 </td>
                                                 <td class="text-center">
-                                                    <span class="text-success">+{{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change > 0 ? $b->quantity_change : 0), 1) }}</span>
-                                                    <span class="text-muted mx-1">/</span>
-                                                    <span class="text-danger">{{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change < 0 ? $b->quantity_change : 0), 1) }}</span>
+                                                    {{ currency_symbol() }} {{ number_format($batch->total_cost, 0) }}
                                                 </td>
-                                                <td></td>
-                                                <td></td>
-                                                <td class="text-end">
-                                                    {{ currency_symbol() }}{{ number_format($paginatedBatches->sum('total_cost'), 2) }}
-                                                </td>
-                                                <td colspan="2"></td>
                                             </tr>
-                                        </tfoot>
+                                            @empty
+                                            <tr><td colspan="6" class="text-center text-muted py-3">{{ __('pagination.no_batches_found') }}</td></tr>
+                                            @endforelse
+                                        </tbody>
                                     </table>
-                                </div>
-
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator'   => $paginatedBatches,
-                                        'pageName'    => 'page',
-                                        'perPageName' => 'per_page',
-                                        'showPerPage' => true,
-                                    ])
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Top Consumed Batches --}}
+
+                    {{-- Top consumed --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-enter fs-2 me-2 text-danger">
@@ -615,27 +424,36 @@
                                                 <th>#</th>
                                                 <th>{{ __('pagination.batch_number') }}</th>
                                                 <th>{{ __('pagination.product') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost') }}</th>
+                                                <th class="text-center">Qty</th>
+                                                <th class="text-center">KG</th>
+                                                <th class="text-center">Cost</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($topConsumedBatches as $index => $batch)
+                                            @forelse($topConsumedBatches as $index => $batch)
                                             <tr>
                                                 <td>{{ $index + 1 }}</td>
                                                 <td><span class="badge badge-light-danger">{{ $batch->batch_number }}</span></td>
-                                                <td>{{ $batch->variant_name }}</td>
-                                                <td class="text-center fw-bold text-danger">{{ number_format($batch->quantity_change, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($batch->total_cost, 2) }}</td>
-                                            </tr>
-                                            @endforeach
-                                            @if($topConsumedBatches->isEmpty())
-                                            <tr>
-                                                <td colspan="5" class="text-center text-muted py-3">
-                                                    {{ __('pagination.no_batches_found') }}
+                                                <td>
+                                                    <div class="fw-bold">{{ $batch->variant_name }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $batch->variant_sku }}
+                                                        @if($batch->weight > 0) · {{ $batch->weight }} kg @endif
+                                                    </div>
+                                                </td>
+                                                <td class="text-center text-danger fw-bold">
+                                                    {{ number_format(abs($batch->quantity_change), 0) }}
+                                                </td>
+                                                <td class="text-center text-danger fw-bold">
+                                                    {{ number_format(abs($batch->quantity_change_kg), 0) }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($batch->total_cost, 0) }}
                                                 </td>
                                             </tr>
-                                            @endif
+                                            @empty
+                                            <tr><td colspan="6" class="text-center text-muted py-3">{{ __('pagination.no_batches_found') }}</td></tr>
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
@@ -644,7 +462,7 @@
                     </div>
                 </div>
 
-                {{-- Variant Breakdown --}}
+                {{-- Batch by variant --}}
                 @if($batchByVariant->count() > 0)
                 <div class="card mb-6">
                     <div class="card-header border-0">
@@ -667,13 +485,14 @@
                                 <thead>
                                     <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                         <th class="ps-4">{{ __('pagination.product') }}</th>
+                                        <th class="text-center">Weight/Unit</th>
                                         <th class="text-center">{{ __('pagination.unique_batches') }}</th>
                                         <th class="text-center">{{ __('pagination.produced_count') }}</th>
                                         <th class="text-center">{{ __('pagination.consumed_count') }}</th>
-                                        <th class="text-end">{{ __('pagination.produced_qty') }}</th>
-                                        <th class="text-end">{{ __('pagination.consumed_qty') }}</th>
-                                        <th class="text-end">{{ __('pagination.net_qty') }}</th>
-                                        <th class="text-end">{{ __('pagination.avg_cost') }}</th>
+                                        <th class="text-end">Produced (kg)</th>
+                                        <th class="text-end">Consumed (kg)</th>
+                                        <th class="text-end">Net (kg)</th>
+                                        <th class="text-end">Cost / kg</th>
                                         <th class="text-end pe-4">{{ __('pagination.net_cost') }}</th>
                                     </tr>
                                 </thead>
@@ -686,6 +505,9 @@
                                                 <small class="text-muted">SKU: {{ $row->variant_sku }}</small>
                                             @endif
                                         </td>
+                                        <td class="text-center text-muted">
+                                            {{ $row->weight > 0 ? $row->weight . ' kg' : '—' }}
+                                        </td>
                                         <td class="text-center">
                                             <span class="badge badge-light-primary">{{ $row->unique_batches }}</span>
                                         </td>
@@ -696,19 +518,19 @@
                                             <span class="badge badge-light-danger">{{ $row->consumed_count }}</span>
                                         </td>
                                         <td class="text-end fw-bold text-success">
-                                            +{{ number_format($row->produced_quantity, 1) }}
+                                            +{{ number_format($row->produced_kg, 0) }}
                                         </td>
                                         <td class="text-end fw-bold text-danger">
-                                            -{{ number_format($row->consumed_quantity, 1) }}
+                                            -{{ number_format($row->consumed_kg, 0) }}
                                         </td>
-                                        <td class="text-end fw-bold {{ $row->net_quantity >= 0 ? 'text-success' : 'text-warning' }}">
-                                            {{ $row->net_quantity >= 0 ? '+' : '' }}{{ number_format($row->net_quantity, 1) }}
+                                        <td class="text-end fw-bold {{ $row->net_kg >= 0 ? 'text-success' : 'text-warning' }}">
+                                            {{ $row->net_kg >= 0 ? '+' : '' }}{{ number_format($row->net_kg, 0) }}
                                         </td>
                                         <td class="text-end text-muted">
-                                            {{ currency_symbol() }}{{ number_format($row->avg_unit_cost, 2) }}
+                                            {{ currency_symbol() }} {{ number_format($row->avg_unit_cost_per_kg, 0) }}
                                         </td>
                                         <td class="text-end pe-4 fw-bold {{ $row->net_cost >= 0 ? 'text-success' : 'text-danger' }}">
-                                            {{ currency_symbol() }}{{ number_format($row->net_cost, 2) }}
+                                            {{ currency_symbol() }} {{ number_format($row->net_cost, 0) }}
                                         </td>
                                     </tr>
                                     @endforeach
@@ -719,7 +541,7 @@
                 </div>
                 @endif
 
-                {{-- Monthly Breakdown --}}
+                {{-- Monthly breakdown --}}
                 @if($batchByMonth->count() > 0)
                 <div class="card mb-6">
                     <div class="card-header border-0">
@@ -739,9 +561,9 @@
                                         <th class="ps-4">{{ __('pagination.period') }}</th>
                                         <th class="text-center">{{ __('pagination.produced_logs') }}</th>
                                         <th class="text-center">{{ __('pagination.consumed_logs') }}</th>
-                                        <th class="text-end">{{ __('pagination.produced_qty') }}</th>
-                                        <th class="text-end">{{ __('pagination.consumed_qty') }}</th>
-                                        <th class="text-end">{{ __('pagination.net_qty') }}</th>
+                                        <th class="text-end">Produced (kg)</th>
+                                        <th class="text-end">Consumed (kg)</th>
+                                        <th class="text-end">Net (kg)</th>
                                         <th class="text-end">{{ __('pagination.produced_cost') }}</th>
                                         <th class="text-end pe-4">{{ __('pagination.consumed_cost') }}</th>
                                     </tr>
@@ -757,19 +579,19 @@
                                             <span class="badge badge-light-danger">{{ $row->consumed_count }}</span>
                                         </td>
                                         <td class="text-end text-success fw-bold">
-                                            +{{ number_format($row->produced_quantity, 1) }}
+                                            +{{ number_format($row->produced_kg, 0) }}
                                         </td>
                                         <td class="text-end text-danger fw-bold">
-                                            -{{ number_format($row->consumed_quantity, 1) }}
+                                            -{{ number_format($row->consumed_kg, 0) }}
                                         </td>
-                                        <td class="text-end fw-bold {{ $row->net_quantity >= 0 ? 'text-success' : 'text-warning' }}">
-                                            {{ $row->net_quantity >= 0 ? '+' : '' }}{{ number_format($row->net_quantity, 1) }}
+                                        <td class="text-end fw-bold {{ $row->net_kg >= 0 ? 'text-success' : 'text-warning' }}">
+                                            {{ $row->net_kg >= 0 ? '+' : '' }}{{ number_format($row->net_kg, 0) }}
                                         </td>
                                         <td class="text-end text-success">
-                                            {{ currency_symbol() }}{{ number_format($row->produced_cost, 2) }}
+                                            {{ currency_symbol() }} {{ number_format($row->produced_cost, 0) }}
                                         </td>
                                         <td class="text-end pe-4 text-danger">
-                                            {{ currency_symbol() }}{{ number_format($row->consumed_cost, 2) }}
+                                            {{ currency_symbol() }} {{ number_format($row->consumed_cost, 0) }}
                                         </td>
                                     </tr>
                                     @endforeach
@@ -780,7 +602,7 @@
                 </div>
                 @endif
 
-                {{-- Batch Logs Table --}}
+                {{-- Batch logs (main table) --}}
                 @if($paginatedBatches->count() > 0)
                 <div class="row">
                     <div class="col-12">
@@ -806,12 +628,12 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th class="ps-4 min-w-60px">#</th>
                                                 <th class="min-w-140px">{{ __('pagination.event_date') }}</th>
-                                                <th class="min-w-180px">{{ __('pagination.batch_product') }}</th>
+                                                <th class="min-w-200px">{{ __('pagination.batch_product') }}</th>
                                                 <th class="min-w-140px">{{ __('pagination.type') }}</th>
                                                 <th class="min-w-180px">{{ __('pagination.source') }}</th>
-                                                <th class="text-center min-w-120px">{{ __('pagination.movement') }}</th>
-                                                <th class="text-center min-w-100px">{{ __('pagination.balance') }}</th>
-                                                <th class="text-end min-w-120px">{{ __('pagination.unit_cost') }}</th>
+                                                <th class="text-center min-w-160px">Movement</th>
+                                                <th class="text-center min-w-140px">Balance (kg)</th>
+                                                <th class="text-end min-w-120px">Cost/kg</th>
                                                 <th class="text-end min-w-120px">{{ __('pagination.total_cost') }}</th>
                                                 <th class="min-w-120px">{{ __('pagination.expiry') }}</th>
                                                 <th class="pe-4 min-w-140px">{{ __('pagination.performed_by') }}</th>
@@ -824,8 +646,7 @@
                                                     $isPositive = $batch->quantity_change > 0;
                                                     $rowAccent  = $batch->type === 'produced' ? 'success'
                                                                 : ($batch->type === 'depleted' ? 'danger'
-                                                                : ($batch->type === 'received' ? 'info'
-                                                                : 'secondary'));
+                                                                : ($batch->type === 'received' ? 'info' : 'secondary'));
                                                     $expired      = $batch->expiry_date && \Carbon\Carbon::parse($batch->expiry_date)->isPast();
                                                     $expiringSoon = !$expired
                                                         && $batch->expiry_date
@@ -850,6 +671,9 @@
                                                             <span class="fw-bold text-gray-800">{{ $batch->variant_name ?? 'N/A' }}</span>
                                                             @if($batch->variant_sku)
                                                                 <small class="text-muted">SKU: {{ $batch->variant_sku }}</small>
+                                                            @endif
+                                                            @if($batch->weight > 0)
+                                                                <small class="text-muted">{{ $batch->weight }} kg/unit</small>
                                                             @endif
                                                             <span class="badge badge-light-{{ $rowAccent }} badge-sm mt-1 align-self-start">
                                                                 {{ $batch->batch_number }}
@@ -890,34 +714,40 @@
                                                         @endif
                                                     </td>
 
+                                                    {{-- Movement: units + kg --}}
                                                     <td class="text-center">
                                                         <div class="d-flex flex-column align-items-center">
                                                             <span class="fw-bold {{ $isPositive ? 'text-success' : ($isNegative ? 'text-danger' : 'text-muted') }}">
-                                                                {{ $isPositive ? '+' : '' }}{{ number_format($batch->quantity_change, 1) }}
+                                                                {{ $isPositive ? '+' : '' }}{{ number_format($batch->quantity_change, 0) }}
+                                                                <small class="text-muted">units</small>
                                                             </span>
-                                                            <small class="text-muted">
-                                                                {{ number_format($batch->quantity_before, 1) }}
-                                                                <i class="ki-duotone ki-arrow-right fs-6 mx-1"></i>
-                                                                {{ number_format($batch->quantity_after, 1) }}
-                                                            </small>
+                                                            <span class="{{ $isPositive ? 'text-success' : 'text-danger' }} fs-7">
+                                                                {{ $isPositive ? '+' : '' }}{{ number_format($batch->quantity_change_kg, 0) }} kg
+                                                            </span>
                                                         </div>
                                                     </td>
 
+                                                    {{-- Balance (kg) --}}
                                                     <td class="text-center">
                                                         <span class="badge badge-light-{{ $batch->quantity_after > 0 ? 'success' : 'danger' }}">
-                                                            {{ number_format($batch->quantity_after, 1) }}
+                                                            {{ number_format($batch->quantity_after_kg, 0) }} kg
                                                         </span>
+                                                        @if($batch->weight > 0 && $batch->quantity_after != $batch->quantity_after_kg)
+                                                            <div class="text-muted fs-8">
+                                                                ({{ number_format($batch->quantity_after, 0) }} units)
+                                                            </div>
+                                                        @endif
                                                     </td>
 
                                                     <td class="text-end">
                                                         <span class="text-gray-800">
-                                                            {{ currency_symbol() }}{{ number_format($batch->unit_cost, 2) }}
+                                                            {{ currency_symbol() }} {{ number_format($batch->unit_cost_per_kg, 0) }}
                                                         </span>
                                                     </td>
 
                                                     <td class="text-end fw-bold">
                                                         <span class="text-{{ $batch->type === 'produced' ? 'success' : 'danger' }}">
-                                                            {{ currency_symbol() }}{{ number_format($batch->total_cost, 2) }}
+                                                            {{ currency_symbol() }} {{ number_format($batch->total_cost, 0) }}
                                                         </span>
                                                     </td>
 
@@ -962,17 +792,17 @@
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="text-success">
-                                                        +{{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change > 0 ? $b->quantity_change : 0), 1) }}
+                                                        +{{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change_kg > 0 ? $b->quantity_change_kg : 0), 0) }} kg
                                                     </span>
                                                     <span class="text-muted mx-1">/</span>
                                                     <span class="text-danger">
-                                                        {{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change < 0 ? $b->quantity_change : 0), 1) }}
+                                                        {{ number_format($paginatedBatches->sum(fn($b) => $b->quantity_change_kg < 0 ? $b->quantity_change_kg : 0), 0) }} kg
                                                     </span>
                                                 </td>
                                                 <td></td>
                                                 <td></td>
                                                 <td class="text-end">
-                                                    {{ currency_symbol() }}{{ number_format($paginatedBatches->sum('total_cost'), 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($paginatedBatches->sum('total_cost'), 0) }}
                                                 </td>
                                                 <td colspan="2"></td>
                                             </tr>
@@ -1003,26 +833,20 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ─── Monthly Batch Trends ──────────────────────────────────────
+    // ─── Monthly Batch Trends (KG) ─────────────────────────────────
     const monthlyData = @json($batchByMonth);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const produced = monthlyData.map(d => d.produced_quantity);
-        const consumed = monthlyData.map(d => d.consumed_quantity);
-        
+        const months    = monthlyData.map(d => d.month);
+        const produced  = monthlyData.map(d => d.produced_kg);
+        const consumed  = monthlyData.map(d => d.consumed_kg);
+        const netKg     = monthlyData.map(d => d.net_kg);
+
         const trendChart = new ApexCharts(document.querySelector("#batchTrendChart"), {
             series: [
-                {
-                    name: 'Produced',
-                    data: produced,
-                    type: 'bar'
-                },
-                {
-                    name: 'Consumed',
-                    data: consumed,
-                    type: 'bar'
-                }
+                { name: 'Produced (kg)', data: produced, type: 'bar'  },
+                { name: 'Consumed (kg)', data: consumed, type: 'bar'  },
+                { name: 'Net (kg)',      data: netKg,    type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -1033,52 +857,47 @@ document.addEventListener('DOMContentLoaded', function() {
             plotOptions: {
                 bar: { horizontal: false, columnWidth: '40%' }
             },
+            stroke: { width: [0, 0, 3], curve: 'smooth' },
             dataLabels: { enabled: false },
             xaxis: {
                 categories: months,
                 labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
             },
-            yaxis: {
-                title: { text: 'Quantity' }
-            },
-            colors: ['#50CD89', '#F1416C'],
+            yaxis: [
+                {
+                    title: { text: 'Quantity (kg)' },
+                    labels: { formatter: v => Number(v).toFixed(0) }
+                },
+                {
+                    opposite: true,
+                    title: { text: 'Net (kg)' },
+                    labels: { formatter: v => Number(v).toFixed(0) }
+                }
+            ],
+            colors: ['#50CD89', '#F1416C', '#3E97FF'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(1);
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + ' kg' }
             },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'top', horizontalAlign: 'center' }
         });
         trendChart.render();
     }
-    
-    // ─── Batch by Variant Chart ──────────────────────────────────────
+
+    // ─── Batch by Variant (top 10, KG) ─────────────────────────────
     const variantData = @json($batchByVariant);
-    
+
     if (variantData.length > 0) {
-        const variants = variantData.map(d => d.variant_name).slice(0, 10);
-        const produced = variantData.map(d => d.produced_quantity).slice(0, 10);
-        const consumed = variantData.map(d => d.consumed_quantity).slice(0, 10);
-        
+        const top = variantData.slice(0, 10);
+        const variants   = top.map(d => d.variant_name);
+        const producedKg = top.map(d => d.produced_kg);
+        const consumedKg = top.map(d => d.consumed_kg);
+
         const variantChart = new ApexCharts(document.querySelector("#variantBatchChart"), {
             series: [
-                {
-                    name: 'Produced',
-                    data: produced,
-                    type: 'bar'
-                },
-                {
-                    name: 'Consumed',
-                    data: consumed,
-                    type: 'bar'
-                }
+                { name: 'Produced (kg)', data: producedKg, type: 'bar' },
+                { name: 'Consumed (kg)', data: consumedKg, type: 'bar' }
             ],
             chart: {
                 type: 'bar',
@@ -1095,33 +914,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: { style: { fontSize: '11px' } }
             },
             yaxis: {
-                title: { text: 'Quantity' }
+                title: { text: 'Quantity (kg)' },
+                labels: { formatter: v => Number(v).toFixed(0) }
             },
             colors: ['#50CD89', '#F1416C'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(1);
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + ' kg' }
             },
-            legend: {
-                position: 'bottom',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'bottom', horizontalAlign: 'center' }
         });
         variantChart.render();
     }
 });
 
-// ─── Export Function ──────────────────────────────────────────────
+// ─── Export ────────────────────────────────────────────────────────
 function exportBatchTracking() {
     const form = document.getElementById('filterForm');
     const formData = new FormData(form);
     const params = new URLSearchParams(formData);
-    
     window.location.href = `/reports/production/batch-tracking/export?${params.toString()}`;
 }
 </script>

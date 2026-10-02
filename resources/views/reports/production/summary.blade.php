@@ -108,7 +108,7 @@
                 <div class="row g-6 mb-6">
                     {{-- Total Orders --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-box fs-2tx text-primary">
@@ -124,10 +124,10 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Quantity Summary --}}
+
+                    {{-- Quantity Summary (KG) --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed">
+                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-arrows-circle fs-2tx text-success">
@@ -137,25 +137,33 @@
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
-                                        <span class="fs-5 fw-bold text-success">{{ number_format($summary['total_output_quantity'], 1) }}</span>
+                                        <span class="fs-5 fw-bold text-success">
+                                            {{ number_format($summary['total_output_quantity'], 0) }} kg
+                                        </span>
                                         <span class="text-muted fs-8 d-block">{{ __('pagination.output') }}</span>
                                     </div>
                                     <div class="vr"></div>
                                     <div>
-                                        <span class="fs-5 fw-bold text-danger">{{ number_format($summary['total_input_quantity'], 1) }}</span>
+                                        <span class="fs-5 fw-bold text-danger">
+                                            {{ number_format($summary['total_input_quantity'], 0) }} kg
+                                        </span>
                                         <span class="text-muted fs-8 d-block">{{ __('pagination.input') }}</span>
                                     </div>
                                 </div>
                                 <span class="text-gray-600 fw-semibold mt-2">
                                     {{ __('pagination.yield') }}: {{ number_format($summary['overall_yield'], 1) }}%
                                 </span>
+                                <span class="text-danger fs-8">
+                                    Loss: {{ number_format($summary['total_loss_quantity'], 0) }} kg
+                                    ({{ number_format($summary['loss_rate'], 1) }}%)
+                                </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Cost Summary --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-info border border-info border-dashed">
+                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-dollar fs-2tx text-info">
@@ -165,25 +173,33 @@
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
-                                        <span class="fs-5 fw-bold text-info">{{ currency_symbol() }}{{ number_format($summary['total_output_cost'], 2) }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.output') }}</span>
+                                        <span class="fs-5 fw-bold text-info">
+                                            {{ currency_symbol() }} {{ number_format($summary['total_output_cost'], 0) }}
+                                        </span>
+                                        <span class="text-muted fs-8 d-block">Revenue</span>
                                     </div>
                                     <div class="vr"></div>
                                     <div>
-                                        <span class="fs-5 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($summary['total_input_cost'], 2) }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.input') }}</span>
+                                        <span class="fs-5 fw-bold text-danger">
+                                            {{ currency_symbol() }} {{ number_format($summary['total_input_cost'], 0) }}
+                                        </span>
+                                        <span class="text-muted fs-8 d-block">Batch Cost</span>
                                     </div>
                                 </div>
                                 <span class="text-gray-600 fw-semibold mt-2">
-                                    {{ currency_symbol() }}{{ number_format($summary['avg_cost_per_order'], 2) }} {{ __('pagination.per_order') }}
+                                    {{ currency_symbol() }} {{ number_format($summary['avg_cost_per_order'], 0) }}
+                                    {{ __('pagination.per_order') }}
+                                </span>
+                                <span class="text-muted fs-8">
+                                    Cost efficiency: {{ number_format($summary['cost_efficiency'], 1) }}%
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Profit Summary --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border border-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border-dashed">
+                        <div class="card card-flush bg-light-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border border-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-chart-line fs-2tx text-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }}">
@@ -192,11 +208,15 @@
                                     </i>
                                 </div>
                                 <span class="fs-1 fw-bold text-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }}">
-                                    {{ currency_symbol() }}{{ number_format($summary['total_profit'], 2) }}
+                                    {{ currency_symbol() }} {{ number_format($summary['total_profit'], 0) }}
                                 </span>
                                 <span class="text-gray-600 fw-semibold">{{ __('pagination.total_profit') }}</span>
                                 <span class="text-muted fs-8">
-                                    {{ currency_symbol() }}{{ number_format($summary['avg_profit_per_order'], 2) }} {{ __('pagination.per_order') }}
+                                    {{ currency_symbol() }} {{ number_format($summary['avg_profit_per_order'], 0) }}
+                                    {{ __('pagination.per_order') }}
+                                </span>
+                                <span class="text-muted fs-8">
+                                    Margin: {{ number_format($summary['profit_margin'], 1) }}%
                                 </span>
                             </div>
                         </div>
@@ -232,7 +252,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Defective & Waste --}}
                     <div class="col-md-6 col-lg-3">
                         <div class="card card-flush bg-light-danger border border-danger border-dashed">
@@ -259,7 +279,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Payment Metrics --}}
                     <div class="col-md-6 col-lg-3">
                         <div class="card card-flush bg-light-success border border-success border-dashed">
@@ -286,7 +306,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Time Metrics --}}
                     <div class="col-md-6 col-lg-3">
                         <div class="card card-flush bg-light-primary border border-primary border-dashed">
@@ -326,7 +346,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Status Distribution --}}
                     <div class="col-lg-4">
                         <div class="card">
@@ -367,38 +387,44 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost') }}</th>
+                                                <th class="text-center">Quantity (KG)</th>
+                                                <th class="text-center">Revenue</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($topProducts as $index => $product)
+                                            @forelse($topProducts as $index => $product)
                                             <tr>
                                                 <td>{{ $index + 1 }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $product->variant_name }}</div>
                                                     <div class="text-muted fs-8">{{ $product->sku }}</div>
                                                 </td>
-                                                <td class="text-center fw-bold text-success">{{ number_format($product->total_quantity, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($product->total_cost, 2) }}</td>
+                                                <td class="text-center fw-bold text-success">
+                                                    {{ number_format($product->total_kg, 0) }} kg
+                                                    <div class="text-muted fs-8">
+                                                        {{ number_format($product->total_quantity, 0) }} bags
+                                                    </div>
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($product->total_revenue, 0) }}
+                                                </td>
                                                 <td class="text-center">{{ $product->order_count }}</td>
                                             </tr>
-                                            @endforeach
-                                            @if($topProducts->isEmpty())
+                                            @empty
                                             <tr>
                                                 <td colspan="5" class="text-center text-muted py-5">
                                                     {{ __('pagination.no_production_data') }}
                                                 </td>
                                             </tr>
-                                            @endif
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Top Consumed Materials --}}
                     <div class="col-lg-6">
                         <div class="card">
@@ -418,31 +444,34 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>#</th>
                                                 <th>{{ __('pagination.material') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost') }}</th>
+                                                <th class="text-center">Quantity (KG)</th>
+                                                <th class="text-center">Cost</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($topMaterials as $index => $material)
+                                            @forelse($topMaterials as $index => $material)
                                             <tr>
                                                 <td>{{ $index + 1 }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $material->variant_name }}</div>
                                                     <div class="text-muted fs-8">{{ $material->sku }}</div>
                                                 </td>
-                                                <td class="text-center fw-bold text-danger">{{ number_format($material->total_quantity, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($material->total_cost, 2) }}</td>
+                                                <td class="text-center fw-bold text-danger">
+                                                    {{ number_format($material->total_kg, 0) }} kg
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($material->total_cost, 0) }}
+                                                </td>
                                                 <td class="text-center">{{ $material->order_count }}</td>
                                             </tr>
-                                            @endforeach
-                                            @if($topMaterials->isEmpty())
+                                            @empty
                                             <tr>
                                                 <td colspan="5" class="text-center text-muted py-5">
                                                     {{ __('pagination.no_production_data') }}
                                                 </td>
                                             </tr>
-                                            @endif
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
@@ -473,7 +502,9 @@
                                                 <th>{{ __('pagination.location') }}</th>
                                                 <th class="text-center">{{ __('pagination.total_orders') }}</th>
                                                 <th class="text-center">{{ __('pagination.completed') }}</th>
-                                                <th class="text-center">{{ __('pagination.total_cost') }}</th>
+                                                <th class="text-center">Yield</th>
+                                                <th class="text-center">Revenue</th>
+                                                <th class="text-center">Batch Cost</th>
                                                 <th class="text-center">{{ __('pagination.profit') }}</th>
                                                 <th class="text-center">{{ __('pagination.completion_rate') }}</th>
                                             </tr>
@@ -481,15 +512,27 @@
                                         <tbody>
                                             @foreach($locationBreakdown as $location)
                                             @php
-                                                $rate = $location->orders > 0 ? ($location->completed / $location->orders) * 100 : 0;
+                                                $rate = $location->orders > 0
+                                                    ? ($location->completed / $location->orders) * 100
+                                                    : 0;
                                             @endphp
                                             <tr>
                                                 <td class="fw-bold">{{ $location->location_name }}</td>
                                                 <td class="text-center">{{ $location->orders }}</td>
                                                 <td class="text-center text-success">{{ $location->completed }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($location->total_cost, 2) }}</td>
+                                                <td class="text-center">
+                                                    <span class="badge badge-light-{{ $location->yield >= 90 ? 'success' : ($location->yield >= 70 ? 'warning' : 'danger') }}">
+                                                        {{ number_format($location->yield, 1) }}%
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($location->revenue, 0) }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($location->total_cost, 0) }}
+                                                </td>
                                                 <td class="text-center text-{{ $location->profit >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }}{{ number_format($location->profit, 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($location->profit, 0) }}
                                                 </td>
                                                 <td class="text-center">
                                                     <div class="d-flex align-items-center justify-content-center">
@@ -520,30 +563,20 @@
 document.addEventListener('DOMContentLoaded', function() {
     // ─── Monthly Trends Chart ──────────────────────────────────────
     const monthlyData = @json($monthlyTrends);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const orders = monthlyData.map(d => d.orders);
+        const months    = monthlyData.map(d => d.month);
+        const orders    = monthlyData.map(d => d.orders);
         const completed = monthlyData.map(d => d.completed);
-        const profit = monthlyData.map(d => d.profit);
-        
+        const profit    = monthlyData.map(d => d.profit);
+        const yieldPct  = monthlyData.map(d => d.yield);
+
         const trendChart = new ApexCharts(document.querySelector("#monthlyTrendChart"), {
             series: [
-                {
-                    name: 'Total Orders',
-                    data: orders,
-                    type: 'bar'
-                },
-                {
-                    name: 'Completed',
-                    data: completed,
-                    type: 'bar'
-                },
-                {
-                    name: 'Profit',
-                    data: profit,
-                    type: 'line'
-                }
+                { name: 'Total Orders',  data: orders,    type: 'bar'  },
+                { name: 'Completed',     data: completed, type: 'bar'  },
+                { name: 'Profit',        data: profit,    type: 'line' },
+                { name: 'Yield %',       data: yieldPct,  type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -554,32 +587,37 @@ document.addEventListener('DOMContentLoaded', function() {
             plotOptions: {
                 bar: { horizontal: false, columnWidth: '40%' }
             },
-            stroke: { width: [0, 0, 3], curve: 'smooth' },
+            stroke: { width: [0, 0, 3, 3], curve: 'smooth' },
             dataLabels: { enabled: false },
             xaxis: {
                 categories: months,
                 labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
             },
             yaxis: [
-                { title: { text: 'Orders' } },
-                { 
-                    opposite: true, 
-                    title: { text: 'Profit' },
+                {
+                    title: { text: 'Orders' }
+                },
+                {
+                    opposite: true,
+                    title: { text: 'Profit / Yield' },
                     labels: {
                         formatter: function(val) {
-                            return '{{ currency_symbol() }}' + val.toFixed(0);
+                            return val.toFixed(0);
                         }
                     }
                 }
             ],
-            colors: ['#3E97FF', '#50CD89', '#F1416C'],
+            colors: ['#3E97FF', '#50CD89', '#F1416C', '#FFC700'],
             tooltip: {
                 shared: true,
                 intersect: false,
                 y: {
                     formatter: function(val, { seriesIndex }) {
                         if (seriesIndex === 2) {
-                            return '{{ currency_symbol() }}' + val.toFixed(2);
+                            return '{{ currency_symbol() }} ' + Number(val).toFixed(2);
+                        }
+                        if (seriesIndex === 3) {
+                            return Number(val).toFixed(2) + '%';
                         }
                         return val + ' orders';
                     }
@@ -588,10 +626,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         trendChart.render();
     }
-    
+
     // ─── Status Distribution Chart ──────────────────────────────────
     const statusData = @json($statusBreakdown);
-    
+
     if (statusData.length > 0) {
         const statusChart = new ApexCharts(document.querySelector("#statusChart"), {
             series: statusData.map(s => s.count),
@@ -600,11 +638,11 @@ document.addEventListener('DOMContentLoaded', function() {
             colors: statusData.map(s => {
                 const colors = {
                     'secondary': '#A1A5B7',
-                    'warning': '#FFC700',
-                    'success': '#50CD89',
-                    'danger': '#F1416C',
-                    'primary': '#3E97FF',
-                    'info': '#7239EA'
+                    'warning':   '#FFC700',
+                    'success':   '#50CD89',
+                    'danger':    '#F1416C',
+                    'primary':   '#3E97FF',
+                    'info':      '#7239EA'
                 };
                 return colors[s.color] || '#A1A5B7';
             }),

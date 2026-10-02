@@ -8,7 +8,7 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -21,13 +21,9 @@
                                         {{ __('pagination.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.production_inventory_impact') }}</li>
                             </ul>
                         </div>
@@ -42,7 +38,7 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filter --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -116,11 +112,11 @@
                     </div>
                 </div>
 
-                {{-- Impact Summary Cards --}}
+                {{-- Summary Cards --}}
                 <div class="row g-6 mb-6">
-                    {{-- Net Inventory Change --}}
+                    {{-- Net Inventory Change (KG) --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }} border border-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }} border-dashed">
+                        <div class="card card-flush bg-light-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }} border border-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-arrows-circle fs-2tx text-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }}">
@@ -128,20 +124,21 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }}">
-                                    {{ $impactSummary['net_inventory_change'] >= 0 ? '+' : '' }}{{ number_format($impactSummary['net_inventory_change'], 1) }}
+                                <span class="fs-2 fw-bold text-{{ $impactSummary['net_inventory_change'] >= 0 ? 'success' : 'danger' }}">
+                                    {{ $impactSummary['net_inventory_change'] >= 0 ? '+' : '' }}{{ number_format($impactSummary['net_inventory_change'], 0) }} kg
                                 </span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.net_inventory_change') }}</span>
+                                <span class="text-gray-600 fw-semibold">Net Inventory Change</span>
                                 <span class="text-muted fs-8">
-                                    {{ number_format($impactSummary['total_output_quantity'], 1) }} / {{ number_format($impactSummary['total_input_quantity'], 1) }}
+                                    Out {{ number_format($impactSummary['total_output_quantity'], 0) }} kg ·
+                                    In {{ number_format($impactSummary['total_input_quantity'], 0) }} kg
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Net Value Change --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }} border border-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }} border-dashed">
+                        <div class="card card-flush bg-light-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }} border border-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-dollar fs-2tx text-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }}">
@@ -149,20 +146,46 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }}">
-                                    {{ currency_symbol() }}{{ number_format($impactSummary['net_value_change'], 2) }}
+                                <span class="fs-2 fw-bold text-{{ $impactSummary['net_value_change'] >= 0 ? 'success' : 'danger' }}">
+                                    {{ currency_symbol() }} {{ number_format($impactSummary['net_value_change'], 0) }}
                                 </span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.net_value_change') }}</span>
+                                <span class="text-gray-600 fw-semibold">Net Value Change</span>
                                 <span class="text-muted fs-8">
-                                    {{ currency_symbol() }}{{ number_format($impactSummary['total_output_value'], 2) }} / {{ currency_symbol() }}{{ number_format($impactSummary['total_input_value'], 2) }}
+                                    Revenue {{ currency_symbol() }} {{ number_format($impactSummary['total_output_value'], 0) }} ·
+                                    Batch {{ currency_symbol() }} {{ number_format($impactSummary['total_input_value'], 0) }}
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Inventory Turnover --}}
+
+                    {{-- Yield --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-info border border-info border-dashed">
+                        @php
+                            $yldColor = $impactSummary['overall_yield'] >= 90 ? 'success' : ($impactSummary['overall_yield'] >= 70 ? 'warning' : 'danger');
+                        @endphp
+                        <div class="card card-flush bg-light-{{ $yldColor }} border border-{{ $yldColor }} border-dashed h-100">
+                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                <div class="mb-2">
+                                    <i class="ki-duotone ki-chart-line fs-2tx text-{{ $yldColor }}">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                </div>
+                                <span class="fs-2 fw-bold text-{{ $yldColor }}">
+                                    {{ number_format($impactSummary['overall_yield'], 1) }}%
+                                </span>
+                                <span class="text-gray-600 fw-semibold">True Yield (kg/kg)</span>
+                                <span class="text-danger fs-8">
+                                    Loss: {{ number_format($impactSummary['loss_kg'], 0) }} kg
+                                    ({{ number_format($impactSummary['loss_rate'], 1) }}%)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Turnover --}}
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-repeat fs-2tx text-info">
@@ -170,43 +193,28 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-info">{{ number_format($impactSummary['inventory_turnover'], 2) }}</span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.inventory_turnover') }}</span>
+                                <span class="fs-2 fw-bold text-info">
+                                    {{ number_format($impactSummary['inventory_turnover'], 2) }}
+                                </span>
+                                <span class="text-gray-600 fw-semibold">Inventory Turnover (kg/kg)</span>
                                 <span class="text-muted fs-8">
                                     {{ $impactSummary['total_orders'] }} {{ __('pagination.orders') }}
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Products Impacted --}}
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-2">
-                                    <i class="ki-duotone ki-box fs-2tx text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <span class="fs-1 fw-bold text-primary">{{ $impactSummary['total_consumed_products'] + $impactSummary['total_produced_products'] }}</span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.products_impacted') }}</span>
-                                <span class="text-muted fs-8">
-                                    {{ $impactSummary['total_consumed_products'] }} {{ __('pagination.consumed') }} / {{ $impactSummary['total_produced_products'] }} {{ __('pagination.produced') }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                {{-- Additional Metrics --}}
+                {{-- Secondary Metrics --}}
                 <div class="row g-6 mb-6">
                     <div class="col-md-4">
                         <div class="card card-flush bg-light-danger border border-danger border-dashed">
                             <div class="card-body d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="text-muted">{{ __('pagination.total_defective') }}</span>
-                                    <div class="fs-2 fw-bold text-danger">{{ number_format($impactSummary['total_defective'], 1) }}</div>
+                                    <span class="text-muted">Total Defective</span>
+                                    <div class="fs-2 fw-bold text-danger">
+                                        {{ number_format($impactSummary['total_defective'], 0) }} kg
+                                    </div>
                                 </div>
                                 <i class="ki-duotone ki-cross-circle fs-2tx text-danger">
                                     <span class="path1"></span>
@@ -219,8 +227,10 @@
                         <div class="card card-flush bg-light-warning border border-warning border-dashed">
                             <div class="card-body d-flex justify-content-between align-items-center">
                                 <div>
-                                    <span class="text-muted">{{ __('pagination.total_waste') }}</span>
-                                    <div class="fs-2 fw-bold text-warning">{{ number_format($impactSummary['total_waste'], 1) }}</div>
+                                    <span class="text-muted">Total Waste</span>
+                                    <div class="fs-2 fw-bold text-warning">
+                                        {{ number_format($impactSummary['total_waste'], 0) }} kg
+                                    </div>
                                 </div>
                                 <i class="ki-duotone ki-trash fs-2tx text-warning">
                                     <span class="path1"></span>
@@ -247,9 +257,8 @@
                     </div>
                 </div>
 
-                {{-- Charts Section --}}
+                {{-- Charts --}}
                 <div class="row g-6 mb-6">
-                    {{-- Monthly Inventory Impact --}}
                     <div class="col-lg-8">
                         <div class="card">
                             <div class="card-header border-0">
@@ -266,8 +275,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Category Impact --}}
                     <div class="col-lg-4">
                         <div class="card">
                             <div class="card-header border-0">
@@ -288,9 +295,9 @@
 
                 {{-- Top Consumed vs Produced --}}
                 <div class="row g-6 mb-6">
-                    {{-- Top Consumed --}}
+                    {{-- Consumed --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-enter fs-2 me-2 text-danger">
@@ -307,43 +314,43 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost') }}</th>
+                                                <th class="text-center">Bags</th>
+                                                <th class="text-center">Total KG</th>
+                                                <th class="text-center">Cost</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($topConsumed as $index => $item)
+                                            @forelse($topConsumed as $index => $item)
                                             <tr>
                                                 <td>{{ $index + 1 }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $item->variant_name }}</div>
-                                                    <div class="text-muted fs-8">{{ $item->variant_sku }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $item->variant_sku }}
+                                                        @if($item->weight > 0) · {{ $item->weight }} kg @endif
+                                                    </div>
                                                 </td>
-                                                <td><span class="badge badge-light-danger">{{ $item->category }}</span></td>
-                                                <td class="text-center text-danger fw-bold">{{ number_format($item->total_quantity, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($item->total_cost, 2) }}</td>
+                                                <td class="text-center">{{ number_format($item->total_quantity, 0) }}</td>
+                                                <td class="text-center fw-bold text-danger">{{ number_format($item->total_kg, 0) }}</td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($item->total_cost, 0) }}
+                                                </td>
                                                 <td class="text-center">{{ $item->order_count }}</td>
                                             </tr>
-                                            @endforeach
-                                            @if($topConsumed->isEmpty())
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted py-3">
-                                                    {{ __('pagination.no_data_available') }}
-                                                </td>
-                                            </tr>
-                                            @endif
+                                            @empty
+                                            <tr><td colspan="6" class="text-center text-muted py-3">{{ __('pagination.no_data_available') }}</td></tr>
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Top Produced --}}
+
+                    {{-- Produced --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-exit fs-2 me-2 text-success">
@@ -360,33 +367,33 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost') }}</th>
+                                                <th class="text-center">Bags</th>
+                                                <th class="text-center">Total KG</th>
+                                                <th class="text-center">Revenue</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($topProduced as $index => $item)
+                                            @forelse($topProduced as $index => $item)
                                             <tr>
                                                 <td>{{ $index + 1 }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $item->variant_name }}</div>
-                                                    <div class="text-muted fs-8">{{ $item->variant_sku }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $item->variant_sku }}
+                                                        @if($item->weight > 0) · {{ $item->weight }} kg @endif
+                                                    </div>
                                                 </td>
-                                                <td><span class="badge badge-light-success">{{ $item->category }}</span></td>
-                                                <td class="text-center text-success fw-bold">{{ number_format($item->total_quantity, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($item->total_cost, 2) }}</td>
+                                                <td class="text-center">{{ number_format($item->total_quantity, 0) }}</td>
+                                                <td class="text-center fw-bold text-success">{{ number_format($item->total_kg, 0) }}</td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($item->total_revenue, 0) }}
+                                                </td>
                                                 <td class="text-center">{{ $item->order_count }}</td>
                                             </tr>
-                                            @endforeach
-                                            @if($topProduced->isEmpty())
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted py-3">
-                                                    {{ __('pagination.no_data_available') }}
-                                                </td>
-                                            </tr>
-                                            @endif
+                                            @empty
+                                            <tr><td colspan="6" class="text-center text-muted py-3">{{ __('pagination.no_data_available') }}</td></tr>
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
@@ -417,9 +424,10 @@
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
                                                 <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.consumed') }}</th>
-                                                <th class="text-center">{{ __('pagination.produced') }}</th>
-                                                <th class="text-center">{{ __('pagination.net_change') }}</th>
+                                                <th class="text-center">Consumed (kg)</th>
+                                                <th class="text-center">Produced (kg)</th>
+                                                <th class="text-center">Net (kg)</th>
+                                                <th class="text-center">Net Value</th>
                                                 <th class="text-center">{{ __('pagination.impact_type') }}</th>
                                             </tr>
                                         </thead>
@@ -432,19 +440,20 @@
                                                     <div class="text-muted fs-8">{{ $item->variant_sku }}</div>
                                                 </td>
                                                 <td><span class="badge badge-light-primary">{{ $item->category }}</span></td>
-                                                <td class="text-center text-danger">{{ number_format($item->consumed_quantity, 1) }}</td>
-                                                <td class="text-center text-success">{{ number_format($item->produced_quantity, 1) }}</td>
+                                                <td class="text-center text-danger">{{ number_format($item->consumed_quantity, 0) }}</td>
+                                                <td class="text-center text-success">{{ number_format($item->produced_quantity, 0) }}</td>
                                                 <td class="text-center fw-bold text-{{ $item->net_quantity >= 0 ? 'success' : 'danger' }}">
-                                                    {{ $item->net_quantity >= 0 ? '+' : '' }}{{ number_format($item->net_quantity, 1) }}
+                                                    {{ $item->net_quantity >= 0 ? '+' : '' }}{{ number_format($item->net_quantity, 0) }}
+                                                </td>
+                                                <td class="text-center text-{{ $item->net_value >= 0 ? 'success' : 'danger' }}">
+                                                    {{ currency_symbol() }} {{ number_format($item->net_value, 0) }}
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $item->impact_color }}">
                                                         @if($item->net_quantity > 0)
-                                                            <i class="ki-duotone ki-arrow-up fs-2 me-1"></i>
-                                                            {{ __('pagination.net_producer') }}
+                                                            <i class="ki-duotone ki-arrow-up fs-2 me-1"></i>{{ __('pagination.net_producer') }}
                                                         @elseif($item->net_quantity < 0)
-                                                            <i class="ki-duotone ki-arrow-down fs-2 me-1"></i>
-                                                            {{ __('pagination.net_consumer') }}
+                                                            <i class="ki-duotone ki-arrow-down fs-2 me-1"></i>{{ __('pagination.net_consumer') }}
                                                         @else
                                                             {{ __('pagination.neutral') }}
                                                         @endif
@@ -461,7 +470,7 @@
                 </div>
                 @endif
 
-                {{-- Impact by Order Table --}}
+                {{-- Impact by Order --}}
                 @if($paginatedImpact->count() > 0)
                 <div class="row">
                     <div class="col-12">
@@ -489,13 +498,14 @@
                                                 <th>{{ __('pagination.order') }}</th>
                                                 <th>{{ __('pagination.status') }}</th>
                                                 <th>{{ __('pagination.location') }}</th>
-                                                <th class="text-center">{{ __('pagination.input_qty') }}</th>
-                                                <th class="text-center">{{ __('pagination.output_qty') }}</th>
-                                                <th class="text-center">{{ __('pagination.net_change') }}</th>
-                                                <th class="text-center">{{ __('pagination.input_cost') }}</th>
-                                                <th class="text-center">{{ __('pagination.output_cost') }}</th>
-                                                <th class="text-center">{{ __('pagination.defective') }}</th>
-                                                <th class="text-center">{{ __('pagination.waste') }}</th>
+                                                <th class="text-center">In (kg)</th>
+                                                <th class="text-center">Out (kg)</th>
+                                                <th class="text-center">Net (kg)</th>
+                                                <th class="text-center">Batch Cost</th>
+                                                <th class="text-center">Revenue</th>
+                                                <th class="text-center">Net Value</th>
+                                                <th class="text-center">Defective (kg)</th>
+                                                <th class="text-center">Waste (kg)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -512,29 +522,31 @@
                                                     </span>
                                                 </td>
                                                 <td>{{ $item->location }}</td>
-                                                <td class="text-center text-danger">{{ number_format($item->input_quantity, 1) }}</td>
-                                                <td class="text-center text-success">{{ number_format($item->output_quantity, 1) }}</td>
+                                                <td class="text-center text-danger">{{ number_format($item->input_quantity, 0) }}</td>
+                                                <td class="text-center text-success">{{ number_format($item->output_quantity, 0) }}</td>
                                                 <td class="text-center fw-bold text-{{ $item->net_quantity >= 0 ? 'success' : 'danger' }}">
-                                                    {{ $item->net_quantity >= 0 ? '+' : '' }}{{ number_format($item->net_quantity, 1) }}
+                                                    {{ $item->net_quantity >= 0 ? '+' : '' }}{{ number_format($item->net_quantity, 0) }}
                                                 </td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($item->input_value, 2) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($item->output_value, 2) }}</td>
-                                                <td class="text-center text-danger">{{ number_format($item->defective, 1) }}</td>
-                                                <td class="text-center text-warning">{{ number_format($item->waste, 1) }}</td>
+                                                <td class="text-center">{{ currency_symbol() }} {{ number_format($item->input_value, 0) }}</td>
+                                                <td class="text-center">{{ currency_symbol() }} {{ number_format($item->output_value, 0) }}</td>
+                                                <td class="text-center text-{{ $item->net_value >= 0 ? 'success' : 'danger' }}">
+                                                    {{ currency_symbol() }} {{ number_format($item->net_value, 0) }}
+                                                </td>
+                                                <td class="text-center text-danger">{{ number_format($item->defective, 0) }}</td>
+                                                <td class="text-center text-warning">{{ number_format($item->waste, 0) }}</td>
                                             </tr>
                                             @endforeach
                                         </tbody>
                                         <tfoot class="bg-light">
                                             <tr>
-                                                <td colspan="11" class="text-end fw-bold">
+                                                <td colspan="12" class="text-end fw-bold">
                                                     {{ __('pagination.total_orders') }}: {{ $paginatedImpact->total() }}
                                                 </td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
-                                
-                                {{-- Pagination --}}
+
                                 <div class="card-footer">
                                     @include('partials.pagination', [
                                         'paginator' => $paginatedImpact,
@@ -575,32 +587,20 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ─── Monthly Impact Chart ──────────────────────────────────────
+    // ─── Monthly Impact ────────────────────────────────────────────
     const monthlyData = @json($monthlyImpact);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const inputQty = monthlyData.map(d => d.input_quantity);
-        const outputQty = monthlyData.map(d => d.output_quantity);
-        const netQty = monthlyData.map(d => d.net_quantity);
-        
+        const months    = monthlyData.map(d => d.month);
+        const inputKg   = monthlyData.map(d => d.input_quantity);
+        const outputKg  = monthlyData.map(d => d.output_quantity);
+        const netKg     = monthlyData.map(d => d.net_quantity);
+
         const monthlyChart = new ApexCharts(document.querySelector("#monthlyImpactChart"), {
             series: [
-                {
-                    name: 'Input Quantity',
-                    data: inputQty,
-                    type: 'bar'
-                },
-                {
-                    name: 'Output Quantity',
-                    data: outputQty,
-                    type: 'bar'
-                },
-                {
-                    name: 'Net Change',
-                    data: netQty,
-                    type: 'line'
-                }
+                { name: 'Input (kg)',  data: inputKg,  type: 'bar'  },
+                { name: 'Output (kg)', data: outputKg, type: 'bar'  },
+                { name: 'Net (kg)',    data: netKg,    type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -618,54 +618,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
             },
             yaxis: [
-                { title: { text: 'Quantity' } },
-                { 
-                    opposite: true, 
-                    title: { text: 'Net Change' },
-                    labels: {
-                        formatter: function(val) {
-                            return val.toFixed(1);
-                        }
-                    }
+                {
+                    title: { text: 'Quantity (kg)' },
+                    labels: { formatter: v => Number(v).toFixed(0) }
+                },
+                {
+                    opposite: true,
+                    title: { text: 'Net (kg)' },
+                    labels: { formatter: v => Number(v).toFixed(0) }
                 }
             ],
             colors: ['#F1416C', '#50CD89', '#3E97FF'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val, { seriesIndex }) {
-                        if (seriesIndex === 2) {
-                            return (val >= 0 ? '+' : '') + val.toFixed(1);
-                        }
-                        return val.toFixed(1);
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + ' kg' }
             }
         });
         monthlyChart.render();
     }
-    
-    // ─── Category Impact Chart ──────────────────────────────────────
+
+    // ─── Category Impact ──────────────────────────────────────────
     const categoryData = @json($categoryImpact);
-    
+
     if (categoryData.length > 0) {
         const categories = categoryData.map(d => d.category);
-        const consumed = categoryData.map(d => d.consumed_quantity);
-        const produced = categoryData.map(d => d.produced_quantity);
-        
+        const consumed   = categoryData.map(d => d.consumed_quantity);
+        const produced   = categoryData.map(d => d.produced_quantity);
+
         const categoryChart = new ApexCharts(document.querySelector("#categoryImpactChart"), {
             series: [
-                {
-                    name: 'Consumed',
-                    data: consumed,
-                    type: 'bar'
-                },
-                {
-                    name: 'Produced',
-                    data: produced,
-                    type: 'bar'
-                }
+                { name: 'Consumed (kg)', data: consumed, type: 'bar' },
+                { name: 'Produced (kg)', data: produced, type: 'bar' }
             ],
             chart: {
                 type: 'bar',
@@ -682,33 +666,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: { style: { fontSize: '11px' } }
             },
             yaxis: {
-                title: { text: 'Quantity' }
+                title: { text: 'Quantity (kg)' },
+                labels: { formatter: v => Number(v).toFixed(0) }
             },
             colors: ['#F1416C', '#50CD89'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(1);
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + ' kg' }
             },
-            legend: {
-                position: 'bottom',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'bottom', horizontalAlign: 'center' }
         });
         categoryChart.render();
     }
 });
 
-// ─── Export Function ──────────────────────────────────────────────
+// ─── Export ────────────────────────────────────────────────────────
 function exportInventoryImpact() {
     const form = document.getElementById('filterForm');
     const formData = new FormData(form);
     const params = new URLSearchParams(formData);
-    
     window.location.href = `/reports/production/inventory-impact/export?${params.toString()}`;
 }
 </script>

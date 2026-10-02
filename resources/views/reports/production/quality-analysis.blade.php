@@ -8,7 +8,7 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -21,13 +21,9 @@
                                         {{ __('pagination.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.production_quality_analysis') }}</li>
                             </ul>
                         </div>
@@ -42,7 +38,7 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filter --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -127,7 +123,7 @@
                     </div>
                 </div>
 
-                {{-- Quality Score Card --}}
+                {{-- Overall Quality Score --}}
                 <div class="row g-6 mb-6">
                     <div class="col-12">
                         <div class="card card-flush bg-light-{{ $qualitySummary['quality_color'] }} border border-{{ $qualitySummary['quality_color'] }} border-dashed">
@@ -141,30 +137,45 @@
                                     <div>
                                         <h3 class="fw-bold mb-1">{{ __('pagination.overall_quality_score') }}</h3>
                                         <div class="text-muted">
-                                            {{ $qualitySummary['quality_rating'] }} - 
-                                            {{ $qualitySummary['total_orders'] }} {{ __('pagination.orders') }} analyzed
+                                            {{ $qualitySummary['quality_rating'] }} ·
+                                            {{ $qualitySummary['total_orders'] }} {{ __('pagination.orders') }} analyzed ·
+                                            KG-weighted
                                         </div>
                                     </div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-4 mt-3 mt-md-0">
                                     <div class="text-center">
                                         <div class="fs-3 fw-bold text-success">{{ number_format($qualitySummary['input_acceptance_rate'], 1) }}%</div>
-                                        <span class="text-muted">{{ __('pagination.input_acceptance') }}</span>
+                                        <span class="text-muted">Input Acceptance</span>
+                                        <div class="text-muted fs-8">
+                                            {{ number_format($qualitySummary['accepted_input_kg'], 0) }} /
+                                            {{ number_format($qualitySummary['total_input_kg'], 0) }} kg
+                                        </div>
                                     </div>
                                     <div class="vr d-none d-md-block"></div>
                                     <div class="text-center">
                                         <div class="fs-3 fw-bold text-info">{{ number_format($qualitySummary['output_approval_rate'], 1) }}%</div>
-                                        <span class="text-muted">{{ __('pagination.output_approval') }}</span>
+                                        <span class="text-muted">Output Approval</span>
+                                        <div class="text-muted fs-8">
+                                            {{ number_format($qualitySummary['approved_output_kg'], 0) }} /
+                                            {{ number_format($qualitySummary['total_output_kg'], 0) }} kg
+                                        </div>
                                     </div>
                                     <div class="vr d-none d-md-block"></div>
                                     <div class="text-center">
                                         <div class="fs-3 fw-bold text-danger">{{ number_format($qualitySummary['defective_rate'], 1) }}%</div>
-                                        <span class="text-muted">{{ __('pagination.defective_rate') }}</span>
+                                        <span class="text-muted">Defective Rate</span>
+                                        <div class="text-muted fs-8">
+                                            {{ number_format($qualitySummary['total_defective_kg'], 0) }} kg
+                                        </div>
                                     </div>
                                     <div class="vr d-none d-md-block"></div>
                                     <div class="text-center">
                                         <div class="fs-3 fw-bold text-warning">{{ number_format($qualitySummary['waste_rate'], 1) }}%</div>
-                                        <span class="text-muted">{{ __('pagination.waste_rate') }}</span>
+                                        <span class="text-muted">Waste Rate</span>
+                                        <div class="text-muted fs-8">
+                                            {{ number_format($qualitySummary['total_input_waste_kg'], 0) }} kg
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -172,11 +183,11 @@
                     </div>
                 </div>
 
-                {{-- Quality Summary Cards --}}
+                {{-- Breakdown Cards --}}
                 <div class="row g-6 mb-6">
                     {{-- Input Quality --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-danger border border-danger border-dashed">
+                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-enter fs-2tx text-danger">
@@ -187,25 +198,28 @@
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
                                         <span class="fs-4 fw-bold text-success">{{ $qualitySummary['accepted_inputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.accepted') }}</span>
+                                        <span class="text-muted fs-8 d-block">Accepted</span>
                                     </div>
                                     <div>
                                         <span class="fs-4 fw-bold text-danger">{{ $qualitySummary['rejected_inputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.rejected') }}</span>
+                                        <span class="text-muted fs-8 d-block">Rejected</span>
                                     </div>
                                     <div>
                                         <span class="fs-4 fw-bold text-secondary">{{ $qualitySummary['pending_inputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.pending') }}</span>
+                                        <span class="text-muted fs-8 d-block">Pending</span>
                                     </div>
                                 </div>
-                                <span class="text-gray-600 fw-semibold mt-2">{{ __('pagination.input_quality') }}</span>
+                                <span class="text-gray-600 fw-semibold mt-2">Input Quality (lines)</span>
+                                <span class="text-muted fs-8">
+                                    {{ number_format($qualitySummary['total_input_kg'], 0) }} kg total
+                                </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Output Quality --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed">
+                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-exit fs-2tx text-success">
@@ -216,25 +230,28 @@
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
                                         <span class="fs-4 fw-bold text-success">{{ $qualitySummary['approved_outputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.approved') }}</span>
+                                        <span class="text-muted fs-8 d-block">Approved</span>
                                     </div>
                                     <div>
                                         <span class="fs-4 fw-bold text-danger">{{ $qualitySummary['rejected_outputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.rejected') }}</span>
+                                        <span class="text-muted fs-8 d-block">Rejected</span>
                                     </div>
                                     <div>
                                         <span class="fs-4 fw-bold text-secondary">{{ $qualitySummary['pending_outputs'] }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.pending') }}</span>
+                                        <span class="text-muted fs-8 d-block">Pending</span>
                                     </div>
                                 </div>
-                                <span class="text-gray-600 fw-semibold mt-2">{{ __('pagination.output_quality') }}</span>
+                                <span class="text-gray-600 fw-semibold mt-2">Output Quality (lines)</span>
+                                <span class="text-muted fs-8">
+                                    {{ number_format($qualitySummary['total_output_kg'], 0) }} kg total
+                                </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Defective & Waste --}}
+
+                    {{-- Loss (defective + waste) --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-warning border border-warning border-dashed">
+                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-trash fs-2tx text-warning">
@@ -244,22 +261,25 @@
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
-                                        <span class="fs-4 fw-bold text-danger">{{ number_format($qualitySummary['total_defective'], 1) }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.defective') }}</span>
+                                        <span class="fs-4 fw-bold text-danger">{{ number_format($qualitySummary['total_defective_kg'], 0) }}</span>
+                                        <span class="text-muted fs-8 d-block">Defective (kg)</span>
                                     </div>
                                     <div>
-                                        <span class="fs-4 fw-bold text-warning">{{ number_format($qualitySummary['total_input_waste'], 1) }}</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.waste') }}</span>
+                                        <span class="fs-4 fw-bold text-warning">{{ number_format($qualitySummary['total_input_waste_kg'], 0) }}</span>
+                                        <span class="text-muted fs-8 d-block">Waste (kg)</span>
                                     </div>
                                 </div>
-                                <span class="text-gray-600 fw-semibold mt-2">{{ __('pagination.total_loss') }}</span>
+                                <span class="text-gray-600 fw-semibold mt-2">Total Loss</span>
+                                <span class="text-muted fs-8">
+                                    {{ number_format($qualitySummary['total_defective_kg'] + $qualitySummary['total_input_waste_kg'], 0) }} kg combined
+                                </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Quality Scores --}}
+
+                    {{-- KG totals --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-chart-line fs-2tx text-primary">
@@ -269,23 +289,25 @@
                                 </div>
                                 <div class="d-flex justify-content-center gap-3">
                                     <div>
-                                        <span class="fs-4 fw-bold text-success">{{ number_format($qualitySummary['input_acceptance_rate'], 1) }}%</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.input_acceptance') }}</span>
+                                        <span class="fs-4 fw-bold text-danger">{{ number_format($qualitySummary['total_input_kg'], 0) }}</span>
+                                        <span class="text-muted fs-8 d-block">In (kg)</span>
                                     </div>
                                     <div>
-                                        <span class="fs-4 fw-bold text-info">{{ number_format($qualitySummary['output_approval_rate'], 1) }}%</span>
-                                        <span class="text-muted fs-8 d-block">{{ __('pagination.output_approval') }}</span>
+                                        <span class="fs-4 fw-bold text-success">{{ number_format($qualitySummary['total_output_kg'], 0) }}</span>
+                                        <span class="text-muted fs-8 d-block">Out (kg)</span>
                                     </div>
                                 </div>
-                                <span class="text-gray-600 fw-semibold mt-2">{{ __('pagination.quality_rates') }}</span>
+                                <span class="text-gray-600 fw-semibold mt-2">Mass Balance</span>
+                                <span class="text-muted fs-8">
+                                    Loss: {{ number_format(max(0, $qualitySummary['total_input_kg'] - $qualitySummary['total_output_kg']), 0) }} kg
+                                </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Charts Section --}}
+                {{-- Charts --}}
                 <div class="row g-6 mb-6">
-                    {{-- Quality Trends --}}
                     <div class="col-lg-8">
                         <div class="card">
                             <div class="card-header border-0">
@@ -302,8 +324,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Category Quality --}}
                     <div class="col-lg-4">
                         <div class="card">
                             <div class="card-header border-0">
@@ -322,7 +342,7 @@
                     </div>
                 </div>
 
-                {{-- Product Quality Summary --}}
+                {{-- Top Products by Quality --}}
                 @if($productQualitySummary->count() > 0)
                 <div class="row g-6 mb-6">
                     <div class="col-12">
@@ -344,10 +364,11 @@
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
                                                 <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.total_quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.defective') }}</th>
-                                                <th class="text-center">{{ __('pagination.defective_rate') }}</th>
-                                                <th class="text-center">{{ __('pagination.quality_score') }}</th>
+                                                <th class="text-center">Bags</th>
+                                                <th class="text-center">Total KG</th>
+                                                <th class="text-center">Defective (kg)</th>
+                                                <th class="text-center">Defective %</th>
+                                                <th class="text-center">Quality Score</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
@@ -360,11 +381,15 @@
                                                 <td>{{ $index + 1 }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $product->variant_name }}</div>
-                                                    <div class="text-muted fs-8">{{ $product->variant_sku }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $product->variant_sku }}
+                                                        @if($product->weight > 0) · {{ $product->weight }} kg/bag @endif
+                                                    </div>
                                                 </td>
                                                 <td><span class="badge badge-light-primary">{{ $product->category }}</span></td>
-                                                <td class="text-center">{{ number_format($product->total_quantity, 1) }}</td>
-                                                <td class="text-center text-danger">{{ number_format($product->defective_quantity, 1) }}</td>
+                                                <td class="text-center">{{ number_format($product->total_quantity, 0) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($product->total_kg, 0) }}</td>
+                                                <td class="text-center text-danger">{{ number_format($product->defective_kg, 0) }}</td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $product->defective_rate <= 5 ? 'success' : ($product->defective_rate <= 15 ? 'warning' : 'danger') }}">
                                                         {{ number_format($product->defective_rate, 1) }}%
@@ -387,7 +412,7 @@
                 </div>
                 @endif
 
-                {{-- Quality by Order Table --}}
+                {{-- Quality by Order --}}
                 @if($paginatedQuality->count() > 0)
                 <div class="row">
                     <div class="col-12">
@@ -415,12 +440,14 @@
                                                 <th>{{ __('pagination.order') }}</th>
                                                 <th>{{ __('pagination.status') }}</th>
                                                 <th>{{ __('pagination.location') }}</th>
-                                                <th class="text-center">{{ __('pagination.input_acceptance') }}</th>
-                                                <th class="text-center">{{ __('pagination.output_approval') }}</th>
-                                                <th class="text-center">{{ __('pagination.defective_rate') }}</th>
-                                                <th class="text-center">{{ __('pagination.waste_rate') }}</th>
-                                                <th class="text-center">{{ __('pagination.quality_score') }}</th>
-                                                <th class="text-center">{{ __('pagination.rating') }}</th>
+                                                <th class="text-center">Input kg</th>
+                                                <th class="text-center">Output kg</th>
+                                                <th class="text-center">Input Accept</th>
+                                                <th class="text-center">Output Approve</th>
+                                                <th class="text-center">Defective %</th>
+                                                <th class="text-center">Waste %</th>
+                                                <th class="text-center">Score</th>
+                                                <th class="text-center">Rating</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -437,6 +464,8 @@
                                                     </span>
                                                 </td>
                                                 <td>{{ $item->location }}</td>
+                                                <td class="text-center">{{ number_format($item->input_kg_total, 0) }}</td>
+                                                <td class="text-center">{{ number_format($item->output_kg_total, 0) }}</td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $item->input_acceptance_rate >= 90 ? 'success' : ($item->input_acceptance_rate >= 70 ? 'warning' : 'danger') }}">
                                                         {{ number_format($item->input_acceptance_rate, 1) }}%
@@ -472,15 +501,14 @@
                                         </tbody>
                                         <tfoot class="bg-light">
                                             <tr>
-                                                <td colspan="10" class="text-end fw-bold">
+                                                <td colspan="12" class="text-end fw-bold">
                                                     {{ __('pagination.total_orders') }}: {{ $paginatedQuality->total() }}
                                                 </td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
-                                
-                                {{-- Pagination --}}
+
                                 <div class="card-footer">
                                     @include('partials.pagination', [
                                         'paginator' => $paginatedQuality,
@@ -521,32 +549,20 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ─── Quality Trends Chart ──────────────────────────────────────
+    // ─── Quality Trends ────────────────────────────────────────────
     const monthlyData = @json($monthlyQuality);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const inputAcceptance = monthlyData.map(d => d.input_acceptance);
-        const outputApproval = monthlyData.map(d => d.output_approval);
-        const overallScore = monthlyData.map(d => d.overall_score);
-        
+        const months        = monthlyData.map(d => d.month);
+        const inputAccept   = monthlyData.map(d => d.input_acceptance);
+        const outputApprove = monthlyData.map(d => d.output_approval);
+        const overallScore  = monthlyData.map(d => d.overall_score);
+
         const trendChart = new ApexCharts(document.querySelector("#qualityTrendChart"), {
             series: [
-                {
-                    name: 'Input Acceptance',
-                    data: inputAcceptance,
-                    type: 'line'
-                },
-                {
-                    name: 'Output Approval',
-                    data: outputApproval,
-                    type: 'line'
-                },
-                {
-                    name: 'Overall Score',
-                    data: overallScore,
-                    type: 'line'
-                }
+                { name: 'Input Acceptance', data: inputAccept,   type: 'line' },
+                { name: 'Output Approval',  data: outputApprove, type: 'line' },
+                { name: 'Overall Score',    data: overallScore,  type: 'line' }
             ],
             chart: {
                 type: 'line',
@@ -564,56 +580,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: { text: 'Percentage (%)' },
                 min: 0,
                 max: 100,
-                labels: {
-                    formatter: function(val) {
-                        return val + '%';
-                    }
-                }
+                labels: { formatter: v => Number(v).toFixed(0) + '%' }
             },
             colors: ['#F1416C', '#50CD89', '#3E97FF'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(1) + '%';
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + '%' }
             },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'top', horizontalAlign: 'center' }
         });
         trendChart.render();
     }
-    
-    // ─── Category Quality Chart ──────────────────────────────────────
+
+    // ─── Category Quality ──────────────────────────────────────────
     const categoryData = @json($categoryQualitySummary);
-    
+
     if (categoryData.length > 0) {
-        const categories = categoryData.map(d => d.category);
+        const categories    = categoryData.map(d => d.category);
         const defectiveRate = categoryData.map(d => d.defective_rate);
-        const approvalRate = categoryData.map(d => d.approval_rate);
-        const qualityScore = categoryData.map(d => d.quality_score);
-        
+        const approvalRate  = categoryData.map(d => d.approval_rate);
+        const qualityScore  = categoryData.map(d => d.quality_score);
+
         const categoryChart = new ApexCharts(document.querySelector("#categoryQualityChart"), {
             series: [
-                {
-                    name: 'Defective Rate',
-                    data: defectiveRate,
-                    type: 'bar'
-                },
-                {
-                    name: 'Approval Rate',
-                    data: approvalRate,
-                    type: 'bar'
-                },
-                {
-                    name: 'Quality Score',
-                    data: qualityScore,
-                    type: 'line'
-                }
+                { name: 'Defective Rate', data: defectiveRate, type: 'bar'  },
+                { name: 'Approval Rate',  data: approvalRate,  type: 'bar'  },
+                { name: 'Quality Score',  data: qualityScore,  type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -632,37 +625,25 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             yaxis: {
                 title: { text: 'Percentage (%)' },
-                labels: {
-                    formatter: function(val) {
-                        return val + '%';
-                    }
-                }
+                labels: { formatter: v => Number(v).toFixed(0) + '%' }
             },
             colors: ['#F1416C', '#50CD89', '#3E97FF'],
             tooltip: {
                 shared: true,
                 intersect: false,
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(1) + '%';
-                    }
-                }
+                y: { formatter: v => Number(v).toFixed(1) + '%' }
             },
-            legend: {
-                position: 'bottom',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'bottom', horizontalAlign: 'center' }
         });
         categoryChart.render();
     }
 });
 
-// ─── Export Function ──────────────────────────────────────────────
+// ─── Export ────────────────────────────────────────────────────────
 function exportQuality() {
     const form = document.getElementById('filterForm');
     const formData = new FormData(form);
     const params = new URLSearchParams(formData);
-    
     window.location.href = `/reports/production/quality-analysis/export?${params.toString()}`;
 }
 </script>

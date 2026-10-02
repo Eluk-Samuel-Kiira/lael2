@@ -8,7 +8,7 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -21,13 +21,9 @@
                                         {{ __('pagination.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.production_efficiency') }}</li>
                             </ul>
                         </div>
@@ -42,7 +38,7 @@
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filter --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -118,92 +114,110 @@
 
                 {{-- Efficiency Summary Cards --}}
                 <div class="row g-6 mb-6">
-                    {{-- Yield Rate --}}
+                    {{-- Yield --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $efficiencySummary['overall_yield'] >= 80 ? 'success' : ($efficiencySummary['overall_yield'] >= 60 ? 'warning' : 'danger') }} border border-{{ $efficiencySummary['overall_yield'] >= 80 ? 'success' : ($efficiencySummary['overall_yield'] >= 60 ? 'warning' : 'danger') }} border-dashed">
+                        @php
+                            $yldColor = $efficiencySummary['overall_yield'] >= 90 ? 'success' : ($efficiencySummary['overall_yield'] >= 70 ? 'warning' : 'danger');
+                        @endphp
+                        <div class="card card-flush bg-light-{{ $yldColor }} border border-{{ $yldColor }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
-                                    <i class="ki-duotone ki-chart-line fs-2tx text-{{ $efficiencySummary['overall_yield'] >= 80 ? 'success' : ($efficiencySummary['overall_yield'] >= 60 ? 'warning' : 'danger') }}">
+                                    <i class="ki-duotone ki-chart-line fs-2tx text-{{ $yldColor }}">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $efficiencySummary['overall_yield'] >= 80 ? 'success' : ($efficiencySummary['overall_yield'] >= 60 ? 'warning' : 'danger') }}">
+                                <span class="fs-1 fw-bold text-{{ $yldColor }}">
                                     {{ number_format($efficiencySummary['overall_yield'], 1) }}%
                                 </span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.overall_yield') }}</span>
+                                <span class="text-gray-600 fw-semibold">True Yield (kg/kg)</span>
                                 <span class="text-muted fs-8">
-                                    {{ number_format($efficiencySummary['total_output_qty'], 1) }} / {{ number_format($efficiencySummary['total_input_qty'], 1) }}
+                                    {{ number_format($efficiencySummary['total_output_kg'], 0) }} /
+                                    {{ number_format($efficiencySummary['total_input_kg'], 0) }} kg
+                                </span>
+                                <span class="text-danger fs-8">
+                                    Loss: {{ number_format($efficiencySummary['total_loss_kg'], 0) }} kg
+                                    ({{ number_format($efficiencySummary['loss_rate'], 1) }}%)
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Cost Efficiency --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $efficiencySummary['overall_cost_efficiency'] >= 80 ? 'success' : ($efficiencySummary['overall_cost_efficiency'] >= 60 ? 'warning' : 'danger') }} border border-{{ $efficiencySummary['overall_cost_efficiency'] >= 80 ? 'success' : ($efficiencySummary['overall_cost_efficiency'] >= 60 ? 'warning' : 'danger') }} border-dashed">
+                        @php
+                            $ceColor = $efficiencySummary['overall_cost_efficiency'] >= 120 ? 'success' : ($efficiencySummary['overall_cost_efficiency'] >= 100 ? 'warning' : 'danger');
+                        @endphp
+                        <div class="card card-flush bg-light-{{ $ceColor }} border border-{{ $ceColor }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
-                                    <i class="ki-duotone ki-dollar fs-2tx text-{{ $efficiencySummary['overall_cost_efficiency'] >= 80 ? 'success' : ($efficiencySummary['overall_cost_efficiency'] >= 60 ? 'warning' : 'danger') }}">
+                                    <i class="ki-duotone ki-dollar fs-2tx text-{{ $ceColor }}">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $efficiencySummary['overall_cost_efficiency'] >= 80 ? 'success' : ($efficiencySummary['overall_cost_efficiency'] >= 60 ? 'warning' : 'danger') }}">
+                                <span class="fs-1 fw-bold text-{{ $ceColor }}">
                                     {{ number_format($efficiencySummary['overall_cost_efficiency'], 1) }}%
                                 </span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.cost_efficiency') }}</span>
+                                <span class="text-gray-600 fw-semibold">Cost Efficiency</span>
                                 <span class="text-muted fs-8">
-                                    {{ currency_symbol() }}{{ number_format($efficiencySummary['total_output_cost'], 2) }} / {{ currency_symbol() }}{{ number_format($efficiencySummary['total_cost'], 2) }}
+                                    {{ currency_symbol() }} {{ number_format($efficiencySummary['total_output_cost'], 0) }} revenue /
+                                    {{ currency_symbol() }} {{ number_format($efficiencySummary['total_cost'], 0) }} cost
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Quality Rate --}}
+
+                    {{-- Quality --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $efficiencySummary['quality_rate'] >= 95 ? 'success' : ($efficiencySummary['quality_rate'] >= 80 ? 'warning' : 'danger') }} border border-{{ $efficiencySummary['quality_rate'] >= 95 ? 'success' : ($efficiencySummary['quality_rate'] >= 80 ? 'warning' : 'danger') }} border-dashed">
+                        @php
+                            $qColor = $efficiencySummary['quality_rate'] >= 95 ? 'success' : ($efficiencySummary['quality_rate'] >= 80 ? 'warning' : 'danger');
+                        @endphp
+                        <div class="card card-flush bg-light-{{ $qColor }} border border-{{ $qColor }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
-                                    <i class="ki-duotone ki-check-circle fs-2tx text-{{ $efficiencySummary['quality_rate'] >= 95 ? 'success' : ($efficiencySummary['quality_rate'] >= 80 ? 'warning' : 'danger') }}">
+                                    <i class="ki-duotone ki-check-circle fs-2tx text-{{ $qColor }}">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $efficiencySummary['quality_rate'] >= 95 ? 'success' : ($efficiencySummary['quality_rate'] >= 80 ? 'warning' : 'danger') }}">
+                                <span class="fs-1 fw-bold text-{{ $qColor }}">
                                     {{ number_format($efficiencySummary['quality_rate'], 1) }}%
                                 </span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.quality_rate') }}</span>
+                                <span class="text-gray-600 fw-semibold">Quality Rate</span>
                                 <span class="text-muted fs-8">
-                                    {{ number_format($efficiencySummary['total_defective'], 1) }} {{ __('pagination.defective') }}
+                                    Defective: {{ number_format($efficiencySummary['total_defective'], 0) }} kg
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Profit Margin --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $efficiencySummary['profit_margin'] >= 20 ? 'success' : ($efficiencySummary['profit_margin'] >= 10 ? 'warning' : 'danger') }} border border-{{ $efficiencySummary['profit_margin'] >= 20 ? 'success' : ($efficiencySummary['profit_margin'] >= 10 ? 'warning' : 'danger') }} border-dashed">
+                        @php
+                            $pmColor = $efficiencySummary['profit_margin'] >= 20 ? 'success' : ($efficiencySummary['profit_margin'] >= 10 ? 'warning' : 'danger');
+                        @endphp
+                        <div class="card card-flush bg-light-{{ $pmColor }} border border-{{ $pmColor }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
-                                    <i class="ki-duotone ki-chart-pie fs-2tx text-{{ $efficiencySummary['profit_margin'] >= 20 ? 'success' : ($efficiencySummary['profit_margin'] >= 10 ? 'warning' : 'danger') }}">
+                                    <i class="ki-duotone ki-chart-pie fs-2tx text-{{ $pmColor }}">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $efficiencySummary['profit_margin'] >= 20 ? 'success' : ($efficiencySummary['profit_margin'] >= 10 ? 'warning' : 'danger') }}">
+                                <span class="fs-1 fw-bold text-{{ $pmColor }}">
                                     {{ number_format($efficiencySummary['profit_margin'], 1) }}%
                                 </span>
                                 <span class="text-gray-600 fw-semibold">{{ __('pagination.profit_margin') }}</span>
                                 <span class="text-muted fs-8">
-                                    {{ currency_symbol() }}{{ number_format($efficiencySummary['total_profit'], 2) }}
+                                    {{ currency_symbol() }} {{ number_format($efficiencySummary['total_profit'], 0) }}
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Additional Metrics --}}
+                {{-- Secondary Metrics --}}
                 <div class="row g-6 mb-6">
                     <div class="col-md-4">
                         <div class="card card-flush bg-light-info border border-info border-dashed">
@@ -213,6 +227,9 @@
                                     <div class="fs-2 fw-bold text-{{ $efficiencySummary['waste_rate'] <= 5 ? 'success' : ($efficiencySummary['waste_rate'] <= 15 ? 'warning' : 'danger') }}">
                                         {{ number_format($efficiencySummary['waste_rate'], 1) }}%
                                     </div>
+                                    <span class="text-muted fs-8">
+                                        {{ number_format($efficiencySummary['total_waste_kg'], 0) }} kg
+                                    </span>
                                 </div>
                                 <i class="ki-duotone ki-trash fs-2tx text-{{ $efficiencySummary['waste_rate'] <= 5 ? 'success' : ($efficiencySummary['waste_rate'] <= 15 ? 'warning' : 'danger') }}">
                                     <span class="path1"></span>
@@ -226,7 +243,9 @@
                             <div class="card-body d-flex justify-content-between align-items-center">
                                 <div>
                                     <span class="text-muted">{{ __('pagination.avg_duration') }}</span>
-                                    <div class="fs-2 fw-bold text-primary">{{ number_format($efficiencySummary['avg_duration_hours'], 1) }}h</div>
+                                    <div class="fs-2 fw-bold text-primary">
+                                        {{ number_format($efficiencySummary['avg_duration_hours'], 2) }}h
+                                    </div>
                                 </div>
                                 <i class="ki-duotone ki-clock fs-2tx text-primary">
                                     <span class="path1"></span>
@@ -253,9 +272,8 @@
                     </div>
                 </div>
 
-                {{-- Charts Section --}}
+                {{-- Charts --}}
                 <div class="row g-6 mb-6">
-                    {{-- Monthly Efficiency Trends --}}
                     <div class="col-lg-8">
                         <div class="card">
                             <div class="card-header border-0">
@@ -272,8 +290,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Efficiency by Location --}}
                     <div class="col-lg-4">
                         <div class="card">
                             <div class="card-header border-0">
@@ -292,7 +308,7 @@
                     </div>
                 </div>
 
-                {{-- Product Efficiency Summary --}}
+                {{-- Top Products by Efficiency --}}
                 @if($productEfficiencySummary->count() > 0)
                 <div class="row g-6 mb-6">
                     <div class="col-12">
@@ -314,18 +330,19 @@
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
                                                 <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.total_quantity') }}</th>
+                                                <th class="text-center">Bags</th>
+                                                <th class="text-center">Total KG</th>
                                                 <th class="text-center">{{ __('pagination.profit_margin') }}</th>
                                                 <th class="text-center">{{ __('pagination.quality_rate') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost_per_unit') }}</th>
-                                                <th class="text-center">{{ __('pagination.profit_per_unit') }}</th>
+                                                <th class="text-center">Cost/KG</th>
+                                                <th class="text-center">Profit/KG</th>
                                                 <th class="text-center">{{ __('pagination.orders') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($productEfficiencySummary as $index => $product)
                                             @php
-                                                $marginColor = $product->profit_margin >= 30 ? 'success' : ($product->profit_margin >= 10 ? 'warning' : 'danger');
+                                                $marginColor  = $product->profit_margin >= 30 ? 'success' : ($product->profit_margin >= 10 ? 'warning' : 'danger');
                                                 $qualityColor = $product->quality_rate >= 95 ? 'success' : ($product->quality_rate >= 80 ? 'warning' : 'danger');
                                             @endphp
                                             <tr>
@@ -335,7 +352,8 @@
                                                     <div class="text-muted fs-8">{{ $product->variant_sku }}</div>
                                                 </td>
                                                 <td><span class="badge badge-light-primary">{{ $product->category }}</span></td>
-                                                <td class="text-center">{{ number_format($product->total_quantity, 1) }}</td>
+                                                <td class="text-center">{{ number_format($product->total_quantity, 0) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($product->total_kg, 0) }}</td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $marginColor }}">
                                                         {{ number_format($product->profit_margin, 1) }}%
@@ -346,9 +364,11 @@
                                                         {{ number_format($product->quality_rate, 1) }}%
                                                     </span>
                                                 </td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($product->cost_per_unit, 2) }}</td>
-                                                <td class="text-center text-{{ $product->profit_per_unit >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }}{{ number_format($product->profit_per_unit, 2) }}
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($product->cost_per_kg, 0) }}
+                                                </td>
+                                                <td class="text-center text-{{ $product->profit_per_kg >= 0 ? 'success' : 'danger' }}">
+                                                    {{ currency_symbol() }} {{ number_format($product->profit_per_kg, 0) }}
                                                 </td>
                                                 <td class="text-center">{{ $product->order_count }}</td>
                                             </tr>
@@ -362,7 +382,7 @@
                 </div>
                 @endif
 
-                {{-- Efficiency Table --}}
+                {{-- Efficiency by Order --}}
                 @if($paginatedEfficiency->count() > 0)
                 <div class="row">
                     <div class="col-12">
@@ -390,10 +410,10 @@
                                                 <th>{{ __('pagination.order') }}</th>
                                                 <th>{{ __('pagination.status') }}</th>
                                                 <th>{{ __('pagination.location') }}</th>
-                                                <th class="text-center">{{ __('pagination.yield') }}</th>
-                                                <th class="text-center">{{ __('pagination.cost_efficiency') }}</th>
-                                                <th class="text-center">{{ __('pagination.quality_rate') }}</th>
-                                                <th class="text-center">{{ __('pagination.waste_rate') }}</th>
+                                                <th class="text-center">Yield</th>
+                                                <th class="text-center">Cost Eff.</th>
+                                                <th class="text-center">Quality</th>
+                                                <th class="text-center">Waste</th>
                                                 <th class="text-center">{{ __('pagination.duration') }}</th>
                                                 <th class="text-center">{{ __('pagination.profit') }}</th>
                                             </tr>
@@ -401,16 +421,20 @@
                                         <tbody>
                                             @foreach($paginatedEfficiency as $index => $item)
                                             @php
-                                                $yieldColor = $item->yield >= 80 ? 'success' : ($item->yield >= 60 ? 'warning' : 'danger');
-                                                $costColor = $item->cost_efficiency >= 80 ? 'success' : ($item->cost_efficiency >= 60 ? 'warning' : 'danger');
-                                                $qualityColor = $item->quality_rate >= 95 ? 'success' : ($item->quality_rate >= 80 ? 'warning' : 'danger');
-                                                $wasteColor = $item->waste_rate <= 5 ? 'success' : ($item->waste_rate <= 15 ? 'warning' : 'danger');
+                                                $yieldColor   = $item->yield           >= 90 ? 'success' : ($item->yield           >= 70 ? 'warning' : 'danger');
+                                                $costColor    = $item->cost_efficiency >= 120 ? 'success' : ($item->cost_efficiency >= 100 ? 'warning' : 'danger');
+                                                $qualityColor = $item->quality_rate    >= 95 ? 'success' : ($item->quality_rate    >= 80 ? 'warning' : 'danger');
+                                                $wasteColor   = $item->waste_rate      <= 5  ? 'success' : ($item->waste_rate      <= 15 ? 'warning' : 'danger');
                                             @endphp
                                             <tr>
                                                 <td>{{ $paginatedEfficiency->firstItem() + $index }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $item->production_number }}</div>
-                                                    <div class="text-muted fs-8">{{ $item->created_at->format('Y-m-d') }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $item->created_at->format('Y-m-d') }} ·
+                                                        {{ number_format($item->input_quantity, 0) }} →
+                                                        {{ number_format($item->output_quantity, 0) }} kg
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <span class="badge badge-light-{{ $item->status_badge }}">
@@ -438,9 +462,9 @@
                                                         {{ number_format($item->waste_rate, 1) }}%
                                                     </span>
                                                 </td>
-                                                <td class="text-center">{{ number_format($item->duration_hours, 1) }}h</td>
+                                                <td class="text-center">{{ number_format($item->duration_hours, 2) }}h</td>
                                                 <td class="text-center text-{{ $item->profit >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }}{{ number_format($item->profit, 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($item->profit, 0) }}
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -454,8 +478,7 @@
                                         </tfoot>
                                     </table>
                                 </div>
-                                
-                                {{-- Pagination --}}
+
                                 <div class="card-footer">
                                     @include('partials.pagination', [
                                         'paginator' => $paginatedEfficiency,
@@ -496,38 +519,22 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ─── Efficiency Trends Chart ──────────────────────────────────
+    // ─── Efficiency Trends ────────────────────────────────────────
     const monthlyData = @json($monthlyEfficiency);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const yieldData = monthlyData.map(d => d.yield);
-        const costData = monthlyData.map(d => d.cost_efficiency);
-        const qualityData = monthlyData.map(d => d.quality_rate);
-        const profitData = monthlyData.map(d => d.profit_margin);
-        
+        const months   = monthlyData.map(d => d.month);
+        const yieldD   = monthlyData.map(d => d.yield);
+        const costD    = monthlyData.map(d => d.cost_efficiency);
+        const qualityD = monthlyData.map(d => d.quality_rate);
+        const profitD  = monthlyData.map(d => d.profit_margin);
+
         const trendChart = new ApexCharts(document.querySelector("#efficiencyTrendChart"), {
             series: [
-                {
-                    name: 'Yield',
-                    data: yieldData,
-                    type: 'line'
-                },
-                {
-                    name: 'Cost Efficiency',
-                    data: costData,
-                    type: 'line'
-                },
-                {
-                    name: 'Quality Rate',
-                    data: qualityData,
-                    type: 'line'
-                },
-                {
-                    name: 'Profit Margin',
-                    data: profitData,
-                    type: 'line'
-                }
+                { name: 'Yield',           data: yieldD,   type: 'line' },
+                { name: 'Cost Efficiency', data: costD,    type: 'line' },
+                { name: 'Quality Rate',    data: qualityD, type: 'line' },
+                { name: 'Profit Margin',   data: profitD,  type: 'line' }
             ],
             chart: {
                 type: 'line',
@@ -543,12 +550,8 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             yaxis: {
                 title: { text: 'Percentage (%)' },
-                min: 0,
-                max: 100,
                 labels: {
-                    formatter: function(val) {
-                        return val + '%';
-                    }
+                    formatter: function(val) { return Number(val).toFixed(0) + '%'; }
                 }
             },
             colors: ['#3E97FF', '#50CD89', '#FFC700', '#F1416C'],
@@ -556,45 +559,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 shared: true,
                 intersect: false,
                 y: {
-                    formatter: function(val) {
-                        return val.toFixed(1) + '%';
-                    }
+                    formatter: function(val) { return Number(val).toFixed(1) + '%'; }
                 }
             },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'top', horizontalAlign: 'center' }
         });
         trendChart.render();
     }
-    
-    // ─── Location Efficiency Chart ──────────────────────────────────
+
+    // ─── Location Efficiency ──────────────────────────────────────
     const locationData = @json($efficiencyByLocation);
-    
+
     if (locationData.length > 0) {
         const locations = locationData.map(d => d.location_name);
-        const yieldData = locationData.map(d => d.yield);
-        const qualityData = locationData.map(d => d.quality_rate);
-        const profitData = locationData.map(d => d.profit_margin);
-        
+        const yieldD    = locationData.map(d => d.yield);
+        const qualityD  = locationData.map(d => d.quality_rate);
+        const profitD   = locationData.map(d => d.profit_margin);
+
         const locationChart = new ApexCharts(document.querySelector("#locationEfficiencyChart"), {
             series: [
-                {
-                    name: 'Yield',
-                    data: yieldData,
-                    type: 'bar'
-                },
-                {
-                    name: 'Quality Rate',
-                    data: qualityData,
-                    type: 'bar'
-                },
-                {
-                    name: 'Profit Margin',
-                    data: profitData,
-                    type: 'line'
-                }
+                { name: 'Yield',         data: yieldD,   type: 'bar'  },
+                { name: 'Quality Rate',  data: qualityD, type: 'bar'  },
+                { name: 'Profit Margin', data: profitD,  type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -614,9 +600,7 @@ document.addEventListener('DOMContentLoaded', function() {
             yaxis: {
                 title: { text: 'Percentage (%)' },
                 labels: {
-                    formatter: function(val) {
-                        return val + '%';
-                    }
+                    formatter: function(val) { return Number(val).toFixed(0) + '%'; }
                 }
             },
             colors: ['#3E97FF', '#50CD89', '#F1416C'],
@@ -624,26 +608,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 shared: true,
                 intersect: false,
                 y: {
-                    formatter: function(val) {
-                        return val.toFixed(1) + '%';
-                    }
+                    formatter: function(val) { return Number(val).toFixed(1) + '%'; }
                 }
             },
-            legend: {
-                position: 'bottom',
-                horizontalAlign: 'center'
-            }
+            legend: { position: 'bottom', horizontalAlign: 'center' }
         });
         locationChart.render();
     }
 });
 
-// ─── Export Function ──────────────────────────────────────────────
+// ─── Export ───────────────────────────────────────────────────────
 function exportEfficiency() {
     const form = document.getElementById('filterForm');
     const formData = new FormData(form);
     const params = new URLSearchParams(formData);
-    
     window.location.href = `/reports/production/efficiency/export?${params.toString()}`;
 }
 </script>

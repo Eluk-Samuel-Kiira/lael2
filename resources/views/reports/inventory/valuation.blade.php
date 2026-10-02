@@ -92,7 +92,7 @@
                                 </div>
                                 
                                 {{-- Location & Department --}}
-                                <div class="col-md-6">
+                                <div class="col-12 col-xl-6">
                                     <x-liveblade-dependent-dropdown 
                                         id="filter_location_department"
                                         parentName="location_id"
@@ -303,16 +303,16 @@
                                             <span class="fw-bold">{{ number_format($quantity) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fw-bold text-gray-700">{{ currency_symbol() }}{{ number_format($costPrice, 2) }}</span>
+                                            <span class="fw-bold text-gray-700">{{ currency_symbol() }} {{ number_format($costPrice, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fw-bold text-gray-700">{{ currency_symbol() }}{{ number_format($sellingPrice, 2) }}</span>
+                                            <span class="fw-bold text-gray-700">{{ currency_symbol() }} {{ number_format($sellingPrice, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fw-bold text-success">{{ currency_symbol() }}{{ number_format($item->valuation_value ?? 0, 2) }}</span>
+                                            <span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($item->valuation_value ?? 0, 2) }}</span>
                                         </td>
                                         <td class="text-end">
-                                            <span class="fw-bold text-primary">{{ currency_symbol() }}{{ number_format($item->potential_profit ?? 0, 2) }}</span>
+                                            <span class="fw-bold text-primary">{{ currency_symbol() }} {{ number_format($item->potential_profit ?? 0, 2) }}</span>
                                         </td>
                                         <td class="text-center">
                                             <span class="badge badge-light-{{ $marginColor }}">
@@ -333,7 +333,7 @@
                                     <tr>
                                         <td colspan="7" class="text-end fw-bold">{{ __('pagination.page_total') }}: </td>
                                         <td class="text-end fw-bold text-success">
-                                            {{ currency_symbol() }}{{ number_format($pageTotalValue, 2) }}
+                                            {{ currency_symbol() }} {{ number_format($pageTotalValue, 2) }}
                                         </td>
                                         <td colspan="2"></td>
                                     </tr>
@@ -341,7 +341,7 @@
                                     <tr>
                                         <td colspan="7" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }}: </td>
                                         <td class="text-end fw-bold text-success">
-                                            {{ currency_symbol() }}{{ number_format($valuationSummary['total_value'], 2) }}
+                                            {{ currency_symbol() }} {{ number_format($valuationSummary['total_value'], 2) }}
                                         </td>
                                         <td colspan="2"></td>
                                     </tr>
@@ -397,7 +397,7 @@
                             | {{ __('pagination.variant') }}: {{ $variants->where('id', $variantId)->first()->name ?? 'N/A' }}
                         @endif
                         | {{ $inventoryItems->total() }} {{ __('pagination.items') }}
-                        | {{ __('pagination.total_value') }}: {{ currency_symbol() }}{{ number_format($valuationSummary['total_value'], 2) }}
+                        | {{ __('pagination.total_value') }}: {{ currency_symbol() }} {{ number_format($valuationSummary['total_value'], 2) }}
                     </p>
                 </div>
                 @endif
@@ -446,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return '{{ currency_symbol() }}' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        return '{{ currency_symbol() }} ' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
                     }
                 }
             },
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
             dataLabels: {
                 enabled: true,
                 formatter: function(val) {
-                    return '{{ currency_symbol() }}' + val.toLocaleString(undefined, {minimumFractionDigits: 0});
+                    return '{{ currency_symbol() }} ' + val.toLocaleString(undefined, {minimumFractionDigits: 0});
                 },
                 style: { fontSize: '10px' }
             },
@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tooltip: {
                 y: {
                     formatter: function(val) {
-                        return '{{ currency_symbol() }}' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
+                        return '{{ currency_symbol() }} ' + val.toLocaleString(undefined, {minimumFractionDigits: 2});
                     }
                 }
             }
