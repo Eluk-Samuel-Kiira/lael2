@@ -229,13 +229,13 @@
                                                 <div class="text-gray-600 fw-semibold mb-2">{{ __('pagination.cost_summary') }}</div>
                                                 <div class="d-flex flex-wrap gap-2">
                                                     <span class="badge badge-light-info fs-6 py-2 px-3">
-                                                        {{ __('pagination.input') }}: {{ currency_symbol() }}{{ number_format($summary['total_input_cost'], 2) }}
+                                                        {{ __('pagination.input') }}: {{ currency_symbol() }} {{ number_format($summary['total_input_cost'], 2) }}
                                                     </span>
                                                     <span class="badge badge-light-success fs-6 py-2 px-3">
-                                                        {{ __('pagination.output') }}: {{ currency_symbol() }}{{ number_format($summary['total_output_cost'], 2) }}
+                                                        {{ __('pagination.output') }}: {{ currency_symbol() }} {{ number_format($summary['total_output_cost'], 2) }}
                                                     </span>
                                                     <span class="badge badge-light-danger fs-6 py-2 px-3">
-                                                        {{ __('pagination.total') }}: {{ currency_symbol() }}{{ number_format($summary['total_cost'], 2) }}
+                                                        {{ __('pagination.total') }}: {{ currency_symbol() }} {{ number_format($summary['total_cost'], 2) }}
                                                     </span>
                                                 </div>
                                             </div>
@@ -253,7 +253,7 @@
                                                     </i>
                                                 </div>
                                                 <span class="fs-1 fw-bold text-gray-800">
-                                                    {{ currency_symbol() }}{{ number_format($summary['total_profit'], 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($summary['total_profit'], 2) }}
                                                 </span>
                                                 <span class="text-gray-600 fw-semibold">
                                                     {{ __('pagination.total_profit') }} 
@@ -299,7 +299,7 @@
                                             <div class="card-body d-flex justify-content-between align-items-center">
                                                 <div>
                                                     <span class="text-muted">{{ __('pagination.average_order_cost') }}</span>
-                                                    <div class="fs-3 fw-bold text-warning">{{ currency_symbol() }}{{ number_format($summary['avg_cost'], 2) }}</div>
+                                                    <div class="fs-3 fw-bold text-warning">{{ currency_symbol() }} {{ number_format($summary['avg_cost'], 2) }}</div>
                                                 </div>
                                                 <i class="ki-duotone ki-calculator fs-2tx text-warning">
                                                     <span class="path1"></span>
@@ -418,14 +418,14 @@
                                                     <span class="fw-bold text-success">{{ number_format($order->total_output_quantity, 2) }}</span>
                                                 </td>
                                                 <td class="text-center">
-                                                    <span class="text-muted">{{ currency_symbol() }}{{ number_format($order->total_input_cost, 2) }}</span>
+                                                    <span class="text-muted">{{ currency_symbol() }} {{ number_format($order->total_input_cost, 2) }}</span>
                                                 </td>
                                                 <td class="text-center">
-                                                    <span class="text-primary">{{ currency_symbol() }}{{ number_format($order->total_output_cost, 2) }}</span>
+                                                    <span class="text-primary">{{ currency_symbol() }} {{ number_format($order->total_output_cost, 2) }}</span>
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="fw-bold text-{{ $profitColor }}">
-                                                        {{ currency_symbol() }}{{ number_format($profit, 2) }}
+                                                        {{ currency_symbol() }} {{ number_format($profit, 2) }}
                                                     </span>
                                                 </td>
                                                 <td>
@@ -463,10 +463,10 @@
                                                 <td colspan="3" class="text-end fw-bold">{{ __('pagination.totals') }}:</td>
                                                 <td class="text-center fw-bold">{{ number_format($paginatedOrders->sum('total_input_quantity'), 2) }}</td>
                                                 <td class="text-center fw-bold">{{ number_format($paginatedOrders->sum('total_output_quantity'), 2) }}</td>
-                                                <td class="text-center fw-bold">{{ currency_symbol() }}{{ number_format($paginatedOrders->sum('total_input_cost'), 2) }}</td>
-                                                <td class="text-center fw-bold">{{ currency_symbol() }}{{ number_format($paginatedOrders->sum('total_output_cost'), 2) }}</td>
+                                                <td class="text-center fw-bold">{{ currency_symbol() }} {{ number_format($paginatedOrders->sum('total_input_cost'), 2) }}</td>
+                                                <td class="text-center fw-bold">{{ currency_symbol() }} {{ number_format($paginatedOrders->sum('total_output_cost'), 2) }}</td>
                                                 <td class="text-center fw-bold text-{{ $paginatedOrders->sum(function($o) { return $o->total_output_cost - $o->total_input_cost; }) >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }}{{ number_format($paginatedOrders->sum(function($o) { return $o->total_output_cost - $o->total_input_cost; }), 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($paginatedOrders->sum(function($o) { return $o->total_output_cost - $o->total_input_cost; }), 2) }}
                                                 </td>
                                                 <td colspan="2"></td>
                                             </tr>
@@ -576,7 +576,7 @@
 function viewDetails(orderId) {
     const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
     const body = document.getElementById('detailsModalBody');
-    
+
     body.innerHTML = `
         <div class="text-center py-10">
             <div class="spinner-border text-primary" role="status">
@@ -584,16 +584,17 @@ function viewDetails(orderId) {
             </div>
         </div>
     `;
-    
+
     modal.show();
-    
+
     const url = `/reports/production/detail/${orderId}`;
-    
+    const currency = '{{ currency_symbol() }}';
+
     fetch(url)
         .then(response => response.json())
         .then(data => {
             let html = '';
-            
+
             // ─── Order Header ──────────────────────────────────────────
             html += `
                 <div class="d-flex align-items-center justify-content-between mb-4">
@@ -614,7 +615,7 @@ function viewDetails(orderId) {
                     </div>
                 </div>
             `;
-            
+
             // ─── Metrics Cards ─────────────────────────────────────────
             html += `
                 <div class="row g-3 mb-4">
@@ -629,32 +630,39 @@ function viewDetails(orderId) {
                     <div class="col-md-3">
                         <div class="card card-flush bg-light-success border border-success border-dashed">
                             <div class="card-body text-center">
-                                <span class="text-muted">Yield</span>
-                                <div class="fs-2 fw-bold text-success">${data.metrics.input_yield.toFixed(1)}%</div>
+                                <span class="text-muted">True Yield (kg/kg)</span>
+                                <div class="fs-2 fw-bold text-success">${Number(data.metrics.input_yield).toFixed(1)}%</div>
+                                <div class="text-muted fs-8">
+                                    ${data.metrics.total_output_kg} / ${data.metrics.total_input_kg} kg
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="card card-flush bg-light-info border border-info border-dashed">
                             <div class="card-body text-center">
-                                <span class="text-muted">Efficiency</span>
-                                <div class="fs-2 fw-bold text-info">${data.metrics.cost_efficiency.toFixed(1)}%</div>
+                                <span class="text-muted">Cost Efficiency</span>
+                                <div class="fs-2 fw-bold text-info">${Number(data.metrics.cost_efficiency).toFixed(1)}%</div>
+                                <div class="text-muted fs-8">revenue / batch cost</div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="card card-flush bg-light-${data.metrics.profit >= 0 ? 'success' : 'danger'} border border-${data.metrics.profit >= 0 ? 'success' : 'danger'} border-dashed">
                             <div class="card-body text-center">
-                                <span class="text-muted">Profit</span>
+                                <span class="text-muted">Net Profit</span>
                                 <div class="fs-2 fw-bold text-${data.metrics.profit >= 0 ? 'success' : 'danger'}">
-                                    {{ currency_symbol() }}${data.metrics.profit.toFixed(2)}
+                                    ${currency} ${Number(data.metrics.profit).toFixed(2)}
+                                </div>
+                                <div class="text-muted fs-8">
+                                    revenue ${currency} ${Number(data.metrics.total_revenue).toFixed(2)}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
-            
+
             // ─── Inputs Table ──────────────────────────────────────────
             html += `
                 <h6 class="fw-bold mb-3">Inputs (${data.input_stats.total_planned} planned, ${data.input_stats.total_actual} actual)</h6>
@@ -673,7 +681,7 @@ function viewDetails(orderId) {
                         </thead>
                         <tbody>
             `;
-            
+
             data.order.inputs.forEach(input => {
                 const yieldPct = input.planned_quantity > 0 ? (input.actual_quantity / input.planned_quantity * 100) : 0;
                 const qualityColors = {
@@ -688,18 +696,18 @@ function viewDetails(orderId) {
                         <td>${input.actual_quantity}</td>
                         <td>${input.waste_quantity}</td>
                         <td>${yieldPct.toFixed(1)}%</td>
-                        <td>{{ currency_symbol() }}${input.actual_cost.toFixed(2)}</td>
+                        <td>${currency} ${Number(input.actual_cost).toFixed(2)}</td>
                         <td><span class="badge badge-light-${qualityColors[input.quality_status] || 'secondary'}">${input.quality_status}</span></td>
                     </tr>
                 `;
             });
-            
+
             html += `
                         </tbody>
                     </table>
                 </div>
             `;
-            
+
             // ─── Outputs Table ─────────────────────────────────────────
             html += `
                 <h6 class="fw-bold mb-3">Outputs (${data.output_stats.total_planned} planned, ${data.output_stats.total_actual} actual)</h6>
@@ -720,7 +728,7 @@ function viewDetails(orderId) {
                         </thead>
                         <tbody>
             `;
-            
+
             data.order.outputs.forEach(output => {
                 const yieldPct = output.planned_quantity > 0 ? (output.actual_quantity / output.planned_quantity * 100) : 0;
                 const qualityColors = {
@@ -736,19 +744,73 @@ function viewDetails(orderId) {
                         <td class="text-success fw-bold">${output.actual_quantity}</td>
                         <td class="text-danger">${output.defective_quantity}</td>
                         <td>${yieldPct.toFixed(1)}%</td>
-                        <td>{{ currency_symbol() }}${output.production_cost.toFixed(2)}</td>
+                        <td>${currency} ${Number(output.production_cost).toFixed(2)}</td>
                         <td>${output.batch_number || '-'}</td>
                         <td><span class="badge badge-light-${qualityColors[output.quality_status] || 'secondary'}">${output.quality_status}</span></td>
                     </tr>
                 `;
             });
-            
+
             html += `
                         </tbody>
                     </table>
                 </div>
             `;
-            
+
+            // ─── ★ NEW: Output Breakdown (Weight-Based) ────────────────
+            if (data.metrics.output_breakdown && data.metrics.output_breakdown.length > 0) {
+                html += `
+                    <h6 class="fw-bold mb-3 mt-4">
+                        <i class="ki-duotone ki-chart-pie fs-3 me-2 text-success"></i>
+                        Output Breakdown (Weight-Based)
+                    </h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-striped align-middle">
+                            <thead>
+                                <tr class="bg-light">
+                                    <th>Variant</th>
+                                    <th class="text-end">Bags / Units</th>
+                                    <th class="text-end">Weight per Unit</th>
+                                    <th class="text-end">Total KG</th>
+                                    <th class="text-end">% of Input</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.metrics.output_breakdown.map(r => `
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold">${r.variant_name}</div>
+                                            ${r.sku ? `<small class="text-muted">${r.sku}</small>` : ''}
+                                        </td>
+                                        <td class="text-end">${r.bags}</td>
+                                        <td class="text-end">${r.weight} kg</td>
+                                        <td class="text-end fw-bold">${r.total_kg} kg</td>
+                                        <td class="text-end">${r.share_pct}%</td>
+                                        <td class="text-end">${currency} ${Number(r.revenue).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+
+                                <tr class="bg-light fw-bold">
+                                    <td colspan="3" class="text-end">Total Output</td>
+                                    <td class="text-end">${data.metrics.total_output_kg} kg</td>
+                                    <td class="text-end">${data.metrics.input_yield}%</td>
+                                    <td class="text-end">${currency} ${Number(data.metrics.total_revenue).toFixed(2)}</td>
+                                </tr>
+                                <tr class="bg-light-danger">
+                                    <td colspan="3" class="text-end text-danger fw-bold">
+                                        Loss (dust / spillage / shrinkage)
+                                    </td>
+                                    <td class="text-end text-danger fw-bold">${data.metrics.loss_kg} kg</td>
+                                    <td class="text-end text-danger fw-bold">${data.metrics.loss_pct}%</td>
+                                    <td class="text-end text-muted">—</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
             body.innerHTML = html;
         })
         .catch(error => {
@@ -761,6 +823,7 @@ function viewDetails(orderId) {
             `;
         });
 }
+
 
 // ─── View Logs ──────────────────────────────────────────────────
 function viewLogs(orderId) {

@@ -75,17 +75,17 @@
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.inventory.turnover') }}" id="filterForm">
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
+                                                                <form method="GET" action="{{ route('reports.inventory.turnover') }}" id="filterForm">
+                                    {{-- Row 1: Date Range --}}
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-6">
                                             <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
                                             <div class="d-flex flex-column flex-sm-row gap-2">
                                                 <div class="input-group w-100">
                                                     <span class="input-group-text">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="start_date" 
+                                                    <input type="date" class="form-control" name="start_date"
                                                         value="{{ $startDate }}" required
                                                         title="{{ __('pagination.start_date') }}">
                                                 </div>
@@ -95,21 +95,22 @@
                                                     <span class="input-group-text bg-light">
                                                         <i class="ki-duotone ki-calendar-8 fs-2"></i>
                                                     </span>
-                                                    <input type="date" class="form-control" name="end_date" 
+                                                    <input type="date" class="form-control" name="end_date"
                                                         value="{{ $endDate }}" required
                                                         title="{{ __('pagination.end_date') }}">
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         {{-- Product Variant --}}
-                                        <div class="flex-grow-1">
+                                        <div class="col-md-6">
                                             <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
                                             <div class="input-group w-100">
-                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
+                                                <select class="form-select" name="variant_id" data-control="select2"
+                                                        data-placeholder="{{ __('pagination.all_variants') }}">
                                                     <option value="">{{ __('pagination.all_variants') }}</option>
                                                     @foreach($variants as $variant)
-                                                        <option value="{{ $variant->id }}" 
+                                                        <option value="{{ $variant->id }}"
                                                                 {{ $variantId == $variant->id ? 'selected' : '' }}>
                                                             {{ $variant->name }} ({{ $variant->sku }})
                                                         </option>
@@ -117,21 +118,41 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.turnover') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
-                                            </div>
+                                    </div>
+
+                                    {{-- Row 2: Location + Department (dependent) --}}
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-12">
+                                            <x-liveblade-dependent-dropdown
+                                                id="filter_location_department"
+                                                parentName="location_id"
+                                                childName="department_id"
+                                                parentLabel="auth.location"
+                                                childLabel="accounting.department"
+                                                :parentOptions="$locations"
+                                                :childOptions="$departments"
+                                                route="{{ route('get.departments') }}"
+                                                selectedParent="{{ $locationId ?? null }}"
+                                                selectedChild="{{ $departmentId ?? null }}"
+                                                skipAjax="false"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {{-- Row 3: Actions --}}
+                                    <div class="row g-3">
+                                        <div class="col-12 d-flex justify-content-end gap-2">
+                                            <button type="submit" class="btn btn-primary" id="applyFilters">
+                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
+                                                <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
+                                                <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
+                                            </button>
+                                            <a href="{{ route('reports.inventory.turnover') }}"
+                                               class="btn btn-light btn-active-light-primary">
+                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
+                                                <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
+                                                <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
+                                            </a>
                                         </div>
                                     </div>
                                 </form>

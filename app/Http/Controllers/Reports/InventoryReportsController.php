@@ -58,6 +58,41 @@ class InventoryReportsController extends Controller
             ]
         );
     }
+
+        /**
+     * Resolve the true per-unit cost of a variant.
+     * Prefers the fully-loaded cost (grand_total_cost_price) but falls
+     * back to supplier_cost_price if the grand total is 0/unset.
+     */
+    private function variantCost($variant): float
+    {
+        if (!$variant) return 0.0;
+
+        $grand = (float) ($variant->grand_total_cost_price ?? 0);
+        if ($grand > 0) return $grand;
+
+        $supplier = (float) ($variant->supplier_cost_price ?? 0);
+        if ($supplier > 0) {
+            // Sum components if grand total was never persisted
+            return $supplier
+                + (float) ($variant->total_shipping_cost ?? 0)
+                + (float) ($variant->ura_taxes_applied  ?? 0)
+                + (float) ($variant->additional_expenses ?? 0);
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Selling price of a variant (discounted if present).
+     */
+    private function variantSellingPrice($variant): float
+    {
+        if (!$variant) return 0.0;
+        return (float) ($variant->discount_selling_price
+            ?? $variant->selling_price
+            ?? 0);
+    }
     
     /**
      * Inventory Summary Report with Pagination
@@ -153,27 +188,25 @@ class InventoryReportsController extends Controller
         ));
     }
     
-    
     /**
-     * Helper method to calculate inventory value from query builder
+     * Helper — inventory value from query builder
      */
     private function calculateInventoryValue($query)
     {
         return $query->with(['variant'])
             ->get()
             ->sum(function ($item) {
-                return $item->quantity_on_hand * ($item->variant->cost_price ?? 0);
+                return $item->quantity_on_hand * $this->variantCost($item->variant);
             });
     }
 
     /**
-     * Helper method to calculate inventory value from collection
+     * Helper — inventory value from collection
      */
     private function calculateInventoryValueFromCollection($items)
     {
         return $items->sum(function ($item) {
-            $costPrice = $item->variant->cost_price ?? 0;
-            return $item->quantity_on_hand * $costPrice;
+            return $item->quantity_on_hand * $this->variantCost($item->variant);
         });
     }
 
@@ -307,231 +340,215 @@ class InventoryReportsController extends Controller
     }              
         
     /**
-     * Inventory Turnover Report with Pure Eloquent - Supports Both Single & Multi-Shop
+     * Inventory Turnover Report — respects location & department filters
      */
     public function turnover(Request $request)
     {
-        $tenantId = $this->getTenantId();
+        $tenantId     = $this->getTenantId();
         $isSingleShop = tenant_is_single_shop($tenantId);
-        
-        $startDate = $request->get('start_date', now()->subMonths(6)->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
-        $variantId = $request->get('variant_id');
+
+        $startDate    = $request->get('start_date', now()->subMonths(6)->format('Y-m-d'));
+        $endDate      = $request->get('end_date', now()->format('Y-m-d'));
+        $variantId    = $request->get('variant_id');
         $departmentId = $request->get('department_id');
-        $locationId = $request->get('location_id');
-        $perPage = (int)$request->get('per_page', 15);
-        
-        // Calculate days in period
+        $locationId   = $request->get('location_id');
+        $perPage      = (int) $request->get('per_page', 15);
+
         $daysInPeriod = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-        
-        // Get all variants first (with their products)
+
+        // ─── Determine which variants belong to this scope ─────────────
+        //    If location/department filters are set, only include variants
+        //    that actually have inventory in that scope.
+        $variantIdsInScope = null;
+
+        if ($locationId || $departmentId) {
+            $scopeQuery = InventoryItems::query()->where('tenant_id', $tenantId);
+
+            if ($locationId) {
+                $scopeQuery->where('location_id', $locationId);
+            }
+            if ($departmentId) {
+                $scopeQuery->where('department_id', $departmentId);
+            }
+
+            $variantIdsInScope = $scopeQuery->pluck('variant_id')
+                ->unique()
+                ->filter()
+                ->values();
+        }
+
+        // ─── Base variant query ────────────────────────────────────────
         $variantsQuery = ProductVariant::with(['product'])
             ->where('tenant_id', $tenantId)
             ->where('is_active', true);
-        
+
         if ($variantId) {
             $variantsQuery->where('id', $variantId);
         }
-        
+        if ($variantIdsInScope !== null) {
+            $variantsQuery->whereIn('id', $variantIdsInScope);
+        }
+
         $allVariants = $variantsQuery->get();
-        
-        // ─── Get Movement Data Based on Shop Type ──────────────────────
+
+        // ─── Movement data collection ──────────────────────────────────
         $movementData = collect();
-        
+
         if ($isSingleShop) {
-            // ─── Single Shop: Use SingleShopInventoryLog ────────────────
+            // Single shop: still honour the scope by filtering logs on the
+            // variant set we already derived above.
             $logs = SingleShopInventoryLog::where('tenant_id', $tenantId)
-                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->whereBetween('created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate . ' 23:59:59',
+                ])
+                ->when($variantIdsInScope !== null, function ($q) use ($variantIdsInScope) {
+                    $q->whereIn('variant_id', $variantIdsInScope);
+                })
                 ->get();
-            
-            // Group logs by variant_id
+
             $logsByVariant = $logs->groupBy('variant_id');
-            
+
             foreach ($allVariants as $variant) {
                 $variantLogs = $logsByVariant->get($variant->id, collect());
-                
-                if ($variantLogs->isEmpty()) {
-                    continue;
-                }
-                
-                $totalMovement = $variantLogs->sum(function ($log) {
-                    return abs($log->quantity_change);
-                });
-                
-                $avgStockLevel = $variantLogs->avg('quantity_before') ?: 1;
-                $transactionCount = $variantLogs->count();
-                $firstMovement = $variantLogs->min('created_at');
-                $lastMovement = $variantLogs->max('created_at');
-                
+                if ($variantLogs->isEmpty()) continue;
+
                 $movementData->push([
-                    'variant' => $variant,
-                    'total_movement' => $totalMovement,
-                    'avg_stock_level' => $avgStockLevel,
-                    'transaction_count' => $transactionCount,
-                    'first_movement' => $firstMovement,
-                    'last_movement' => $lastMovement,
+                    'variant'           => $variant,
+                    'total_movement'    => $variantLogs->sum(fn($l) => abs($l->quantity_change)),
+                    'avg_stock_level'   => $variantLogs->avg('quantity_before') ?: 1,
+                    'transaction_count' => $variantLogs->count(),
+                    'first_movement'    => $variantLogs->min('created_at'),
+                    'last_movement'     => $variantLogs->max('created_at'),
                 ]);
             }
-            
         } else {
-            // ─── Multi-Shop: Use InventoryTransactions ──────────────────
-            $transactionsQuery = InventoryTransactions::with(['InventoryItems' => function($q) use ($departmentId, $locationId) {
-                if ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                }
-                if ($locationId) {
-                    $q->where('location_id', $locationId);
-                }
-            }])
-            ->where('tenant_id', $tenantId)
-            ->where('type', 'sale') // Only sales
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-            
-            // Apply department filter if provided
+            // Multi-shop branch — same as before, plus scope guard
+            $transactionsQuery = InventoryTransactions::with([
+                'InventoryItems' => function ($q) use ($departmentId, $locationId) {
+                    if ($departmentId) $q->where('department_id', $departmentId);
+                    if ($locationId)   $q->where('location_id',   $locationId);
+                },
+            ])
+                ->where('tenant_id', $tenantId)
+                ->where('type', 'sale')
+                ->whereBetween('created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate . ' 23:59:59',
+                ]);
+
             if ($departmentId) {
-                $transactionsQuery->whereHas('InventoryItems', function($q) use ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                });
+                $transactionsQuery->whereHas('InventoryItems', fn($q) => $q->where('department_id', $departmentId));
             }
-            
-            // Apply location filter if provided
             if ($locationId) {
-                $transactionsQuery->whereHas('InventoryItems', function($q) use ($locationId) {
-                    $q->where('location_id', $locationId);
-                });
+                $transactionsQuery->whereHas('InventoryItems', fn($q) => $q->where('location_id', $locationId));
             }
-            
+            if ($variantIdsInScope !== null) {
+                $transactionsQuery->whereHas('InventoryItems', fn($q) => $q->whereIn('variant_id', $variantIdsInScope));
+            }
+
             $transactions = $transactionsQuery->get();
-            
-            // Group by variant_id through inventory_items
-            $transactionsByVariant = $transactions->groupBy(function($transaction) {
-                return $transaction->InventoryItems->variant_id ?? null;
-            });
-            
+
+            $transactionsByVariant = $transactions->groupBy(
+                fn($t) => $t->InventoryItems->variant_id ?? null
+            );
+
             foreach ($allVariants as $variant) {
                 $variantTransactions = $transactionsByVariant->get($variant->id, collect());
-                
-                if ($variantTransactions->isEmpty()) {
-                    continue;
-                }
-                
-                $totalMovement = $variantTransactions->sum(function ($transaction) {
-                    return abs($transaction->quantity);
-                });
-                
-                // Get average stock level from InventoryItems
-                $inventoryItem = InventoryItems::where('variant_id', $variant->id)
+                if ($variantTransactions->isEmpty()) continue;
+
+                $inventoryItemQuery = InventoryItems::where('variant_id', $variant->id)
                     ->where('tenant_id', $tenantId);
-                
-                if ($departmentId) {
-                    $inventoryItem->where('department_id', $departmentId);
-                }
-                if ($locationId) {
-                    $inventoryItem->where('location_id', $locationId);
-                }
-                
-                $avgStockLevel = $inventoryItem->avg('quantity_on_hand') ?: 1;
-                $transactionCount = $variantTransactions->count();
-                $firstMovement = $variantTransactions->min('created_at');
-                $lastMovement = $variantTransactions->max('created_at');
-                
+
+                if ($departmentId) $inventoryItemQuery->where('department_id', $departmentId);
+                if ($locationId)   $inventoryItemQuery->where('location_id',   $locationId);
+
                 $movementData->push([
-                    'variant' => $variant,
-                    'total_movement' => $totalMovement,
-                    'avg_stock_level' => $avgStockLevel,
-                    'transaction_count' => $transactionCount,
-                    'first_movement' => $firstMovement,
-                    'last_movement' => $lastMovement,
+                    'variant'           => $variant,
+                    'total_movement'    => $variantTransactions->sum(fn($t) => abs($t->quantity)),
+                    'avg_stock_level'   => $inventoryItemQuery->avg('quantity_on_hand') ?: 1,
+                    'transaction_count' => $variantTransactions->count(),
+                    'first_movement'    => $variantTransactions->min('created_at'),
+                    'last_movement'     => $variantTransactions->max('created_at'),
                 ]);
             }
         }
-        
-        // ─── Calculate Turnover Metrics ─────────────────────────────────
+
+        // ─── Turnover metrics (unchanged) ──────────────────────────────
         $turnoverCollection = $movementData->map(function ($data) use ($daysInPeriod) {
-            $variant = $data['variant'];
-            $totalMovement = $data['total_movement'];
-            $avgStockLevel = $data['avg_stock_level'] ?: 1;
+            $variant          = $data['variant'];
+            $totalMovement    = $data['total_movement'];
+            $avgStockLevel    = $data['avg_stock_level'] ?: 1;
             $transactionCount = $data['transaction_count'];
-            $firstMovement = $data['first_movement'];
-            $lastMovement = $data['last_movement'];
-            
-            // Calculate turnover rate
-            $turnoverRate = $avgStockLevel > 0 ? $totalMovement / $avgStockLevel : 0;
-            
-            // Calculate days inventory held
+
+            $turnoverRate      = $avgStockLevel > 0 ? $totalMovement / $avgStockLevel : 0;
             $daysInventoryHeld = $turnoverRate > 0 ? $daysInPeriod / $turnoverRate : $daysInPeriod;
-            
-            // Determine movement category
+
             if ($turnoverRate >= 10) {
                 $movementCategory = 'fast';
-                $movementLabel = __('pagination.fast_moving');
-                $movementColor = 'danger';
+                $movementLabel    = __('pagination.fast_moving');
+                $movementColor    = 'danger';
             } elseif ($turnoverRate >= 1) {
                 $movementCategory = 'slow';
-                $movementLabel = __('pagination.slow_moving');
-                $movementColor = 'warning';
+                $movementLabel    = __('pagination.slow_moving');
+                $movementColor    = 'warning';
             } else {
                 $movementCategory = 'non';
-                $movementLabel = __('pagination.non_moving');
-                $movementColor = 'dark';
+                $movementLabel    = __('pagination.non_moving');
+                $movementColor    = 'dark';
             }
-            
-            return (object)[
-                'variant' => $variant,
-                'total_movement' => $totalMovement,
-                'avg_stock_level' => $avgStockLevel,
-                'transaction_count' => $transactionCount,
-                'first_movement' => $firstMovement,
-                'last_movement' => $lastMovement,
-                'turnover_rate' => $turnoverRate,
+
+            return (object) [
+                'variant'             => $variant,
+                'total_movement'      => $totalMovement,
+                'avg_stock_level'     => $avgStockLevel,
+                'transaction_count'   => $transactionCount,
+                'first_movement'      => $data['first_movement'],
+                'last_movement'       => $data['last_movement'],
+                'turnover_rate'       => $turnoverRate,
                 'days_inventory_held' => $daysInventoryHeld,
-                'movement_category' => $movementCategory,
-                'movement_label' => $movementLabel,
-                'movement_color' => $movementColor,
+                'movement_category'   => $movementCategory,
+                'movement_label'      => $movementLabel,
+                'movement_color'      => $movementColor,
             ];
         });
-        
-        // Sort by turnover rate (descending)
+
         $sortedTurnover = $turnoverCollection->sortByDesc('turnover_rate')->values();
-        
-        // ✅ Apply pagination
-        $turnoverData = $this->paginateCollection($sortedTurnover, $perPage, 'page');
-        
-        // Calculate summary statistics from ALL data (not paginated)
+        $turnoverData   = $this->paginateCollection($sortedTurnover, $perPage, 'page');
+
         $summary = [
-            'avg_turnover_rate' => $sortedTurnover->avg('turnover_rate') ?? 0,
-            'avg_days_held' => $sortedTurnover->avg('days_inventory_held') ?? 0,
-            'total_movement' => $sortedTurnover->sum('total_movement'),
-            'total_transactions' => $sortedTurnover->sum('transaction_count'),
-            'fast_moving' => $sortedTurnover->where('turnover_rate', '>=', 10)->count(),
-            'slow_moving' => $sortedTurnover->whereBetween('turnover_rate', [1, 9.99])->count(),
-            'non_moving' => $sortedTurnover->where('turnover_rate', '<', 1)->count(),
-            'total_items' => $sortedTurnover->count(),
+            'avg_turnover_rate'   => $sortedTurnover->avg('turnover_rate') ?? 0,
+            'avg_days_held'       => $sortedTurnover->avg('days_inventory_held') ?? 0,
+            'total_movement'      => $sortedTurnover->sum('total_movement'),
+            'total_transactions'  => $sortedTurnover->sum('transaction_count'),
+            'fast_moving'         => $sortedTurnover->where('turnover_rate', '>=', 10)->count(),
+            'slow_moving'         => $sortedTurnover->whereBetween('turnover_rate', [1, 9.99])->count(),
+            'non_moving'          => $sortedTurnover->where('turnover_rate', '<', 1)->count(),
+            'total_items'         => $sortedTurnover->count(),
         ];
-        
-        // Get variants for filter dropdown
+
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with('product')
             ->orderBy('name')
             ->get();
-        
-        // Get departments and locations for filters
+
+        // ★ Now actually used by the view
         $departments = Department::where('tenant_id', $tenantId)->get();
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
+        $locations   = Location::where('tenant_id', $tenantId)->get();
+
         return view('reports.inventory.turnover', compact(
             'turnoverData',
             'sortedTurnover',
             'summary',
             'variants',
-            'departments',
-            'locations',
+            'departments',   // ← new
+            'locations',     // ← new
             'startDate',
             'endDate',
             'variantId',
-            'departmentId',
-            'locationId',
+            'departmentId',  // ← new
+            'locationId',    // ← new
             'perPage',
             'daysInPeriod',
             'isSingleShop'
@@ -976,7 +993,9 @@ class InventoryReportsController extends Controller
             if ($currentStock <= $lowStockThreshold) {
                 $isLowStock = true;
                 $deficit = $lowStockThreshold - $currentStock;
-                $deficitValue = $deficit * ($item->variant->cost_price ?? 0);
+                $variantCost = $this->variantCost($item->variant);
+
+                $deficitValue = $deficit * $variantCost;
                 
                 // Determine severity based on how low the stock is
                 if ($currentStock <= $lowStockThreshold * 0.3) {
@@ -1037,7 +1056,7 @@ class InventoryReportsController extends Controller
                     'severity_text' => $severityLevel === 'critical' ? __('pagination.critical') : ($severityLevel === 'warning' ? __('pagination.warning') : __('pagination.low')),
                     'urgency_text' => $urgencyText,
                     'urgency_color' => $urgencyColor,
-                    'cost_price' => $item->variant->cost_price ?? 0,
+                    'cost_price' => $variantCost,
                     'sku' => $item->variant->sku ?? '-',
                     'barcode' => $item->variant->barcode ?? '-',
                     'variant_name' => $item->variant->name ?? '-',
@@ -1251,26 +1270,25 @@ class InventoryReportsController extends Controller
         
         // Get ALL inventory items for calculations (unpaginated)
         $allItems = $query->get();
-        
+
         // Get inventory logs for movement data
         $logs = SingleShopInventoryLog::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->get()
             ->groupBy('variant_id');
-        
-        // Calculate inventory value and movement for each item using collections
+
+        // ★ Compute value using grand_total_cost_price
         $itemsWithMetrics = $allItems->map(function ($item) use ($logs) {
-            $costPrice = $item->variant->cost_price ?? 0;
+            $costPrice      = $this->variantCost($item->variant);
             $inventoryValue = $item->quantity_on_hand * $costPrice;
-            
-            $itemLogs = $logs->get($item->variant_id, collect());
-            $totalMovement = $itemLogs->sum(function ($log) {
-                return abs($log->quantity_change);
-            });
-            
+
+            $itemLogs      = $logs->get($item->variant_id, collect());
+            $totalMovement = $itemLogs->sum(fn($log) => abs($log->quantity_change));
+
             $item->inventory_value = $inventoryValue;
-            $item->total_movement = $totalMovement;
-            
+            $item->total_movement  = $totalMovement;
+            $item->cost_price      = $costPrice;
+
             return $item;
         });
         
@@ -1566,118 +1584,107 @@ class InventoryReportsController extends Controller
             });
     }
 
+
     /**
-     * Inventory Valuation Report with Proper Pagination
+     * Inventory Valuation Report
      */
     public function valuation(Request $request)
     {
         $tenantId = $this->getTenantId();
-        
-        $departmentId = $request->get('department_id');
-        $locationId = $request->get('location_id');
-        $variantId = $request->get('variant_id'); // ✅ Added variant filter
+
+        $departmentId    = $request->get('department_id');
+        $locationId      = $request->get('location_id');
+        $variantId       = $request->get('variant_id');
         $valuationMethod = $request->get('valuation_method', 'cost');
-        $perPage = (int)$request->get('per_page', 15);
-        
-        // Build query for inventory items
+        $perPage         = (int) $request->get('per_page', 15);
+
         $query = InventoryItems::with([
             'variant.product',
             'departmentItem',
-            'itemLocation'
+            'itemLocation',
         ])
-        ->where('tenant_id', $tenantId)
-        ->where('quantity_allocated', '>', 0); // ✅ Use quantity_allocated
-        
-        if ($departmentId) {
-            $query->where('department_id', $departmentId);
-        }
-        
-        if ($locationId) {
-            $query->where('location_id', $locationId);
-        }
-        
-        // ✅ Apply variant filter
-        if ($variantId) {
-            $query->where('variant_id', $variantId);
-        }
-        
-        // Get ALL inventory items for summary calculations (unpaginated)
+            ->where('tenant_id', $tenantId)
+            ->where('quantity_allocated', '>', 0);
+
+        if ($departmentId) $query->where('department_id', $departmentId);
+        if ($locationId)   $query->where('location_id',   $locationId);
+        if ($variantId)    $query->where('variant_id',    $variantId);
+
         $allItems = $query->get();
-        
-        // Calculate valuation metrics for ALL items using collections
-        $allItemsWithValuation = $allItems->map(function ($item) use ($valuationMethod) {
-            // ✅ Use grand_total_cost_price as the actual cost
-            $costPrice = $item->variant->grand_total_cost_price ?? 0;
-            $sellingPrice = $item->variant->selling_price ?? 0;
-            $quantity = $item->quantity_allocated;
-            
-            // Calculate item value based on valuation method
-            $itemValue = $quantity * $costPrice;
-            $potentialProfit = $quantity * ($sellingPrice - $costPrice);
-            $profitMargin = $costPrice > 0 ? (($sellingPrice - $costPrice) / $costPrice) * 100 : 0;
-            
-            $item->valuation_value = $itemValue;
+
+        // ─── Enrich with correct pricing ────────────────────────────
+        $allItemsWithValuation = $allItems->map(function ($item) {
+            $costPrice    = $this->variantCost($item->variant);
+            $sellingPrice = $this->variantSellingPrice($item->variant);
+            $quantity     = (float) ($item->quantity_allocated ?? 0);
+
+            $itemValue       = $quantity * $costPrice;
+            $potentialProfit = $quantity * max(0, $sellingPrice - $costPrice);
+            $profitMargin    = $costPrice > 0
+                ? (($sellingPrice - $costPrice) / $costPrice) * 100
+                : 0;
+
+            $item->valuation_value  = $itemValue;
             $item->potential_profit = $potentialProfit;
-            $item->profit_margin = $profitMargin;
-            $item->cost_price = $costPrice;
-            $item->selling_price = $sellingPrice;
-            
+            $item->profit_margin    = $profitMargin;
+            $item->cost_price       = $costPrice;
+            $item->selling_price    = $sellingPrice;
+
             return $item;
         });
-        
-        // Calculate valuation summary from ALL items
-        $totalValue = $allItemsWithValuation->sum('valuation_value');
+
+        $totalValue    = $allItemsWithValuation->sum('valuation_value');
         $totalQuantity = $allItemsWithValuation->sum('quantity_allocated');
-        $totalProfit = $allItemsWithValuation->sum('potential_profit');
-        
+        $totalProfit   = $allItemsWithValuation->sum('potential_profit');
+
         $valuationSummary = [
-            'total_items' => $allItemsWithValuation->count(),
-            'total_quantity' => $totalQuantity,
-            'total_value' => $totalValue,
-            'avg_unit_cost' => $totalQuantity > 0 ? $totalValue / $totalQuantity : 0,
-            'avg_unit_price' => $allItemsWithValuation->avg(function($item) {
-                return $item->variant->selling_price ?? 0;
-            }),
-            'potential_profit' => $totalProfit,
-            'avg_profit_margin' => $allItemsWithValuation->avg('profit_margin'),
+            'total_items'        => $allItemsWithValuation->count(),
+            'total_quantity'     => $totalQuantity,
+            'total_value'        => $totalValue,
+            'avg_unit_cost'      => $totalQuantity > 0 ? $totalValue / $totalQuantity : 0,
+            'avg_unit_price'     => $allItemsWithValuation->avg(fn($i) => $i->selling_price ?? 0),
+            'potential_profit'   => $totalProfit,
+            'avg_profit_margin'  => $allItemsWithValuation->avg('profit_margin') ?? 0,
         ];
-        
-        // Calculate value by department
-        $valueByDepartment = $allItemsWithValuation->groupBy('department_id')->map(function ($items, $deptId) {
-            $department = $items->first()->departmentItem ?? null;
-            $departmentName = $department ? $department->name : 'Unspecified';
-            return [
-                'name' => $departmentName,
-                'value' => $items->sum('valuation_value'),
-                'count' => $items->count()
-            ];
-        })->sortByDesc('value')->values();
-        
-        // Calculate value by location
-        $valueByLocation = $allItemsWithValuation->groupBy('location_id')->map(function ($items, $locId) {
-            $location = $items->first()->itemLocation ?? null;
-            $locationName = $location ? $location->name : 'Unspecified';
-            return [
-                'name' => $locationName,
-                'value' => $items->sum('valuation_value'),
-                'count' => $items->count()
-            ];
-        })->sortByDesc('value')->values();
-        
-        // Apply pagination to the items collection
-        $sortedItems = $allItemsWithValuation->sortByDesc('valuation_value')->values();
+
+        $valueByDepartment = $allItemsWithValuation
+            ->groupBy('department_id')
+            ->map(function ($items) {
+                $department = $items->first()->departmentItem ?? null;
+                return [
+                    'name'  => $department ? $department->name : 'Unspecified',
+                    'value' => $items->sum('valuation_value'),
+                    'count' => $items->count(),
+                ];
+            })
+            ->sortByDesc('value')
+            ->values();
+
+        $valueByLocation = $allItemsWithValuation
+            ->groupBy('location_id')
+            ->map(function ($items) {
+                $location = $items->first()->itemLocation ?? null;
+                return [
+                    'name'  => $location ? $location->name : 'Unspecified',
+                    'value' => $items->sum('valuation_value'),
+                    'count' => $items->count(),
+                ];
+            })
+            ->sortByDesc('value')
+            ->values();
+
+        $sortedItems   = $allItemsWithValuation->sortByDesc('valuation_value')->values();
         $inventoryItems = $this->paginateCollection($sortedItems, $perPage, 'page');
-        
-        // ✅ Get variants for filter dropdown
+
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with('product')
             ->orderBy('name')
             ->get();
-        
+
         $departments = Department::where('tenant_id', $tenantId)->get();
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
+        $locations   = Location::where('tenant_id', $tenantId)->get();
+
         return view('reports.inventory.valuation', compact(
             'inventoryItems',
             'valuationSummary',
@@ -1685,10 +1692,10 @@ class InventoryReportsController extends Controller
             'valueByLocation',
             'departments',
             'locations',
-            'variants', // ✅ Pass variants to view
+            'variants',
             'departmentId',
             'locationId',
-            'variantId', // ✅ Pass variant ID
+            'variantId',
             'valuationMethod',
             'perPage'
         ));

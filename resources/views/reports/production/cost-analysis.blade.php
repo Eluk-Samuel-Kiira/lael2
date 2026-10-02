@@ -129,9 +129,9 @@
 
                 {{-- Cost Summary Cards --}}
                 <div class="row g-6 mb-6">
-                    {{-- Input Cost --}}
+                    {{-- Batch (Input) Cost --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-danger border border-danger border-dashed">
+                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-enter fs-2tx text-danger">
@@ -139,18 +139,21 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($costSummary['total_input_cost'], 2) }}</span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.total_input_cost') }}</span>
+                                <span class="fs-2 fw-bold text-danger">
+                                    {{ currency_symbol() }} {{ number_format($costSummary['total_input_cost'], 0) }}
+                                </span>
+                                <span class="text-gray-600 fw-semibold">Batch Cost (Input)</span>
                                 <span class="text-muted fs-8">
-                                    {{ __('pagination.avg') }}: {{ currency_symbol() }}{{ number_format($costSummary['avg_input_cost_per_order'], 2) }}
+                                    {{ number_format($costSummary['total_input_kg'], 0) }} kg ·
+                                    {{ currency_symbol() }} {{ number_format($costSummary['cost_per_kg_input'], 0) }}/kg
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Output Cost --}}
+
+                    {{-- Revenue (Output) --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed">
+                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-exit fs-2tx text-success">
@@ -158,37 +161,21 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-success">{{ currency_symbol() }}{{ number_format($costSummary['total_output_cost'], 2) }}</span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.total_output_cost') }}</span>
+                                <span class="fs-2 fw-bold text-success">
+                                    {{ currency_symbol() }} {{ number_format($costSummary['total_output_cost'], 0) }}
+                                </span>
+                                <span class="text-gray-600 fw-semibold">Revenue (Output)</span>
                                 <span class="text-muted fs-8">
-                                    {{ __('pagination.avg') }}: {{ currency_symbol() }}{{ number_format($costSummary['avg_output_cost_per_order'], 2) }}
+                                    {{ number_format($costSummary['total_output_kg'], 0) }} kg ·
+                                    {{ currency_symbol() }} {{ number_format($costSummary['revenue_per_kg'], 0) }}/kg
                                 </span>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Total Cost --}}
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
-                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                <div class="mb-2">
-                                    <i class="ki-duotone ki-dollar fs-2tx text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                </div>
-                                <span class="fs-1 fw-bold text-primary">{{ currency_symbol() }}{{ number_format($costSummary['total_cost'], 2) }}</span>
-                                <span class="text-gray-600 fw-semibold">{{ __('pagination.total_cost') }}</span>
-                                <span class="text-muted fs-8">
-                                    {{ __('pagination.avg_per_order') }}: {{ currency_symbol() }}{{ number_format($costSummary['avg_cost_per_order'], 2) }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    
+
                     {{-- Profit --}}
                     <div class="col-md-6 col-lg-3">
-                        <div class="card card-flush bg-light-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }} border border-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }} border-dashed">
+                        <div class="card card-flush bg-light-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }} border border-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }} border-dashed h-100">
                             <div class="card-body d-flex flex-column justify-content-center text-center">
                                 <div class="mb-2">
                                     <i class="ki-duotone ki-chart-line fs-2tx text-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }}">
@@ -196,12 +183,34 @@
                                         <span class="path2"></span>
                                     </i>
                                 </div>
-                                <span class="fs-1 fw-bold text-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }}">
-                                    {{ currency_symbol() }}{{ number_format($costSummary['total_profit'], 2) }}
+                                <span class="fs-2 fw-bold text-{{ $costSummary['total_profit'] >= 0 ? 'success' : 'danger' }}">
+                                    {{ currency_symbol() }} {{ number_format($costSummary['total_profit'], 0) }}
                                 </span>
                                 <span class="text-gray-600 fw-semibold">{{ __('pagination.total_profit') }}</span>
                                 <span class="text-muted fs-8">
-                                    {{ __('pagination.margin') }}: {{ number_format($costSummary['profit_margin'], 1) }}%
+                                    Margin: {{ number_format($costSummary['profit_margin'], 1) }}%
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Yield / Loss --}}
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
+                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                <div class="mb-2">
+                                    <i class="ki-duotone ki-arrows-circle fs-2tx text-warning">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                </div>
+                                <span class="fs-2 fw-bold text-warning">
+                                    {{ number_format($costSummary['overall_yield'], 1) }}%
+                                </span>
+                                <span class="text-gray-600 fw-semibold">True Yield (kg/kg)</span>
+                                <span class="text-danger fs-8">
+                                    Loss: {{ number_format($costSummary['total_loss_kg'], 0) }} kg
+                                    ({{ number_format($costSummary['loss_rate'], 1) }}%)
                                 </span>
                             </div>
                         </div>
@@ -216,6 +225,7 @@
                                 <div>
                                     <span class="text-muted">{{ __('pagination.cost_efficiency') }}</span>
                                     <div class="fs-2 fw-bold text-info">{{ number_format($costSummary['cost_efficiency'], 1) }}%</div>
+                                    <span class="text-muted fs-8">revenue ÷ batch cost</span>
                                 </div>
                                 <i class="ki-duotone ki-chart-bar fs-2tx text-info">
                                     <span class="path1"></span>
@@ -232,6 +242,7 @@
                                     <div class="fs-2 fw-bold text-{{ $costSummary['profit_margin'] >= 0 ? 'success' : 'danger' }}">
                                         {{ number_format($costSummary['profit_margin'], 1) }}%
                                     </div>
+                                    <span class="text-muted fs-8">profit ÷ revenue</span>
                                 </div>
                                 <i class="ki-duotone ki-chart-pie fs-2tx text-{{ $costSummary['profit_margin'] >= 0 ? 'success' : 'danger' }}">
                                     <span class="path1"></span>
@@ -246,8 +257,11 @@
                                 <div>
                                     <span class="text-muted">{{ __('pagination.input_to_output_ratio') }}</span>
                                     <div class="fs-2 fw-bold text-secondary">
-                                        {{ $costSummary['total_input_cost'] > 0 ? number_format($costSummary['total_output_cost'] / $costSummary['total_input_cost'], 2) : 0 }}
+                                        {{ $costSummary['total_input_cost'] > 0
+                                            ? number_format($costSummary['total_output_cost'] / $costSummary['total_input_cost'], 2)
+                                            : '0.00' }}
                                     </div>
+                                    <span class="text-muted fs-8">revenue ÷ batch cost</span>
                                 </div>
                                 <i class="ki-duotone ki-arrows-circle fs-2tx text-secondary">
                                     <span class="path1"></span>
@@ -277,7 +291,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {{-- Cost by Status --}}
                     <div class="col-lg-4">
                         <div class="card">
@@ -301,7 +315,7 @@
                 <div class="row g-6 mb-6">
                     {{-- Input Cost by Category --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-enter fs-2 me-2 text-danger">
@@ -317,24 +331,28 @@
                                         <thead>
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
+                                                <th class="text-center">KG</th>
                                                 <th class="text-center">{{ __('pagination.total_cost') }}</th>
-                                                <th class="text-center">{{ __('pagination.avg_per_unit') }}</th>
+                                                <th class="text-center">Cost/kg</th>
                                                 <th class="text-center">{{ __('pagination.percentage') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($categoryInputCosts as $category)
+                                            @forelse($categoryInputCosts as $category)
                                             @php
-                                                $percentage = $costSummary['total_input_cost'] > 0 
-                                                    ? ($category->total_cost / $costSummary['total_input_cost']) * 100 
+                                                $percentage = $costSummary['total_input_cost'] > 0
+                                                    ? ($category->total_cost / $costSummary['total_input_cost']) * 100
                                                     : 0;
                                             @endphp
                                             <tr>
                                                 <td class="fw-bold">{{ $category->category }}</td>
-                                                <td class="text-center">{{ number_format($category->total_quantity, 1) }}</td>
-                                                <td class="text-center text-danger">{{ currency_symbol() }}{{ number_format($category->total_cost, 2) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($category->avg_cost_per_unit, 2) }}</td>
+                                                <td class="text-center">{{ number_format($category->total_kg, 0) }}</td>
+                                                <td class="text-center text-danger">
+                                                    {{ currency_symbol() }} {{ number_format($category->total_cost, 0) }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($category->avg_cost_per_kg, 0) }}
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="d-flex align-items-center justify-content-center">
                                                         <span class="badge badge-light-danger">{{ number_format($percentage, 1) }}%</span>
@@ -344,24 +362,23 @@
                                                     </div>
                                                 </td>
                                             </tr>
-                                            @endforeach
-                                            @if($categoryInputCosts->isEmpty())
+                                            @empty
                                             <tr>
                                                 <td colspan="5" class="text-center text-muted py-3">
                                                     {{ __('pagination.no_data_available') }}
                                                 </td>
                                             </tr>
-                                            @endif
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    {{-- Output Cost by Category --}}
+
+                    {{-- Output Revenue by Category --}}
                     <div class="col-lg-6">
-                        <div class="card">
+                        <div class="card h-100">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-exit fs-2 me-2 text-success">
@@ -377,24 +394,28 @@
                                         <thead>
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>{{ __('pagination.category') }}</th>
-                                                <th class="text-center">{{ __('pagination.quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.total_cost') }}</th>
-                                                <th class="text-center">{{ __('pagination.avg_per_unit') }}</th>
+                                                <th class="text-center">KG</th>
+                                                <th class="text-center">Revenue</th>
+                                                <th class="text-center">Rev/kg</th>
                                                 <th class="text-center">{{ __('pagination.percentage') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            @foreach($categoryOutputCosts as $category)
+                                            @forelse($categoryOutputCosts as $category)
                                             @php
-                                                $percentage = $costSummary['total_output_cost'] > 0 
-                                                    ? ($category->total_cost / $costSummary['total_output_cost']) * 100 
+                                                $percentage = $costSummary['total_output_cost'] > 0
+                                                    ? ($category->total_cost / $costSummary['total_output_cost']) * 100
                                                     : 0;
                                             @endphp
                                             <tr>
                                                 <td class="fw-bold">{{ $category->category }}</td>
-                                                <td class="text-center">{{ number_format($category->total_quantity, 1) }}</td>
-                                                <td class="text-center text-success">{{ currency_symbol() }}{{ number_format($category->total_cost, 2) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($category->avg_cost_per_unit, 2) }}</td>
+                                                <td class="text-center">{{ number_format($category->total_kg, 0) }}</td>
+                                                <td class="text-center text-success">
+                                                    {{ currency_symbol() }} {{ number_format($category->total_cost, 0) }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($category->avg_cost_per_kg, 0) }}
+                                                </td>
                                                 <td class="text-center">
                                                     <div class="d-flex align-items-center justify-content-center">
                                                         <span class="badge badge-light-success">{{ number_format($percentage, 1) }}%</span>
@@ -404,14 +425,13 @@
                                                     </div>
                                                 </td>
                                             </tr>
-                                            @endforeach
-                                            @if($categoryOutputCosts->isEmpty())
+                                            @empty
                                             <tr>
                                                 <td colspan="5" class="text-center text-muted py-3">
                                                     {{ __('pagination.no_data_available') }}
                                                 </td>
                                             </tr>
-                                            @endif
+                                            @endforelse
                                         </tbody>
                                     </table>
                                 </div>
@@ -420,7 +440,7 @@
                     </div>
                 </div>
 
-                {{-- Cost Per Unit Analysis Table --}}
+                {{-- Cost Per Unit / Per KG Analysis --}}
                 @if($paginatedCostPerUnit->count() > 0)
                 <div class="row">
                     <div class="col-12">
@@ -435,7 +455,8 @@
                                         <h3 class="fw-bold m-0">{{ __('pagination.cost_per_unit_analysis') }}</h3>
                                     </div>
                                     <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $paginatedCostPerUnit->count() }} {{ __('pagination.of') }} {{ $paginatedCostPerUnit->total() }}
+                                        {{ __('pagination.showing') }} {{ $paginatedCostPerUnit->count() }}
+                                        {{ __('pagination.of') }} {{ $paginatedCostPerUnit->total() }}
                                     </span>
                                 </div>
                             </div>
@@ -446,30 +467,51 @@
                                             <tr class="fw-bold fs-7 text-gray-800 bg-light">
                                                 <th>#</th>
                                                 <th>{{ __('pagination.product') }}</th>
-                                                <th class="text-center">{{ __('pagination.total_quantity') }}</th>
-                                                <th class="text-center">{{ __('pagination.avg_cost_per_unit') }}</th>
-                                                <th class="text-center">{{ __('pagination.avg_selling_price') }}</th>
-                                                <th class="text-center">{{ __('pagination.avg_profit_per_unit') }}</th>
-                                                <th class="text-center">{{ __('pagination.profit_margin') }}</th>
-                                                <th class="text-center">{{ __('pagination.orders') }}</th>
+                                                <th class="text-center">Bags</th>
+                                                <th class="text-center">Total KG</th>
+                                                <th class="text-center">Cost/Bag</th>
+                                                <th class="text-center">Cost/KG</th>
+                                                <th class="text-center">Price</th>
+                                                <th class="text-center">Profit/Bag</th>
+                                                <th class="text-center">Profit/KG</th>
+                                                <th class="text-center">Margin</th>
+                                                <th class="text-center">Orders</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($paginatedCostPerUnit as $index => $item)
                                             @php
-                                                $marginColor = $item->avg_profit_margin >= 30 ? 'success' : ($item->avg_profit_margin >= 10 ? 'warning' : 'danger');
+                                                $marginColor = $item->avg_profit_margin >= 30
+                                                    ? 'success'
+                                                    : ($item->avg_profit_margin >= 10 ? 'warning' : 'danger');
                                             @endphp
                                             <tr>
                                                 <td>{{ $paginatedCostPerUnit->firstItem() + $index }}</td>
                                                 <td>
                                                     <div class="fw-bold">{{ $item->variant_name }}</div>
-                                                    <div class="text-muted fs-8">{{ $item->variant_sku }}</div>
+                                                    <div class="text-muted fs-8">
+                                                        {{ $item->variant_sku }}
+                                                        @if($item->weight > 0)
+                                                            · {{ $item->weight }} kg/bag
+                                                        @endif
+                                                    </div>
                                                 </td>
-                                                <td class="text-center">{{ number_format($item->total_quantity, 1) }}</td>
-                                                <td class="text-center">{{ currency_symbol() }}{{ number_format($item->avg_cost_per_unit, 2) }}</td>
-                                                <td class="text-center text-primary">{{ currency_symbol() }}{{ number_format($item->avg_selling_price, 2) }}</td>
+                                                <td class="text-center">{{ number_format($item->total_quantity, 0) }}</td>
+                                                <td class="text-center fw-bold">{{ number_format($item->total_kg, 0) }}</td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($item->avg_cost_per_unit, 0) }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {{ currency_symbol() }} {{ number_format($item->avg_cost_per_kg, 0) }}
+                                                </td>
+                                                <td class="text-center text-primary">
+                                                    {{ currency_symbol() }} {{ number_format($item->avg_selling_price, 0) }}
+                                                </td>
                                                 <td class="text-center text-{{ $item->avg_profit_per_unit >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }}{{ number_format($item->avg_profit_per_unit, 2) }}
+                                                    {{ currency_symbol() }} {{ number_format($item->avg_profit_per_unit, 0) }}
+                                                </td>
+                                                <td class="text-center text-{{ $item->avg_profit_per_kg >= 0 ? 'success' : 'danger' }}">
+                                                    {{ currency_symbol() }} {{ number_format($item->avg_profit_per_kg, 0) }}
                                                 </td>
                                                 <td class="text-center">
                                                     <span class="badge badge-light-{{ $marginColor }}">
@@ -482,15 +524,14 @@
                                         </tbody>
                                         <tfoot class="bg-light">
                                             <tr>
-                                                <td colspan="8" class="text-end fw-bold">
+                                                <td colspan="11" class="text-end fw-bold">
                                                     {{ __('pagination.total_products') }}: {{ $paginatedCostPerUnit->total() }}
                                                 </td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
-                                
-                                {{-- Pagination --}}
+
                                 <div class="card-footer">
                                     @include('partials.pagination', [
                                         'paginator' => $paginatedCostPerUnit,
@@ -533,30 +574,20 @@
 document.addEventListener('DOMContentLoaded', function() {
     // ─── Monthly Cost Trends ──────────────────────────────────────
     const monthlyData = @json($monthlyCostTrends);
-    
+
     if (monthlyData.length > 0) {
-        const months = monthlyData.map(d => d.month);
-        const inputCost = monthlyData.map(d => d.input_cost);
+        const months     = monthlyData.map(d => d.month);
+        const inputCost  = monthlyData.map(d => d.input_cost);
         const outputCost = monthlyData.map(d => d.output_cost);
-        const profit = monthlyData.map(d => d.profit);
-        
+        const profit     = monthlyData.map(d => d.profit);
+        const yieldPct   = monthlyData.map(d => d.yield);
+
         const monthlyChart = new ApexCharts(document.querySelector("#monthlyCostChart"), {
             series: [
-                {
-                    name: 'Input Cost',
-                    data: inputCost,
-                    type: 'bar'
-                },
-                {
-                    name: 'Output Cost',
-                    data: outputCost,
-                    type: 'bar'
-                },
-                {
-                    name: 'Profit',
-                    data: profit,
-                    type: 'line'
-                }
+                { name: 'Batch Cost', data: inputCost,  type: 'bar'  },
+                { name: 'Revenue',    data: outputCost, type: 'bar'  },
+                { name: 'Profit',     data: profit,     type: 'line' },
+                { name: 'Yield %',    data: yieldPct,   type: 'line' }
             ],
             chart: {
                 type: 'bar',
@@ -567,48 +598,49 @@ document.addEventListener('DOMContentLoaded', function() {
             plotOptions: {
                 bar: { horizontal: false, columnWidth: '35%' }
             },
-            stroke: { width: [0, 0, 3], curve: 'smooth' },
+            stroke: { width: [0, 0, 3, 3], curve: 'smooth' },
             dataLabels: { enabled: false },
             xaxis: {
                 categories: months,
                 labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
             },
             yaxis: [
-                { 
-                    title: { text: 'Cost' },
+                {
+                    title: { text: 'Amount' },
                     labels: {
                         formatter: function(val) {
-                            return '{{ currency_symbol() }}' + val.toFixed(0);
+                            return '{{ currency_symbol() }} ' + Number(val).toFixed(0);
                         }
                     }
                 },
-                { 
-                    opposite: true, 
-                    title: { text: 'Profit' },
+                {
+                    opposite: true,
+                    title: { text: 'Profit / Yield' },
                     labels: {
                         formatter: function(val) {
-                            return '{{ currency_symbol() }}' + val.toFixed(0);
+                            return Number(val).toFixed(0);
                         }
                     }
                 }
             ],
-            colors: ['#F1416C', '#50CD89', '#3E97FF'],
+            colors: ['#F1416C', '#50CD89', '#3E97FF', '#FFC700'],
             tooltip: {
                 shared: true,
                 intersect: false,
                 y: {
-                    formatter: function(val) {
-                        return '{{ currency_symbol() }}' + val.toFixed(2);
+                    formatter: function(val, { seriesIndex }) {
+                        if (seriesIndex === 3) return Number(val).toFixed(2) + '%';
+                        return '{{ currency_symbol() }} ' + Number(val).toFixed(2);
                     }
                 }
             }
         });
         monthlyChart.render();
     }
-    
+
     // ─── Cost by Status Chart ──────────────────────────────────────
     const statusData = @json($costByStatus);
-    
+
     if (statusData.length > 0) {
         const statusChart = new ApexCharts(document.querySelector("#costByStatusChart"), {
             series: statusData.map(s => s.total_cost),
@@ -616,10 +648,10 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: statusData.map(s => s.status),
             colors: statusData.map(s => {
                 const colors = {
-                    'Draft': '#A1A5B7',
+                    'Draft':       '#A1A5B7',
                     'In Progress': '#FFC700',
-                    'Completed': '#50CD89',
-                    'Cancelled': '#F1416C'
+                    'Completed':   '#50CD89',
+                    'Cancelled':   '#F1416C'
                 };
                 return colors[s.status] || '#A1A5B7';
             }),
@@ -632,21 +664,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             show: true,
                             total: {
                                 show: true,
-                                label: 'Total Cost',
+                                label: 'Batch Cost',
                                 formatter: function(w) {
-                                    return '{{ currency_symbol() }}' + w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(2);
+                                    return '{{ currency_symbol() }} ' + w.globals.seriesTotals.reduce((a, b) => a + b, 0).toFixed(0);
                                 }
                             }
                         }
                     }
                 }
             },
-            tooltip: { 
-                y: { 
-                    formatter: function(val) { 
-                        return '{{ currency_symbol() }}' + val.toFixed(2); 
-                    } 
-                } 
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return '{{ currency_symbol() }} ' + Number(val).toFixed(2);
+                    }
+                }
             }
         });
         statusChart.render();
@@ -658,7 +690,7 @@ function exportCostAnalysis() {
     const form = document.getElementById('filterForm');
     const formData = new FormData(form);
     const params = new URLSearchParams(formData);
-    
+
     window.location.href = `/reports/production/cost-analysis/export?${params.toString()}`;
 }
 </script>

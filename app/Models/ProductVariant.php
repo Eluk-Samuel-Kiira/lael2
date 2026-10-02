@@ -432,6 +432,23 @@ class ProductVariant extends Model
         return $this->getAvailableSerialNumbers($locationId, $departmentId)->count();
     }
 
+    /**
+     * Convert a quantity of this variant into kilograms.
+     * Falls back to raw quantity if weight is not set.
+     */
+    public function toKilograms(float $quantity): float
+    {
+        $weight = (float) ($this->weight ?? 0);
+        return $weight > 0 ? $quantity * $weight : $quantity;
+    }
 
+    /**
+     * Convert a quantity of this variant into revenue using its selling price.
+     */
+    public function toRevenue(float $quantity): float
+    {
+        $price = (float) ($this->selling_price ?? 0);
+        return $quantity * $price;
+    } 
 
 }
