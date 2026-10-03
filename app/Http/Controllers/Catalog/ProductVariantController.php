@@ -896,12 +896,53 @@ class ProductVariantController extends Controller
         $tenantId = $user->tenant_id;
 
         $request->validate([
-            'recipe_id' => 'required|exists:recipes,id',
-            'ingredients' => 'required|array',
+            'recipe_id'   => 'required|exists:recipes,id',
+            'ingredients' => 'required|array|min:1',
             'ingredients.*.ingredient_variant_id' => 'required|exists:product_variants,id',
-            'ingredients.*.quantity_required' => 'required|numeric|min:0.0001',
-            'ingredients.*.unit_id' => 'nullable|exists:unit_of_measures,id',
+            'ingredients.*.quantity_required'     => 'required|numeric|min:0.0001',
+            'ingredients.*.unit_id'               => 'nullable|exists:unit_of_measures,id',
         ]);
+
+        // ★ Reject duplicate ingredient variants in the same payload
+        $variantIds = collect($request->ingredients)
+            ->pluck('ingredient_variant_id')
+            ->filter()
+            ->values();
+
+        if ($variantIds->count() !== $variantIds->unique()->count()) {
+            $duplicates = $variantIds
+                ->duplicates()
+                ->unique()
+                ->values();
+
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.duplicate_ingredients_not_allowed', [
+                    'ids' => $duplicates->implode(', '),
+                ]),
+                'duplicate_variant_ids' => $duplicates->all(),
+            ], 422);
+        }
+
+        // ★ Also guard: the recipe cannot contain its own product's variant
+        $recipe = Recipe::where('id', $request->recipe_id)
+            ->whereHas('product', fn($q) => $q->where('tenant_id', $tenantId))
+            ->with('product')
+            ->first();
+
+        if (!$recipe) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Recipe not found',
+            ], 404);
+        }
+
+        if ($recipe->product && $recipe->product->variants->pluck('id')->contains(fn($id) => $variantIds->contains($id))) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.recipe_cannot_contain_itself'),
+            ], 422);
+        }
 
         $recipe = Recipe::where('id', $request->recipe_id)
             ->whereHas('product', function($q) use ($tenantId) {

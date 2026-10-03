@@ -1582,6 +1582,10 @@ return [
     'item_not_sellable'       => 'This item is not sellable — its selling price is not set.',
     'serial_already_in_cart'  => 'This serial number is already in the cart.',
 
+    'duplicate_ingredients_not_allowed'  => 'Duplicate ingredients are not allowed. Variant IDs: :ids',
+    'duplicate_ingredient_in_recipe'     => 'This ingredient is already added to the recipe.',
+    'already_added'                      => 'already added',
+    'recipe_cannot_contain_itself'       => 'A recipe cannot use its own finished product as an ingredient.',
 
     'total_logs'                => 'Total Logs',
     'batch_info'                => 'Batch Info',

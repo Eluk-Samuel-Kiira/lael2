@@ -802,11 +802,11 @@ class POSController extends Controller
             && ((float) ($serial->selling_price ?? 0) > 0);
 
         $batchOverrides = $batch
-            && (($batch->pricing_source ?? null) === 'batch')
+            && ((int) ($batch->has_custom_pricing ?? 0) === 1)
             && ((float) ($batch->unit_selling_price ?? 0) > 0);
 
         $ingredientOverrides = $ingredient
-            && (($ingredient->pricing_source ?? null) === 'ingredient')
+            && ((int) ($ingredient->has_custom_pricing ?? 0) === 1)
             && ((float) ($ingredient->unit_selling_price ?? 0) > 0);
 
         $itemOverrides = $inventory
@@ -2163,7 +2163,7 @@ class POSController extends Controller
 
         foreach ($ingredients as $ingredient) {
             $ingredientVariant = $ingredient->ingredientVariant;
-            $requiredQuantity = $ingredient->quantity_required * $quantityMultiplier;
+            $requiredQuantity  = $ingredient->quantity_required * $quantityMultiplier;
 
             if (!$ingredientVariant) {
                 throw new \Exception("Ingredient variant not found for recipe '{$product->name}'");
@@ -2175,28 +2175,42 @@ class POSController extends Controller
             }
 
             $strategy = $ingredientProduct->resolvedInventoryStrategy();
-            
+
             if ($strategy === 'recipe') {
                 throw new \Exception("Nested recipes are not allowed. '{$ingredientVariant->name}' is also a recipe product.");
             }
 
-            // ✅ Check stock BEFORE depleting
-            $this->checkIngredientStock($ingredientVariant, $requiredQuantity, $order->tenant_id, $ingredientItem, $order);
-
-            // ✅ Deplete using the correct shop mode
+            // ★ Build the pseudo-item FIRST — it's needed by both the
+            //   stock check and the depletion call below.
+            //
+            //   Recipe ingredients don't carry a batch_id, serial_id, or
+            //   inventory_data from the parent order line, so we pass the
+            //   bare minimum the depletion methods need. When the ingredient
+            //   is batch- or serial-tracked, the depletion method falls
+            //   back to FIFO internally.
             $ingredientItem = (object) [
-                'variant_id' => $ingredientVariant->id,
-                'quantity'   => $requiredQuantity,
-                'name'       => $ingredientVariant->name,
-                'price'      => 0,
-                'tax_total'  => 0,
-                'discount'   => 0,
-                'total'      => 0,
-                'batch_id'   => null,
-                'serial_id'  => null,
-                'inventory_data' => null,   // recipe ingredients don't carry inventory_data
+                'variant_id'     => $ingredientVariant->id,
+                'quantity'       => $requiredQuantity,
+                'name'           => $ingredientVariant->name,
+                'price'          => 0,
+                'tax_total'      => 0,
+                'discount'       => 0,
+                'total'          => 0,
+                'batch_id'       => null,
+                'serial_id'      => null,
+                'inventory_data' => null,
             ];
 
+            // ✅ Check stock BEFORE depleting (now that $ingredientItem exists)
+            $this->checkIngredientStock(
+                $ingredientVariant,
+                $requiredQuantity,
+                $order->tenant_id,
+                $ingredientItem,
+                $order
+            );
+
+            // ✅ Deplete using the correct shop mode
             $this->depleteInventoryByStrategy($ingredientVariant, $ingredientItem, $order);
         }
 
@@ -2700,56 +2714,58 @@ class POSController extends Controller
             //     'remaining' => $targetBatch->quantity_remaining
             // ]);
             
-        } else {
-            // ✅ No batch_id specified - use FIFO
-            foreach ($batches as $batch) {
-                if ($quantityNeeded <= 0) break;
+            } else {
+                // ✅ No batch_id specified - use FIFO
+                foreach ($batches as $batch) {
+                    if ($quantityNeeded <= 0) break;
 
-                $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-                $deduct = min($effectiveQuantity, $quantityNeeded);
-                
-                if ($batch->quantity_remaining !== null) {
-                    $batch->quantity_remaining -= $deduct;
-                } else {
-                    $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $deduct;
+                    $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+                    $deduct = min($effectiveQuantity, $quantityNeeded);
+
+                    $beforeQty = $effectiveQuantity;
+                    $afterQty  = $effectiveQuantity - $deduct;
+
+                    if ($batch->quantity_remaining !== null) {
+                        $batch->quantity_remaining -= $deduct;
+                    } else {
+                        $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $deduct;
+                    }
+                    $batch->save();
+
+                    BatchLog::create([
+                        'batch_id'        => $batch->id,
+                        'batch_number'    => $batch->batch_number,
+                        'variant_id'      => $variant->id,
+                        'variant_name'    => $variant->name,
+                        'variant_sku'     => $variant->sku,
+                        'type'            => BatchLog::TYPE_DEPLETED,
+                        'quantity_change' => -$deduct,
+                        'quantity_before' => $beforeQty,
+                        'quantity_after'  => $afterQty,
+                        'unit_cost'       => $pricing['cost'],
+                        'total_cost'      => -$deduct * $pricing['cost'],
+                        'unit_selling_price'  => $pricing['selling'],
+                        'total_selling_value' => -$deduct * $pricing['selling'],
+                        'gross_profit'        => $deduct * ($pricing['selling'] - $pricing['cost']),
+                        'pricing_source'      => $pricing['pricing_source'],
+                        'order_id'        => $order->id,
+                        'order_number'    => $order->order_number,
+                        'tenant_id'       => $tenantId,
+                        'location_id'     => $locationId,
+                        'department_id'   => $departmentId,
+                        'expiry_date'     => $batch->expiry_date,
+                        'event_date'      => now(),
+                        'performed_by'    => auth()->id(),
+                        'metadata' => [
+                            'inventory_id'  => $inventory->id,
+                            'customer_name' => $order->customer_name,
+                            'item_name'     => $itemName,
+                        ],
+                    ]);
+
+                    $quantityNeeded -= $deduct;
                 }
-                $batch->save();
-                $quantityNeeded -= $deduct;
-
-                BatchLog::create([
-                    'batch_id'        => $targetBatch->id,
-                    'batch_number'    => $targetBatch->batch_number,
-                    'variant_id'      => $variant->id,
-                    'variant_name'    => $variant->name,
-                    'variant_sku'     => $variant->sku,
-                    'type'            => BatchLog::TYPE_DEPLETED,
-                    'quantity_change' => -$quantityNeeded,
-                    'quantity_before' => $effectiveQuantity,
-                    'quantity_after'  => $targetBatch->quantity_remaining,
-                    'unit_cost'       => $pricing['cost'],
-                    'total_cost'      => -$quantityNeeded * $pricing['cost'],
-                    'unit_selling_price'  => $pricing['selling'],
-                    'total_selling_value' => -$quantityNeeded * $pricing['selling'],
-                    'gross_profit'        => $quantityNeeded * ($pricing['selling'] - $pricing['cost']),
-                    'pricing_source'      => $pricing['pricing_source'],
-                    'order_id'        => $order->id,
-                    'order_number'    => $order->order_number,
-                    'tenant_id'       => $tenantId,
-                    'location_id'     => $locationId,
-                    'department_id'   => $departmentId,
-                    'expiry_date'     => $targetBatch->expiry_date,
-                    'event_date'      => now(),
-                    'performed_by'    => auth()->id(),
-                    'metadata' => [
-                        'inventory_id'         => $inventory->id,
-                        'customer_name'        => $order->customer_name,
-                        'item_name'            => $itemName,
-                        'deducted_from_batch'  => $targetBatch->batch_number,
-                    ],
-                ]);
-
             }
-        }
 
         // Update inventory allocation
         $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityNeeded);
@@ -3072,25 +3088,22 @@ class POSController extends Controller
 
     private function extractInventoryData($item): array
     {
-        if (!$item) {
-            return [];
+        if (!$item) return [];
+
+        // Arrays first
+        if (is_array($item)) {
+            $raw = $item['inventory_data'] ?? null;
+        } else {
+            // Objects — try getRawOriginal (Eloquent models), else public property
+            $raw = method_exists($item, 'getRawOriginal')
+                ? $item->getRawOriginal('inventory_data')
+                : ($item->inventory_data ?? null);
         }
 
-        // Read the raw, uncast, un-accessor-ed value straight from attributes
-        $raw = $item->getRawOriginal('inventory_data');
+        if (is_array($raw)) return $raw;
+        if (!is_string($raw) || $raw === '') return [];
 
-        if (is_array($raw)) {
-            return $raw;
-        }
-
-        if (!is_string($raw) || $raw === '') {
-            return [];
-        }
-
-        // First decode
         $decoded = json_decode($raw, true);
-
-        // If the first decode returned a string, it was double-encoded
         if (is_string($decoded)) {
             $decoded = json_decode($decoded, true);
         }

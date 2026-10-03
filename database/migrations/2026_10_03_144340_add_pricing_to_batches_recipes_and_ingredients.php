@@ -11,8 +11,9 @@ return new class extends Migration
     {
         // ─────────────────────────────────────────────────────────
         // 1. Purchase Receipt Items (batches)
-        //    Add selling-side pricing so a batch can be sold on its
-        //    own cost/margin, independent of the variant's defaults.
+        //    Add selling-side pricing + a has_custom_pricing flag
+        //    so the POS can tell when a batch genuinely overrides
+        //    the variant's default price.
         // ─────────────────────────────────────────────────────────
         if (Schema::hasTable('purchase_receipt_items')) {
             Schema::table('purchase_receipt_items', function (Blueprint $table) {
@@ -31,9 +32,15 @@ return new class extends Migration
                 if (! Schema::hasColumn('purchase_receipt_items', 'pricing_source')) {
                     $table->string('pricing_source', 20)->nullable()->after('discount_percentage');
                 }
+                if (! Schema::hasColumn('purchase_receipt_items', 'has_custom_pricing')) {
+                    // ★ Opt-in flag — batches only override the variant
+                    //   price when this is set. Absent / 0 means the batch
+                    //   inherits its price from the inventory item or variant.
+                    $table->boolean('has_custom_pricing')->default(0)->after('pricing_source');
+                }
 
                 // Guard the index — self-contained so it can't crash on re-run
-                if (! $this->indexExists('purchase_receipt_items', 'idx_pri_tenant_variant')) {
+                if (! $this->indexExists('purchase_receipt_items', 'idx_pri_tenant_scope')) {
                     $table->index(
                         ['tenant_id', 'location_id', 'department_id'],
                         'idx_pri_tenant_scope'
@@ -66,9 +73,9 @@ return new class extends Migration
 
         // ─────────────────────────────────────────────────────────
         // 3. Recipe Ingredients (lines)
-        //    Snapshot the ingredient's per-unit cost and total cost
-        //    at the moment the recipe was built. Protects the recipe
-        //    from variant repricing.
+        //    Snapshot the ingredient's per-unit cost + total cost,
+        //    and add the same opt-in flag so a line can override
+        //    its own price.
         // ─────────────────────────────────────────────────────────
         if (Schema::hasTable('recipe_ingredients')) {
             Schema::table('recipe_ingredients', function (Blueprint $table) {
@@ -84,7 +91,44 @@ return new class extends Migration
                 if (! Schema::hasColumn('recipe_ingredients', 'pricing_source')) {
                     $table->string('pricing_source', 20)->nullable()->after('unit_selling_price');
                 }
+                if (! Schema::hasColumn('recipe_ingredients', 'has_custom_pricing')) {
+                    // ★ Same opt-in pattern as the other strategies.
+                    $table->boolean('has_custom_pricing')->default(0)->after('pricing_source');
+                }
             });
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // 4. Batch Logs
+        //    Freeze the selling side + gross profit on every batch
+        //    movement so historical reports are truthful even after
+        //    the variant is repriced.
+        // ─────────────────────────────────────────────────────────
+        if (Schema::hasTable('batch_logs')) {
+            Schema::table('batch_logs', function (Blueprint $table) {
+                if (! Schema::hasColumn('batch_logs', 'unit_selling_price')) {
+                    $table->bigInteger('unit_selling_price')->nullable()->after('unit_cost');
+                }
+                if (! Schema::hasColumn('batch_logs', 'total_selling_value')) {
+                    $table->bigInteger('total_selling_value')->nullable()->after('total_cost');
+                }
+                if (! Schema::hasColumn('batch_logs', 'gross_profit')) {
+                    // Signed — a below-cost sale produces negative profit
+                    $table->bigInteger('gross_profit')->nullable()->after('total_selling_value');
+                }
+                if (! Schema::hasColumn('batch_logs', 'pricing_source')) {
+                    $table->string('pricing_source', 20)->nullable()->after('gross_profit');
+                }
+            });
+
+            // Normalise money columns to signed BIGINT
+            // (unit_cost and total_cost may have been created as UNSIGNED
+            // in an earlier migration — negatives are needed for outflows)
+            DB::statement("ALTER TABLE `batch_logs` MODIFY `unit_cost`           BIGINT NULL");
+            DB::statement("ALTER TABLE `batch_logs` MODIFY `total_cost`          BIGINT NULL");
+            DB::statement("ALTER TABLE `batch_logs` MODIFY `unit_selling_price`  BIGINT NULL");
+            DB::statement("ALTER TABLE `batch_logs` MODIFY `total_selling_value` BIGINT NULL");
+            DB::statement("ALTER TABLE `batch_logs` MODIFY `gross_profit`        BIGINT NULL");
         }
     }
 
@@ -102,6 +146,7 @@ return new class extends Migration
                     'discount_selling_price',
                     'discount_percentage',
                     'pricing_source',
+                    'has_custom_pricing',      // ★ new
                 ]);
             });
         }
@@ -122,6 +167,18 @@ return new class extends Migration
                     'unit_cost',
                     'total_cost',
                     'unit_selling_price',
+                    'pricing_source',
+                    'has_custom_pricing',      // ★ new
+                ]);
+            });
+        }
+
+        if (Schema::hasTable('batch_logs')) {
+            Schema::table('batch_logs', function (Blueprint $table) {
+                $table->dropColumn([
+                    'unit_selling_price',
+                    'total_selling_value',
+                    'gross_profit',
                     'pricing_source',
                 ]);
             });
