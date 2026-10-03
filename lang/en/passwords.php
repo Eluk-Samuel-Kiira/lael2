@@ -1669,6 +1669,7 @@ return [
     // ─── Buttons ───────────────────────────────────────────────────────────────────
     'close' => 'Close',
     
+    
     // ─── Production Cost ─────────────────────────────────────────────────────────────
     'production_cost' => 'Production Cost',
     'estimated_cost' => 'Estimated Cost',
@@ -1712,6 +1713,37 @@ return [
     '_tax'                     => 'Tax number',
     '_status'                  => 'Status',
     '_description'             => 'Description',
+
+    'cost_price'                   => 'Cost Price',
+    'selling_price'                => 'Selling Price',
+    'profit'                       => 'Profit',
+    'search_serials_placeholder' => 'Search by serial, location, department, or notes…',
+    'page'                       => 'page',
+    'showing'                    => 'Showing',
+    'of'                         => 'of',
+    'lost'                         => 'Lost',
+    'all_status'                 => 'All statuses',
+    'clear'                      => 'Clear',
+    'profit_per_unit'              => 'Profit Per Unit',
+    'edit_pricing'                 => 'Edit Pricing',
+    'supplier_cost'                => 'Supplier Cost',
+    'other_costs'                  => 'Other Costs',
+    'discount'                     => 'Discount',
+    'grand_total_cost'             => 'Grand Total Cost',
+    'effective_selling_price'      => 'Effective Selling Price',
+    'pricing_updated'              => 'Pricing updated successfully',
+    'pricing_help_text'            => 'Leave any field blank to inherit from the inventory item or the parent variant.',
+    'custom_pricing'               => 'Custom pricing',
+    'was'                          => 'was',
+    'save'                         => 'Save',
+    'saving'                       => 'Saving...',
+    'serial_not_found'             => 'Serial not found',
+    'error_saving_pricing'         => 'Failed to save pricing',
+    'no_departments_for_location'  => 'No departments available for this location',
+    'select_location_or_department'=> 'Select a location or a department',
+    'assign_serials'               => 'Assign Serials',
+    'select_all'                   => 'Select All',
+    'selected'                     => 'selected',
 
 
     'customer_group'                => 'Customer Group',

@@ -18,10 +18,9 @@ class POSController extends Controller
 {
     public function index(Request $request)
     {
-        // Artisan::call('optimize:clear');
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view order')) {
             return response()->json([
                 'success' => false,
@@ -29,12 +28,11 @@ class POSController extends Controller
             ]);
         }
 
-        $isSingleShop = tenant_is_single_shop($tenantId);
-        $now = now();
-        
+        $isSingleShop         = tenant_is_single_shop($tenantId);
+        $now                  = now();
         $selectedDepartmentId = $request->input('department', '');
-        $products = collect();
-        
+        $products             = collect();
+
         if ($isSingleShop) {
             // ─── SINGLE SHOP ────────────────────────────────────────────────
             $products = Product::with([
@@ -42,82 +40,85 @@ class POSController extends Controller
                 'promotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants' => function($query) {
+                'variants' => function ($query) {
                     $query->where('is_active', 1)->orderBy('name');
                 },
                 'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
                 'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants.batches' => function($q) {
+                'variants.batches' => function ($q) {
                     $q->where('quantity_remaining', '>', 0)
                         ->orWhereNull('quantity_remaining')
                         ->orderBy('expiry_date', 'asc');
                 },
-                // ✅ Load serial numbers - use the correct relationship path
-                'variants.serialNumbers' => function($q) {
-                    $q->where(function($sub) {
+                'variants.serialNumbers' => function ($q) {
+                    $q->where(function ($sub) {
                         $sub->where('status', SerialNumber::STATUS_AVAILABLE)
                             ->orWhere('status', SerialNumber::STATUS_RESERVED);
                     });
                 },
             ])
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->whereHas('variants')
-            ->limit(10)
-            ->latest()
-            ->get();
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->whereHas('variants')
+                ->limit(10)
+                ->latest()
+                ->get();
 
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
-                    // Default quantity for non-batch
+                    // Default quantity
                     $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
-                    $variant->quantity_source = 'overall';
-                    $variant->inventory_by_dept = [];
-                    
-                    // ✅ For batch products
+                    $variant->quantity_source    = 'overall';
+                    $variant->inventory_by_dept  = [];
+
+                    // Strategy-specific quantity enrichment
                     if ($product->inventory_strategy === 'batch') {
                         $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function($batch) {
+                        $totalAvailable = $batches->sum(function ($batch) {
                             return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                         });
-                        $variant->available_batches = $batches->map(function($batch) {
+                        $variant->available_batches = $batches->map(function ($batch) {
                             return [
-                                'id' => $batch->id,
-                                'batch_number' => $batch->batch_number,
+                                'id'                 => $batch->id,
+                                'batch_number'       => $batch->batch_number,
                                 'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id' => $batch->location_id,
-                                'department_id' => $batch->department_id,
+                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id'        => $batch->location_id,
+                                'department_id'      => $batch->department_id,
                             ];
                         });
                         $variant->quantity_available = $totalAvailable;
-                    } 
-                    // ✅ For serial products
-                    elseif ($product->inventory_strategy === 'serial') {
-                        // ✅ Get serial numbers from the loaded relationship
+                    } elseif ($product->inventory_strategy === 'serial') {
                         $serialNumbers = $variant->serialNumbers;
-                        
-                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                        $variant->available_serials = $serialNumbers->map(function ($serial) {
                             return [
-                                'id' => $serial->id,
-                                'serial_number' => $serial->serial_number,
-                                'status' => $serial->status,
-                                'location_id' => $serial->location_id,
-                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id' => $serial->department_id,
+                                'id'              => $serial->id,
+                                'serial_number'   => $serial->serial_number,
+                                'status'          => $serial->status,
+                                'location_id'     => $serial->location_id,
+                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id'   => $serial->department_id,
                                 'department_name' => $serial->department ? $serial->department->name : 'N/A',
                             ];
                         });
                         $variant->quantity_available = $variant->available_serials->count();
                     } else {
-                        $variant->available_batches = [];
+                        $variant->available_batches  = [];
                         $variant->available_serials = [];
                     }
+
+                    // ★ Attach resolved pricing snapshot
+                    $this->attachPosPricing(
+                        $variant,
+                        null,
+                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+                    );
                 }
             }
-            
+
         } else {
             // ─── MULTI-SHOP ──────────────────────────────────────────────────
             if (empty($selectedDepartmentId)) {
@@ -132,9 +133,7 @@ class POSController extends Controller
                 ));
             }
 
-            // ✅ Resolve from location_user (not users.location_id)
             $userLocationId = $this->resolveUserLocationId($request, $user);
-            // \Log::info($userLocationId);
 
             if (!$userLocationId) {
                 return redirect()
@@ -155,11 +154,11 @@ class POSController extends Controller
                     $query->where('is_active', 1)
                         ->whereHas('inventory', function ($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where('department_id', $selectedDepartmentId)
-                            ->where('location_id', $userLocationId);
+                              ->where('location_id', $userLocationId);
                         })
                         ->with(['inventory' => function ($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where('department_id', $selectedDepartmentId)
-                            ->where('location_id', $userLocationId);
+                              ->where('location_id', $userLocationId);
                         }])
                         ->with(['batches' => function ($q) use ($selectedDepartmentId, $userLocationId) {
                             $q->where(function ($sub) {
@@ -184,72 +183,68 @@ class POSController extends Controller
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
             ])
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->whereHas('departments', function ($q) use ($selectedDepartmentId) {
-                $q->where('department_id', $selectedDepartmentId);
-            })
-            ->whereHas('variants', function ($q) use ($selectedDepartmentId, $userLocationId) {
-                $q->where('is_active', 1)
-                ->whereHas('inventory', function ($query) use ($selectedDepartmentId, $userLocationId) {
-                    $query->where('department_id', $selectedDepartmentId)
-                            ->where('location_id', $userLocationId);
-                });
-            })
-            ->limit(10)
-            ->latest()
-            ->get();
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->whereHas('departments', function ($q) use ($selectedDepartmentId) {
+                    $q->where('department_id', $selectedDepartmentId);
+                })
+                ->whereHas('variants', function ($q) use ($selectedDepartmentId, $userLocationId) {
+                    $q->where('is_active', 1)
+                      ->whereHas('inventory', function ($query) use ($selectedDepartmentId, $userLocationId) {
+                          $query->where('department_id', $selectedDepartmentId)
+                                ->where('location_id', $userLocationId);
+                      });
+                })
+                ->limit(10)
+                ->latest()
+                ->get();
 
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $inventoryByDept = [];
-                    $totalQty = 0;
-                    
+                    $totalQty        = 0;
+
                     foreach ($variant->inventory as $inv) {
                         $inventoryByDept[$inv->department_id] = [
-                            'inventory_id' => $inv->id,
-                            'quantity' => $inv->quantity_allocated,
-                            'location_id' => $inv->location_id,
+                            'inventory_id'  => $inv->id,
+                            'quantity'      => $inv->quantity_allocated,
+                            'location_id'   => $inv->location_id,
                             'department_id' => $inv->department_id,
                         ];
                         $totalQty += $inv->quantity_allocated;
                     }
-                    
+
                     $variant->inventory_by_dept = $inventoryByDept;
-                    $variant->quantity_source = 'inventory_allocated';
-                    
-                    // ✅ For batch products
+                    $variant->quantity_source   = 'inventory_allocated';
+
                     if ($product->inventory_strategy === 'batch') {
                         $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function($batch) {
+                        $totalAvailable = $batches->sum(function ($batch) {
                             return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                         });
-                        $variant->available_batches = $batches->map(function($batch) {
+                        $variant->available_batches = $batches->map(function ($batch) {
                             return [
-                                'id' => $batch->id,
-                                'batch_number' => $batch->batch_number,
+                                'id'                 => $batch->id,
+                                'batch_number'       => $batch->batch_number,
                                 'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id' => $batch->location_id,
-                                'department_id' => $batch->department_id,
+                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id'        => $batch->location_id,
+                                'department_id'      => $batch->department_id,
                             ];
                         });
                         $variant->quantity_available = $totalAvailable;
                         $inventoryByDept[$selectedDepartmentId]['quantity'] = $totalAvailable;
                         $variant->inventory_by_dept = $inventoryByDept;
-                    }
-                    // ✅ For serial products
-                    elseif ($product->inventory_strategy === 'serial') {
+                    } elseif ($product->inventory_strategy === 'serial') {
                         $serialNumbers = $variant->serialNumbers;
-                        
-                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                        $variant->available_serials = $serialNumbers->map(function ($serial) {
                             return [
-                                'id' => $serial->id,
-                                'serial_number' => $serial->serial_number,
-                                'status' => $serial->status,
-                                'location_id' => $serial->location_id,
-                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id' => $serial->department_id,
+                                'id'              => $serial->id,
+                                'serial_number'   => $serial->serial_number,
+                                'status'          => $serial->status,
+                                'location_id'     => $serial->location_id,
+                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id'   => $serial->department_id,
                                 'department_name' => $serial->department ? $serial->department->name : 'N/A',
                             ];
                         });
@@ -257,33 +252,44 @@ class POSController extends Controller
                         $inventoryByDept[$selectedDepartmentId]['quantity'] = $variant->quantity_available;
                         $variant->inventory_by_dept = $inventoryByDept;
                     } else {
-                        $variant->available_batches = [];
+                        $variant->available_batches  = [];
                         $variant->available_serials = [];
                         $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
                     }
+
+                    // ★ Attach resolved pricing snapshot (item override first)
+                    $inventoryForPricing = $variant->inventory->firstWhere('department_id', $selectedDepartmentId)
+                        ?? $variant->inventory->first();
+
+                    $this->attachPosPricing(
+                        $variant,
+                        $inventoryForPricing,
+                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+                    );
                 }
             }
         }
 
-        // Compute taxes and promotions
+        // ─── Taxes and promotions (unchanged logic) ─────────────────────
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
                 // Taxes
-                if ((int)$variant->is_taxable === 0) {
+                if ((int) $variant->is_taxable === 0) {
                     $variant->applicable_taxes = collect();
                 } else {
                     $applicableTaxes = collect();
-                    
+
                     if ($variant->variantTaxes->isNotEmpty()) {
                         $applicableTaxes = $variant->variantTaxes->keyBy('id');
-                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+                    } elseif ((int) $product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
                         $applicableTaxes = $product->taxes->keyBy('id');
                     }
 
                     $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
                         $rate = (float) $t->rate;
                         return [
-                            'id'   => (int)$t->id,
+                            'id'   => (int) $t->id,
                             'name' => $t->name,
                             'rate' => $rate,
                             'type' => $t->type,
@@ -296,30 +302,33 @@ class POSController extends Controller
 
                 if ($variant->variantPromotions->isNotEmpty()) {
                     $applicablePromos = $variant->variantPromotions->keyBy('id');
-                } else if ($product->promotions->isNotEmpty()) {
+                } elseif ($product->promotions->isNotEmpty()) {
                     $applicablePromos = $product->promotions->keyBy('id');
                 }
 
                 $variant->applicable_promotions = $applicablePromos->map(function ($p) {
                     $value = (float) $p->discount_value;
                     return [
-                        'id'          => (int)$p->id,
-                        'name'        => $p->name,
-                        'type'        => $p->discount_type,
-                        'value'       => $value,
-                        'start_date'  => $p->start_date,
-                        'end_date'    => $p->end_date,
+                        'id'         => (int) $p->id,
+                        'name'       => $p->name,
+                        'type'       => $p->discount_type,
+                        'value'      => $value,
+                        'start_date' => $p->start_date,
+                        'end_date'   => $p->end_date,
                     ];
                 })->values();
 
-                $variant->price = $variant->selling_price;
-                $variant->grant_total_cost_price = $variant->grand_total_cost_price;
+                // ★ Display price comes from the resolved snapshot
+                $variant->price = $variant->effective_price
+                    ?? $variant->selling_price;
+
+                // Backwards-compatible alias some views still read
+                $variant->grant_total_cost_price = $variant->effective_cost_price
+                    ?? $variant->grand_total_cost_price;
             }
         }
 
         $user_departments = $user->departments()->get();
-
-        // \Log::info($products);
 
         return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
     }
@@ -327,7 +336,7 @@ class POSController extends Controller
 
     public function search(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view order')) {
@@ -338,13 +347,13 @@ class POSController extends Controller
         }
 
         $isSingleShop = tenant_is_single_shop($tenantId);
-        $now = now();
-        $searchTerm = $request->input('search', '');
+        $now          = now();
+        $searchTerm   = $request->input('search', '');
         $departmentId = $request->input('department', '');
 
         if (empty($searchTerm)) {
             return response()->json([
-                'success' => true,
+                'success'  => true,
                 'products' => [],
                 'has_more' => false,
             ]);
@@ -357,96 +366,99 @@ class POSController extends Controller
                 'promotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants' => function($query) {
+                'variants' => function ($query) {
                     $query->where('is_active', 1)->orderBy('name');
                 },
                 'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
                 'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
-                'variants.batches' => function($q) {
+                'variants.batches' => function ($q) {
                     $q->where('quantity_remaining', '>', 0)
                         ->orWhereNull('quantity_remaining')
                         ->orderBy('expiry_date', 'asc');
                 },
-                // ✅ Load serial numbers for single shop search
-                'variants.serialNumbers' => function($q) {
-                    $q->where(function($sub) {
+                'variants.serialNumbers' => function ($q) {
+                    $q->where(function ($sub) {
                         $sub->where('status', SerialNumber::STATUS_AVAILABLE)
                             ->orWhere('status', SerialNumber::STATUS_RESERVED);
                     });
                 },
             ])
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->where(function($q) use ($searchTerm) {
-                $q->where('name', 'LIKE', "%{$searchTerm}%")
-                ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
-                ->orWhereHas('variants', function($vq) use ($searchTerm) {
-                    $vq->where('name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
-                });
-            })
-            ->limit(10)
-            ->get();
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->where(function ($q) use ($searchTerm) {
+                    $q->where('name', 'LIKE', "%{$searchTerm}%")
+                      ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
+                      ->orWhereHas('variants', function ($vq) use ($searchTerm) {
+                          $vq->where('name', 'LIKE', "%{$searchTerm}%")
+                             ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+                      });
+                })
+                ->limit(10)
+                ->get();
 
-            // Prepare variant data with batches and serials
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
-                    $variant->quantity_source = 'overall';
-                    $variant->inventory_by_dept = [];
-                    
+                    $variant->quantity_source    = 'overall';
+                    $variant->inventory_by_dept  = [];
+
                     if ($product->inventory_strategy === 'batch') {
                         $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function($batch) {
+                        $totalAvailable = $batches->sum(function ($batch) {
                             return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                         });
-                        $variant->available_batches = $batches->map(function($batch) {
+                        $variant->available_batches = $batches->map(function ($batch) {
                             return [
-                                'id' => $batch->id,
-                                'batch_number' => $batch->batch_number,
+                                'id'                 => $batch->id,
+                                'batch_number'       => $batch->batch_number,
                                 'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id' => $batch->location_id,
-                                'department_id' => $batch->department_id,
+                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id'        => $batch->location_id,
+                                'department_id'      => $batch->department_id,
                             ];
                         });
                         $variant->quantity_available = $totalAvailable;
                     } elseif ($product->inventory_strategy === 'serial') {
                         $serialNumbers = $variant->serialNumbers;
-                        
-                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                        $variant->available_serials = $serialNumbers->map(function ($serial) {
                             return [
-                                'id' => $serial->id,
-                                'serial_number' => $serial->serial_number,
-                                'status' => $serial->status,
-                                'location_id' => $serial->location_id,
-                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id' => $serial->department_id,
+                                'id'              => $serial->id,
+                                'serial_number'   => $serial->serial_number,
+                                'status'          => $serial->status,
+                                'location_id'     => $serial->location_id,
+                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id'   => $serial->department_id,
                                 'department_name' => $serial->department ? $serial->department->name : 'N/A',
                             ];
                         });
                         $variant->quantity_available = $variant->available_serials->count();
                     } else {
-                        $variant->available_batches = [];
+                        $variant->available_batches  = [];
                         $variant->available_serials = [];
                     }
+
+                    $this->attachPosPricing(
+                        $variant,
+                        null,
+                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+                    );
                 }
             }
-            
+
         } else {
             // ─── MULTI-SHOP SEARCH ────────────────────────────────────────────
             if (empty($departmentId)) {
                 return response()->json([
-                    'success'   => true,
-                    'products'  => [],
-                    'has_more'  => false,
-                    'message'   => 'Please select a department first',
+                    'success'  => true,
+                    'products' => [],
+                    'has_more' => false,
+                    'message'  => 'Please select a department first',
                 ]);
             }
 
-            // ✅ Resolve from location_user
             $userLocationId = $this->resolveUserLocationId($request, $user);
 
             if (!$userLocationId) {
@@ -467,11 +479,11 @@ class POSController extends Controller
                     $query->where('is_active', 1)
                         ->whereHas('inventory', function ($q) use ($departmentId, $userLocationId) {
                             $q->where('department_id', $departmentId)
-                            ->where('location_id', $userLocationId);
+                              ->where('location_id', $userLocationId);
                         })
                         ->with(['inventory' => function ($q) use ($departmentId, $userLocationId) {
                             $q->where('department_id', $departmentId)
-                            ->where('location_id', $userLocationId);
+                              ->where('location_id', $userLocationId);
                         }])
                         ->with(['batches' => function ($q) use ($departmentId, $userLocationId) {
                             $q->where(function ($sub) {
@@ -496,60 +508,57 @@ class POSController extends Controller
                     ->where('start_date', '<=', $now)
                     ->where('end_date', '>=', $now),
             ])
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->whereHas('departments', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            })
-            ->whereHas('variants', function ($q) use ($departmentId, $userLocationId) {
-                $q->where('is_active', 1)
-                ->whereHas('inventory', function ($query) use ($departmentId, $userLocationId) {
-                    $query->where('department_id', $departmentId)
-                            ->where('location_id', $userLocationId);
-                });
-            })
-            ->where(function ($q) use ($searchTerm) {
-                $q->where('name', 'LIKE', "%{$searchTerm}%")
-                ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
-                ->orWhereHas('variants', function ($vq) use ($searchTerm) {
-                    $vq->where('name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
-                });
-            })
-            ->limit(10)
-            ->get();
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->whereHas('departments', function ($q) use ($departmentId) {
+                    $q->where('department_id', $departmentId);
+                })
+                ->whereHas('variants', function ($q) use ($departmentId, $userLocationId) {
+                    $q->where('is_active', 1)
+                      ->whereHas('inventory', function ($query) use ($departmentId, $userLocationId) {
+                          $query->where('department_id', $departmentId)
+                                ->where('location_id', $userLocationId);
+                      });
+                })
+                ->where(function ($q) use ($searchTerm) {
+                    $q->where('name', 'LIKE', "%{$searchTerm}%")
+                      ->orWhere('sku', 'LIKE', "%{$searchTerm}%")
+                      ->orWhereHas('variants', function ($vq) use ($searchTerm) {
+                          $vq->where('name', 'LIKE', "%{$searchTerm}%")
+                             ->orWhere('sku', 'LIKE', "%{$searchTerm}%");
+                      });
+                })
+                ->limit(10)
+                ->get();
 
-            // Calculate quantities per department and prepare batch/serial data
             foreach ($products as $product) {
                 foreach ($product->variants as $variant) {
                     $inventoryByDept = [];
-                    $totalQty = 0;
-                    
+
                     foreach ($variant->inventory as $inv) {
                         $inventoryByDept[$inv->department_id] = [
-                            'inventory_id' => $inv->id,
-                            'quantity' => $inv->quantity_allocated,
-                            'location_id' => $inv->location_id,
+                            'inventory_id'  => $inv->id,
+                            'quantity'      => $inv->quantity_allocated,
+                            'location_id'   => $inv->location_id,
                             'department_id' => $inv->department_id,
                         ];
-                        $totalQty += $inv->quantity_allocated;
                     }
-                    
+
                     $variant->inventory_by_dept = $inventoryByDept;
-                    
+
                     if ($product->inventory_strategy === 'batch') {
                         $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function($batch) {
+                        $totalAvailable = $batches->sum(function ($batch) {
                             return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                         });
-                        $variant->available_batches = $batches->map(function($batch) {
+                        $variant->available_batches = $batches->map(function ($batch) {
                             return [
-                                'id' => $batch->id,
-                                'batch_number' => $batch->batch_number,
+                                'id'                 => $batch->id,
+                                'batch_number'       => $batch->batch_number,
                                 'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id' => $batch->location_id,
-                                'department_id' => $batch->department_id,
+                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+                                'location_id'        => $batch->location_id,
+                                'department_id'      => $batch->department_id,
                             ];
                         });
                         $variant->quantity_available = $totalAvailable;
@@ -557,15 +566,14 @@ class POSController extends Controller
                         $variant->inventory_by_dept = $inventoryByDept;
                     } elseif ($product->inventory_strategy === 'serial') {
                         $serialNumbers = $variant->serialNumbers;
-                        
-                        $variant->available_serials = $serialNumbers->map(function($serial) {
+                        $variant->available_serials = $serialNumbers->map(function ($serial) {
                             return [
-                                'id' => $serial->id,
-                                'serial_number' => $serial->serial_number,
-                                'status' => $serial->status,
-                                'location_id' => $serial->location_id,
-                                'location_name' => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id' => $serial->department_id,
+                                'id'              => $serial->id,
+                                'serial_number'   => $serial->serial_number,
+                                'status'          => $serial->status,
+                                'location_id'     => $serial->location_id,
+                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+                                'department_id'   => $serial->department_id,
                                 'department_name' => $serial->department ? $serial->department->name : 'N/A',
                             ];
                         });
@@ -573,33 +581,43 @@ class POSController extends Controller
                         $inventoryByDept[$departmentId]['quantity'] = $variant->quantity_available;
                         $variant->inventory_by_dept = $inventoryByDept;
                     } else {
-                        $variant->available_batches = [];
+                        $variant->available_batches  = [];
                         $variant->available_serials = [];
                         $variant->quantity_available = $inventoryByDept[$departmentId]['quantity'] ?? 0;
                     }
+
+                    // ★ Attach resolved pricing snapshot
+                    $inventoryForPricing = $variant->inventory->firstWhere('department_id', $departmentId)
+                        ?? $variant->inventory->first();
+
+                    $this->attachPosPricing(
+                        $variant,
+                        $inventoryForPricing,
+                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+                    );
                 }
             }
         }
 
-        // Compute taxes and promotions for each variant
+        // ─── Taxes and promotions (unchanged logic) ─────────────────────
         foreach ($products as $product) {
             foreach ($product->variants as $variant) {
-                // Taxes
-                if ((int)$variant->is_taxable === 0) {
+                if ((int) $variant->is_taxable === 0) {
                     $variant->applicable_taxes = collect();
                 } else {
                     $applicableTaxes = collect();
-                    
+
                     if ($variant->variantTaxes->isNotEmpty()) {
                         $applicableTaxes = $variant->variantTaxes->keyBy('id');
-                    } else if ((int)$product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+                    } elseif ((int) $product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
                         $applicableTaxes = $product->taxes->keyBy('id');
                     }
 
                     $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
                         $rate = (float) $t->rate;
                         return [
-                            'id'   => (int)$t->id,
+                            'id'   => (int) $t->id,
                             'name' => $t->name,
                             'rate' => $rate,
                             'type' => $t->type,
@@ -607,36 +625,39 @@ class POSController extends Controller
                     })->values();
                 }
 
-                // Promotions
                 $applicablePromos = collect();
 
                 if ($variant->variantPromotions->isNotEmpty()) {
                     $applicablePromos = $variant->variantPromotions->keyBy('id');
-                } else if ($product->promotions->isNotEmpty()) {
+                } elseif ($product->promotions->isNotEmpty()) {
                     $applicablePromos = $product->promotions->keyBy('id');
                 }
 
                 $variant->applicable_promotions = $applicablePromos->map(function ($p) {
                     $value = (float) $p->discount_value;
                     return [
-                        'id'          => (int)$p->id,
-                        'name'        => $p->name,
-                        'type'        => $p->discount_type,
-                        'value'       => $value,
-                        'start_date'  => $p->start_date,
-                        'end_date'    => $p->end_date,
+                        'id'         => (int) $p->id,
+                        'name'       => $p->name,
+                        'type'       => $p->discount_type,
+                        'value'      => $value,
+                        'start_date' => $p->start_date,
+                        'end_date'   => $p->end_date,
                     ];
                 })->values();
 
-                $variant->price = $variant->selling_price;
-                $variant->grant_total_cost_price = $variant->grand_total_cost_price;
+                // ★ Display price from the resolved snapshot
+                $variant->price = $variant->effective_price
+                    ?? $variant->selling_price;
+
+                $variant->grant_total_cost_price = $variant->effective_cost_price
+                    ?? $variant->grand_total_cost_price;
             }
         }
 
         return response()->json([
-            'success' => true,
-            'products' => $products,
-            'has_more' => $products->count() >= 20,
+            'success'        => true,
+            'products'       => $products,
+            'has_more'       => $products->count() >= 20,
             'is_single_shop' => $isSingleShop,
         ]);
     }
@@ -738,6 +759,150 @@ class POSController extends Controller
             ?? $request->input('department_id')
             ?? $user->department_id
             ?? 0) ?: null;
+    }
+
+        /**
+     * Resolve the pricing to attach to a variant for POS display.
+     *
+     * Cascade (for each selling-side field):
+     *   1. Strategy-specific record (inventory item, batch, serial, ingredient)
+     *      — but only when it has_custom_pricing = true AND the value > 0
+     *   2. product_variants
+     *   3. (for cost) recompute from variant components
+     *
+     * Returns an array ready to merge onto the variant model.
+     */
+    /**
+     * Attach the resolved pricing snapshot to a variant.
+     *
+     * Cascade (per field):
+     *   1. Strategy-specific record — only when it explicitly opts in
+     *      (has_custom_pricing === true, or pricing_source marks an
+     *      explicit override) AND its value is > 0
+     *   2. product_variants
+     *
+     * Never mutates the database; only sets transient attributes on
+     * the in-memory variant so the view/JSON can read them.
+     */
+    private function attachPosPricing(
+        ProductVariant $variant,
+        ?InventoryItems $inventory = null,
+        ?PurchaseReceiptItem $batch = null,
+        ?SerialNumber $serial = null,
+        ?RecipeIngredient $ingredient = null
+    ): void {
+        // ── Determine which strategy record legitimately overrides ─
+        $source     = null;
+        $sourceType = 'variant';
+
+        // Explicit int comparison — '0' is not a valid override.
+        // Also require a real selling price > 0.
+        $serialOverrides = $serial
+            && ((int) ($serial->has_custom_pricing ?? 0) === 1)
+            && ((float) ($serial->selling_price ?? 0) > 0);
+
+        $batchOverrides = $batch
+            && (($batch->pricing_source ?? null) === 'batch')
+            && ((float) ($batch->unit_selling_price ?? 0) > 0);
+
+        $ingredientOverrides = $ingredient
+            && (($ingredient->pricing_source ?? null) === 'ingredient')
+            && ((float) ($ingredient->unit_selling_price ?? 0) > 0);
+
+        $itemOverrides = $inventory
+            && ((int) ($inventory->has_custom_pricing ?? 0) === 1)
+            && ((float) ($inventory->selling_price ?? 0) > 0);
+
+        // Priority: serial > batch > ingredient > item
+        if ($serialOverrides) {
+            $source     = $serial;
+            $sourceType = 'serial';
+        } elseif ($batchOverrides) {
+            $source     = $batch;
+            $sourceType = 'batch';
+        } elseif ($ingredientOverrides) {
+            $source     = $ingredient;
+            $sourceType = 'ingredient';
+        } elseif ($itemOverrides) {
+            $source     = $inventory;
+            $sourceType = 'item';
+        }
+
+        // ── Cost ──────────────────────────────────────────────────
+        // Prefer the source's grand_total_cost_price / unit_cost.
+        // Fall back to variant, then to summed components.
+        $cost = 0.0;
+
+        if ($source) {
+            $cost = (float) ($source->grand_total_cost_price
+                ?? $source->unit_cost
+                ?? 0);
+        }
+
+        if ($cost <= 0) {
+            $cost = (float) ($variant->grand_total_cost_price ?? 0);
+        }
+
+        if ($cost <= 0) {
+            $cost = (float) ($variant->supplier_cost_price ?? 0)
+                  + (float) ($variant->total_shipping_cost ?? 0)
+                  + (float) ($variant->ura_taxes_applied   ?? 0)
+                  + (float) ($variant->additional_expenses ?? 0);
+        }
+
+        // ── Selling price (THE REAL PRICE) ───────────────────────
+        // The POS charges and displays this number.
+        // Batch & ingredient expose it as `unit_selling_price`;
+        // item / serial / variant expose it as `selling_price`.
+        $selling = 0.0;
+
+        if ($source) {
+            $selling = (float) (
+                $source->selling_price
+                ?? $source->unit_selling_price
+                ?? 0
+            );
+        }
+
+        if ($selling <= 0) {
+            $selling = (float) ($variant->selling_price ?? 0);
+        }
+
+        // ── Discounted selling price (INFORMATIONAL ONLY) ────────
+        // Attached for display/reference to the teller. It is
+        // NEVER used to price the sale.
+        $discountSelling = 0.0;
+
+        if ($source) {
+            $discountSelling = (float) ($source->discount_selling_price ?? 0);
+        }
+
+        if ($discountSelling <= 0) {
+            $discountSelling = (float) ($variant->discount_selling_price ?? 0);
+        }
+
+        // ── Effective price = the actual selling price ───────────
+        // This is what the POS shows, charges, and sends to the
+        // controller. Not the discount price.
+        $effective = $selling;
+
+        // ── Attach as transient attributes (not persisted) ───────
+        $variant->effective_cost_price     = $cost;
+        $variant->effective_selling_price  = $selling;
+        $variant->effective_discount_price = $discountSelling;  // info only
+        $variant->effective_price          = $effective;         // = selling
+        $variant->pricing_source           = $sourceType;
+        $variant->has_custom_pricing       = $sourceType !== 'variant';
+
+        // ── Debug (remove after verifying) ──────────────────────
+        // \Log::info('[attachPosPricing]', [
+        //     'variant_id'   => $variant->id,
+        //     'inventory_id' => $inventory?->id,
+        //     'source_type'  => $sourceType,
+        //     'selling'      => $selling,
+        //     'discount'     => $discountSelling,
+        //     'effective'    => $effective,
+        // ]);
     }
 
     public function processPayment(Request $request)
@@ -889,24 +1054,73 @@ class POSController extends Controller
                     ];
                 }
 
+                
+                // ★ Resolve the cost that will be frozen on this line.
+                //   Chain: inventory item → variant → recomputed components → 0
+                //   Never returns null so total_cost_price and gross_profit
+                //   are always computable by the OrderItem::booted() hook.
+                $unitCost    = 0.0;
+                $costSource  = 'variant';
+
+                $inventoryCost = 0.0;
+                if (isset($inventory) && $inventory instanceof \App\Models\InventoryItems) {
+                    $inventoryCost = (float) ($inventory->grand_total_cost_price ?? 0);
+                }
+
+                if ($inventoryCost > 0) {
+                    // Level 1: item-level override
+                    $unitCost   = $inventoryCost;
+                    $costSource = 'item';
+                } else {
+                    // Level 2: variant's grand total
+                    $variantCost = (float) ($variant->grand_total_cost_price ?? 0);
+
+                    if ($variantCost > 0) {
+                        $unitCost   = $variantCost;
+                        $costSource = 'variant';
+                    } else {
+                        // Level 3: recompute from variant components
+                        $recomputed = (float) ($variant->supplier_cost_price ?? 0)
+                                    + (float) ($variant->total_shipping_cost ?? 0)
+                                    + (float) ($variant->ura_taxes_applied   ?? 0)
+                                    + (float) ($variant->additional_expenses ?? 0);
+
+                        $unitCost   = $recomputed;   // may still be 0 if variant has no cost at all
+                        $costSource = 'variant';
+                    }
+                }
+
+                // Level 4: hard floor so nothing downstream sees null
+                if ($unitCost < 0) {
+                    $unitCost = 0.0;
+                }
+
                 $order->orderItems()->create([
-                    'product_id' => $variant->product_id,
-                    'variant_id' => $variant->id,
-                    'item_name' => $item['name'],
-                    'sku' => $variant->sku,
-                    'unit_price' => $item['price'],
-                    'quantity' => $item['quantity'],
-                    'tax_amount' => $item['tax_total'] ?? 0,
-                    'discount' => $item['discount'] ?? 0,
-                    'total_price' => $item['total'],
-                    'batch_id' => $item['batch_id'] ?? null,      
-                    'batch_number' => $item['batch_number'] ?? null,
-                    'serial_id' => $item['serial_id'] ?? null,
-                    'serial_number' => $item['serial_number'] ?? null, 
+                    'product_id'     => $variant->product_id,
+                    'variant_id'     => $variant->id,
+                    'item_name'      => $item['name'],
+                    'sku'            => $variant->sku,
+                    'unit_price'     => $item['price'],
+                    'quantity'       => $item['quantity'],
+                    'tax_amount'     => $item['tax_total'] ?? 0,
+                    'discount'       => $item['discount'] ?? 0,
+                    'total_price'    => $item['total'],
+
+                    // ★ Cost snapshot — never null
+                    'unit_cost_price' => $unitCost,
+                    'pricing_source'  => $costSource,
+                    // total_cost_price + gross_profit auto-computed by OrderItem::booted()
+
+                    'batch_id'       => $item['batch_id'] ?? null,
+                    'batch_number'   => $item['batch_number'] ?? null,
+                    'serial_id'      => $item['serial_id'] ?? null,
+                    'serial_number'  => $item['serial_number'] ?? null,
                     'inventory_data' => json_encode($inventoryData),
-                    'tax_data' => json_encode($item['taxes'] ?? []),
+                    'tax_data'       => json_encode($item['taxes'] ?? []),
                     'promotion_data' => json_encode($item['promotions'] ?? []),
                 ]);
+
+
             }
 
             return response()->json([
@@ -1031,23 +1245,41 @@ class POSController extends Controller
                         $user
                     );
 
+                    // Resolve the cost for this line
+                    $costSource = 'variant';
+                    $unitCost   = (float) ($variant->grand_total_cost_price ?? 0);
+
+                    // Invoice flow has an $inventoryData array; use it to
+                    // reach the underlying inventory item if present
+                    if (! empty($inventoryData['inventory_id'])) {
+                        $inv = InventoryItems::find($inventoryData['inventory_id']);
+                        if ($inv && (float) ($inv->grand_total_cost_price ?? 0) > 0) {
+                            $unitCost   = (float) $inv->grand_total_cost_price;
+                            $costSource = 'item';
+                        }
+                    }
+
                     $order->orderItems()->create([
-                        'product_id'       => $variant->product_id,
-                        'variant_id'       => $variant->id,
-                        'item_name'        => $item['name'],
-                        'sku'              => $variant->sku,
-                        'unit_price'       => $item['price'],
-                        'quantity'         => $item['quantity'],
-                        'tax_amount'       => $item['tax_total'] ?? 0,
-                        'discount'         => $item['discount'] ?? 0,
-                        'total_price'      => $item['total'],
-                        'batch_id'         => $item['batch_id'] ?? null,
-                        'batch_number'     => $item['batch_number'] ?? null,
-                        'serial_id'        => $item['serial_id'] ?? null,
-                        'serial_number'    => $item['serial_number'] ?? null,
-                        'inventory_data'   => json_encode($inventoryData),
-                        'tax_data'         => json_encode($item['taxes'] ?? []),
-                        'promotion_data'   => json_encode($item['promotions'] ?? []),
+                        'product_id'     => $variant->product_id,
+                        'variant_id'     => $variant->id,
+                        'item_name'      => $item['name'],
+                        'sku'            => $variant->sku,
+                        'unit_price'     => $item['price'],
+                        'quantity'       => $item['quantity'],
+                        'tax_amount'     => $item['tax_total'] ?? 0,
+                        'discount'       => $item['discount'] ?? 0,
+                        'total_price'    => $item['total'],
+
+                        'unit_cost_price' => $unitCost,
+                        'pricing_source'  => $costSource,
+
+                        'batch_id'       => $item['batch_id'] ?? null,
+                        'batch_number'   => $item['batch_number'] ?? null,
+                        'serial_id'      => $item['serial_id'] ?? null,
+                        'serial_number'  => $item['serial_number'] ?? null,
+                        'inventory_data' => json_encode($inventoryData),
+                        'tax_data'       => json_encode($item['taxes'] ?? []),
+                        'promotion_data' => json_encode($item['promotions'] ?? []),
                     ]);
                 }
 
@@ -1275,22 +1507,39 @@ class POSController extends Controller
                         }
                     }
 
+                    // Resolve the cost for this line
+                    $costSource = 'variant';
+                    $unitCost   = (float) ($variant->grand_total_cost_price ?? 0);
+
+                    if (! empty($inventoryData['inventory_id'])) {
+                        $inv = InventoryItems::find($inventoryData['inventory_id']);
+                        if ($inv && (float) ($inv->grand_total_cost_price ?? 0) > 0) {
+                            $unitCost   = (float) $inv->grand_total_cost_price;
+                            $costSource = 'item';
+                        }
+                    }
+
                     $order->orderItems()->create([
-                        'product_id' => $variant->product_id,
-                        'variant_id' => $variant->id,
-                        'item_name' => $item['name'],
-                        'sku' => $variant->sku,
-                        'unit_price' => $item['price'],
-                        'quantity' => $item['quantity'],
-                        'tax_amount' => $item['tax_total'] ?? 0,
-                        'discount' => $item['discount'] ?? 0,
-                        'total_price' => $item['total'],
-                        'batch_id' => $item['batch_id'] ?? null,
-                        'batch_number' => $item['batch_number'] ?? null,
-                        'serial_id' => $item['serial_id'] ?? null,
-                        'serial_number' => $item['serial_number'] ?? null,
+                        'product_id'     => $variant->product_id,
+                        'variant_id'     => $variant->id,
+                        'item_name'      => $item['name'],
+                        'sku'            => $variant->sku,
+                        'unit_price'     => $item['price'],
+                        'quantity'       => $item['quantity'],
+                        'tax_amount'     => $item['tax_total'] ?? 0,
+                        'discount'       => $item['discount'] ?? 0,
+                        'total_price'    => $item['total'],
+
+                        // ★ Cost snapshot
+                        'unit_cost_price' => $unitCost,
+                        'pricing_source'  => $costSource,
+
+                        'batch_id'       => $item['batch_id'] ?? null,
+                        'batch_number'   => $item['batch_number'] ?? null,
+                        'serial_id'      => $item['serial_id'] ?? null,
+                        'serial_number'  => $item['serial_number'] ?? null,
                         'inventory_data' => json_encode($inventoryData),
-                        'tax_data' => json_encode($item['taxes'] ?? []),
+                        'tax_data'       => json_encode($item['taxes'] ?? []),
                         'promotion_data' => json_encode($item['promotions'] ?? []),
                     ]);
 
@@ -1595,6 +1844,36 @@ class POSController extends Controller
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Resolve the per-unit cost to freeze on an order line.
+     *
+     * Priority:
+     *   1. Inventory-item override at this location/department
+     *   2. The variant's own grand_total_cost_price
+     *   3. Recomputed from the variant's cost components
+     *   4. Zero — never null, so downstream sums don't need COALESCE
+     *
+     * Returns [float $unitCost, string $source]
+     */
+    private function resolveLineCost(?InventoryItems $inventory, ProductVariant $variant): array
+    {
+        if ($inventory && (float) ($inventory->grand_total_cost_price ?? 0) > 0) {
+            return [(float) $inventory->grand_total_cost_price, 'item'];
+        }
+
+        $grand = (float) ($variant->grand_total_cost_price ?? 0);
+        if ($grand > 0) {
+            return [$grand, 'variant'];
+        }
+
+        $recomputed = (float) ($variant->supplier_cost_price    ?? 0)
+                    + (float) ($variant->total_shipping_cost    ?? 0)
+                    + (float) ($variant->ura_taxes_applied      ?? 0)
+                    + (float) ($variant->additional_expenses    ?? 0);
+
+        return [$recomputed, 'variant'];
     }
 
     /**
@@ -1998,19 +2277,29 @@ class POSController extends Controller
 
         $variant->update(['overal_quantity_at_hand' => $after]);
 
-        // Log
+        // Resolve pricing snapshot
+        $pricing = $this->resolveLogPricing(null, $variant);
+
         SingleShopInventoryLog::create([
-            'variant_id' => $variant->id,
-            'order_id' => $order->id,
-            'tenant_id' => $order->tenant_id,
-            'created_by' => auth()->id(),
+            'variant_id'      => $variant->id,
+            'order_id'        => $order->id,
+            'tenant_id'       => $order->tenant_id,
+            'created_by'      => auth()->id(),
             'quantity_before' => $before,
-            'quantity_after' => $after,
+            'quantity_after'  => $after,
             'quantity_change' => -$item->quantity,
-            'reason' => 'pos_sale',
-            'notes' => "POS sale - Order #{$order->order_number}",
-            'source' => 'pos',
-            'metadata' => ['strategy' => 'quantity']
+            'reason'          => 'pos_sale',
+            'notes'           => "POS sale - Order #{$order->order_number}",
+            'source'          => 'pos',
+
+            // ★ Frozen pricing at the moment of the sale
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$item->quantity * $pricing['cost'],
+            'total_selling_value' => -$item->quantity * $pricing['selling'],
+            'pricing_source'      => $pricing['pricing_source'],
+
+            'metadata' => ['strategy' => 'quantity'],
         ]);
 
         // \Log::info('[Single Shop] Quantity depleted', [
@@ -2233,6 +2522,9 @@ class POSController extends Controller
 
         $inventory->update(['quantity_allocated' => $after]);
 
+        // Resolve pricing from the inventory row (authoritative), fall back to variant
+        $pricing = $this->resolveLogPricing($inventory, $variant);
+
         InventoryTransactions::create([
             'quantity'       => -$quantity,
             'reference_id'   => $order->id,
@@ -2242,6 +2534,12 @@ class POSController extends Controller
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$quantity * $pricing['cost'],
+            'total_selling_value' => -$quantity * $pricing['selling'],
         ]);
 
         InventoryAdjustments::create([
@@ -2252,6 +2550,11 @@ class POSController extends Controller
             'inventory_id'    => $inventory->id,
             'created_by'      => auth()->id(),
             'tenant_id'       => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => -$quantity * $pricing['cost'],
         ]);
     }
 
@@ -2281,6 +2584,7 @@ class POSController extends Controller
         $inventory = null;
         if ($inventoryId) {
             $inventory = InventoryItems::find($inventoryId);
+            $pricing = $this->resolveLogPricing($inventory, $variant);
         }
 
         // ✅ Resolve location_id from inventory → department → user pivot
@@ -2358,28 +2662,35 @@ class POSController extends Controller
             
             // Log batch depletion
             BatchLog::create([
-                'batch_id' => $targetBatch->id,
-                'batch_number' => $targetBatch->batch_number,
-                'variant_id' => $variant->id,
-                'variant_name' => $variant->name,
-                'type' => BatchLog::TYPE_DEPLETED,
+                'batch_id'        => $targetBatch->id,
+                'batch_number'    => $targetBatch->batch_number,
+                'variant_id'      => $variant->id,
+                'variant_name'    => $variant->name,
+                'variant_sku'     => $variant->sku,
+                'type'            => BatchLog::TYPE_DEPLETED,
                 'quantity_change' => -$quantityNeeded,
                 'quantity_before' => $effectiveQuantity,
-                'quantity_after' => $targetBatch->quantity_remaining,
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'tenant_id' => $tenantId,
-                'location_id' => $locationId,
-                'department_id' => $departmentId,
-                'expiry_date' => $targetBatch->expiry_date,
-                'event_date' => now(),
-                'performed_by' => auth()->id(),
+                'quantity_after'  => $targetBatch->quantity_remaining,
+                'unit_cost'       => $pricing['cost'],
+                'total_cost'      => -$quantityNeeded * $pricing['cost'],
+                'unit_selling_price'  => $pricing['selling'],
+                'total_selling_value' => -$quantityNeeded * $pricing['selling'],
+                'gross_profit'        => $quantityNeeded * ($pricing['selling'] - $pricing['cost']),
+                'pricing_source'      => $pricing['pricing_source'],
+                'order_id'        => $order->id,
+                'order_number'    => $order->order_number,
+                'tenant_id'       => $tenantId,
+                'location_id'     => $locationId,
+                'department_id'   => $departmentId,
+                'expiry_date'     => $targetBatch->expiry_date,
+                'event_date'      => now(),
+                'performed_by'    => auth()->id(),
                 'metadata' => [
-                    'inventory_id' => $inventory->id,
-                    'customer_name' => $order->customer_name,
-                    'item_name' => $itemName,
-                    'deducted_from_batch' => $targetBatch->batch_number
-                ]
+                    'inventory_id'         => $inventory->id,
+                    'customer_name'        => $order->customer_name,
+                    'item_name'            => $itemName,
+                    'deducted_from_batch'  => $targetBatch->batch_number,
+                ],
             ]);
             
             // \Log::info('Batch depleted from specific batch', [
@@ -2406,28 +2717,37 @@ class POSController extends Controller
                 $quantityNeeded -= $deduct;
 
                 BatchLog::create([
-                    'batch_id' => $batch->id,
-                    'batch_number' => $batch->batch_number,
-                    'variant_id' => $variant->id,
-                    'variant_name' => $variant->name,
-                    'type' => BatchLog::TYPE_DEPLETED,
-                    'quantity_change' => -$deduct,
+                    'batch_id'        => $targetBatch->id,
+                    'batch_number'    => $targetBatch->batch_number,
+                    'variant_id'      => $variant->id,
+                    'variant_name'    => $variant->name,
+                    'variant_sku'     => $variant->sku,
+                    'type'            => BatchLog::TYPE_DEPLETED,
+                    'quantity_change' => -$quantityNeeded,
                     'quantity_before' => $effectiveQuantity,
-                    'quantity_after' => $batch->quantity_remaining,
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'tenant_id' => $tenantId,
-                    'location_id' => $locationId,
-                    'department_id' => $departmentId,
-                    'expiry_date' => $batch->expiry_date,
-                    'event_date' => now(),
-                    'performed_by' => auth()->id(),
+                    'quantity_after'  => $targetBatch->quantity_remaining,
+                    'unit_cost'       => $pricing['cost'],
+                    'total_cost'      => -$quantityNeeded * $pricing['cost'],
+                    'unit_selling_price'  => $pricing['selling'],
+                    'total_selling_value' => -$quantityNeeded * $pricing['selling'],
+                    'gross_profit'        => $quantityNeeded * ($pricing['selling'] - $pricing['cost']),
+                    'pricing_source'      => $pricing['pricing_source'],
+                    'order_id'        => $order->id,
+                    'order_number'    => $order->order_number,
+                    'tenant_id'       => $tenantId,
+                    'location_id'     => $locationId,
+                    'department_id'   => $departmentId,
+                    'expiry_date'     => $targetBatch->expiry_date,
+                    'event_date'      => now(),
+                    'performed_by'    => auth()->id(),
                     'metadata' => [
-                        'inventory_id' => $inventory->id,
-                        'customer_name' => $order->customer_name,
-                        'item_name' => $itemName,
-                    ]
+                        'inventory_id'         => $inventory->id,
+                        'customer_name'        => $order->customer_name,
+                        'item_name'            => $itemName,
+                        'deducted_from_batch'  => $targetBatch->batch_number,
+                    ],
                 ]);
+
             }
         }
 
@@ -2435,16 +2755,21 @@ class POSController extends Controller
         $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityNeeded);
         $inventory->save();
 
-        // Log inventory transaction
         InventoryTransactions::create([
-            'quantity' => -$quantityNeeded,
-            'reference_id' => $order->id,
+            'quantity'       => -$quantityNeeded,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name} (BATCH)",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "POS sale - Order #{$order->order_number} - {$variant->name} (BATCH)",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$quantityNeeded * $pricing['cost'],
+            'total_selling_value' => -$quantityNeeded * $pricing['selling'],
         ]);
 
         // \Log::info('[Multi Shop] Batch depleted', [
@@ -2473,6 +2798,7 @@ class POSController extends Controller
         $inventory = null;
         if ($inventoryId) {
             $inventory = InventoryItems::find($inventoryId);
+            $pricing = $this->resolveLogPricing($inventory, $variant);
         }
 
         // ✅ Resolve location_id from inventory → department → user pivot
@@ -2552,14 +2878,20 @@ class POSController extends Controller
 
         // Log inventory transaction
         InventoryTransactions::create([
-            'quantity' => -$quantity,
-            'reference_id' => $order->id,
+            'quantity'       => -$quantity,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "POS sale - Order #{$order->order_number} - {$variant->name} (SERIAL)",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "POS sale - Order #{$order->order_number} - {$variant->name} (SERIAL)",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$quantity * $pricing['cost'],
+            'total_selling_value' => -$quantity * $pricing['selling'],
         ]);
     }
 
@@ -2772,34 +3104,98 @@ class POSController extends Controller
     private function logBatchDepletion($batch, $variant, $item, $order, $quantityDeducted)
     {
         $beforeQty = ($batch->quantity_remaining ?? $batch->quantity_received ?? 0) + $quantityDeducted;
-        $afterQty = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-        
+        $afterQty  = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+
+        // ★ Resolve pricing — single-shop has no inventory item, so fall back to variant
+        $pricing = $this->resolveLogPricing(null, $variant);
+
         BatchLog::create([
-            'batch_id' => $batch->id,
-            'batch_number' => $batch->batch_number,
-            'variant_id' => $variant->id,
-            'variant_name' => $variant->name,
-            'variant_sku' => $variant->sku,
-            'type' => BatchLog::TYPE_DEPLETED,
+            'batch_id'        => $batch->id,
+            'batch_number'    => $batch->batch_number,
+            'variant_id'      => $variant->id,
+            'variant_name'    => $variant->name,
+            'variant_sku'     => $variant->sku,
+            'type'            => BatchLog::TYPE_DEPLETED,
             'quantity_change' => -$quantityDeducted,
             'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
-            'unit_cost' => $batch->unit_cost ?? 0,
-            'total_cost' => ($batch->unit_cost ?? 0) * $quantityDeducted,
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'tenant_id' => $order->tenant_id,
-            'location_id' => $batch->location_id ?? $order->location_id,
+            'quantity_after'  => $afterQty,
+
+            // ★ Frozen pricing
+            'unit_cost'           => $pricing['cost'],
+            'total_cost'          => -$quantityDeducted * $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_selling_value' => -$quantityDeducted * $pricing['selling'],
+            'gross_profit'        => $quantityDeducted * ($pricing['selling'] - $pricing['cost']),
+            'pricing_source'      => $pricing['pricing_source'],
+
+            'order_id'      => $order->id,
+            'order_number'  => $order->order_number,
+            'tenant_id'     => $order->tenant_id,
+            'location_id'   => $batch->location_id ?? $order->location_id,
             'department_id' => $batch->department_id ?? $order->department_id,
-            'expiry_date' => $batch->expiry_date,
-            'event_date' => now(),
-            'performed_by' => auth()->id(),
+            'expiry_date'   => $batch->expiry_date,
+            'event_date'    => now(),
+            'performed_by'  => auth()->id(),
             'metadata' => [
-                'item_name' => $item->name ?? $variant->name,
+                'item_name'     => $item->name ?? $variant->name,
                 'customer_name' => $order->customer_name,
-                'unit_price' => $item->price ?? 0,
+                'unit_price'    => $item->price ?? 0,
             ],
         ]);
+    }
+
+        /**
+     * Resolve the cost and selling price to be frozen onto an
+     * inventory log for a given variant.
+     *
+     * Priority:
+     *   1. The inventory item the sale is actually happening against
+     *      (per-location override, if any)
+     *   2. The variant's own grand_total_cost_price / selling_price
+     *   3. Zero — never null, so reports can SUM() without COALESCE
+     *
+     * $inventory may be null (single-shop mode, or if resolution failed).
+     */
+    private function resolveLogPricing(?InventoryItems $inventory, ProductVariant $variant): array
+    {
+        // ── Cost ────────────────────────────────────────────────
+        $cost = 0.0;
+        $source = 'variant';
+
+        if ($inventory && (float) ($inventory->grand_total_cost_price ?? 0) > 0) {
+            $cost = (float) $inventory->grand_total_cost_price;
+            $source = 'item';
+        } else {
+            $grand = (float) ($variant->grand_total_cost_price ?? 0);
+            if ($grand > 0) {
+                $cost = $grand;
+            } else {
+                // Fall back to recomputing components
+                $cost = (float) ($variant->supplier_cost_price ?? 0)
+                      + (float) ($variant->total_shipping_cost ?? 0)
+                      + (float) ($variant->ura_taxes_applied   ?? 0)
+                      + (float) ($variant->additional_expenses ?? 0);
+            }
+        }
+
+        // ── Selling price ──────────────────────────────────────
+        $selling = 0.0;
+
+        if ($inventory && (float) ($inventory->discount_selling_price ?? 0) > 0) {
+            $selling = (float) $inventory->discount_selling_price;
+        } elseif ($inventory && (float) ($inventory->selling_price ?? 0) > 0) {
+            $selling = (float) $inventory->selling_price;
+        } else {
+            $selling = (float) ($variant->discount_selling_price
+                ?? $variant->selling_price
+                ?? 0);
+        }
+
+        return [
+            'cost'         => $cost,
+            'selling'      => $selling,
+            'pricing_source' => $source,   // 'item' | 'variant'
+        ];
     }
 
     private function depleteSingleSerial($variant, $item, $order)
@@ -2822,10 +3218,13 @@ class POSController extends Controller
             
             // ✅ Mark as SOLD
             $serial->update([
-                'status' => SerialNumber::STATUS_SOLD,
-                'order_id' => $order->id,
-                'sold_at' => now(),
-                'sold_by' => auth()->id(),
+                'status'            => SerialNumber::STATUS_SOLD,
+                'order_id'          => $order->id,
+                'sold_at'           => now(),
+                'sold_by'           => auth()->id(),
+                'sold_unit_price'   => $pricing['selling'],
+                'sold_total_price'  => $pricing['selling'],
+                'sold_gross_profit' => $pricing['selling'] - $pricing['cost'],
             ]);
             
             // Log the sale
@@ -2854,6 +3253,39 @@ class POSController extends Controller
                 'sold_by' => auth()->id(),
             ]);
         }
+
+                // Update overall quantity
+        $before = $variant->overal_quantity_at_hand;
+        $variant->overal_quantity_at_hand = max(0, $before - 1);
+        $variant->save();
+
+        // ★ Snapshot pricing and log the movement
+        $pricing = $this->resolveLogPricing(null, $variant);
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $order->id,
+            'tenant_id'       => $order->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $variant->overal_quantity_at_hand,
+            'quantity_change' => -1,
+            'reason'          => 'pos_sale',
+            'notes'           => "Serial sale - {$serial->serial_number} - Order #{$order->order_number}",
+            'source'          => 'pos',
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$pricing['cost'],
+            'total_selling_value' => -$pricing['selling'],
+            'pricing_source'      => $pricing['pricing_source'],
+
+            'metadata' => [
+                'strategy'      => 'serial',
+                'serial_id'     => $serial->id,
+                'serial_number' => $serial->serial_number,
+            ],
+        ]);
 
         // Update overall quantity
         $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - 1);

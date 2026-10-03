@@ -83,6 +83,135 @@
     })();
 </script>
 
+<script>
+(function () {
+    'use strict';
+
+    // ─── Filter serial rows by serial_number / text content ────
+    function filterSerialSelection() {
+        const input = document.getElementById('serialSelectionSearch');
+        const body  = document.getElementById('serialSelectionBody');
+        const count = document.getElementById('serialSelectionCount');
+        if (!input || !body) return;
+
+        const q = input.value.trim().toLowerCase();
+
+        // Match against whatever rows exist inside the body. We look
+        // for the most common patterns:
+        //   - <tr class="serial-row"> ... </tr>       (table layout)
+        //   - <div class="serial-item"> ... </div>    (card layout)
+        //   - <label class="serial-option"> ... </label> (radio list)
+        //   - any element with [data-serial-number]
+        //
+        // Whichever exists, filter will respect it.
+        const rows = body.querySelectorAll(
+            'tr.serial-row, .serial-item, .serial-option, [data-serial-number]'
+        );
+
+        let visible = 0;
+        rows.forEach(row => {
+            const haystack = (
+                row.getAttribute('data-serial-number') ||
+                row.textContent ||
+                ''
+            ).toLowerCase();
+
+            const show = q === '' || haystack.includes(q);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        // Update the count line
+        if (count) {
+            if (rows.length === 0) {
+                count.textContent = '';
+            } else if (q === '') {
+                count.textContent = rows.length + ' {{ __('passwords.serials') }}';
+            } else {
+                count.textContent = visible + ' {{ __('passwords.of') }} ' + rows.length + ' {{ __('passwords.serials') }}';
+            }
+        }
+
+        // Show an inline "no match" hint if everything got hidden
+        let noMatch = body.querySelector('.serial-no-match');
+        if (q !== '' && visible === 0 && rows.length > 0) {
+            if (!noMatch) {
+                noMatch = document.createElement('div');
+                noMatch.className = 'serial-no-match text-center py-5 text-muted';
+                noMatch.innerHTML = '<i class="bi bi-search fs-3 d-block mb-2"></i>{{ __('passwords.no_serials_found') }}';
+                body.appendChild(noMatch);
+            }
+            noMatch.style.display = '';
+        } else if (noMatch) {
+            noMatch.style.display = 'none';
+        }
+    }
+
+    // ─── Reset the search each time the modal opens ────────────
+    function resetSerialSelectionSearch() {
+        const input = document.getElementById('serialSelectionSearch');
+        const count = document.getElementById('serialSelectionCount');
+        if (input) input.value = '';
+        if (count) count.textContent = '';
+        // Re-run filter to un-hide everything
+        filterSerialSelection();
+    }
+
+    // ─── Wire it up once the DOM is ready ──────────────────────
+    function bind() {
+        const input = document.getElementById('serialSelectionSearch');
+        const clear = document.getElementById('serialSelectionSearchClear');
+        const modal = document.getElementById('serialSelectionModal');
+
+        if (input) {
+            // Debounce-free — serial lists are short, filter is cheap
+            input.addEventListener('input', filterSerialSelection);
+
+            // Enter clears the filter if the field is empty
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    input.value = '';
+                    filterSerialSelection();
+                }
+            });
+        }
+
+        if (clear) {
+            clear.addEventListener('click', function () {
+                if (input) input.value = '';
+                filterSerialSelection();
+                if (input) input.focus();
+            });
+        }
+
+        // Reset on open so a previous search doesn't carry over
+        if (modal) {
+            modal.addEventListener('shown.bs.modal', function () {
+                resetSerialSelectionSearch();
+                // Focus the search box for quick typing
+                setTimeout(() => input?.focus(), 100);
+            });
+        }
+    }
+
+    // Handle both load states
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+
+    // ─── Auto-refilter whenever the modal body is re-rendered ──
+    // Any code that replaces #serialSelectionBody's innerHTML will
+    // trigger this observer, and the current search term re-applies.
+    const bodyEl = document.getElementById('serialSelectionBody');
+    if (bodyEl && window.MutationObserver) {
+        new MutationObserver(function () {
+            filterSerialSelection();
+        }).observe(bodyEl, { childList: true, subtree: true });
+    }
+})();
+</script>
 
 {{-- ═══════════════════════════════════════════════
      1. CART FUNCTIONS
@@ -125,6 +254,22 @@ function getCartItemKey(variantId, departmentId, inventoryId, batchId = null, se
     }
 }
 
+/**
+ * Pull the pricing snapshot off a variant card's dataset.
+ * These values are attached by the server in the enriched variant data
+ * and hidden in data-attributes so the UI never reveals a "custom price"
+ * unless we choose to (via the optional badge).
+ */
+function extractPricingFromCard(el) {
+    return {
+        effective_price:          parseFloat(el.dataset.effectivePrice)          || 0,
+        effective_selling_price:  parseFloat(el.dataset.effectiveSellingPrice)   || 0,
+        effective_cost_price:     parseFloat(el.dataset.effectiveCostPrice)      || 0,
+        effective_discount_price: parseFloat(el.dataset.effectiveDiscountPrice)  || 0,
+        pricing_source:           el.dataset.pricingSource                       || 'variant',
+        has_custom_pricing:       el.dataset.hasCustomPricing === 'true',
+    };
+}
 
 // ============================================================
 // DEPARTMENT SELECTION HELPERS
@@ -259,60 +404,64 @@ function getCartItemKey(variantId, departmentId, inventoryId, batchId = null, se
 
 
 function addToCart(variant) {
+    // ✅ Selling-price guard FIRST — before anything else
+    //    Catches both missing prices and genuine "not for sale" items.
+    const resolvedSellingPrice =
+        parseFloat(variant.effective_selling_price) > 0
+            ? parseFloat(variant.effective_selling_price)
+            : parseFloat(variant.selling_price) > 0
+                ? parseFloat(variant.selling_price)
+                : parseFloat(variant.effective_price) > 0
+                    ? parseFloat(variant.effective_price)
+                    : parseFloat(variant.price) || 0;
+
+    if (resolvedSellingPrice <= 0) {
+        toastr['error']('{{ __("pagination.item_not_sellable") }}');
+        return;
+    }
+
     // ✅ For recipe products, always allow adding
     if (!variant.is_recipe && variant.quantity_available <= 0) {
         toastr['error']('{{ __("pagination.out_of_stock") }}');
         return;
     }
-    
+
     // ✅ CRITICAL: If this is a serial product, we MUST have a unique cartKey
     let itemKey = variant.cartKey;
-    
+
     // If no cartKey provided, generate one
     if (!itemKey) {
-        // For serial products, generate a unique key with serial_id
         if (variant.strategy === 'serial' && variant.serial_id) {
             const variantIdStr = String(variant.id || '');
-            const deptStr = String(variant.department_id || '');
-            const invStr = String(variant.inventory_id || '');
-            const serialIdStr = String(variant.serial_id);
+            const deptStr      = String(variant.department_id || '');
+            const invStr       = String(variant.inventory_id || '');
+            const serialIdStr  = String(variant.serial_id);
             itemKey = variantIdStr + '_' + deptStr + '_' + invStr + '_serial_' + serialIdStr;
         } else {
-            // For other products, use the standard key generation
             itemKey = getCartItemKey(
-                variant.id, 
-                variant.department_id, 
+                variant.id,
+                variant.department_id,
                 variant.inventory_id,
                 variant.batch_id || null,
                 variant.serial_id || null
             );
         }
     }
-    
-    // console.log('🛒 addToCart - final itemKey:', itemKey);
-    // console.log('🛒 addToCart - variant data:', {
-    //     id: variant.id,
-    //     strategy: variant.strategy,
-    //     serial_id: variant.serial_id,
-    //     serial_number: variant.serial_number,
-    //     cartKey: variant.cartKey
-    // });
-    
+
     // ✅ Check if this item is already in cart using the unique key
     const idx = cart.findIndex(i => i.cartKey === itemKey);
-    
+
     // ✅ For serial products, if it's already in cart, prevent adding
     if (variant.strategy === 'serial' && idx > -1) {
-        toastr['warning']('This serial number is already in the cart');
+        toastr['warning']('{{ __("pagination.serial_already_in_cart") }}');
         return;
     }
-    
-    // ✅ Include all relevant data in cart item
+
     const cartItem = {
         id: variant.id,
         cartKey: itemKey,
         name: variant.name,
-        price: variant.price,
+        price: resolvedSellingPrice,          // ← guaranteed > 0
         image: variant.image || '/images/default-product.png',
         quantity: 1,
         quantity_available: variant.quantity_available,
@@ -325,17 +474,23 @@ function addToCart(variant) {
         batch_id: variant.batch_id || null,
         batch_number: variant.batch_number || null,
         serial_id: variant.serial_id || null,
-        serial_number: variant.serial_number || null
+        serial_number: variant.serial_number || null,
+
+        // ★ Pricing snapshot — hidden from UI, sent to server on checkout
+        effective_price:          resolvedSellingPrice,
+        effective_selling_price:  resolvedSellingPrice,
+        effective_cost_price:     parseFloat(variant.effective_cost_price) || 0,
+        effective_discount_price: parseFloat(variant.effective_discount_price) || 0,
+        pricing_source:           variant.pricing_source     ?? 'variant',
+        has_custom_pricing:       variant.has_custom_pricing ?? false,
     };
-    
+
     if (idx > -1) {
-        // ✅ For serial products, this shouldn't happen (we already returned)
-        // For batch or quantity, increment quantity
         if (variant.strategy === 'serial') {
-            toastr['warning']('This serial number is already in the cart');
+            toastr['warning']('{{ __("pagination.serial_already_in_cart") }}');
             return;
         }
-        
+
         if (cart[idx].quantity < cart[idx].quantity_available || cart[idx].is_recipe) {
             cart[idx].quantity += 1;
             updateCartItem(idx);
@@ -451,6 +606,9 @@ function handleVariantClick(el) {
     const serials = JSON.parse(el.dataset.serials || '[]');  
     
     let quantityAvailable = parseInt(el.dataset.quantityAvailable) || 0;
+
+    const pricing = extractPricingFromCard(el);
+
     let inventoryId = null;
     let departmentId = null;
 
@@ -555,17 +713,27 @@ function handleVariantClick(el) {
             addToCart({
                 id: variantId,
                 name: name,
-                price: price,
+                price: pricing.effective_price || price,   // ← use effective
                 image: image,
-                quantity_available: batch.quantity_remaining,
+                quantity_available: quantityAvailable,
                 taxes: taxes,
                 promotions: promotions,
                 inventory_id: inventoryId,
                 department_id: departmentId,
                 strategy: strategy,
                 is_recipe: isRecipe,
-                batch_id: batch.id,
-                batch_number: batch.batch_number
+                batch_id: null,
+                batch_number: null,
+                serial_id: null,
+                serial_number: null,
+
+                // ★ Hidden pricing snapshot
+                effective_price:          pricing.effective_price,
+                effective_selling_price:  pricing.effective_selling_price,
+                effective_cost_price:     pricing.effective_cost_price,
+                effective_discount_price: pricing.effective_discount_price,
+                pricing_source:           pricing.pricing_source,
+                has_custom_pricing:       pricing.has_custom_pricing,
             });
             return;
         }
@@ -944,23 +1112,32 @@ document.addEventListener('DOMContentLoaded', () => calculateCartSummary());
                         }); 
                     }
                 });
-                return { 
-                    variant_id: item.id, 
-                    quantity: item.quantity, 
-                    price: item.price, 
+                
+                return {
+                    variant_id: item.id,
                     name: item.name,
-                    subtotal: itemSubtotal, 
-                    taxes: itemTaxes, 
+                    price: item.price,
+                    quantity: item.quantity,
+                    subtotal: itemSubtotal,
+                    taxes: itemTaxes,
                     tax_total: itemTaxTotal,
-                    discount: discountTotal, 
+                    discount: discountTotal,
                     promotions: appliedPromotions,
                     total: itemSubtotal - discountTotal + itemTaxTotal,
                     inventory_id: item.inventory_id || null,
                     department_id: item.department_id || null,
-                    batch_id: item.batch_id || null,     
-                    batch_number: item.batch_number || null, 
+                    batch_id: item.batch_id || null,
+                    batch_number: item.batch_number || null,
                     serial_id: item.serial_id || null,
-                    serial_number: item.serial_number || null
+                    serial_number: item.serial_number || null,
+
+                    // ★ Pricing snapshot — the controller writes these onto order_items
+                    effective_price:          item.effective_price          ?? item.price,
+                    effective_selling_price:  item.effective_selling_price  ?? item.price,
+                    effective_cost_price:     item.effective_cost_price     ?? 0,
+                    effective_discount_price: item.effective_discount_price ?? 0,
+                    pricing_source:           item.pricing_source           ?? 'variant',
+                    has_custom_pricing:       item.has_custom_pricing       ?? false,
                 };
             }),
             customer: customerData,

@@ -64,15 +64,33 @@
 
                 <!-- Serial Selection Modal -->
                 <div class="modal fade" id="serialSelectionModal" tabindex="-1">
-                    <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
                         <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">
-                                    <i class="bi bi-upc-scan fs-2 me-2 text-primary"></i>
-                                    {{ __('passwords.select_serial') }}
-                                    <span id="serialVariantName" class="fs-6 text-muted ms-2"></span>
-                                </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <div class="modal-header flex-column align-items-stretch">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h5 class="modal-title mb-0">
+                                        <i class="bi bi-upc-scan fs-2 me-2 text-primary"></i>
+                                        {{ __('passwords.select_serial') }}
+                                        <span id="serialVariantName" class="fs-6 text-muted ms-2"></span>
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+
+                                {{-- Search bar --}}
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-search"></i>
+                                    </span>
+                                    <input type="text"
+                                        id="serialSelectionSearch"
+                                        class="form-control"
+                                        placeholder="{{ __('passwords.search_serials_placeholder') }}"
+                                        autocomplete="off">
+                                    <button class="btn btn-light" type="button" id="serialSelectionSearchClear">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="text-muted fs-8 mt-2" id="serialSelectionCount"></div>
                             </div>
                             <div class="modal-body" id="serialSelectionBody">
                                 <!-- Serials will be listed here -->
@@ -80,7 +98,7 @@
                         </div>
                     </div>
                 </div>
-                
+                                
                 <style>
                     .product-item .product-card {
                         display: flex;
@@ -213,20 +231,29 @@
                                         $isRecipe = $product->hasRecipe();
                                     @endphp
                                     
-                                    <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative" 
+                                    <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative"
                                         data-name="{{ strtolower($variant->name ?? $product->name) }}"
                                         data-product="{{ $product->id }}"
                                         data-variant-id="{{ $variant->id }}"
-                                        data-price="{{ $variant->selling_price }}"
+
+                                        {{-- ★ Pricing the POS will use --}}
+                                        data-price="{{ $variant->effective_price ?? $variant->selling_price }}"
+                                        data-effective-price="{{ $variant->effective_price ?? $variant->selling_price }}"
+                                        data-effective-selling-price="{{ $variant->effective_selling_price ?? $variant->selling_price }}"
+                                        data-effective-cost-price="{{ $variant->effective_cost_price ?? 0 }}"
+                                        data-effective-discount-price="{{ $variant->effective_discount_price ?? 0 }}"
+                                        data-pricing-source="{{ $variant->pricing_source ?? 'variant' }}"
+                                        data-has-custom-pricing="{{ ($variant->has_custom_pricing ?? false) ? 'true' : 'false' }}"
+
                                         data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
                                         data-taxes='@json($variant->applicable_taxes ?? [])'
                                         data-promotions='@json($variant->applicable_promotions ?? [])'
                                         data-strategy="{{ $strategy }}"
                                         data-is-recipe="{{ $isRecipe ? 'true' : 'false' }}"
                                         data-batches='@json($variant->available_batches ?? [])'
-                                        data-serials='@json($variant->available_serials ?? [])'  
-                                        data-quantity-available="{{ $variant->quantity_available ?? 0 }}"  
-                                        data-variant-name="{{ $variant->name ?? $product->name }}"         
+                                        data-serials='@json($variant->available_serials ?? [])'
+                                        data-quantity-available="{{ $variant->quantity_available ?? 0 }}"
+                                        data-variant-name="{{ $variant->name ?? $product->name }}"
                                         @if(!$isSingleShop) data-inventory='{{ $inventoryJson }}' @endif
                                         onclick="handleVariantClick(this)"
                                         style="cursor: pointer;">
@@ -299,9 +326,19 @@
                                                     </span>
                                                 </div>
                                             </div>
-
                                             <span class="text-success text-end fw-bold fs-1">
-                                                {{ $variant->selling_price }} {{ currency_symbol() }}
+                                                {{ $variant->effective_price ?? $variant->selling_price }} {{ currency_symbol() }}
+                                                @if($variant->has_custom_pricing ?? false)
+                                                    <span class="badge badge-light-warning fs-8 ms-1"
+                                                        title="{{ match($variant->pricing_source ?? 'variant') {
+                                                            'item'   => 'Item-level price',
+                                                            'batch'  => 'Batch-level price',
+                                                            'serial' => 'Serial-level price',
+                                                            default  => 'Custom price',
+                                                        } }}">
+                                                        <i class="bi bi-pencil-square"></i>
+                                                    </span>
+                                                @endif
                                             </span>
                                         </div>
                                     </div>
@@ -770,7 +807,7 @@
                         card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
                         card.setAttribute('data-product', product.id);
                         card.setAttribute('data-variant-id', variant.id);
-                        card.setAttribute('data-price', variant.selling_price);
+                        card.setAttribute('data-price', variant.effective_price ?? variant.selling_price);
                         card.setAttribute('data-image', imageUrl);
                         card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
                         card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
@@ -899,7 +936,16 @@
                                 </div>
 
                                 <span class="text-success text-end fw-bold fs-1">
-                                    ${variant.selling_price} {{ currency_symbol() }}
+                                    ${variant.effective_price ?? variant.selling_price} {{ currency_symbol() }}
+                                    ${variant.has_custom_pricing
+                                        ? `<span class="badge badge-light-warning fs-8 ms-1"
+                                                title="${variant.pricing_source === 'item' ? 'Item-level price' :
+                                                        variant.pricing_source === 'batch' ? 'Batch-level price' :
+                                                        variant.pricing_source === 'serial' ? 'Serial-level price' :
+                                                        'Custom price'}">
+                                               <i class="bi bi-pencil-square"></i>
+                                           </span>`
+                                        : ''}
                                 </span>
                             </div>
                         `;
@@ -1042,7 +1088,7 @@
                         card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
                         card.setAttribute('data-product', product.id);
                         card.setAttribute('data-variant-id', variant.id);
-                        card.setAttribute('data-price', variant.selling_price);
+                        card.setAttribute('data-price', variant.effective_price ?? variant.selling_price);
                         card.setAttribute('data-image', imageUrl);
                         card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
                         card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
@@ -1098,7 +1144,16 @@
                                 </div>
 
                                 <span class="text-success text-end fw-bold fs-1">
-                                    ${variant.selling_price} {{ currency_symbol() }}
+                                    ${variant.effective_price ?? variant.selling_price} {{ currency_symbol() }}
+                                    ${variant.has_custom_pricing
+                                        ? `<span class="badge badge-light-warning fs-8 ms-1"
+                                                title="${variant.pricing_source === 'item'   ? 'Item-level price'   :
+                                                        variant.pricing_source === 'batch'  ? 'Batch-level price'  :
+                                                        variant.pricing_source === 'serial' ? 'Serial-level price' :
+                                                                                              'Custom price'}">
+                                               <i class="bi bi-pencil-square"></i>
+                                           </span>`
+                                        : ''}
                                 </span>
                             </div>
                         `;

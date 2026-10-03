@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Catalog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ProductVariant;
-use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredient, SerialNumber };
+use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredient, SerialNumber,
+    InventoryItems, Department };
 use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
@@ -1003,15 +1004,21 @@ class ProductVariantController extends Controller
             });
     }
 
+
+
+
+
+
     /**
-     * Get serial numbers for a variant
+     * Get serial numbers for a variant (with pricing).
+     * Supports search + pagination.
      */
-    public function getSerials($variantId)
+    public function getSerials(Request $request, $variantId)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('view variant')) {
+        if (! $user->hasPermissionTo('view variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1022,82 +1029,150 @@ class ProductVariantController extends Controller
             ->where('id', $variantId)
             ->first();
 
-        if (!$variant) {
+        if (! $variant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Variant not found'
+                'message' => 'Variant not found',
             ], 404);
         }
 
-        // ✅ EAGER LOAD location and department with proper foreign keys
-        $serials = SerialNumber::with(['location', 'department'])
-            ->where('variant_id', $variantId)
-            ->where('tenant_id', $tenantId)
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // ─── Filters ───────────────────────────────────────────
+        $search    = trim((string) $request->get('search', ''));
+        $status    = $request->get('status');              // optional single status
+        $perPage   = (int) $request->get('per_page', 15);
+        $perPage   = max(1, min(100, $perPage));           // sanity bound
+        $page      = (int) $request->get('page', 1);
+        $page      = max(1, $page);
 
-        // // ✅ DEBUG: Log location and department data
-        // \Log::info('Serial Data Debug', [
-        //     'total_serials' => $serials->count(),
-        //     'first_serial' => $serials->first() ? [
-        //         'id' => $serials->first()->id,
-        //         'serial_number' => $serials->first()->serial_number,
-        //         'location_id' => $serials->first()->location_id,
-        //         'location' => $serials->first()->location ? [
-        //             'id' => $serials->first()->location->id,
-        //             'name' => $serials->first()->location->name,
-        //         ] : null,
-        //         'department_id' => $serials->first()->department_id,
-        //         'department' => $serials->first()->department ? [
-        //             'id' => $serials->first()->department->id,
-        //             'name' => $serials->first()->department->name,
-        //         ] : null,
-        //     ] : null,
-        //     'all_serials' => $serials->map(function($serial) {
-        //         return [
-        //             'id' => $serial->id,
-        //             'serial_number' => $serial->serial_number,
-        //             'location_id' => $serial->location_id,
-        //             'location_name' => $serial->location ? $serial->location->name : 'N/A',
-        //             'department_id' => $serial->department_id,
-        //             'department_name' => $serial->department ? $serial->department->name : 'N/A',
-        //         ];
-        //     })->toArray()
-        // ]);
+        // ─── Base query — always scoped to this variant ────────
+        $baseQuery = SerialNumber::with(['location', 'department', 'variant'])
+            ->where('variant_id', $variantId)
+            ->where('tenant_id', $tenantId);
+
+        // Summary needs the *unfiltered-by-search* counts so totals
+        // reflect the whole variant, not just the current search.
+        $allSerials = (clone $baseQuery)->get();
 
         $summary = [
-            'total' => $serials->count(),
-            'available' => $serials->where('status', SerialNumber::STATUS_AVAILABLE)->count(),
-            'sold' => $serials->where('status', SerialNumber::STATUS_SOLD)->count(),
-            'reserved' => $serials->where('status', SerialNumber::STATUS_RESERVED)->count(),
-            'returned' => $serials->where('status', SerialNumber::STATUS_RETURNED)->count(),
-            'lost' => $serials->where('status', SerialNumber::STATUS_LOST)->count(),
-            'damaged' => $serials->where('status', SerialNumber::STATUS_DAMAGED)->count(),
+            'total'     => $allSerials->count(),
+            'available' => $allSerials->where('status', SerialNumber::STATUS_AVAILABLE)->count(),
+            'sold'      => $allSerials->where('status', SerialNumber::STATUS_SOLD)->count(),
+            'reserved'  => $allSerials->where('status', SerialNumber::STATUS_RESERVED)->count(),
+            'returned'  => $allSerials->where('status', SerialNumber::STATUS_RETURNED)->count(),
+            'lost'      => $allSerials->where('status', SerialNumber::STATUS_LOST)->count(),
+            'damaged'   => $allSerials->where('status', SerialNumber::STATUS_DAMAGED)->count(),
         ];
+
+        // ─── Apply filters to the paginated query ──────────────
+        $query = clone $baseQuery;
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('serial_number', 'LIKE', "%{$search}%")
+                  ->orWhere('notes', 'LIKE', "%{$search}%")
+                  ->orWhereHas('location', fn($l) =>
+                        $l->where('name', 'LIKE', "%{$search}%"))
+                  ->orWhereHas('department', fn($d) =>
+                        $d->where('name', 'LIKE', "%{$search}%"));
+            });
+        }
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $query->orderBy('created_at', 'desc');
+
+        // ─── Paginate ──────────────────────────────────────────
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        // ─── Map to payload ────────────────────────────────────
+        $serialsPayload = collect($paginator->items())->map(function (SerialNumber $serial) {
+            return [
+                'id'              => $serial->id,
+                'serial_number'   => $serial->serial_number,
+                'status'          => $serial->status,
+                'status_label'    => $serial->status_label,
+                'status_color'    => $serial->status_color,
+
+                'location_id'     => $serial->location_id,
+                'location_name'   => $serial->location_name,
+                'department_id'   => $serial->department_id,
+                'department_name' => $serial->department_name,
+
+                'order_id'        => $serial->order_id,
+                'sold_at'         => optional($serial->sold_at)->toIso8601String(),
+                'expiry_date'     => optional($serial->expiry_date)->format('Y-m-d'),
+                'notes'           => $serial->notes,
+                'created_at'      => $serial->created_at,
+
+                // Raw overrides (for the edit modal to prefill)
+                'supplier_cost_price'    => $serial->supplier_cost_price,
+                'total_shipping_cost'    => $serial->total_shipping_cost,
+                'ura_taxes_applied'      => $serial->ura_taxes_applied,
+                'additional_expenses'    => $serial->additional_expenses,
+                'grand_total_cost_price' => $serial->grand_total_cost_price,
+                'selling_price'          => $serial->selling_price,
+                'discount_selling_price' => $serial->discount_selling_price,
+                'discount_percentage'    => $serial->discount_percentage,
+
+                // Resolved values (what the table displays)
+                'unit_cost_price'                  => $serial->effective_grand_total_cost_price,
+                'effective_selling_price'          => $serial->effective_selling_price,
+                'effective_discount_selling_price' => $serial->effective_discount_selling_price,
+                'profit_per_unit'                  => $serial->effective_profit_per_unit,
+                'profit_margin'                    => $serial->effective_profit_margin,
+                'pricing_source'                   => $serial->pricing_source,
+                'has_custom_pricing'               => (bool) $serial->has_custom_pricing,
+
+                // Frozen snapshot (null unless sold)
+                'sold_unit_price'     => $serial->sold_unit_price,
+                'sold_total_price'    => $serial->sold_total_price,
+                'sold_gross_profit'   => $serial->sold_gross_profit,
+            ];
+        })->values();
 
         return response()->json([
             'success' => true,
-            'data' => [
+            'data'    => [
                 'variant' => [
-                    'id' => $variant->id,
+                    'id'   => $variant->id,
                     'name' => $variant->name,
-                    'sku' => $variant->sku,
+                    'sku'  => $variant->sku,
                 ],
-                'serials' => $serials,
-                'summary' => $summary,
-            ]
+                'serials'  => $serialsPayload,
+                'summary'  => $summary,
+                'pagination' => [
+                    'total'         => $paginator->total(),
+                    'per_page'      => $paginator->perPage(),
+                    'current_page'  => $paginator->currentPage(),
+                    'last_page'     => $paginator->lastPage(),
+                    'from'          => $paginator->firstItem(),
+                    'to'            => $paginator->lastItem(),
+                    'has_prev'      => $paginator->currentPage() > 1,
+                    'has_next'      => $paginator->hasMorePages(),
+                    'prev_page'     => max(1, $paginator->currentPage() - 1),
+                    'next_page'     => min($paginator->lastPage(), $paginator->currentPage() + 1),
+                ],
+                'filters' => [
+                    'search'   => $search,
+                    'status'   => $status ?? 'all',
+                    'per_page' => $perPage,
+                ],
+            ],
         ]);
     }
 
-    /**
-     * Generate serial numbers
+        /**
+     * Update a serial's per-unit pricing.
+     * Passing null for any field clears it (falls back to item/variant).
      */
-    public function generateSerials(Request $request)
+    public function updateSerialPricing(Request $request, $serialId)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('edit variant')) {
+        if (! $user->hasPermissionTo('edit variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1105,63 +1180,165 @@ class ProductVariantController extends Controller
         }
 
         $validated = $request->validate([
-            'variant_id' => 'required|exists:product_variants,id',
-            'quantity' => 'required|integer|min:1|max:1000',
-            'prefix' => 'nullable|string|max:10',
+            'supplier_cost_price'    => 'nullable|numeric|min:0',
+            'total_shipping_cost'    => 'nullable|numeric|min:0',
+            'ura_taxes_applied'      => 'nullable|numeric|min:0',
+            'additional_expenses'    => 'nullable|numeric|min:0',
+            'selling_price'          => 'nullable|numeric|min:0',
+            'discount_percentage'    => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $serial = SerialNumber::where('tenant_id', $tenantId)
+            ->where('id', $serialId)
+            ->first();
+
+        if (! $serial) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Serial number not found',
+            ], 404);
+        }
+
+        if ($serial->status === SerialNumber::STATUS_SOLD) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot edit pricing on a sold serial',
+            ], 422);
+        }
+
+        // Persist — the model's mutators convert to base currency.
+        $serial->fill($validated);
+
+        // Auto-compute grand total and discount selling price
+        $serial->grand_total_cost_price = $serial->calculateGrandTotalCostPrice();
+
+        if ($serial->selling_price !== null
+            && $serial->discount_percentage !== null
+            && (float) $serial->discount_percentage > 0) {
+            $serial->discount_selling_price =
+                $serial->selling_price
+                - (($serial->selling_price * (float) $serial->discount_percentage) / 100);
+        } elseif ($serial->selling_price !== null) {
+            $serial->discount_selling_price = $serial->selling_price;
+        }
+
+        $serial->pricing_source = 'serial';
+        $serial->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => __('passwords.pricing_updated'),
+            'reload'  => true,
+        ]);
+    }
+
+    /**
+     * Generate serial numbers.
+     *
+     * Snapshots the variant's grand_total_cost_price and
+     * discount_selling_price onto each serial at creation time,
+     * unless the caller explicitly overrides them.
+     */
+    public function generateSerials(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (! $user->hasPermissionTo('edit variant')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'variant_id'      => 'required|exists:product_variants,id',
+            'quantity'        => 'required|integer|min:1|max:1000',
+            'prefix'          => 'nullable|string|max:10',
+            'unit_cost_price' => 'nullable|numeric|min:0',
+            'selling_price'   => 'nullable|numeric|min:0',
+            'location_id'     => 'nullable|exists:locations,id',
+            'department_id'   => 'nullable|exists:departments,id',
         ]);
 
         $variant = ProductVariant::where('tenant_id', $tenantId)
             ->where('id', $validated['variant_id'])
             ->first();
 
-        if (!$variant) {
+        if (! $variant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Variant not found'
+                'message' => 'Variant not found',
             ], 404);
         }
 
         $product = $variant->product;
-        if (!$product || $product->resolvedInventoryStrategy() !== 'serial') {
+        if (! $product || $product->resolvedInventoryStrategy() !== 'serial') {
             return response()->json([
                 'success' => false,
-                'message' => 'This product does not use serial tracking strategy'
+                'message' => 'This product does not use serial tracking strategy',
             ], 422);
         }
+
+        // ─── Resolve baseline prices from the variant ──────────
+        //    Prefer caller-provided overrides; otherwise snapshot
+        //    the variant's current values. This makes every serial
+        //    self-contained: the price it shows today is the price
+        //    it was created with, unaffected by later variant edits.
+        $costPrice = $validated['unit_cost_price']
+            ?? $variant->grand_total_cost_price
+            ?? $variant->calculateGrandTotalCostPrice();
+
+        $sellingPrice = $validated['selling_price']
+            ?? $variant->discount_selling_price
+            ?? $variant->selling_price
+            ?? 0;
+
+        // Discount % on the variant — carried over so the serial
+        // can recompute its own discount_selling_price later if the
+        // user changes the selling price.
+        $discountPercent = $variant->discount_percentage ?? 0;
 
         DB::beginTransaction();
 
         try {
-            $generatedSerials = [];
-            $prefix = $validated['prefix'] ?? strtoupper(substr($variant->sku, 0, 4));
+            $prefix  = $validated['prefix'] ?? strtoupper(substr($variant->sku, 0, 4));
+            $created = 0;
 
             for ($i = 0; $i < $validated['quantity']; $i++) {
-                $serial = SerialNumber::create([
-                    'variant_id' => $variant->id,
-                    'tenant_id' => $tenantId,
+                SerialNumber::create([
+                    'variant_id'    => $variant->id,
+                    'tenant_id'     => $tenantId,
                     'serial_number' => SerialNumber::generateSerialNumber($variant->id, $prefix),
-                    'status' => SerialNumber::STATUS_AVAILABLE,
-                    'created_by' => $user->id,
-                ]);
-                $generatedSerials[] = $serial;
-            }
+                    'status'        => SerialNumber::STATUS_AVAILABLE,
+                    'created_by'    => $user->id,
 
-            $variant->overal_quantity_at_hand = ($variant->overal_quantity_at_hand ?? 0) + $validated['quantity'];
-            $variant->save();
+                    'location_id'   => $validated['location_id']   ?? null,
+                    'department_id' => $validated['department_id'] ?? null,
+
+                    // ★ Snapshot the pricing from the variant
+                    'grand_total_cost_price' => $costPrice,
+                    'selling_price'          => $sellingPrice,
+                    'discount_percentage'    => $discountPercent,
+                    'discount_selling_price' => $sellingPrice,   // set to sell price for now
+                    'pricing_source'         => 'variant',
+                ]);
+                $created++;
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => "{$validated['quantity']} serial number(s) generated successfully",
-                'reload' => true,
+                'message' => "{$created} serial number(s) generated successfully",
+                'reload'  => true,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to generate serial numbers', [
                 'variant_id' => $validated['variant_id'],
-                'error' => $e->getMessage()
+                'error'      => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -1172,14 +1349,17 @@ class ProductVariantController extends Controller
     }
 
     /**
-     * Import serial numbers
+     * Import serial numbers.
+     *
+     * Snapshots the variant's pricing onto every imported serial,
+     * same convention as generateSerials().
      */
     public function importSerials(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('edit variant')) {
+        if (! $user->hasPermissionTo('edit variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1187,35 +1367,53 @@ class ProductVariantController extends Controller
         }
 
         $validated = $request->validate([
-            'variant_id' => 'required|exists:product_variants,id',
-            'serial_numbers' => 'required|string',
+            'variant_id'      => 'required|exists:product_variants,id',
+            'serial_numbers'  => 'required|string',
+            'unit_cost_price' => 'nullable|numeric|min:0',
+            'selling_price'   => 'nullable|numeric|min:0',
+            'location_id'     => 'nullable|exists:locations,id',
+            'department_id'   => 'nullable|exists:departments,id',
         ]);
 
         $variant = ProductVariant::where('tenant_id', $tenantId)
             ->where('id', $validated['variant_id'])
             ->first();
 
-        if (!$variant) {
+        if (! $variant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Variant not found'
+                'message' => 'Variant not found',
             ], 404);
         }
 
-        $serialList = array_filter(array_map('trim', explode("\n", $validated['serial_numbers'])));
+        $serialList = array_filter(
+            array_map('trim', explode("\n", $validated['serial_numbers']))
+        );
 
         if (empty($serialList)) {
             return response()->json([
                 'success' => false,
-                'message' => 'No valid serial numbers found'
+                'message' => 'No valid serial numbers found',
             ], 422);
         }
+
+        // ─── Resolve baseline prices once ──────────────────────
+        $costPrice = $validated['unit_cost_price']
+            ?? $variant->grand_total_cost_price
+            ?? $variant->calculateGrandTotalCostPrice();
+
+        $sellingPrice = $validated['selling_price']
+            ?? $variant->discount_selling_price
+            ?? $variant->selling_price
+            ?? 0;
+
+        $discountPercent = $variant->discount_percentage ?? 0;
 
         DB::beginTransaction();
 
         try {
             $imported = 0;
-            $errors = [];
+            $errors   = [];
 
             foreach ($serialList as $serialNumber) {
                 $exists = SerialNumber::where('tenant_id', $tenantId)
@@ -1228,37 +1426,44 @@ class ProductVariantController extends Controller
                 }
 
                 SerialNumber::create([
-                    'variant_id' => $variant->id,
-                    'tenant_id' => $tenantId,
+                    'variant_id'    => $variant->id,
+                    'tenant_id'     => $tenantId,
                     'serial_number' => $serialNumber,
-                    'status' => SerialNumber::STATUS_AVAILABLE,
-                    'created_by' => $user->id,
+                    'status'        => SerialNumber::STATUS_AVAILABLE,
+                    'created_by'    => $user->id,
+
+                    'location_id'   => $validated['location_id']   ?? null,
+                    'department_id' => $validated['department_id'] ?? null,
+
+                    // ★ Same snapshot convention
+                    'grand_total_cost_price' => $costPrice,
+                    'selling_price'          => $sellingPrice,
+                    'discount_percentage'    => $discountPercent,
+                    'discount_selling_price' => $sellingPrice,
+                    'pricing_source'         => 'variant',
                 ]);
 
                 $imported++;
             }
 
-            $variant->overal_quantity_at_hand = ($variant->overal_quantity_at_hand ?? 0) + $imported;
-            $variant->save();
-
             DB::commit();
 
             $message = "{$imported} serial number(s) imported successfully";
-            if (!empty($errors)) {
-                $message .= ". " . implode(', ', $errors);
+            if (! empty($errors)) {
+                $message .= '. ' . implode(', ', $errors);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'reload' => true,
+                'reload'  => true,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to import serial numbers', [
                 'variant_id' => $validated['variant_id'],
-                'error' => $e->getMessage()
+                'error'      => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -1270,14 +1475,15 @@ class ProductVariantController extends Controller
 
 
     /**
-     * Assign selected serials to location and department
+     * Assign selected serials to location and department,
+     * freezing per-scope pricing on each serial.
      */
     public function assignSelectedSerials(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('edit variant')) {
+        if (! $user->hasPermissionTo('edit variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1285,51 +1491,109 @@ class ProductVariantController extends Controller
         }
 
         $validated = $request->validate([
-            'serial_ids' => 'required|array',
-            'serial_ids.*' => 'exists:serial_numbers,id',
-            'location_id' => 'nullable|exists:locations,id',
+            'serial_ids'    => 'required|array',
+            'serial_ids.*'  => 'exists:serial_numbers,id',
+            'location_id'   => 'nullable|exists:locations,id',
             'department_id' => 'nullable|exists:departments,id',
         ]);
 
-        // ✅ Allow assigning location OR department individually
-        if (!$validated['location_id'] && !$validated['department_id']) {
+        if (! $validated['location_id'] && ! $validated['department_id']) {
             return response()->json([
                 'success' => false,
                 'message' => __('passwords.select_location_or_department'),
             ], 422);
         }
 
+        // Validate department belongs to location if both are given
+        if ($validated['location_id'] && $validated['department_id']) {
+            $belongs = Department::where('tenant_id', $tenantId)
+                ->where('id', $validated['department_id'])
+                ->where('location_id', $validated['location_id'])
+                ->exists();
+
+            if (! $belongs) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('passwords.department_not_in_location'),
+                ], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
-            $query = SerialNumber::where('tenant_id', $tenantId)
+            $serials = SerialNumber::where('tenant_id', $tenantId)
                 ->whereIn('id', $validated['serial_ids'])
-                ->where('status', SerialNumber::STATUS_AVAILABLE);
+                ->where('status', SerialNumber::STATUS_AVAILABLE)
+                ->with('variant')
+                ->get();
 
-            // ✅ Build update array dynamically
-            $updateData = [];
-            if ($validated['location_id']) {
-                $updateData['location_id'] = $validated['location_id'];
-            }
-            if ($validated['department_id']) {
-                $updateData['department_id'] = $validated['department_id'];
-            }
+            $updated = 0;
 
-            $updated = $query->update($updateData);
+            foreach ($serials as $serial) {
+                // ─── Resolve pricing for this serial's new scope ───
+                $item = null;
+
+                if ($validated['location_id'] || $validated['department_id']) {
+                    $item = InventoryItems::query()
+                        ->where('tenant_id', $tenantId)
+                        ->where('variant_id', $serial->variant_id)
+                        ->when($validated['location_id'],   fn($q, $v) => $q->where('location_id', $v))
+                        ->when($validated['department_id'], fn($q, $v) => $q->where('department_id', $v))
+                        ->first();
+                }
+
+                // Build update payload — always move location/department
+                $payload = [];
+                if ($validated['location_id']) {
+                    $payload['location_id'] = $validated['location_id'];
+                }
+                if ($validated['department_id']) {
+                    $payload['department_id'] = $validated['department_id'];
+                }
+
+                // ★ Freeze pricing only if the serial has no override yet
+                if (! $serial->has_custom_pricing) {
+                    if ($item && $item->grand_total_cost_price !== null) {
+                        // Prefer the item-level override
+                        $payload['supplier_cost_price']    = $item->supplier_cost_price;
+                        $payload['total_shipping_cost']    = $item->total_shipping_cost;
+                        $payload['ura_taxes_applied']      = $item->ura_taxes_applied;
+                        $payload['additional_expenses']    = $item->additional_expenses;
+                        $payload['grand_total_cost_price'] = $item->grand_total_cost_price;
+                        $payload['selling_price']          = $item->selling_price;
+                        $payload['discount_selling_price'] = $item->discount_selling_price;
+                        $payload['discount_percentage']    = $item->discount_percentage;
+                        $payload['markup_percentage']      = $item->markup_percentage;
+                        $payload['pricing_source']         = 'item';
+                    } elseif ($serial->variant) {
+                        // Fall back to variant — leaves serial's own columns
+                        // null so the accessor keeps falling back to variant
+                        // even if the variant gets repriced later.
+                        // (Explicitly NOT copying variant values onto the
+                        // serial so future variant updates still flow through
+                        // for items that were never overridden.)
+                        $payload['pricing_source'] = 'variant';
+                    }
+                }
+
+                $serial->fill($payload)->save();
+                $updated++;
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
                 'message' => __('passwords.selected_serials_assigned', ['count' => $updated]),
-                'reload' => true,
+                'reload'  => true,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to assign selected serials', [
                 'serial_ids' => $validated['serial_ids'],
-                'error' => $e->getMessage()
+                'error'      => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -1341,14 +1605,15 @@ class ProductVariantController extends Controller
 
 
     /**
-     * Update serial number status
+     * Update serial number status,
+     * freezing sale prices when the serial is marked as sold.
      */
     public function updateSerialStatus(Request $request, $serialId)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('edit variant')) {
+        if (! $user->hasPermissionTo('edit variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1356,42 +1621,89 @@ class ProductVariantController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => 'required|in:available,sold,reserved,returned,lost,damaged',
-            'order_id' => 'nullable|exists:orders,id',
-            'notes' => 'nullable|string|max:500',
+            'status'          => 'required|in:available,sold,reserved,returned,lost,damaged',
+            'order_id'        => 'nullable|exists:orders,id',
+            'notes'           => 'nullable|string|max:500',
+            'sold_unit_price' => 'nullable|numeric|min:0',  // ★ optional override
         ]);
 
-        $serial = SerialNumber::where('tenant_id', $tenantId)
+        $serial = SerialNumber::with('variant')
+            ->where('tenant_id', $tenantId)
             ->where('id', $serialId)
             ->first();
 
-        if (!$serial) {
+        if (! $serial) {
             return response()->json([
                 'success' => false,
-                'message' => 'Serial number not found'
+                'message' => 'Serial number not found',
             ], 404);
         }
 
-        if ($validated['status'] === SerialNumber::STATUS_SOLD && !$validated['order_id']) {
+        if ($validated['status'] === SerialNumber::STATUS_SOLD && ! $validated['order_id']) {
             return response()->json([
                 'success' => false,
-                'message' => 'Order ID is required when marking as sold'
+                'message' => 'Order ID is required when marking as sold',
             ], 422);
         }
 
-        $serial->update([
-            'status' => $validated['status'],
-            'order_id' => $validated['order_id'] ?? $serial->order_id,
-            'sold_at' => $validated['status'] === SerialNumber::STATUS_SOLD ? now() : $serial->sold_at,
-            'sold_by' => $validated['status'] === SerialNumber::STATUS_SOLD ? $user->id : $serial->sold_by,
-            'notes' => $validated['notes'] ?? $serial->notes,
-        ]);
+        DB::beginTransaction();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Serial number status updated successfully',
-            'reload' => true,
-        ]);
+        try {
+            // ─── Base payload ──────────────────────────────────────
+            $payload = [
+                'status'   => $validated['status'],
+                'order_id' => $validated['order_id'] ?? $serial->order_id,
+                'notes'    => $validated['notes']    ?? $serial->notes,
+            ];
+
+            if ($validated['status'] === SerialNumber::STATUS_SOLD) {
+                $payload['sold_at'] = now();
+                $payload['sold_by'] = $user->id;
+
+                // ★ Freeze the actual sale price
+                $unitSalePrice = $validated['sold_unit_price']
+                    ?? $serial->effective_discount_selling_price;
+
+                $unitCost = $serial->effective_grand_total_cost_price;
+
+                $payload['sold_unit_price']   = $unitSalePrice;
+                $payload['sold_total_price']  = $unitSalePrice;  // 1 unit
+                $payload['sold_gross_profit'] = $unitSalePrice - $unitCost;
+            }
+
+            // If transitioning AWAY from sold, clear the frozen snapshot
+            // so historical reports don't carry stale sold data.
+            if ($validated['status'] !== SerialNumber::STATUS_SOLD
+                && $serial->status === SerialNumber::STATUS_SOLD) {
+                $payload['sold_at']           = null;
+                $payload['sold_by']           = null;
+                $payload['sold_unit_price']   = null;
+                $payload['sold_total_price']  = null;
+                $payload['sold_gross_profit'] = null;
+            }
+
+            $serial->fill($payload)->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Serial number status updated successfully',
+                'reload'  => true,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to update serial status', [
+                'serial_id' => $serialId,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update serial: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

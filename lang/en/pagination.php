@@ -1579,6 +1579,9 @@ return [
     'created_by' => 'Created By',
     'total_output_quantity' => 'Total Output Quantity',
     'total_input_quantity' => 'Total Input Quantity',
+    'item_not_sellable'       => 'This item is not sellable — its selling price is not set.',
+    'serial_already_in_cart'  => 'This serial number is already in the cart.',
+
 
     'total_logs'                => 'Total Logs',
     'batch_info'                => 'Batch Info',

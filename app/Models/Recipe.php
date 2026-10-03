@@ -15,8 +15,50 @@ class Recipe extends Model
 
     protected $fillable = [
         'product_id',
+        'unit_cost',
+        'unit_selling_price',
+        'last_costed_at',
         'tenant_id',
     ];
+
+    protected $casts = [
+        'unit_cost'         => 'integer',
+        'unit_selling_price'=> 'integer',
+        'last_costed_at'    => 'datetime',
+    ];
+
+    public function getUnitCostAttribute($v): ?float
+    {
+        return $v === null ? null : from_base_currency($v);
+    }
+    public function getUnitSellingPriceAttribute($v): ?float
+    {
+        return $v === null ? null : from_base_currency($v);
+    }
+    public function setUnitCostAttribute($v): void
+    {
+        $this->attributes['unit_cost'] = $v === null ? null : to_base_currency($v);
+    }
+    public function setUnitSellingPriceAttribute($v): void
+    {
+        $this->attributes['unit_selling_price'] = $v === null ? null : to_base_currency($v);
+    }
+
+    /**
+     * Recompute and cache the recipe's unit cost from its ingredients.
+     */
+    public function recalculateCost(): self
+    {
+        $total = $this->ingredients->sum(function (RecipeIngredient $i) {
+            return (float) ($i->total_cost ?? ($i->unit_cost * $i->quantity_required));
+        });
+
+        $this->unit_cost      = $total;
+        $this->last_costed_at = now();
+        $this->save();
+
+        return $this;
+    }
 
     /**
      * Get the product that owns this recipe
