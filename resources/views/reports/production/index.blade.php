@@ -610,40 +610,87 @@ window.toggleAllOutputRows = function (include) {
 
 window.__recomputeOutputTotals = function () {
     const rows      = window.__outputRows;
-    const inputKg   = window.__outputInputKg;
     const currency  = window.__outputCurrency;
+    const declaredInputKg = Number(window.__outputInputKg);
 
-    const included  = rows.filter(r => r.included);
-    const totalKg   = included.reduce((s, r) => s + r.total_kg, 0);
-    const totalRev  = included.reduce((s, r) => s + r.revenue, 0);
-    const totalShare = inputKg > 0 ? (totalKg / inputKg) * 100 : 0;
+    const included = rows.filter(r => r.included);
+    const totalKg  = included.reduce((s, r) => s + r.total_kg, 0);
+    const totalRev = included.reduce((s, r) => s + r.revenue,  0);
 
-    // Per-row share — recompute against input kg so numbers reflect the toggle
+    // ────────────────────────────────────────────────────────────
+    // ★ DYNAMIC: resolve the best-available input kg
+    // ────────────────────────────────────────────────────────────
+    // Rules (in order of preference):
+    //   1. If controller sent a plausible input_kg, use it.
+    //      Plausible = finite, > 0, and >= sum of ALL output kg
+    //      (physical reality: you can't output more than you input).
+    //   2. Otherwise, fall back to sum of ALL output rows' total_kg.
+    //      This makes loss = 0, but at least percentages are truthful
+    //      relative to "what we produced". Better than garbage %.
+    //   3. If no rows at all, mark input as unavailable.
+    // ────────────────────────────────────────────────────────────
+    const sumAllOutputKg = rows.reduce((s, r) => s + r.total_kg, 0);
+
+    let inputKg;
+    let inputSource;
+
+    if (Number.isFinite(declaredInputKg)
+        && declaredInputKg > 0
+        && declaredInputKg >= sumAllOutputKg) {
+        inputKg = declaredInputKg;
+        inputSource = 'declared';
+    } else if (sumAllOutputKg > 0) {
+        inputKg = sumAllOutputKg;
+        inputSource = 'derived';
+        console.warn('[Output Breakdown] declared input_kg was invalid, deriving from output sum', {
+            declared: declaredInputKg,
+            derived:  sumAllOutputKg,
+        });
+    } else {
+        inputKg = null;
+        inputSource = 'unavailable';
+    }
+
+    const inputIsSane = inputKg !== null && inputKg > 0;
+
+    // ─── Per-row % of input ───────────────────────────────────────
     rows.forEach(r => {
-        const el = document.querySelector(`#${r.id} .output-row-share`);
-        if (!el) return;
-        const share = inputKg > 0 ? (r.total_kg / inputKg) * 100 : 0;
-        el.textContent = share.toFixed(2) + '%';
-        // Fade the share/revenue cells of excluded rows
-        el.style.opacity = r.included ? '1' : '0.4';
+        const shareEl = document.querySelector(`#${r.id} .output-row-share`);
+        if (shareEl) {
+            if (inputIsSane) {
+                const share = (r.total_kg / inputKg) * 100;
+                shareEl.textContent = share.toFixed(2) + '%';
+                shareEl.title = '';
+            } else {
+                shareEl.textContent = '—';
+                shareEl.title = 'Input KG unavailable — cannot compute %';
+            }
+            shareEl.style.opacity = r.included ? '1' : '0.4';
+        }
         const revEl = document.querySelector(`#${r.id} .output-row-revenue`);
         if (revEl) revEl.style.opacity = r.included ? '1' : '0.4';
     });
 
-    const lossKg  = Math.max(0, inputKg - totalKg);
-    const lossPct = inputKg > 0 ? (lossKg / inputKg) * 100 : 0;
+    // ─── Loss ─────────────────────────────────────────────────────
+    const lossKg  = inputIsSane ? Math.max(0, inputKg - totalKg) : null;
+    const lossPct = inputIsSane ? (lossKg / inputKg) * 100 : null;
+    const totalShare = inputIsSane ? (totalKg / inputKg) * 100 : null;
 
-    const tKgEl    = document.getElementById('outputTotalKg');
-    const tShareEl = document.getElementById('outputTotalShare');
-    const tRevEl   = document.getElementById('outputTotalRevenue');
-    const lKgEl    = document.getElementById('outputLossKg');
-    const lPctEl   = document.getElementById('outputLossPct');
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
 
-    if (tKgEl)    tKgEl.textContent    = totalKg.toFixed(2) + ' kg';
-    if (tShareEl) tShareEl.textContent = totalShare.toFixed(2) + '%';
-    if (tRevEl)   tRevEl.textContent   = `${currency} ${totalRev.toFixed(2)}`;
-    if (lKgEl)    lKgEl.textContent    = lossKg.toFixed(2) + ' kg';
-    if (lPctEl)   lPctEl.textContent   = lossPct.toFixed(2) + '%';
+    setText('outputTotalKg',      totalKg.toFixed(2) + ' kg');
+    setText('outputTotalShare',   inputIsSane ? totalShare.toFixed(2) + '%' : '—');
+    setText('outputTotalRevenue', `${currency} ${totalRev.toFixed(2)}`);
+    setText('outputLossKg',       inputIsSane ? lossKg.toFixed(2) + ' kg' : '—');
+    setText('outputLossPct',      inputIsSane ? lossPct.toFixed(2) + '%' : '—');
+
+    // ─── Optional: sync summary card ──────────────────────────────
+    if (typeof window.__outputOnChange === 'function' && inputIsSane) {
+        window.__outputOnChange(totalKg, totalRev, lossKg, lossPct, inputSource);
+    }
 };
 
 // ─── View Details ──────────────────────────────────────────────
