@@ -653,4 +653,240 @@ class InventoryItemController extends Controller
         ]);
     }
 
+
+
+        /**
+     * Return the resolved pricing for one inventory item.
+     *
+     * Cascade:
+     *   1. The item's own override — only when has_custom_pricing = 1
+     *      and selling_price > 0
+     *   2. The parent variant's grand_total_cost_price / selling_price /
+     *      discount_selling_price
+     *
+     * Also returns the raw override values so the edit modal can
+     * prefill the form when has_custom_pricing is on.
+     */
+    public function getPricing(string $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (! $user->hasPermissionTo('view inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $item = InventoryItems::with(['variant', 'departmentItem', 'itemLocation'])
+            ->where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (! $item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        $variant = $item->variant;
+
+        // ── Variant fallback values ────────────────────────────
+        $variantCost = (float) ($variant->grand_total_cost_price ?? 0);
+        if ($variantCost <= 0) {
+            $variantCost = (float) ($variant->supplier_cost_price ?? 0)
+                         + (float) ($variant->total_shipping_cost ?? 0)
+                         + (float) ($variant->ura_taxes_applied   ?? 0)
+                         + (float) ($variant->additional_expenses ?? 0);
+        }
+
+        $variantSelling = (float) ($variant->selling_price ?? 0);
+        $variantDisc    = (float) ($variant->discount_selling_price ?? 0);
+
+        // ── Item override (only used when has_custom_pricing = 1) ─
+        $hasCustom = ((int) ($item->has_custom_pricing ?? 0) === 1);
+
+        $payload = [
+            'item' => [
+                'id'        => $item->id,
+                'variant'   => [
+                    'id'   => $variant?->id,
+                    'name' => $variant?->name,
+                    'sku'  => $variant?->sku,
+                ],
+                'department' => $item->departmentItem?->name,
+                'location'   => $item->itemLocation?->name,
+                'quantity_allocated' => (float) ($item->quantity_allocated ?? 0),
+            ],
+
+            'has_custom_pricing' => $hasCustom,
+
+            // Raw override fields — for prefilling the edit form
+            'raw' => [
+                'supplier_cost_price'    => $item->supplier_cost_price,
+                'total_shipping_cost'    => $item->total_shipping_cost,
+                'ura_taxes_applied'      => $item->ura_taxes_applied,
+                'additional_expenses'    => $item->additional_expenses,
+                'grand_total_cost_price' => $item->grand_total_cost_price,
+                'selling_price'          => $item->selling_price,
+                'discount_selling_price' => $item->discount_selling_price,
+                'discount_percentage'    => $item->discount_percentage,
+            ],
+
+            // Variant fallback — always provided so the UI can show
+            // "inherited" values even when has_custom_pricing = 0
+            'variant' => [
+                'grand_total_cost_price' => $variantCost,
+                'selling_price'          => $variantSelling,
+                'discount_selling_price' => $variantDisc,
+            ],
+
+            // Resolved effective values — what the POS would charge
+            'effective' => [
+                'cost_price'     => $hasCustom ? (float) ($item->grand_total_cost_price ?? 0) : $variantCost,
+                'selling_price'  => $hasCustom ? (float) ($item->selling_price ?? 0)          : $variantSelling,
+                'discount_price' => $hasCustom ? (float) ($item->discount_selling_price ?? 0) : $variantDisc,
+                'pricing_source' => $hasCustom ? 'item' : 'variant',
+            ],
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => $payload,
+        ]);
+    }
+
+    /**
+     * Update an inventory item's per-scope pricing.
+     *
+     * Passing has_custom_pricing = false clears every override column and
+     * reverts the item to inheriting from the variant.
+     */
+    public function updatePricing(Request $request, string $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (! $user->hasPermissionTo('edit inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $item = InventoryItems::where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (! $item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'has_custom_pricing'     => 'required|boolean',
+            'supplier_cost_price'    => 'nullable|numeric|min:0',
+            'total_shipping_cost'    => 'nullable|numeric|min:0',
+            'ura_taxes_applied'      => 'nullable|numeric|min:0',
+            'additional_expenses'    => 'nullable|numeric|min:0',
+            'selling_price'          => 'nullable|numeric|min:0',
+            'discount_percentage'    => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            if (! $validated['has_custom_pricing']) {
+                // ★ Turn off — clear all override columns, revert to variant
+                $item->fill([
+                    'has_custom_pricing'     => 0,
+                    'supplier_cost_price'    => null,
+                    'total_shipping_cost'    => null,
+                    'ura_taxes_applied'      => null,
+                    'additional_expenses'    => null,
+                    'grand_total_cost_price' => null,
+                    'selling_price'          => null,
+                    'discount_selling_price' => null,
+                    'discount_percentage'    => null,
+                    'markup_percentage'      => null,
+                    'pricing_source'         => 'variant',
+                ]);
+                $item->save();
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'reload'  => true,
+                    'message' => __('passwords.custom_pricing_removed'),
+                ]);
+            }
+
+            // ★ Turn on (or update) — write the override values
+            $item->fill([
+                'supplier_cost_price' => $validated['supplier_cost_price'] ?? null,
+                'total_shipping_cost' => $validated['total_shipping_cost'] ?? null,
+                'ura_taxes_applied'   => $validated['ura_taxes_applied']   ?? null,
+                'additional_expenses' => $validated['additional_expenses'] ?? null,
+                'selling_price'       => $validated['selling_price']       ?? null,
+                'discount_percentage' => $validated['discount_percentage'] ?? null,
+                'has_custom_pricing'  => 1,
+                'pricing_source'      => 'item',
+            ]);
+
+            // Recompute grand_total_cost_price from components
+            $item->grand_total_cost_price = (float) ($item->supplier_cost_price ?? 0)
+                                          + (float) ($item->total_shipping_cost ?? 0)
+                                          + (float) ($item->ura_taxes_applied   ?? 0)
+                                          + (float) ($item->additional_expenses ?? 0);
+
+            // Recompute discount_selling_price from selling price and %
+            if ($item->selling_price !== null) {
+                $item->discount_selling_price = ($item->discount_percentage > 0)
+                    ? $item->selling_price - (($item->selling_price * (float) $item->discount_percentage) / 100)
+                    : $item->selling_price;
+            }
+
+            // Recompute markup
+            if ($item->grand_total_cost_price > 0 && $item->selling_price > 0) {
+                $item->markup_percentage =
+                    (($item->selling_price - $item->grand_total_cost_price)
+                    / $item->grand_total_cost_price) * 100;
+            }
+
+            $item->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'reload'  => true,
+                'message' => __('passwords.custom_pricing_updated'),
+                'data'    => [
+                    'grand_total_cost_price' => $item->grand_total_cost_price,
+                    'selling_price'          => $item->selling_price,
+                    'discount_selling_price' => $item->discount_selling_price,
+                    'has_custom_pricing'     => (bool) $item->has_custom_pricing,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Inventory pricing update failed', [
+                'item_id' => $id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.update_failed') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 }

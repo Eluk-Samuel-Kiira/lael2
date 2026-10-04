@@ -106,6 +106,30 @@
                                                     value="{{ $search }}" placeholder="{{ __('pagination.search_products') }}">
                                             </div>
                                         </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
+                                            <select class="form-select" name="location_id" data-control="select2">
+                                                <option value="">{{ __('pagination.all_locations') }}</option>
+                                                @foreach($locations as $location)
+                                                    <option value="{{ $location->id }}" {{ ($locationId ?? '') == $location->id ? 'selected' : '' }}>
+                                                        {{ $location->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-3">
+                                            <label class="form-label fw-semibold">{{ __('pagination.department') }}</label>
+                                            <select class="form-select" name="department_id" data-control="select2">
+                                                <option value="">{{ __('pagination.all_departments') }}</option>
+                                                @foreach($departments as $department)
+                                                    <option value="{{ $department->id }}" {{ ($departmentId ?? '') == $department->id ? 'selected' : '' }}>
+                                                        {{ $department->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
                                         
                                         {{-- Actions --}}
                                         <div class="col-md-2 d-flex align-items-end">

@@ -104,8 +104,16 @@
                                         <i class="bi bi-pencil-square fs-5"></i><span>{{ __('auth._edit') }}</span>
                                     </button>
                                 @endcan
+                                @can('update stock levels')
+                                    <button class="btn btn-sm btn-light btn-active-color-success"
+                                            onclick="openInventoryPricingModal({{ $item->id }})"
+                                            title="{{ __('passwords.custom_pricing') }}">
+                                        <i class="bi bi-currency-exchange fs-5"></i>
+                                    </button>
+                                @endcan
                             </div>
                             @include('store.inventory-items.edit')
+                            @include('store.inventory-items.pricing-modal')
                         </td>
                     </tr>
                 @empty

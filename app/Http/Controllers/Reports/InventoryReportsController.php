@@ -17,9 +17,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Pagination\LengthAwarePaginator;
+use App\Services\PricingResolverService;
 
 class InventoryReportsController extends Controller
 {
+    public function __construct(
+        protected PricingResolverService $pricingResolver
+    ) {}
+
     /**
      * Get current tenant ID
      */
@@ -59,119 +64,144 @@ class InventoryReportsController extends Controller
         );
     }
 
-        /**
+
+    /**
      * Resolve the true per-unit cost of a variant.
-     * Prefers the fully-loaded cost (grand_total_cost_price) but falls
-     * back to supplier_cost_price if the grand total is 0/unset.
+     * Cascade: grand_total → components → 0
      */
     private function variantCost($variant): float
     {
-        if (!$variant) return 0.0;
+        if (! $variant) return 0.0;
 
         $grand = (float) ($variant->grand_total_cost_price ?? 0);
         if ($grand > 0) return $grand;
 
-        $supplier = (float) ($variant->supplier_cost_price ?? 0);
-        if ($supplier > 0) {
-            // Sum components if grand total was never persisted
-            return $supplier
-                + (float) ($variant->total_shipping_cost ?? 0)
-                + (float) ($variant->ura_taxes_applied  ?? 0)
-                + (float) ($variant->additional_expenses ?? 0);
-        }
+        $recomputed = (float) ($variant->supplier_cost_price    ?? 0)
+                    + (float) ($variant->total_shipping_cost    ?? 0)
+                    + (float) ($variant->ura_taxes_applied      ?? 0)
+                    + (float) ($variant->additional_expenses    ?? 0);
 
-        return 0.0;
+        return $recomputed;
     }
 
     /**
-     * Selling price of a variant (discounted if present).
+     * Selling price actually charged — variant only.
+     * (Per-scope overrides are resolved via resolveScopeSellingPrice().)
      */
     private function variantSellingPrice($variant): float
     {
-        if (!$variant) return 0.0;
-        return (float) ($variant->discount_selling_price
-            ?? $variant->selling_price
-            ?? 0);
+        if (! $variant) return 0.0;
+        return (float) ($variant->selling_price ?? 0);
     }
-    
+
     /**
-     * Inventory Summary Report with Pagination
+     * Resolve the selling price for a variant at a specific scope.
+     * Cascade:
+     *   1. InventoryItems row (has_custom_pricing = 1) at this location/department
+     *   2. Variant selling_price
      */
+    private function resolveScopeSellingPrice(
+        $variant,
+        $locationId = null,
+        $departmentId = null,
+        $inventoryPricing = null
+    ): float {
+        if (! $variant) return 0.0;
+
+        if ($inventoryPricing && $locationId && $departmentId) {
+            $key = "{$variant->id}|{$locationId}|{$departmentId}";
+            $row = $inventoryPricing->get($key);
+            if ($row && (float) $row->selling_price > 0) {
+                return (float) $row->selling_price;
+            }
+        }
+
+        return (float) ($variant->selling_price ?? 0);
+    }
+
+    
     public function summary(Request $request)
     {
         $tenantId = $this->getTenantId();
-        
+
         // Filter parameters
-        $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
-        $endDate = $request->get('end_date', now()->format('Y-m-d'));
+        $startDate    = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
+        $endDate      = $request->get('end_date', now()->format('Y-m-d'));
         $departmentId = $request->get('department_id');
-        $locationId = $request->get('location_id');
-        $variantId = $request->get('variant_id');
-        $isActive = $request->get('is_active', 'all');
-        $perPage = (int)$request->get('per_page', 15);
-        
-        // Query for inventory items
+        $locationId   = $request->get('location_id');
+        $variantId    = $request->get('variant_id');
+        $isActive     = $request->get('is_active', 'all');
+        $perPage      = (int) $request->get('per_page', 15);
+
+        // ─── Query for inventory items ─────────────────────────────────
         $query = InventoryItems::with(['variant', 'departmentItem', 'itemLocation'])
             ->where('tenant_id', $tenantId);
-        
-        // Apply date filter
+
         if ($startDate && $endDate) {
             $query->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
         }
-        
-        // Apply filters
+
         if ($departmentId) {
             $query->where('department_id', $departmentId);
         }
-        
+
         if ($locationId) {
             $query->where('location_id', $locationId);
         }
-        
+
         if ($variantId) {
             $query->where('variant_id', $variantId);
         }
-        
+
         if ($isActive !== 'all') {
-            $query->whereHas('variant', function($q) use ($isActive) {
+            $query->whereHas('variant', function ($q) use ($isActive) {
                 $q->where('is_active', $isActive);
             });
         }
-        
-        // ✅ Get ALL items for summary calculations (unpaginated)
+
+        // ─── All items (unpaginated) for summary ───────────────────────
         $allItems = $query->get();
-        
-        // Summary statistics from ALL items
+
+        // ─── Summary statistics — read quantity_allocated everywhere ───
         $summary = [
-            'total_items' => $allItems->count(),
-            'total_quantity_on_hand' => $allItems->sum('quantity_on_hand'),
+            'total_items'              => $allItems->count(),
+            'total_quantity_on_hand'   => $allItems->sum('quantity_allocated'),
             'total_quantity_allocated' => $allItems->sum('quantity_allocated'),
-            'total_value' => $this->calculateInventoryValueFromCollection($allItems),
-            'average_stock_level' => $allItems->avg('quantity_on_hand'),
-            'items_below_reorder' => $allItems->filter(function($item) {
-                return $item->quantity_on_hand < ($item->reorder_point ?? 0);
+
+            'total_value'              => $this->calculateInventoryValueFromCollection($allItems),
+
+            'average_stock_level'          => $allItems->count() > 0
+                ? $allItems->avg('quantity_allocated')
+                : 0,
+
+            'items_below_reorder'      => $allItems->filter(function ($item) {
+                return (float) $item->quantity_allocated < (float) ($item->reorder_point ?? 0);
             })->count(),
-            'items_above_preferred' => $allItems->filter(function($item) {
-                return $item->preferred_stock_level > 0 && $item->quantity_on_hand > $item->preferred_stock_level;
+
+            'items_above_preferred'    => $allItems->filter(function ($item) {
+                return (float) $item->preferred_stock_level > 0
+                    && (float) $item->quantity_allocated > (float) $item->preferred_stock_level;
             })->count(),
-            'out_of_stock' => $allItems->where('quantity_on_hand', 0)->count(),
-            'total_reorder_point' => $allItems->sum('reorder_point'),
-            'total_preferred_stock' => $allItems->sum('preferred_stock_level'),
+
+            'out_of_stock'             => $allItems->where('quantity_allocated', 0)->count(),
+
+            'total_reorder_point'      => $allItems->sum('reorder_point'),
+            'total_preferred_stock'    => $allItems->sum('preferred_stock_level'),
         ];
-        
-        // ✅ Apply pagination to the collection
+
+        // ─── Paginate ──────────────────────────────────────────────────
         $inventoryItems = $this->paginateCollection($allItems, $perPage, 'page');
-        
-        // Get variants for filter dropdown
+
+        // ─── Filter options ────────────────────────────────────────────
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with('product')
             ->orderBy('name')
             ->get();
-        
+
         $departments = Department::where('tenant_id', $tenantId)->get();
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
+        $locations   = Location::where('tenant_id', $tenantId)->get();
+
         return view('reports.inventory.summary', compact(
             'inventoryItems',
             'summary',
@@ -196,7 +226,8 @@ class InventoryReportsController extends Controller
         return $query->with(['variant'])
             ->get()
             ->sum(function ($item) {
-                return $item->quantity_on_hand * $this->variantCost($item->variant);
+                return (float) ($item->quantity_allocated ?? 0)
+                    * $this->variantCost($item->variant);
             });
     }
 
@@ -206,7 +237,8 @@ class InventoryReportsController extends Controller
     private function calculateInventoryValueFromCollection($items)
     {
         return $items->sum(function ($item) {
-            return $item->quantity_on_hand * $this->variantCost($item->variant);
+            return (float) ($item->quantity_allocated ?? 0)
+                * $this->variantCost($item->variant);
         });
     }
 
@@ -466,7 +498,7 @@ class InventoryReportsController extends Controller
                 $movementData->push([
                     'variant'           => $variant,
                     'total_movement'    => $variantTransactions->sum(fn($t) => abs($t->quantity)),
-                    'avg_stock_level'   => $inventoryItemQuery->avg('quantity_on_hand') ?: 1,
+                    'avg_stock_level'   => $inventoryItemQuery->avg('quantity_allocated') ?: 1,
                     'transaction_count' => $variantTransactions->count(),
                     'first_movement'    => $variantTransactions->min('created_at'),
                     'last_movement'     => $variantTransactions->max('created_at'),
@@ -636,8 +668,8 @@ class InventoryReportsController extends Controller
             $variant = $item->variant;
             
             // ✅ Use grand_total_cost_price for accurate cost
-            $costPrice = $variant->grand_total_cost_price ?? 0;
-            $sellingPrice = $variant->selling_price ?? 0;
+            $costPrice    = $this->variantCost($variant);
+            $sellingPrice = $this->variantSellingPrice($variant);
             
             // ─── Get Days Since Last Movement ──────────────────────────
             $daysSinceLastMovement = $this->getDaysSinceLastMovement($item, $isSingleShop);
@@ -756,7 +788,7 @@ class InventoryReportsController extends Controller
                 
                 // ✅ Use quantity_allocated
                 'quantity_allocated' => $quantity,
-                'quantity_on_hand' => $item->quantity_on_hand,
+                'quantity_on_hand' => $item->quantity_allocated,
                 
                 // Batch information
                 'batch_number' => $batchNumber ?? '-',
@@ -1251,7 +1283,7 @@ class InventoryReportsController extends Controller
             'itemLocation'
         ])
         ->where('tenant_id', $tenantId)
-        ->where('quantity_on_hand', '>', 0);
+        ->where('quantity_allocated', '>', 0);
         
         // Apply department filter
         if ($departmentId) {
@@ -1277,10 +1309,9 @@ class InventoryReportsController extends Controller
             ->get()
             ->groupBy('variant_id');
 
-        // ★ Compute value using grand_total_cost_price
         $itemsWithMetrics = $allItems->map(function ($item) use ($logs) {
             $costPrice      = $this->variantCost($item->variant);
-            $inventoryValue = $item->quantity_on_hand * $costPrice;
+            $inventoryValue = (float) ($item->quantity_allocated ?? 0) * $costPrice;
 
             $itemLogs      = $logs->get($item->variant_id, collect());
             $totalMovement = $itemLogs->sum(fn($log) => abs($log->quantity_change));
@@ -1612,11 +1643,21 @@ class InventoryReportsController extends Controller
 
         $allItems = $query->get();
 
-        // ─── Enrich with correct pricing ────────────────────────────
-        $allItemsWithValuation = $allItems->map(function ($item) {
-            $costPrice    = $this->variantCost($item->variant);
-            $sellingPrice = $this->variantSellingPrice($item->variant);
-            $quantity     = (float) ($item->quantity_allocated ?? 0);
+        $inventoryPricing = InventoryItems::where('tenant_id', $tenantId)
+            ->whereIn('variant_id', $allItems->pluck('variant_id')->unique()->filter()->toArray())
+            ->where('has_custom_pricing', 1)
+            ->get(['variant_id', 'location_id', 'department_id', 'selling_price'])
+            ->keyBy(fn($r) => "{$r->variant_id}|{$r->location_id}|{$r->department_id}");
+
+        $allItemsWithValuation = $allItems->map(function ($item) use ($inventoryPricing) {
+            $costPrice = $this->variantCost($item->variant);
+            $sellingPrice = $this->resolveScopeSellingPrice(
+                $item->variant,
+                $item->location_id,
+                $item->department_id,
+                $inventoryPricing
+            );
+            $quantity = (float) ($item->quantity_allocated ?? 0);
 
             $itemValue       = $quantity * $costPrice;
             $potentialProfit = $quantity * max(0, $sellingPrice - $costPrice);
@@ -1760,8 +1801,7 @@ class InventoryReportsController extends Controller
             $daysIdle = Carbon::parse($lastMovementDate)->diffInDays(now());
             $isExpired = $item->expiry_date && Carbon::parse($item->expiry_date)->lt(now());
             
-            // ✅ Use grand_total_cost_price
-            $costPrice = $item->variant->grand_total_cost_price ?? 0;
+            $costPrice      = $this->variantCost($item->variant); 
             $inventoryValue = $item->quantity_allocated * $costPrice;
             
             $isDeadStock = $daysIdle >= $daysThreshold;
@@ -1900,8 +1940,8 @@ class InventoryReportsController extends Controller
             
             if ($excessQuantity > 0) {
                 $excessPercentage = (($currentStock / $preferredStock) - 1) * 100;
-                // ✅ Use grand_total_cost_price
-                $costPrice = $item->variant->grand_total_cost_price ?? 0;
+
+                $costPrice = $this->variantCost($item->variant);
                 $excessValue = $excessQuantity * $costPrice;
                 
                 // Determine severity

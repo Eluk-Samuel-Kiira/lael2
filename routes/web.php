@@ -5,7 +5,7 @@ use App\Http\Controllers\Home\{ DashboardController, LocationController, Setting
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Tenant\{ EmployeeDocumentController, DepartmentController, EmployeeController, 
     EmployeePaymentController, TenantController, EmployeeAdvanceController, LeaveController };
-use App\Http\Controllers\Catalog\ { CategoryController, InventoryItemController, ProductVariantController, BatchController,
+use App\Http\Controllers\Catalog\ { SerialController, RecipeController, CategoryController, InventoryItemController, ProductVariantController, BatchController,
     InventoryAdjustmentsController, ProductController, ProductCategoryController, ProductImportController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
@@ -297,6 +297,14 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::resource('items', InventoryItemController::class);
         Route::post('items/batch', [InventoryItemController::class, 'storeBatch'])
             ->name('items.batchStore');
+        Route::get ('items/{id}/pricing', [InventoryItemController::class, 'getPricing'])
+            ->name('items.pricing.get');
+        
+        Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
+        Route::get('/serials', [SerialController::class, 'index'])->name('serials.index');
+
+        Route::put ('items/{id}/pricing', [InventoryItemController::class, 'updatePricing'])
+            ->name('items.pricing.update');
 
         Route::get('/get-departments', [InventoryItemController::class, 'getDepartmentsByLocation'])->name('get.departments');
         Route::resource('stocks', InventoryAdjustmentsController::class);
@@ -304,7 +312,6 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('transfer.stock');
 
         Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
-
 
 
         // Batch routes
@@ -318,12 +325,13 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         Route::prefix('serials')->name('serials.')->group(function () {
-            Route::get('/variant/{variantId}', [ProductVariantController::class, 'getSerials'])->name('get');
-            Route::post('/generate', [ProductVariantController::class, 'generateSerials'])->name('generate');
-            Route::post('/import', [ProductVariantController::class, 'importSerials'])->name('import');
-            Route::post('/assign-selected', [ProductVariantController::class, 'assignSelectedSerials'])->name('assign-selected');
-            Route::put('/{serialId}/status', [ProductVariantController::class, 'updateSerialStatus'])->name('update-status');
-            Route::delete('/{serialId}', [ProductVariantController::class, 'deleteSerial'])->name('delete');
+            Route::get   ('/variant/{variantId}',  [ProductVariantController::class, 'getSerials'])->name('get');
+            Route::post  ('/generate',             [ProductVariantController::class, 'generateSerials'])->name('generate');
+            Route::post  ('/import',               [ProductVariantController::class, 'importSerials'])->name('import');
+            Route::post  ('/assign-selected',      [ProductVariantController::class, 'assignSelectedSerials'])->name('assign-selected');
+            Route::put   ('/{serialId}/status',    [ProductVariantController::class, 'updateSerialStatus'])->name('update-status');
+            Route::put   ('/{serialId}/pricing',   [ProductVariantController::class, 'updateSerialPricing'])->name('update-pricing'); // ★ NEW
+            Route::delete('/{serialId}',           [ProductVariantController::class, 'deleteSerial'])->name('delete');
         });
 
         // Location

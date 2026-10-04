@@ -572,6 +572,80 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
+    // ─── Output Breakdown — recompute on toggle ─────────────────────
+window.__outputRows = [];
+window.__outputInputKg = 0;
+window.__outputCurrency = '';
+
+window.toggleOutputRow = function (rowId) {
+    const row = window.__outputRows.find(r => r.id === rowId);
+    if (!row) return;
+
+    row.included = !row.included;
+
+    const el = document.getElementById(rowId);
+    if (el) {
+        el.classList.toggle('table-secondary', !row.included);
+        el.style.opacity = row.included ? '1' : '0.5';
+        const cb = el.querySelector('.output-row-check');
+        if (cb) cb.checked = row.included;
+    }
+
+    window.__recomputeOutputTotals();
+};
+
+window.toggleAllOutputRows = function (include) {
+    window.__outputRows.forEach(r => {
+        r.included = include;
+        const el = document.getElementById(r.id);
+        if (el) {
+            el.classList.toggle('table-secondary', !include);
+            el.style.opacity = include ? '1' : '0.5';
+            const cb = el.querySelector('.output-row-check');
+            if (cb) cb.checked = include;
+        }
+    });
+    window.__recomputeOutputTotals();
+};
+
+window.__recomputeOutputTotals = function () {
+    const rows      = window.__outputRows;
+    const inputKg   = window.__outputInputKg;
+    const currency  = window.__outputCurrency;
+
+    const included  = rows.filter(r => r.included);
+    const totalKg   = included.reduce((s, r) => s + r.total_kg, 0);
+    const totalRev  = included.reduce((s, r) => s + r.revenue, 0);
+    const totalShare = inputKg > 0 ? (totalKg / inputKg) * 100 : 0;
+
+    // Per-row share — recompute against input kg so numbers reflect the toggle
+    rows.forEach(r => {
+        const el = document.querySelector(`#${r.id} .output-row-share`);
+        if (!el) return;
+        const share = inputKg > 0 ? (r.total_kg / inputKg) * 100 : 0;
+        el.textContent = share.toFixed(2) + '%';
+        // Fade the share/revenue cells of excluded rows
+        el.style.opacity = r.included ? '1' : '0.4';
+        const revEl = document.querySelector(`#${r.id} .output-row-revenue`);
+        if (revEl) revEl.style.opacity = r.included ? '1' : '0.4';
+    });
+
+    const lossKg  = Math.max(0, inputKg - totalKg);
+    const lossPct = inputKg > 0 ? (lossKg / inputKg) * 100 : 0;
+
+    const tKgEl    = document.getElementById('outputTotalKg');
+    const tShareEl = document.getElementById('outputTotalShare');
+    const tRevEl   = document.getElementById('outputTotalRevenue');
+    const lKgEl    = document.getElementById('outputLossKg');
+    const lPctEl   = document.getElementById('outputLossPct');
+
+    if (tKgEl)    tKgEl.textContent    = totalKg.toFixed(2) + ' kg';
+    if (tShareEl) tShareEl.textContent = totalShare.toFixed(2) + '%';
+    if (tRevEl)   tRevEl.textContent   = `${currency} ${totalRev.toFixed(2)}`;
+    if (lKgEl)    lKgEl.textContent    = lossKg.toFixed(2) + ' kg';
+    if (lPctEl)   lPctEl.textContent   = lossPct.toFixed(2) + '%';
+};
+
 // ─── View Details ──────────────────────────────────────────────
 function viewDetails(orderId) {
     const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
@@ -757,17 +831,47 @@ function viewDetails(orderId) {
                 </div>
             `;
 
-            // ─── ★ NEW: Output Breakdown (Weight-Based) ────────────────
+            // ─── Output Breakdown (Weight-Based, with per-row toggle) ─────
             if (data.metrics.output_breakdown && data.metrics.output_breakdown.length > 0) {
+
+                const inputKg   = Number(data.metrics.total_input_kg) || 0;
+                const currency  = '{{ currency_symbol() }}';
+
+                // Assign stable ids so we can toggle rows individually
+                const rows = data.metrics.output_breakdown.map((r, i) => ({
+                    id:          `out-row-${i}`,
+                    variant_name: r.variant_name,
+                    sku:          r.sku,
+                    bags:         Number(r.bags)      || 0,
+                    weight:       Number(r.weight)    || 0,
+                    total_kg:     Number(r.total_kg)  || 0,
+                    revenue:      Number(r.revenue)   || 0,
+                    included:     true,                       // default: all in
+                }));
+
                 html += `
                     <h6 class="fw-bold mb-3 mt-4">
                         <i class="ki-duotone ki-chart-pie fs-3 me-2 text-success"></i>
                         Output Breakdown (Weight-Based)
+                        <span class="text-muted fs-7 ms-2">
+                            — click any row to include / exclude it from the totals
+                        </span>
                     </h6>
+
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-xs btn-light-primary" onclick="toggleAllOutputRows(true)">
+                            Include All
+                        </button>
+                        <button type="button" class="btn btn-xs btn-light" onclick="toggleAllOutputRows(false)">
+                            Exclude All
+                        </button>
+                    </div>
+
                     <div class="table-responsive mb-4">
-                        <table class="table table-bordered table-striped align-middle">
+                        <table class="table table-bordered table-striped align-middle" id="outputBreakdownTable">
                             <thead>
                                 <tr class="bg-light">
+                                    <th style="width:40px;"></th>
                                     <th>Variant</th>
                                     <th class="text-end">Bags / Units</th>
                                     <th class="text-end">Weight per Unit</th>
@@ -777,8 +881,12 @@ function viewDetails(orderId) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${data.metrics.output_breakdown.map(r => `
-                                    <tr>
+                                ${rows.map(r => `
+                                    <tr id="${r.id}" class="output-row" style="cursor:pointer;" onclick="toggleOutputRow('${r.id}')">
+                                        <td class="text-center">
+                                            <input type="checkbox" class="form-check-input output-row-check" checked
+                                                onclick="event.stopPropagation(); toggleOutputRow('${r.id}')">
+                                        </td>
                                         <td>
                                             <div class="fw-bold">${r.variant_name}</div>
                                             ${r.sku ? `<small class="text-muted">${r.sku}</small>` : ''}
@@ -786,29 +894,38 @@ function viewDetails(orderId) {
                                         <td class="text-end">${r.bags}</td>
                                         <td class="text-end">${r.weight} kg</td>
                                         <td class="text-end fw-bold">${r.total_kg} kg</td>
-                                        <td class="text-end">${r.share_pct}%</td>
-                                        <td class="text-end">${currency} ${Number(r.revenue).toFixed(2)}</td>
+                                        <td class="text-end output-row-share">—</td>
+                                        <td class="text-end output-row-revenue">${currency} ${r.revenue.toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
 
                                 <tr class="bg-light fw-bold">
-                                    <td colspan="3" class="text-end">Total Output</td>
-                                    <td class="text-end">${data.metrics.total_output_kg} kg</td>
-                                    <td class="text-end">${data.metrics.input_yield}%</td>
-                                    <td class="text-end">${currency} ${Number(data.metrics.total_revenue).toFixed(2)}</td>
+                                    <td colspan="4" class="text-end">Total Output (included)</td>
+                                    <td class="text-end" id="outputTotalKg">0 kg</td>
+                                    <td class="text-end" id="outputTotalShare">0%</td>
+                                    <td class="text-end" id="outputTotalRevenue">${currency} 0.00</td>
                                 </tr>
+
                                 <tr class="bg-light-danger">
-                                    <td colspan="3" class="text-end text-danger fw-bold">
+                                    <td colspan="4" class="text-end text-danger fw-bold">
                                         Loss (dust / spillage / shrinkage)
                                     </td>
-                                    <td class="text-end text-danger fw-bold">${data.metrics.loss_kg} kg</td>
-                                    <td class="text-end text-danger fw-bold">${data.metrics.loss_pct}%</td>
+                                    <td class="text-end text-danger fw-bold" id="outputLossKg">0 kg</td>
+                                    <td class="text-end text-danger fw-bold" id="outputLossPct">0%</td>
                                     <td class="text-end text-muted">—</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 `;
+
+                // ─── Attach state to window so toggles can reach it ─────────────
+                window.__outputRows     = rows;
+                window.__outputInputKg  = inputKg;
+                window.__outputCurrency = currency;
+
+                // First render
+                setTimeout(() => window.__recomputeOutputTotals(), 0);
             }
 
             body.innerHTML = html;

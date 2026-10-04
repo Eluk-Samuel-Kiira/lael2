@@ -19,9 +19,24 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
+use App\Services\PricingResolverService;
 
 class OrderReportsController extends Controller
 {
+    public function __construct(
+        protected PricingResolverService $pricingResolver
+    ) {}
+
+    /**
+     * @return array{0: float, 1: float, 2: string}  [unitCost, unitSell, source]
+     */
+    private function resolveLinePricing(\App\Models\OrderItem $item): array
+    {
+        $r = $this->pricingResolver->resolveLinePricing($item);
+        return [$r['unit_cost'], $r['unit_sell'], $r['source']];
+    }
+
+
     // Order Summary Report
     public function summary(Request $request)
     {
@@ -149,6 +164,7 @@ class OrderReportsController extends Controller
         ));
     }
 
+
     /**
      * Profit Analysis Report - Calculate profits on completed orders
      */
@@ -212,33 +228,33 @@ class OrderReportsController extends Controller
             
             foreach ($order->items as $item) {
                 $variant = $item->productVariant;
-                
-                if ($variant) {
-                    // Cost price from variant
-                    $unitCost = $variant->grand_total_cost_price ?? 0;
-                    $quantity = $item->quantity;
-                    $itemCost = $unitCost * $quantity;
-                    $totalCost += $itemCost;
-                    
-                    // Calculate item profit
-                    $itemRevenue = $item->total_price ?? 0;
-                    $itemProfit = $itemRevenue - $itemCost;
-                    $itemProfitMargin = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
-                    
-                    $itemProfits[] = (object)[
-                        'variant_name' => $variant->name ?? 'Unknown',
-                        'sku' => $variant->sku ?? 'N/A',
-                        'quantity' => $quantity,
-                        'unit_cost' => $unitCost,
-                        'unit_price' => $item->unit_price ?? 0,
-                        'total_cost' => $itemCost,
-                        'total_revenue' => $itemRevenue,
-                        'profit' => $itemProfit,
-                        'profit_margin' => $itemProfitMargin,
-                    ];
-                }
+                if (! $variant) continue;
+
+                // ★ Cascade: log → inventory item (if custom) → variant
+                [$unitCost, $unitSell, $source] = $this->resolveLinePricing($item);
+
+                $quantity = $item->quantity;
+                $itemCost = $unitCost * $quantity;
+                $totalCost += $itemCost;
+
+                $itemRevenue = $item->total_price ?? 0;
+                $itemProfit  = $itemRevenue - $itemCost;
+                $itemProfitMargin = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
+
+                $itemProfits[] = (object)[
+                    'variant_name'  => $variant->name ?? 'Unknown',
+                    'sku'           => $variant->sku ?? 'N/A',
+                    'quantity'      => $quantity,
+                    'unit_cost'     => $unitCost,
+                    'unit_price'    => $item->unit_price ?? 0,
+                    'total_cost'    => $itemCost,
+                    'total_revenue' => $itemRevenue,
+                    'profit'        => $itemProfit,
+                    'profit_margin' => $itemProfitMargin,
+                    'pricing_source'=> $source,   // ★ new — useful for the table
+                ];
             }
-            
+                        
             // Calculate net profit (revenue - cost - discount)
             $grossProfit = $totalRevenue - $totalCost;
             $netProfit = $grossProfit - $totalDiscount;
@@ -961,13 +977,31 @@ class OrderReportsController extends Controller
                 // ─── Get Current Stock ──────────────────────────────────
                 $currentStock = $variantStockMap[$variantId] ?? 0;
                 
-                // ─── Profit Metrics ────────────────────────────────────
-                $unitCost = $variant->grand_total_cost_price ?? 0;
-                $unitPrice = $variant->selling_price ?? 0;
-                $discountPrice = $variant->discount_selling_price ?? $unitPrice;
-                $profitPerUnit = $discountPrice - $unitCost;
-                $profitMargin = $discountPrice > 0 ? ($profitPerUnit / $discountPrice) * 100 : 0;
-                $totalProfit = $profitPerUnit * $totalQuantity;
+                // ─── Profit Metrics — average the frozen costs across the actual items ──
+                $totalCostFromLogs   = 0.0;
+                $totalSellFromLogs   = 0.0;
+                $countWithCost       = 0;
+
+                foreach ($items as $item) {
+                    [$unitCost, $unitSell, $source] = $this->resolveLinePricing($item);
+
+                    $totalCostFromLogs += $unitCost * $item->quantity;
+                    $totalSellFromLogs += $unitSell * $item->quantity;
+                    if ($unitCost > 0) $countWithCost++;
+                }
+
+                $totalRevenueFromLogs = $totalSellFromLogs > 0 ? $totalSellFromLogs : $totalRevenue;
+
+                $totalProfit = $totalRevenue - $totalCostFromLogs;
+                $avgUnitCost = $totalQuantity > 0 ? $totalCostFromLogs / $totalQuantity : 0;
+                $avgUnitSell = $totalQuantity > 0 ? $totalRevenueFromLogs / $totalQuantity : 0;
+
+                $profitPerUnit = $avgUnitSell - $avgUnitCost;
+                $profitMargin  = $avgUnitSell > 0 ? ($profitPerUnit / $avgUnitSell) * 100 : 0;
+
+                $unitCost      = $avgUnitCost;
+                $unitPrice     = $avgUnitSell;
+                $discountPrice = $avgUnitSell;
                 
                 return (object)[
                     'variant_id' => $variantId,
@@ -1207,32 +1241,22 @@ class OrderReportsController extends Controller
             }
             
         } else {
-            // ─── MULTI-SHOP: Get stock from InventoryItems ──────────
+            // ─── MULTI-SHOP: quantity_allocated is authoritative ────────
             $inventoryQuery = InventoryItems::whereIn('variant_id', $variantIds)
                 ->where('tenant_id', $tenantId);
-            
-            // Apply location filter if provided
-            if ($locationId) {
-                $inventoryQuery->where('location_id', $locationId);
-            }
-            
-            // Apply department filter if provided
-            if ($departmentId) {
-                $inventoryQuery->where('department_id', $departmentId);
-            }
-            
-            // Get inventory records
+
+            if ($locationId)   $inventoryQuery->where('location_id', $locationId);
+            if ($departmentId) $inventoryQuery->where('department_id', $departmentId);
+
             $inventoryRecords = $inventoryQuery->get();
-            
-            // Group by variant_id and sum quantity_on_hand
+
             foreach ($inventoryRecords as $record) {
                 if (!isset($stockMap[$record->variant_id])) {
                     $stockMap[$record->variant_id] = 0;
                 }
-                $stockMap[$record->variant_id] += (int)($record->quantity_on_hand ?? 0);
+                $stockMap[$record->variant_id] += (int) ($record->quantity_allocated ?? 0);
             }
-            
-            // Ensure all variants have a stock value (even if 0)
+
             foreach ($variantIds as $variantId) {
                 if (!isset($stockMap[$variantId])) {
                     $stockMap[$variantId] = 0;
@@ -2980,7 +3004,9 @@ class OrderReportsController extends Controller
         
         // ─── Calculate Inventory Metrics ─────────────────────────────
         $totalInventoryValue = $this->calculateTotalInventoryValue($allProducts, $tenantId, $isSingleShop, $locationId, $departmentId);
-        $soldInventoryValue = $soldProductsCollection->sum('revenue_generated');
+        $soldInventoryValue  = $soldProductsCollection->sum('revenue_generated');
+        $soldInventoryCost   = $soldProductsCollection->sum('total_cost_generated');
+        $soldInventoryProfit = $soldInventoryValue - $soldInventoryCost;
         $turnoverRate = $totalInventoryValue > 0 ? ($soldInventoryValue / $totalInventoryValue) * 100 : 0;
         
         // ─── Stock Aging Analysis ────────────────────────────────────
@@ -3032,7 +3058,9 @@ class OrderReportsController extends Controller
             'unsoldPerPage',
             'deadStockPerPage',
             'daysInPeriod',
-            'isSingleShop'
+            'isSingleShop',
+            'soldInventoryCost',
+            'soldInventoryProfit',
         ));
     }
     
@@ -3052,17 +3080,17 @@ class OrderReportsController extends Controller
             ->where('status', 'completed')
             ->pluck('id')
             ->toArray();
-        
+
         // ─── Get Orders that are confirmed AND have sent invoices ──────
         $confirmedOrderIds = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->where('status', 'confirmed')
-            ->whereHas('invoices', function($query) {
+            ->whereHas('invoices', function ($query) {
                 $query->whereIn('status', ['sent', 'viewed', 'partially_paid', 'paid']);
             })
             ->pluck('id')
             ->toArray();
-        
+
         // ─── Get Orders from POS invoices (paid or partially paid) ────
         $posInvoiceOrderIds = Invoice::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
@@ -3070,38 +3098,72 @@ class OrderReportsController extends Controller
             ->whereIn('status', ['paid', 'partially_paid'])
             ->pluck('order_id')
             ->toArray();
-        
+
         // ─── Merge all valid order IDs ─────────────────────────────────
-        $validOrderIds = array_merge($completedOrderIds, $confirmedOrderIds, $posInvoiceOrderIds);
-        $validOrderIds = array_unique($validOrderIds);
-        
+        $validOrderIds = array_unique(array_merge(
+            $completedOrderIds,
+            $confirmedOrderIds,
+            $posInvoiceOrderIds
+        ));
+
         // ─── Build OrderItems Query ──────────────────────────────────
-        $orderItemsQuery = OrderItem::whereHas('order', function($query) use ($tenantId, $validOrderIds, $locationId, $departmentId) {
-            $query->where('tenant_id', $tenantId)
-                ->whereIn('id', $validOrderIds);
-            
-            if ($locationId) {
-                $query->where('location_id', $locationId);
-            }
-            if ($departmentId) {
-                $query->where('department_id', $departmentId);
-            }
-        })
-        ->with(['productVariant', 'order']);
-        
-        $orderItems = $orderItemsQuery->get();
-        
+        $orderItems = OrderItem::whereHas('order', function ($query) use ($tenantId, $validOrderIds, $locationId, $departmentId) {
+                $query->where('tenant_id', $tenantId)
+                    ->whereIn('id', $validOrderIds);
+
+                if ($locationId) {
+                    $query->where('location_id', $locationId);
+                }
+                if ($departmentId) {
+                    $query->where('department_id', $departmentId);
+                }
+            })
+            ->with(['productVariant', 'order'])
+            ->get();
+
+        if ($orderItems->isEmpty()) {
+            return collect();
+        }
+
+        // ─── Pre-load custom-priced inventory items for all variants ──
+        //     Keyed: "{variant_id}|{location_id}|{department_id}"
+        //     Used as the primary price source, matching POS behaviour.
+        $variantIds = $orderItems->pluck('variant_id')->unique()->filter()->values()->toArray();
+
+        $inventoryPricing = InventoryItems::where('tenant_id', $tenantId)
+            ->whereIn('variant_id', $variantIds)
+            ->where('has_custom_pricing', 1)
+            ->get([
+                'variant_id',
+                'location_id',
+                'department_id',
+                'selling_price',
+            ])
+            ->keyBy(function ($row) {
+                return "{$row->variant_id}|{$row->location_id}|{$row->department_id}";
+            });
+
         // ─── Build Sold Products Collection ─────────────────────────
         return $orderItems
             ->groupBy('variant_id')
-            ->map(function($items, $variantId) use ($daysInPeriod, $tenantId, $isSingleShop, $locationId, $departmentId) {
+            ->map(function ($items, $variantId) use (
+                $daysInPeriod,
+                $tenantId,
+                $isSingleShop,
+                $locationId,
+                $departmentId,
+                $inventoryPricing
+            ) {
                 $firstItem = $items->first();
-                $variant = $firstItem->productVariant;
-                
-                if (!$variant) return null;
-                
+                $variant   = $firstItem->productVariant;
+
+                if (! $variant) {
+                    return null;
+                }
+
+                // ── Movement category ────────────────────────────────
                 $dailySalesRate = $items->sum('quantity') / max($daysInPeriod, 1);
-                
+
                 if ($dailySalesRate >= 1) {
                     $movementCategory = 'Fast Mover';
                 } elseif ($dailySalesRate >= 0.1) {
@@ -3109,32 +3171,78 @@ class OrderReportsController extends Controller
                 } else {
                     $movementCategory = 'Slow Mover';
                 }
-                
-                // \Log::info($movementCategory);
-                // ─── Get Current Stock ────────────────────────────────────
-                $currentStock = $this->getVariantStock($variant->id, $tenantId, $isSingleShop, $locationId, $departmentId);
-                
-                return (object)[
-                    'id' => $variant->id,
-                    'sku' => $variant->sku ?? 'N/A',
-                    'name' => $variant->name ?? 'Unknown',
-                    'image_url' => $variant->image_url ?? null,
-                    'price' => $variant->selling_price ?? 0,
-                    'current_stock' => $currentStock,
-                    'quantity_sold' => $items->sum('quantity'),
-                    'revenue_generated' => $items->sum('total_price'),
+
+                // ── Current stock (reads quantity_allocated) ────────
+                $currentStock = $this->getVariantStock(
+                    $variant->id,
+                    $tenantId,
+                    $isSingleShop,
+                    $locationId,
+                    $departmentId
+                );
+
+                // ── Resolve unit price (selling_price only) ─────────
+                $unitPrice = 0.0;
+
+                if (! $isSingleShop) {
+                    // Prefer the custom-priced inventory row for this
+                    // order's location/department, then any custom row
+                    // for this variant as a fallback.
+                    $scopedKey = $locationId && $departmentId
+                        ? "{$variant->id}|{$locationId}|{$departmentId}"
+                        : null;
+
+                    $pricedItem = $scopedKey
+                        ? $inventoryPricing->get($scopedKey)
+                        : null;
+
+                    if (! $pricedItem) {
+                        $pricedItem = $inventoryPricing
+                            ->first(fn($row) => $row->variant_id === $variant->id);
+                    }
+
+                    if ($pricedItem) {
+                        $unitPrice = (float) ($pricedItem->selling_price ?? 0);
+                    }
+                }
+
+                // Fall back to the variant's own selling price
+                if ($unitPrice <= 0) {
+                    $unitPrice = (float) ($variant->selling_price ?? 0);
+                }
+
+                // ── Cost total (frozen pricing via resolveLinePricing) ─
+                $totalCost = 0.0;
+                foreach ($items as $item) {
+                    [$unitCost] = $this->resolveLinePricing($item);
+                    $totalCost += $unitCost * $item->quantity;
+                }
+
+                return (object) [
+                    'id'                    => $variant->id,
+                    'sku'                   => $variant->sku ?? 'N/A',
+                    'name'                  => $variant->name ?? 'Unknown',
+                    'image_url'             => $variant->image_url ?? null,
+
+                    'price'                 => $unitPrice,
+                    'current_stock'         => $currentStock,
+                    'stock_value'           => $currentStock * $unitPrice,
+
+                    'quantity_sold'         => $items->sum('quantity'),
+                    'total_cost_generated'  => $totalCost,
+                    'revenue_generated'     => $items->sum('total_price'),
                     'average_selling_price' => $items->avg('unit_price') ?? 0,
-                    'times_ordered' => $items->unique('order_id')->count(),
-                    'last_sold_date' => $items->max('created_at'),
-                    'daily_sales_rate' => $dailySalesRate,
-                    'movement_category' => $movementCategory, 
+                    'times_ordered'         => $items->unique('order_id')->count(),
+                    'last_sold_date'        => $items->max('created_at'),
+                    'daily_sales_rate'      => $dailySalesRate,
+                    'movement_category'     => $movementCategory,
                 ];
             })
             ->filter()
             ->sortByDesc('quantity_sold')
             ->values();
     }
-    
+        
     /**
      * Get unsold products
      * Products that:
@@ -3152,6 +3260,7 @@ class OrderReportsController extends Controller
             ->pluck('variant_id')
             ->unique()
             ->toArray();
+
         
         return $allProducts
             ->filter(function($product) use ($soldProductIds, $confirmedOrderProductIds, $isSingleShop, $locationId, $departmentId) {
@@ -3169,50 +3278,69 @@ class OrderReportsController extends Controller
                 $stock = $this->getVariantStock($product->id, $product->tenant_id, $isSingleShop, $locationId, $departmentId);
                 return $stock > 0;
             })
-            ->map(function($product) use ($isSingleShop, $locationId, $departmentId) {
-                $currentStock = $this->getVariantStock($product->id, $product->tenant_id, $isSingleShop, $locationId, $departmentId);
-                
-                return (object)[
-                    'id' => $product->id,
-                    'sku' => $product->sku ?? 'N/A',
-                    'name' => $product->name ?? 'Unknown',
-                    'price' => $product->selling_price ?? 0,
+            ->map(function ($product) use ($isSingleShop, $locationId, $departmentId, $tenantId) {
+
+                $currentStock = $this->getVariantStock(
+                    $product->id, $product->tenant_id, $isSingleShop, $locationId, $departmentId
+                );
+
+                // ── Resolve the unit price ────────────────────────────────
+                $unitPrice = 0.0;
+
+                if (! $isSingleShop) {
+                    $inventoryQuery = InventoryItems::where('tenant_id', $tenantId)
+                        ->where('variant_id', $product->id)
+                        ->where('has_custom_pricing', 1);
+
+                    if ($locationId)   $inventoryQuery->where('location_id', $locationId);
+                    if ($departmentId) $inventoryQuery->where('department_id', $departmentId);
+
+                    $pricedItem = $inventoryQuery
+                        ->orderByDesc('selling_price')
+                        ->first();
+
+                    if ($pricedItem) {
+                        $unitPrice = (float) ($pricedItem->selling_price ?? 0);
+                    }
+                }
+
+                // Fall back to the variant
+                if ($unitPrice <= 0) {
+                    $unitPrice = (float) ($product->selling_price ?? 0);
+                }
+
+                return (object) [
+                    'id'            => $product->id,
+                    'sku'           => $product->sku ?? 'N/A',
+                    'name'          => $product->name ?? 'Unknown',
+                    'price'         => $unitPrice,
                     'current_stock' => $currentStock,
-                    'stock_value' => $currentStock * ($product->selling_price ?? 0),
+                    'stock_value'   => $currentStock * $unitPrice,
                 ];
             })
             ->sortByDesc('current_stock')
             ->values();
     }
     
-    /**
-     * Get variant stock based on shop type
-     */
     private function getVariantStock($variantId, $tenantId, $isSingleShop, $locationId = null, $departmentId = null)
     {
         if ($isSingleShop) {
-            // ─── Single Shop: Use SingleShopInventoryLog ──────────────
             $latestLog = SingleShopInventoryLog::where('variant_id', $variantId)
                 ->where('tenant_id', $tenantId)
                 ->latest('created_at')
                 ->first();
-            
-            return $latestLog ? (int)$latestLog->quantity_after : 0;
-            
-        } else {
-            // ─── Multi-Shop: Use InventoryItems ────────────────────────
-            $query = InventoryItems::where('variant_id', $variantId)
-                ->where('tenant_id', $tenantId);
-            
-            if ($locationId) {
-                $query->where('location_id', $locationId);
-            }
-            if ($departmentId) {
-                $query->where('department_id', $departmentId);
-            }
-            
-            return (int)$query->sum('quantity_on_hand');
+
+            return $latestLog ? (int) $latestLog->quantity_after : 0;
         }
+
+        // ─── Multi-shop: quantity_allocated is what POS depletes ────
+        $query = InventoryItems::where('variant_id', $variantId)
+            ->where('tenant_id', $tenantId);
+
+        if ($locationId)   $query->where('location_id', $locationId);
+        if ($departmentId) $query->where('department_id', $departmentId);
+
+        return (int) $query->sum('quantity_allocated');
     }
     
     /**

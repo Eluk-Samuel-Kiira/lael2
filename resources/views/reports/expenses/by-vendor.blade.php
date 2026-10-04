@@ -420,7 +420,7 @@
                                                     <td><span class="fw-bold text-success">{{ currency_symbol() }} {{ number_format($vendor->grand_total, 2) }}</span></td>
                                                     <td><span class="text-gray-600">{{ currency_symbol() }} {{ number_format($vendor->average_transaction, 2) }}</span></td>
                                                     <td><span class="text-danger">{{ currency_symbol() }} {{ number_format($vendor->largest_transaction, 2) }}</span></td>
-                                                    <td><span class="text-secondary">{{ currency_symbol() }} {{ number_format($vendor->smallest_transaction, 2) }}</span></td>
+                                                    <td><span class="text-warning">{{ currency_symbol() }} {{ number_format($vendor->smallest_transaction, 2) }}</span></td>
                                                     <td>
                                                         <span class="badge badge-light-info">{{ $vendor->categories_used }}</span>
                                                     </td>
