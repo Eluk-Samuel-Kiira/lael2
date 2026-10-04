@@ -346,6 +346,8 @@ return [
     '_upload_receipt' => 'Upload Receipt',
     '_users' => 'Users',
     '_view' => 'View',
+    'cost_of_goods_sold' => 'Cost of Goods sold',
+    'sold_inventory_profit' => 'Sold Inventory Profit',
     
     // Settings Module
     'account_deactivate' => 'Account Deactivation',

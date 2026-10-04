@@ -230,6 +230,10 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
+
+                        {{-- ═══════════════════════════════════════════════════════
+                            Multi-shop only entries
+                            ═══════════════════════════════════════════════════════ --}}
                         @if(auth()->check() && !tenant_is_single_shop(auth()->user()->tenant_id))
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('items.index') }}')">
@@ -250,6 +254,9 @@
                         </div>
                         @endif
 
+                        {{-- ═══════════════════════════════════════════════════════
+                            Batches
+                            ═══════════════════════════════════════════════════════ --}}
                         <div class="menu-item">
                             <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('batches.index') }}')">
                                 <span class="menu-bullet">
@@ -258,7 +265,44 @@
                                 <span class="menu-title-list">{{ __('pagination.stock_batches') }}</span>
                             </a>
                         </div>
-                        
+
+                        {{-- ═══════════════════════════════════════════════════════
+                            ★ NEW — Serials
+                            ═══════════════════════════════════════════════════════ --}}
+                        @if (Route::has('serials.index'))
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('serials.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">
+                                    <!-- <i class="bi bi-upc-scan fs-4 me-2 text-primary"></i> -->
+                                    {{ __('passwords.serial_numbers') }}
+                                </span>
+                            </a>
+                        </div>
+                        @endif
+
+                        {{-- ═══════════════════════════════════════════════════════
+                            ★ NEW — Recipes
+                            ═══════════════════════════════════════════════════════ --}}
+                        @if (Route::has('recipes.index'))
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('recipes.index') }}')">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">
+                                    <!-- <i class="bi bi-journal-bookmark-fill fs-4 me-2 text-warning"></i> -->
+                                    {{ __('passwords.recipes') }}
+                                </span>
+                            </a>
+                        </div>
+                        @endif
+
+                        {{-- ═══════════════════════════════════════════════════════
+                            Production Orders
+                            ═══════════════════════════════════════════════════════ --}}
                         @if (tenant_can('production_orders'))
                         @can('view production_orders')
                         <div class="menu-item">

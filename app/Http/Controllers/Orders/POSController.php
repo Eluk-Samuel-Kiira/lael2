@@ -2329,66 +2329,200 @@ class POSController extends Controller
      */
     private function depleteSingleBatch($variant, $item, $order)
     {
-        $tenantId = $order->tenant_id;
-        $quantityNeeded = $item->quantity;
-        
-        // ✅ Get batch_id from the order item
-        $batchId = $item->batch_id ?? null;
-        
-        // \Log::info('Depleting Single Batch', [
-        //     'variant_id' => $variant->id,
-        //     'variant_name' => $variant->name,
-        //     'batch_id' => $batchId,
-        //     'batch_number' => $item->batch_number ?? null,
-        //     'quantity_needed' => $quantityNeeded,
-        //     'order_id' => $order->id
-        // ]);
-        
+        $tenantId       = $order->tenant_id;
+        $quantityNeeded = (float) $item->quantity;
+        $batchId        = $item->batch_id ?? null;
+
+        // ★ Resolve pricing ONCE so every BatchLog shares the same snapshot
+        $pricing = $this->resolveLogPricing(null, $variant);
+
+        // ────────────────────────────────────────────────────────────
+        // 1. Specific batch requested — deduct only from that one
+        // ────────────────────────────────────────────────────────────
         if ($batchId) {
-            // ✅ Deduct from specific batch
             $batch = PurchaseReceiptItem::query()
                 ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
                 ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
                 ->where('purchase_orders.tenant_id', $tenantId)
                 ->where('purchase_receipt_items.id', $batchId)
-                ->where(function($q) {
+                ->where(function ($q) {
                     $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
                     ->orWhereNull('purchase_receipt_items.quantity_remaining');
                 })
                 ->select('purchase_receipt_items.*')
                 ->first();
-                
+
             if (!$batch) {
-                throw new \Exception("Batch not found or has no remaining quantity");
+                throw new \Exception("Batch not found or has no remaining quantity.");
             }
-            
+
             $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+
             if ($effectiveQuantity < $quantityNeeded) {
-                throw new \Exception("Insufficient quantity in batch {$batch->batch_number}. Available: {$effectiveQuantity}, Required: {$quantityNeeded}");
+                throw new \Exception(
+                    "Insufficient quantity in batch {$batch->batch_number}. " .
+                    "Available: {$effectiveQuantity}, Required: {$quantityNeeded}"
+                );
             }
-            
-            // ✅ Update quantity_remaining
+
+            $beforeQty = $effectiveQuantity;
+            $afterQty  = $effectiveQuantity - $quantityNeeded;
+
+            // Decrement the batch
             if ($batch->quantity_remaining !== null) {
                 $batch->quantity_remaining -= $quantityNeeded;
             } else {
                 $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $quantityNeeded;
             }
             $batch->save();
-            
-            // Log batch depletion
-            $this->logBatchDepletion($batch, $variant, $item, $order, $quantityNeeded);
-            
-            // Update overall quantity for reporting only
-            $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded);
+
+            // Log
+            BatchLog::create([
+                'batch_id'        => $batch->id,
+                'batch_number'    => $batch->batch_number,
+                'variant_id'      => $variant->id,
+                'variant_name'    => $variant->name,
+                'variant_sku'     => $variant->sku,
+                'type'            => BatchLog::TYPE_DEPLETED,
+                'quantity_change' => -$quantityNeeded,
+                'quantity_before' => $beforeQty,
+                'quantity_after'  => $afterQty,
+
+                // ★ frozen pricing
+                'unit_cost'           => $pricing['cost'],
+                'total_cost'          => -$quantityNeeded * $pricing['cost'],
+                'unit_selling_price'  => $pricing['selling'],
+                'total_selling_value' => -$quantityNeeded * $pricing['selling'],
+                'gross_profit'        => $quantityNeeded * ($pricing['selling'] - $pricing['cost']),
+                'pricing_source'      => $pricing['pricing_source'],
+
+                'order_id'      => $order->id,
+                'order_number'  => $order->order_number,
+                'tenant_id'     => $tenantId,
+                'location_id'   => $batch->location_id ?? $order->location_id,
+                'department_id' => $batch->department_id ?? $order->department_id,
+                'expiry_date'   => $batch->expiry_date,
+                'event_date'    => now(),
+                'performed_by'  => auth()->id(),
+                'metadata' => [
+                    'strategy'      => 'batch',
+                    'mode'          => 'specific',
+                    'item_name'     => $item->name ?? $variant->name,
+                    'customer_name' => $order->customer_name,
+                    'unit_price'    => $item->price ?? 0,
+                ],
+            ]);
+
+            // Single overall decrement
+            $variant->overal_quantity_at_hand = max(
+                0,
+                ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded
+            );
             $variant->save();
-            
+
             return;
         }
-        
-        // ✅ If no batch_id, fallback to FIFO
-        // ... FIFO logic ...
-    }
 
+        // ────────────────────────────────────────────────────────────
+        // 2. No specific batch — FIFO across available batches
+        // ────────────────────────────────────────────────────────────
+        $batches = PurchaseReceiptItem::query()
+            ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
+            ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
+            ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
+            ->where('purchase_orders.tenant_id', $tenantId)
+            ->where('purchase_order_items.product_variant_id', $variant->id)
+            ->where(function ($q) {
+                $q->where('purchase_receipt_items.quantity_remaining', '>', 0)
+                ->orWhereNull('purchase_receipt_items.quantity_remaining');
+            })
+            ->orderBy('purchase_receipt_items.expiry_date', 'asc')   // oldest first
+            ->orderBy('purchase_receipt_items.id', 'asc')            // stable tie-breaker
+            ->select('purchase_receipt_items.*')
+            ->get();
+
+        if ($batches->isEmpty()) {
+            throw new \Exception("No available batches for '{$variant->name}'.");
+        }
+
+        $totalAvailable = $batches->sum(function ($b) {
+            return (float) ($b->quantity_remaining ?? $b->quantity_received ?? 0);
+        });
+
+        if ($totalAvailable < $quantityNeeded) {
+            throw new \Exception(
+                "Insufficient batch stock for {$variant->name}. " .
+                "Available: {$totalAvailable}, Required: {$quantityNeeded}"
+            );
+        }
+
+        $remaining = $quantityNeeded;
+
+        foreach ($batches as $batch) {
+            if ($remaining <= 0) break;
+
+            $effectiveQuantity = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+            if ($effectiveQuantity <= 0) continue;
+
+            $deduct = min($effectiveQuantity, $remaining);
+
+            $beforeQty = $effectiveQuantity;
+            $afterQty  = $effectiveQuantity - $deduct;
+
+            // Decrement the batch
+            if ($batch->quantity_remaining !== null) {
+                $batch->quantity_remaining -= $deduct;
+            } else {
+                $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $deduct;
+            }
+            $batch->save();
+
+            // Log this partial depletion
+            BatchLog::create([
+                'batch_id'        => $batch->id,
+                'batch_number'    => $batch->batch_number,
+                'variant_id'      => $variant->id,
+                'variant_name'    => $variant->name,
+                'variant_sku'     => $variant->sku,
+                'type'            => BatchLog::TYPE_DEPLETED,
+                'quantity_change' => -$deduct,
+                'quantity_before' => $beforeQty,
+                'quantity_after'  => $afterQty,
+
+                'unit_cost'           => $pricing['cost'],
+                'total_cost'          => -$deduct * $pricing['cost'],
+                'unit_selling_price'  => $pricing['selling'],
+                'total_selling_value' => -$deduct * $pricing['selling'],
+                'gross_profit'        => $deduct * ($pricing['selling'] - $pricing['cost']),
+                'pricing_source'      => $pricing['pricing_source'],
+
+                'order_id'      => $order->id,
+                'order_number'  => $order->order_number,
+                'tenant_id'     => $tenantId,
+                'location_id'   => $batch->location_id ?? $order->location_id,
+                'department_id' => $batch->department_id ?? $order->department_id,
+                'expiry_date'   => $batch->expiry_date,
+                'event_date'    => now(),
+                'performed_by'  => auth()->id(),
+                'metadata' => [
+                    'strategy'      => 'batch',
+                    'mode'          => 'fifo',
+                    'item_name'     => $item->name ?? $variant->name,
+                    'customer_name' => $order->customer_name,
+                    'unit_price'    => $item->price ?? 0,
+                ],
+            ]);
+
+            $remaining -= $deduct;
+        }
+
+        // Single overall decrement after all batches processed
+        $variant->overal_quantity_at_hand = max(
+            0,
+            ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded
+        );
+        $variant->save();
+    }
 
 
     // ============================================================
@@ -2590,6 +2724,9 @@ class POSController extends Controller
         $inventoryId  = $inventoryData['inventory_id']  ?? null;
         $departmentId = $inventoryData['department_id'] ?? null;
 
+        $quantityOriginal = $item->quantity;
+        $quantityNeeded   = $item->quantity;
+
         $itemName = is_object($item)
             ? ($item->item_name ?? $item->name ?? $variant->name)
             : ($item['name'] ?? $variant->name);
@@ -2707,17 +2844,18 @@ class POSController extends Controller
                 ],
             ]);
             
-            // \Log::info('Batch depleted from specific batch', [
-            //     'batch_id' => $targetBatch->id,
-            //     'batch_number' => $targetBatch->batch_number,
-            //     'quantity_deducted' => $quantityNeeded,
-            //     'remaining' => $targetBatch->quantity_remaining
-            // ]);
+                // \Log::info('Batch depleted from specific batch', [
+                //     'batch_id' => $targetBatch->id,
+                //     'batch_number' => $targetBatch->batch_number,
+                //     'quantity_deducted' => $quantityNeeded,
+                //     'remaining' => $targetBatch->quantity_remaining
+                // ]);
             
             } else {
                 // ✅ No batch_id specified - use FIFO
                 foreach ($batches as $batch) {
                     if ($quantityNeeded <= 0) break;
+                    $deduct = min($effectiveQuantity, $quantityNeeded);
 
                     $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                     $deduct = min($effectiveQuantity, $quantityNeeded);
@@ -2768,11 +2906,11 @@ class POSController extends Controller
             }
 
         // Update inventory allocation
-        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityNeeded);
+        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityOriginal);
         $inventory->save();
 
         InventoryTransactions::create([
-            'quantity'       => -$quantityNeeded,
+            'quantity'       => -$quantityOriginal,
             'reference_id'   => $order->id,
             'reference_type' => 'order',
             'type'           => 'sale',
@@ -2855,6 +2993,8 @@ class POSController extends Controller
             
             $serial->update([
                 'status' => SerialNumber::STATUS_SOLD,
+                'sold_unit_price'   => $pricing['selling'], 
+                'sold_gross_profit' => $pricing['selling'] - $pricing['cost'],
                 'order_id' => $order->id,
                 'sold_at' => now(),
                 'sold_by' => auth()->id(),
@@ -3214,6 +3354,7 @@ class POSController extends Controller
     private function depleteSingleSerial($variant, $item, $order)
     {
         // ✅ Get serial_id from the order item
+        $pricing = $this->resolveLogPricing(null, $variant);
         $serialId = $item->serial_id ?? null;
         $serialNumber = $item->serial_number ?? null;
         
@@ -3268,7 +3409,7 @@ class POSController extends Controller
         }
 
                 // Update overall quantity
-        $before = $variant->overal_quantity_at_hand;
+       $before = $variant->overal_quantity_at_hand;
         $variant->overal_quantity_at_hand = max(0, $before - 1);
         $variant->save();
 
@@ -3301,7 +3442,7 @@ class POSController extends Controller
         ]);
 
         // Update overall quantity
-        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - 1);
+        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - 1);  // ← SECOND decrement
         $variant->save();
     }
 

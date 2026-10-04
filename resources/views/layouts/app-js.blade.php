@@ -886,7 +886,11 @@
 </script>
 
 
+
+
 <script>
+
+
     document.addEventListener('DOMContentLoaded', function() {
         const variantSearch = document.getElementById('variant_search');
         const variantHidden = document.getElementById('variant_id');
@@ -1138,6 +1142,260 @@
 
 
 
+</script>
+
+{{-- ============================================================
+     Inventory Pricing — works alongside LiveBlade refreshes
+     No IIFE, no captured nodes. Uses document-level delegation
+     so re-rendered DOM doesn't lose its listeners.
+     ============================================================ --}}
+<script>
+    // ── Route templates (constant; safe to redefine on each render) ──
+    window.INV_PRICING_GET_URL    = @json(route('items.pricing.get',    ['id' => '__ID__']));
+    window.INV_PRICING_UPDATE_URL = @json(route('items.pricing.update', ['id' => '__ID__']));
+    window.INV_PRICING_CSRF       = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+    window.INV_PRICING_CURRENCY   = @json(currency_symbol());
+
+    // ── Helpers ─────────────────────────────────────────────────
+    window.invPricingUrlFor = function (template, id) {
+        return template.replace('__ID__', encodeURIComponent(id));
+    };
+
+    window.invPricingFmt = function (v) {
+        return window.INV_PRICING_CURRENCY + Number(v ?? 0).toFixed(2);
+    };
+
+    window.invPricingNumberOrNull = function (id) {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        const raw = el.value;
+        if (raw === '' || raw === null) return null;
+        const n = parseFloat(raw);
+        return isNaN(n) ? null : n;
+    };
+
+    // ── Toggle sections ─────────────────────────────────────────
+    window.invPricingToggleSections = function (on) {
+        document.getElementById('customPricingSection')
+            ?.classList.toggle('d-none', !on);
+        document.getElementById('variantFallbackSection')
+            ?.classList.toggle('d-none', on);
+    };
+
+    // ── Live preview ────────────────────────────────────────────
+    window.invPricingRecalcPreview = function () {
+        const supplierEl = document.getElementById('pricingSupplierCost');
+        const otherEl    = document.getElementById('pricingOtherCosts');
+        const sellingEl  = document.getElementById('pricingSellingPrice');
+        const discEl     = document.getElementById('pricingDiscountPercent');
+        if (!supplierEl || !otherEl || !sellingEl || !discEl) return;
+
+        const supplier = parseFloat(supplierEl.value) || 0;
+        const other    = parseFloat(otherEl.value)    || 0;
+        const selling  = parseFloat(sellingEl.value)  || 0;
+        const discount = parseFloat(discEl.value)     || 0;
+
+        const grandCost = supplier + other;
+        const effective = discount > 0 ? selling - (selling * discount / 100) : selling;
+        const profit    = effective - grandCost;
+        const margin    = effective > 0 ? (profit / effective) * 100 : 0;
+
+        const costEl    = document.getElementById('previewCost');
+        const sellEl    = document.getElementById('previewSelling');
+        const profitEl  = document.getElementById('previewProfit');
+
+        if (costEl)   costEl.textContent   = window.invPricingFmt(grandCost);
+        if (sellEl)   sellEl.textContent   = window.invPricingFmt(effective);
+        if (profitEl) {
+            profitEl.textContent = window.invPricingFmt(profit) + ' (' + margin.toFixed(1) + '%)';
+            profitEl.className   = 'col-6 text-end fw-bold text-' + (profit >= 0 ? 'success' : 'danger');
+        }
+    };
+
+    // ── Open the modal (called from the row button) ─────────────
+    window.openInventoryPricingModal = async function (itemId) {
+        const modalEl = document.getElementById('inventoryPricingModal');
+        if (!modalEl) {
+            console.error('[pricing] modal not found in DOM');
+            return;
+        }
+
+        document.getElementById('pricingItemId').value = itemId;
+        document.getElementById('pricingItemLabel').textContent = '…';
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        try {
+            const res = await fetch(
+                window.invPricingUrlFor(window.INV_PRICING_GET_URL, itemId),
+                {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                }
+            );
+            const json = await res.json();
+
+            if (!json.success) {
+                toastr.error(json.message || 'Failed to load pricing');
+                modal.hide();
+                return;
+            }
+
+            window.invPricingHydrate(json.data);
+        } catch (err) {
+            console.error('[pricing] fetch failed', err);
+            toastr.error('Failed to load pricing');
+            modal.hide();
+        }
+    };
+
+    // ── Populate the modal ──────────────────────────────────────
+    window.invPricingHydrate = function (data) {
+        const label = data.item?.variant?.name
+            ? `${data.item.variant.name} — ${data.item.department ?? ''} (${data.item.location ?? ''})`
+            : `Item #${data.item.id}`;
+
+        const labelEl = document.getElementById('pricingItemLabel');
+        if (labelEl) labelEl.textContent = '- ' + label;
+
+        const vCost = document.getElementById('variantCostPrice');
+        const vSell = document.getElementById('variantSellingPrice');
+        const vDisc = document.getElementById('variantDiscountPrice');
+        if (vCost) vCost.textContent = window.invPricingFmt(data.variant.grand_total_cost_price);
+        if (vSell) vSell.textContent = window.invPricingFmt(data.variant.selling_price);
+        if (vDisc) vDisc.textContent = window.invPricingFmt(data.variant.discount_selling_price);
+
+        const toggle = document.getElementById('hasCustomPricingToggle');
+        if (toggle) {
+            toggle.checked = !!data.has_custom_pricing;
+            window.invPricingToggleSections(toggle.checked);
+        }
+
+        const sCost = document.getElementById('pricingSupplierCost');
+        const oCost = document.getElementById('pricingOtherCosts');
+        const sSell = document.getElementById('pricingSellingPrice');
+        const sDisc = document.getElementById('pricingDiscountPercent');
+
+        if (sCost) sCost.value = data.raw.supplier_cost_price     ?? '';
+        if (oCost) oCost.value = data.raw.total_shipping_cost     ?? '';
+        if (sSell) sSell.value = data.raw.selling_price           ?? '';
+        if (sDisc) sDisc.value = data.raw.discount_percentage     ?? '';
+
+        // Seed the selling price from the variant when there's no override yet
+        if (!data.has_custom_pricing && sSell && !sSell.value && data.variant.selling_price > 0) {
+            sSell.value = data.variant.selling_price;
+        }
+
+        window.invPricingRecalcPreview();
+    };
+
+    // ── Save ────────────────────────────────────────────────────
+    window.invPricingSave = async function () {
+        const itemId = document.getElementById('pricingItemId')?.value;
+        if (!itemId) return;
+
+        const btn      = document.getElementById('saveInventoryPricingBtn');
+        const label    = btn?.querySelector('.indicator-label');
+        const progress = btn?.querySelector('.indicator-progress');
+
+        if (btn)      btn.disabled              = true;
+        if (label)    label.style.display       = 'none';
+        if (progress) progress.style.display    = 'inline-flex';
+
+        const hasCustom = document.getElementById('hasCustomPricingToggle')?.checked ?? false;
+
+        const payload = {
+            has_custom_pricing:  hasCustom ? 1 : 0,
+            supplier_cost_price: hasCustom ? window.invPricingNumberOrNull('pricingSupplierCost')   : null,
+            total_shipping_cost: hasCustom ? window.invPricingNumberOrNull('pricingOtherCosts')     : null,
+            ura_taxes_applied:   0,
+            additional_expenses: 0,
+            selling_price:       hasCustom ? window.invPricingNumberOrNull('pricingSellingPrice')   : null,
+            discount_percentage: hasCustom ? (window.invPricingNumberOrNull('pricingDiscountPercent') ?? 0) : null,
+        };
+
+        try {
+            const res = await fetch(
+                window.invPricingUrlFor(window.INV_PRICING_UPDATE_URL, itemId),
+                {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': window.INV_PRICING_CSRF,
+                    },
+                    body: JSON.stringify(payload),
+                }
+            );
+            const json = await res.json();
+
+            if (json.success) {
+                toastr.success(json.message);
+                bootstrap.Modal.getInstance(document.getElementById('inventoryPricingModal'))?.hide();
+
+                // Refresh the items table (LiveBlade-safe)
+                const target = document.getElementById('reloadItemComponent');
+                if (target) {
+                    fetch(`{{ route('items.index') }}?bladeFileToReload=reloadItemComponent`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    })
+                        .then(r => r.text())
+                        .then(html => {
+                            const fresh = document.getElementById('reloadItemComponent');
+                            if (fresh) fresh.outerHTML = html;
+                        })
+                        .catch(() => location.reload());
+                } else {
+                    location.reload();
+                }
+            } else {
+                toastr.error(json.message || 'Failed to save pricing');
+            }
+        } catch (err) {
+            console.error('[pricing] save failed', err);
+            toastr.error('Failed to save pricing');
+        } finally {
+            if (btn)      btn.disabled           = false;
+            if (label)    label.style.display    = 'inline-flex';
+            if (progress) progress.style.display = 'none';
+        }
+    };
+
+    // ── One-time wiring (only runs if not already done) ────────
+    if (!window.__invPricingWired) {
+        window.__invPricingWired = true;
+
+        // Toggle switch → show/hide sections
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.id === 'hasCustomPricingToggle') {
+                window.invPricingToggleSections(e.target.checked);
+            }
+        });
+
+        // Live preview on any input in the override form
+        document.addEventListener('input', function (e) {
+            if (!e.target) return;
+            if (['pricingSupplierCost', 'pricingOtherCosts',
+                 'pricingSellingPrice', 'pricingDiscountPercent'].includes(e.target.id)) {
+                window.invPricingRecalcPreview();
+            }
+        });
+
+        // Save button (delegated)
+        document.addEventListener('click', function (e) {
+            if (e.target && e.target.closest('#saveInventoryPricingBtn')) {
+                window.invPricingSave();
+            }
+        });
+
+        console.log('[pricing] wired');
+    }
 </script>
 
 

@@ -87,6 +87,28 @@ class Product extends Model
     }
 
     /**
+     * Resolve the recipe that applies to a given variant:
+     *   1. The variant's own recipe (product_variant_id = variant->id)
+     *   2. The product-level recipe (product_variant_id = null)
+     *
+     * Returns null when neither exists.
+     */
+    public function recipeForVariant(?ProductVariant $variant): ?Recipe
+    {
+        if (! $variant) {
+            return $this->recipe()->whereNull('product_variant_id')->first();
+        }
+
+        return $this->recipe()
+            ->where(function ($q) use ($variant) {
+                $q->where('product_variant_id', $variant->id)
+                ->orWhereNull('product_variant_id');
+            })
+            ->orderByRaw('product_variant_id IS NULL ASC')  // prefer variant-specific
+            ->first();
+    }
+
+    /**
      * Get the recipe for this product
      * 
      * @return HasOne

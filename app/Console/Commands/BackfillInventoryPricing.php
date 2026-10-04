@@ -64,6 +64,36 @@ class BackfillInventoryPricing extends Command
             });
         $this->info("inventory_items: {$count} rows updated");
 
+        \App\Models\OrderItem::whereNull('unit_cost_price')
+            ->orWhere('unit_cost_price', 0)
+            ->orderBy('id')
+            ->chunk(500, function ($items) {
+                foreach ($items as $item) {
+                    $variant = $item->productVariant;
+                    if (!$variant) continue;
+
+                    $cost = (float) ($variant->grand_total_cost_price ?? 0);
+                    if ($cost <= 0) {
+                        $cost = (float) ($variant->supplier_cost_price ?? 0)
+                            + (float) ($variant->total_shipping_cost ?? 0)
+                            + (float) ($variant->ura_taxes_applied   ?? 0)
+                            + (float) ($variant->additional_expenses ?? 0);
+                    }
+
+                    $qty = (float) $item->quantity;
+                    $netRev = (float) ($item->total_price ?? 0) - (float) ($item->tax_amount ?? 0);
+
+                    \DB::table('order_items')
+                        ->where('id', $item->id)
+                        ->update([
+                            'unit_cost_price'  => (int) round($cost * 100),      // to base currency
+                            'total_cost_price' => (int) round($cost * $qty * 100),
+                            'gross_profit'     => (int) round(($netRev - $cost * $qty) * 100),
+                            'pricing_source'   => 'variant',
+                        ]);
+                }
+            });
+
         // ─────────────────────────────────────────────────
         // 2. purchase_receipt_items (batches)
         // ─────────────────────────────────────────────────

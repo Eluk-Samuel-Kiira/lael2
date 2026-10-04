@@ -204,23 +204,6 @@
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">
-                                        @if($period == 'monthly')
-                                            {{ __('accounting.monthly_trends_summary') }} {{ $year }}
-                                        @elseif($period == 'quarterly')
-                                            {{ __('accounting.quarterly_trends_summary') }} {{ $year }}
-                                        @else
-                                            {{ __('accounting.yearly_trends_summary') }}
-                                        @endif
-                                    </h3>
-                                </div>
-                            </div>
                             @if(!empty($trendData))
                                 @php
                                     $currentTotal  = (float) collect($trendData)->sum('current_year')

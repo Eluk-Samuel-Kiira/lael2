@@ -15,6 +15,7 @@ class Recipe extends Model
 
     protected $fillable = [
         'product_id',
+        'product_variant_id',
         'unit_cost',
         'unit_selling_price',
         'last_costed_at',
@@ -26,6 +27,24 @@ class Recipe extends Model
         'unit_selling_price'=> 'integer',
         'last_costed_at'    => 'datetime',
     ];
+
+    /**
+     * The variant this recipe belongs to (when variant-specific).
+     */
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function scopeForVariant($query, int $variantId)
+    {
+        return $query->where('product_variant_id', $variantId);
+    }
+
+    public function scopeForProductLevel($query)
+    {
+        return $query->whereNull('product_variant_id');
+    }
 
     public function getUnitCostAttribute($v): ?float
     {

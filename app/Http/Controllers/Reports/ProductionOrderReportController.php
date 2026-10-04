@@ -36,14 +36,6 @@ class ProductionOrderReportController extends Controller
         return $user->tenant_id;
     }
 
-    /**
-     * Check if tenant is single shop
-     */
-    private function isTenantSingleShop($tenantId)
-    {
-        $locationCount = Location::where('tenant_id', $tenantId)->count();
-        return $locationCount <= 1;
-    }
 
     /**
      * ✅ Reusable pagination method
@@ -72,7 +64,7 @@ class ProductionOrderReportController extends Controller
     public function index(Request $request)
     {
         $tenantId = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
         
         // ─── Filter Parameters ──────────────────────────────────────────
         $startDate = $request->get('start_date', now()->subDays(30)->format('Y-m-d'));
@@ -265,7 +257,7 @@ class ProductionOrderReportController extends Controller
     public function detail($orderId)
     {
         $tenantId = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
         $purchaseOrderItems = $this->resolveProductionPOItems($orderId);
         
         $order = ProductionOrder::with([
@@ -574,7 +566,7 @@ class ProductionOrderReportController extends Controller
     public function summary(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filter Parameters ──────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(6)->format('Y-m-d'));
@@ -952,7 +944,7 @@ class ProductionOrderReportController extends Controller
     public function costAnalysis(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filter Parameters ──────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -1370,7 +1362,7 @@ class ProductionOrderReportController extends Controller
     public function efficiency(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -1801,7 +1793,7 @@ class ProductionOrderReportController extends Controller
     public function inventoryImpact(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -1890,7 +1882,7 @@ class ProductionOrderReportController extends Controller
                 $w = (float) ($v->weight ?? 0);
                 $q = (float) $output->actual_quantity;
                 $kg = $w > 0 ? $q * $w : $q;
-                $sell = (float) ($v->discount_selling_price ?? $v->selling_price ?? 0);
+                $sell = (float) ($v->selling_price ?? 0);
                 $rev  = $q * $sell;
 
                 $outKg   += $kg;
@@ -2241,7 +2233,7 @@ class ProductionOrderReportController extends Controller
     public function qualityAnalysis(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate     = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -2822,7 +2814,7 @@ class ProductionOrderReportController extends Controller
     public function inputOutput(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate      = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -2903,7 +2895,7 @@ class ProductionOrderReportController extends Controller
                 $w = (float) ($v->weight ?? 0);
                 $q = (float) $output->actual_quantity;
                 $kg = $w > 0 ? $q * $w : $q;
-                $sell = (float) ($v->discount_selling_price ?? $v->selling_price ?? 0);
+                $sell = (float) ($v->selling_price ?? 0);
 
                 $outKg   += $kg;
                 $revenue += $q * $sell;
@@ -3190,7 +3182,7 @@ class ProductionOrderReportController extends Controller
     public function waste(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
@@ -3303,7 +3295,7 @@ class ProductionOrderReportController extends Controller
                     $dq = (float) $output->defective_quantity;
                     $dKg = $w > 0 ? $dq * $w : $dq;
 
-                    $sell = (float) ($v->discount_selling_price ?? $v->selling_price ?? 0);
+                    $sell = (float) ($v->selling_price ?? 0);
 
                     $outKg   += $kg;
                     $defKg   += $dKg;
@@ -3698,7 +3690,7 @@ class ProductionOrderReportController extends Controller
     public function batchTracking(Request $request)
     {
         $tenantId     = $this->getTenantId();
-        $isSingleShop = $this->isTenantSingleShop($tenantId);
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
         // ─── Filters ────────────────────────────────────────────────────
         $startDate  = $request->get('start_date', now()->subMonths(3)->format('Y-m-d'));
