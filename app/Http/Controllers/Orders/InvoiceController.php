@@ -222,191 +222,6 @@ class InvoiceController extends Controller
         ]);
     }
 
-    /**
-     * THE COMMIT POINT. First send: stock leaves, status flips to 'sent'.
-     * A resend after that never deducts stock again.
-     *
-     * channel = 'email'    → needs a destination address. Uses billing_email
-     *                        on file, or the 'email' field if the cashier
-     *                        typed/overrode one — and persists that override
-     *                        onto the invoice so it's there next time.
-     * channel = 'download' → no address needed. Still marks the invoice sent
-     *                        and moves stock (goods left the store either
-     *                        way) — just hands back a PDF url for the
-     *                        cashier to send manually (WhatsApp, print, etc).
-     */
-    /**
-     * Send invoice via email or download
-     */
-    // public function send(Request $request, $id)
-    // {
-    //     $user = Auth::user();
-    //     $tenantId = $user->tenant_id;
-
-    //     $invoice = Invoice::with('order.orderItems')
-    //         ->where('tenant_id', $tenantId)
-    //         ->findOrFail($id);
-
-    //     if ($invoice->isVoid() || $invoice->isPaid()) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => __('payments.invoice_cannot_be_sent'),
-    //         ], 422);
-    //     }
-
-    //     $validated = $request->validate([
-    //         'channel' => 'nullable|in:email,print,sms,whatsapp',
-    //         'email'   => 'nullable|email',
-    //         'subject' => 'nullable|string|max:255',
-    //         'message' => 'nullable|string',
-    //     ]);
-
-    //     $channel = $validated['channel'] ?? 'email';
-
-    //     // For email channel, validate email
-    //     if ($channel === 'email') {
-    //         $emailToUse = $validated['email'] ?? $invoice->billing_email;
-            
-    //         // Log the email being used
-    //         // Log::info('Email channel selected', [
-    //         //     'invoice_id' => $invoice->id,
-    //         //     'email_from_request' => $validated['email'] ?? null,
-    //         //     'email_from_invoice' => $invoice->billing_email,
-    //         //     'email_to_use' => $emailToUse
-    //         // ]);
-            
-    //         if (!$emailToUse) {
-    //             return response()->json([
-    //                 'success' => false,
-    //                 'message' => __('payments.customer_email_required'),
-    //             ], 422);
-    //         }
-    //     }
-
-    //     DB::beginTransaction();
-    //     try {
-    //         $isFirstSend = $invoice->isDraft();
-
-    //         // Update email if changed
-    //         if ($channel === 'email' && !empty($validated['email']) && $validated['email'] !== $invoice->billing_email) {
-    //             $invoice->billing_email = $validated['email'];
-    //         }
-
-    //         // First send - reduce stock
-    //         if ($isFirstSend) {
-    //             $isSingleShop = tenant_is_single_shop($tenantId);
-
-    //             foreach ($invoice->order->orderItems as $item) {
-    //                 $variant = ProductVariant::find($item->variant_id);
-    //                 if (!$variant) continue;
-
-    //                 if ($isSingleShop) {
-    //                     $this->reduceSingleShopStockForInvoice($variant, $item, $invoice->order);
-    //                 } else {
-    //                     $this->reduceMultiShopStockForInvoice($variant, $item, $invoice->order, $user);
-    //                 }
-    //             }
-
-    //             $invoice->status = Invoice::STATUS_SENT;
-    //             $invoice->sent_at = now();
-    //             $invoice->save();
-    //         }
-
-    //         // ─── SEND EMAIL ──────────────────────────────────────────────
-    //         if ($channel === 'email') {
-    //             $emailToUse = $validated['email'] ?? $invoice->billing_email;
-    //             $subject = $validated['subject'] ?? __('payments.invoice_subject', [
-    //                 'number' => $invoice->invoice_number,
-    //                 'app_name' => config('app.name'),
-    //             ]);
-    //             $customMessage = $validated['message'] ?? null;
-
-    //             // Log before sending
-    //             Log::info('Attempting to send invoice email', [
-    //                 'invoice_id' => $invoice->id,
-    //                 'to' => $emailToUse,
-    //                 'subject' => $subject,
-    //             ]);
-
-    //             try {
-    //                 // USE send() NOT queue() - to send immediately
-    //                 Mail::to($emailToUse)
-    //                     ->send(new \App\Mail\InvoiceMail($invoice, $subject, $customMessage));
-                    
-    //                 Log::info('Invoice email sent successfully', [
-    //                     'invoice_id' => $invoice->id,
-    //                     'to' => $emailToUse
-    //                 ]);
-
-    //                 // Create send record
-    //                 $invoice->sends()->create([
-    //                     'channel' => $channel,
-    //                     'recipient' => $invoice->billing_email,
-    //                     'status' => 'sent',
-    //                     'provider' => config('mail.default'),
-    //                     'sent_by' => $user->id,
-    //                     'sent_at' => now(),
-    //                 ]);
-
-    //             } catch (\Exception $e) {
-    //                 Log::error('Failed to send invoice email: ' . $e->getMessage(), [
-    //                     'invoice_id' => $invoice->id,
-    //                     'to' => $emailToUse,
-    //                     'trace' => $e->getTraceAsString()
-    //                 ]);
-                    
-    //                 // Record the failure
-    //                 $invoice->sends()->create([
-    //                     'channel' => $channel,
-    //                     'recipient' => $emailToUse,
-    //                     'status' => 'failed',
-    //                     'provider' => config('mail.default'),
-    //                     'error_message' => $e->getMessage(),
-    //                     'sent_by' => $user->id,
-    //                 ]);
-                    
-    //                 throw $e;
-    //             }
-    //         }
-
-    //         // ─── DOWNLOAD ──────────────────────────────────────────────────
-    //         if ($channel === 'download') {
-    //             $invoice->sends()->create([
-    //                 'channel' => $channel,
-    //                 'recipient' => $invoice->billing_phone ?? null,
-    //                 'status' => 'delivered',
-    //                 'sent_by' => $user->id,
-    //                 'sent_at' => now(),
-    //             ]);
-    //         }
-
-    //         DB::commit();
-
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => $channel === 'email'
-    //                 ? ($isFirstSend
-    //                     ? __('payments.invoice_sent_and_stock_reduced')
-    //                     : __('payments.invoice_resent'))
-    //                 : __('payments.invoice_ready_for_download'),
-    //             'invoice_id' => $invoice->id,
-    //             'status' => $invoice->status,
-    //             'download_url' => $channel === 'download' ? route('invoices.pdf', $invoice->id) : null,
-    //         ]);
-
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         Log::error('Invoice send failed: ' . $e->getMessage(), [
-    //             'invoice_id' => $id,
-    //             'trace' => $e->getTraceAsString()
-    //         ]);
-            
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => __('payments.invoice_send_failed') . ': ' . $e->getMessage(),
-    //         ], 500);
-    //     }
-    // }
 
   
     /**
@@ -778,7 +593,7 @@ class InvoiceController extends Controller
     private function reduceMultiShopStockForInvoice($variant, $item, $order, $user)
     {
         // ✅ Get inventory_id from the stored inventory_data
-        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryData = $this->extractInventoryData($item);
         $inventoryId = $inventoryData['inventory_id'] ?? null;
         $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
         $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
@@ -877,7 +692,7 @@ class InvoiceController extends Controller
     // private function restockMultiShopForVoid($variant, $item, $order, $user)
     // {
     //     // ✅ Get inventory_id from the stored inventory_data
-    //     $inventoryData = json_decode($item->inventory_data, true);
+    //     $inventoryData = $this->extractInventoryData($item);
     //     $inventoryId = $inventoryData['inventory_id'] ?? null;
     //     $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
     //     $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
@@ -1482,6 +1297,37 @@ class InvoiceController extends Controller
         // ✅ Update overall quantity (virtual, for reference only)
         $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantity);
         $variant->save();
+
+        // ★ Snapshot pricing and log the sale
+        $pricing = $this->resolveLogPricing(null, $variant);
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $order->id,
+            'quantity_before' => $before,
+            'tenant_id'       => $order->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $variant->overal_quantity_at_hand,
+            'quantity_change' => -$quantity,
+            'reason'          => 'invoice_sent',
+            'notes'           => "Invoice sent (serial) - Order #{$order->order_number} - {$variant->name}",
+            'source'          => 'invoice',
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$quantity * $pricing['cost'],
+            'total_selling_value' => -$quantity * $pricing['selling'],
+            'pricing_source'      => $pricing['source'],
+
+            'metadata' => [
+                'strategy'      => 'serial',
+                'serial_id'     => $serialId,
+                'serial_number' => $serialNumber,
+            ],
+        ]);
+
     }
 
     // ─── MULTI SHOP SERIAL ──────────────────────────────────────────────
@@ -1617,32 +1463,48 @@ class InvoiceController extends Controller
             $depletedQuantity = $quantity;
         }
 
-        // ✅ Update inventory allocation
-        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $depletedQuantity);
+        $before = (int) $inventory->quantity_allocated;
+        $inventory->quantity_allocated = max(0, $before - $depletedQuantity);
         $inventory->save();
+        $after = (int) $inventory->quantity_allocated;
 
         // Log inventory transaction
+        // ★ Resolve pricing from the inventory row
+        $pricing = $this->resolveLogPricing($inventory, $variant);
+
         InventoryTransactions::create([
-            'quantity' => -$depletedQuantity,
-            'reference_id' => $order->id,
+            'quantity'       => -$depletedQuantity,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "Invoice sent - Order #{$order->order_number} - {$variant->name} (SERIAL)",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "Invoice sent - Order #{$order->order_number} - {$variant->name} (SERIAL)",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$depletedQuantity * $pricing['cost'],
+            'total_selling_value' => -$depletedQuantity * $pricing['selling'],
         ]);
 
-        // Log adjustment
         InventoryAdjustments::create([
-            'quantity_before' => $inventory->quantity_allocated + $depletedQuantity,
-            'quantity_after' => $inventory->quantity_allocated,
-            'reason' => 'invoice_sent',
-            'notes' => "Invoice sent - Order #{$order->order_number} - {$variant->name} (SERIAL)",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'quantity_before' => $before,
+            'quantity_after'  => $after,
+            'reason'          => 'invoice_sent',
+            'notes'           => "Invoice sent - Order #{$order->order_number} - {$variant->name} (SERIAL)",
+            'inventory_id'    => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => -$depletedQuantity * $pricing['cost'],
         ]);
+
+
     }
 
     // ─── RECIPE DEPLETION FOR INVOICE (with serial support) ─────────────
@@ -1839,18 +1701,29 @@ class InvoiceController extends Controller
 
         $variant->update(['overal_quantity_at_hand' => $after]);
 
+        // ★ Resolve prices from the variant (single-shop has no InventoryItems row)
+        $pricing = $this->resolveLogPricing(null, $variant);
+
         SingleShopInventoryLog::create([
-            'variant_id' => $variant->id,
-            'order_id' => $order->id,
-            'tenant_id' => $order->tenant_id,
-            'created_by' => auth()->id(),
+            'variant_id'      => $variant->id,
+            'order_id'        => $order->id,
+            'tenant_id'       => $order->tenant_id,
+            'created_by'      => auth()->id(),
             'quantity_before' => $before,
-            'quantity_after' => $after,
+            'quantity_after'  => $after,
             'quantity_change' => -$item->quantity,
-            'reason' => 'invoice_sent',
-            'notes' => "Invoice sent - Order #{$order->order_number} ({$variant->name})",
-            'source' => 'invoice',
-            'metadata' => ['strategy' => 'quantity']
+            'reason'          => 'invoice_sent',
+            'notes'           => "Invoice sent - Order #{$order->order_number} ({$variant->name})",
+            'source'          => 'invoice',
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$item->quantity * $pricing['cost'],
+            'total_selling_value' => -$item->quantity * $pricing['selling'],
+            'pricing_source'      => $pricing['source'],
+
+            'metadata'        => ['strategy' => 'quantity'],
         ]);
 
         Log::info('[Invoice] Single Shop Quantity depleted', [
@@ -1865,7 +1738,8 @@ class InvoiceController extends Controller
     private function depleteSingleBatchForInvoice($variant, $item, $order)
     {
         $tenantId = $order->tenant_id;
-        $quantityNeeded = $item->quantity;
+        $quantityOriginal = (float) $item->quantity;   // ★
+        $quantityNeeded   = $quantityOriginal;
         
         // ✅ Get batch_id from the order item
         $batchId = $item->batch_id ?? null;
@@ -1910,7 +1784,7 @@ class InvoiceController extends Controller
             
             $this->logBatchDepletionForInvoice($batch, $variant, $item, $order, $quantityNeeded);
             
-            $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded);
+            $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityOriginal);
             $variant->save();
             return;
         }
@@ -1959,7 +1833,7 @@ class InvoiceController extends Controller
             $this->logBatchDepletionForInvoice($batch, $variant, $item, $order, $deduct);
         }
 
-        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded);
+        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityOriginal);
         $variant->save();
     }
 
@@ -1972,7 +1846,7 @@ class InvoiceController extends Controller
         $user = Auth::user();
         $tenantId = $order->tenant_id;
 
-        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryData = $this->extractInventoryData($item);
         $inventoryId = $inventoryData['inventory_id'] ?? null;
         $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
         $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
@@ -2003,25 +1877,39 @@ class InvoiceController extends Controller
 
         $inventory->update(['quantity_allocated' => $after]);
 
+        // ★ Resolve prices from the inventory row (multi-shop always has one here)
+        $pricing = $this->resolveLogPricing($inventory, $variant);
+
         InventoryTransactions::create([
-            'quantity' => -$item->quantity,
-            'reference_id' => $order->id,
+            'quantity'       => -$item->quantity,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "Invoice sent - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "Invoice sent - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$item->quantity * $pricing['cost'],
+            'total_selling_value' => -$item->quantity * $pricing['selling'],
         ]);
 
         InventoryAdjustments::create([
             'quantity_before' => $before,
-            'quantity_after' => $after,
-            'reason' => 'invoice_sent',
-            'notes' => "Invoice sent - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'quantity_after'  => $after,
+            'reason'          => 'invoice_sent',
+            'notes'           => "Invoice sent - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'    => $inventory->id,
+            'created_by'      => auth()->id(),
+            'tenant_id'       => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => -$item->quantity * $pricing['cost'],
         ]);
 
         // Log::info('[Invoice] Multi Shop Quantity depleted', [
@@ -2040,7 +1928,8 @@ class InvoiceController extends Controller
     {
         $user = Auth::user();
         $tenantId = $order->tenant_id;
-        $quantityNeeded = $item->quantity;
+        $quantityOriginal = (float) $item->quantity;   // ★ capture
+        $quantityNeeded   = $quantityOriginal;
         
         // ✅ Get batch_id from the order item
         $batchId = $item->batch_id ?? null;
@@ -2054,7 +1943,7 @@ class InvoiceController extends Controller
             'order_id' => $order->id
         ]);
 
-        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryData = $this->extractInventoryData($item);
         $inventoryId = $inventoryData['inventory_id'] ?? null;
         $locationId = $inventoryData['location_id'] ?? $user->location_id ?? null;
         $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? null;
@@ -2147,18 +2036,28 @@ class InvoiceController extends Controller
             }
         }
 
-        $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityNeeded);
+        $before = (int) $inventory->quantity_allocated;
+        $inventory->quantity_allocated = max(0, $before - $quantityOriginal);   // ★
         $inventory->save();
+        $after = (int) $inventory->quantity_allocated;
+
+        $pricing = $this->resolveLogPricing($inventory, $variant);
 
         InventoryTransactions::create([
-            'quantity' => -$quantityNeeded,
-            'reference_id' => $order->id,
+            'quantity'       => -$quantityOriginal,
+            'reference_id'   => $order->id,
             'reference_type' => 'order',
-            'type' => 'sale',
-            'notes' => "Invoice sent - Order #{$order->order_number} - {$variant->name} (BATCH)",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $tenantId,
+            'type'           => 'sale',
+            'notes'          => "Invoice sent - Order #{$order->order_number} - {$variant->name} (BATCH)",
+            'inventory_id'   => $inventory->id,
+            'created_by'     => auth()->id(),
+            'tenant_id'      => $tenantId,
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => -$quantityNeeded * $pricing['cost'],
+            'total_selling_value' => -$quantityNeeded * $pricing['selling'],
         ]);
 
         Log::info('[Invoice] Multi Shop Batch depleted', [
@@ -2177,35 +2076,57 @@ class InvoiceController extends Controller
 
     private function logBatchDepletionForInvoice($batch, $variant, $item, $order, $quantityDeducted)
     {
-        $beforeQty = ($batch->quantity_remaining ?? $batch->quantity_received ?? 0) + $quantityDeducted;
-        $afterQty = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-        
+        $beforeQty = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0) + $quantityDeducted;
+        $afterQty  = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+
+        // ★ Try to resolve the inventory row this item is actually drawn from
+        $inventory = null;
+        $inventoryData = $this->extractInventoryData($item);
+        if (!empty($inventoryData['inventory_id'])) {
+            $inventory = InventoryItems::find($inventoryData['inventory_id']);
+        }
+
+        $frozenUnitPrice = is_object($item)
+            ? (float) ($item->unit_price ?? 0)
+            : (float) ($item['unit_price'] ?? 0);
+
+        // ★ Pass the frozen price — batch unit_cost wins for cost side
+        $pricing = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
+        $unitCost = (float) ($batch->unit_cost ?? 0);
+        if ($unitCost <= 0) $unitCost = $pricing['cost'];
+
         BatchLog::create([
-            'batch_id' => $batch->id,
-            'batch_number' => $batch->batch_number,
-            'variant_id' => $variant->id,
-            'variant_name' => $variant->name,
-            'variant_sku' => $variant->sku,
-            'type' => BatchLog::TYPE_DEPLETED,
+            'batch_id'        => $batch->id,
+            'batch_number'    => $batch->batch_number,
+            'variant_id'      => $variant->id,
+            'variant_name'    => $variant->name,
+            'variant_sku'     => $variant->sku,
+            'type'            => BatchLog::TYPE_DEPLETED,
             'quantity_change' => -$quantityDeducted,
             'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
-            'unit_cost' => $batch->unit_cost ?? 0,
-            'total_cost' => ($batch->unit_cost ?? 0) * $quantityDeducted,
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'tenant_id' => $order->tenant_id,
-            'location_id' => $batch->location_id ?? $order->location_id,
+            'quantity_after'  => $afterQty,
+
+            'unit_cost'           => $unitCost,
+            'total_cost'          => -$quantityDeducted * $unitCost,
+            'unit_selling_price'  => $pricing['selling'],
+            'total_selling_value' => -$quantityDeducted * $pricing['selling'],
+            'gross_profit'        => $quantityDeducted * ($pricing['selling'] - $unitCost),
+            'pricing_source'      => $batch->unit_cost ? 'batch' : $pricing['source'],
+
+            'order_id'      => $order->id,
+            'order_number'  => $order->order_number,
+            'tenant_id'     => $order->tenant_id,
+            'location_id'   => $batch->location_id ?? $order->location_id,
             'department_id' => $batch->department_id ?? $order->department_id,
-            'expiry_date' => $batch->expiry_date,
-            'event_date' => now(),
-            'performed_by' => auth()->id(),
+            'expiry_date'   => $batch->expiry_date,
+            'event_date'    => now(),
+            'performed_by'  => auth()->id(),
             'metadata' => [
-                'item_name' => $item->name ?? $variant->name,
+                'item_name'     => $item->name ?? $variant->name,
                 'customer_name' => $order->customer_name,
-                'unit_price' => $item->price ?? 0,
-                'source' => 'invoice',
-                'invoice_id' => $order->invoice_id ?? null,
+                'unit_price'    => $item->price ?? 0,
+                'source'        => 'invoice',
             ],
         ]);
     }
@@ -2219,19 +2140,33 @@ class InvoiceController extends Controller
 
         $variant->update(['overal_quantity_at_hand' => $afterQty]);
 
+        $frozenUnitPrice = is_object($item)
+            ? (float) ($item->unit_price ?? 0)
+            : (float) ($item['unit_price'] ?? 0);
+
+        $pricing = $this->resolveLogPricing(null, $variant, $frozenUnitPrice);
+
         SingleShopInventoryLog::create([
-            'variant_id' => $variant->id,
-            'order_id' => $order->id,
-            'tenant_id' => $order->tenant_id,
-            'created_by' => auth()->id(),
+            'variant_id'      => $variant->id,
+            'order_id'        => $order->id,
+            'tenant_id'       => $order->tenant_id,
+            'created_by'      => auth()->id(),
             'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
+            'quantity_after'  => $afterQty,
             'quantity_change' => $item->quantity,
-            'reason' => 'invoice_voided',
-            'notes' => 'Invoice voided, stock restored - Order #' . $order->order_number,
-            'source' => 'invoice',
+            'reason'          => 'invoice_voided',
+            'notes'           => 'Invoice voided, stock restored - Order #' . $order->order_number,
+            'source'          => 'invoice',
+
+            // ★ Frozen pricing (positive because stock is coming back)
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $item->quantity * $pricing['cost'],
+            'total_selling_value' => $item->quantity * $pricing['selling'],
+            'pricing_source'      => $pricing['source'],
+
             'metadata' => [
-                'item_name' => $item->item_name,
+                'item_name'  => $item->item_name,
                 'unit_price' => $item->unit_price,
             ],
         ]);
@@ -2245,7 +2180,7 @@ class InvoiceController extends Controller
 
     private function restockMultiShopForVoid($variant, $item, $order, $user)
     {
-        $inventoryData = json_decode($item->inventory_data, true);
+        $inventoryData = $this->extractInventoryData($item);
         $inventoryId = $inventoryData['inventory_id'] ?? null;
         $departmentId = $inventoryData['department_id'] ?? $user->department_id ?? 1;
         $locationId = $inventoryData['location_id'] ?? $user->location_id ?? 1;
@@ -2274,25 +2209,44 @@ class InvoiceController extends Controller
 
         $inventory->update(['quantity_allocated' => $afterQty]);
 
+        
+        // ★ Resolve pricing from the sale line (frozen unit_price is authoritative)
+        $frozenUnitPrice = is_object($item)
+            ? (float) ($item->unit_price ?? 0)
+            : (float) ($item['unit_price'] ?? 0);
+
+        $pricing = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
         InventoryAdjustments::create([
-            'quantity_before' => $beforeQty,
-            'quantity_after' => $afterQty,
-            'reason' => 'invoice_voided',
-            'notes' => "Invoice voided, stock restored - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $order->tenant_id,
+            'quantity_before'    => $beforeQty,
+            'quantity_after'     => $afterQty,
+            'reason'             => 'invoice_voided',
+            'notes'              => "Invoice voided, stock restored - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'       => $inventory->id,
+            'created_by'         => auth()->id(),
+            'tenant_id'          => $order->tenant_id,
+
+            // ★ Frozen pricing (positive — stock coming back)
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => $item->quantity * $pricing['cost'],
         ]);
 
         InventoryTransactions::create([
-            'quantity' => $item->quantity,
-            'reference_id' => $order->id,
-            'reference_type' => 'order',
-            'type' => 'return',
-            'notes' => "Stock restored - Invoice voided - Order #{$order->order_number} - {$variant->name}",
-            'inventory_id' => $inventory->id,
-            'created_by' => auth()->id(),
-            'tenant_id' => $order->tenant_id,
+            'quantity'            => $item->quantity,
+            'reference_id'        => $order->id,
+            'reference_type'      => 'order',
+            'type'                => 'return',
+            'notes'               => "Stock restored - Invoice voided - Order #{$order->order_number} - {$variant->name}",
+            'inventory_id'        => $inventory->id,
+            'created_by'          => auth()->id(),
+            'tenant_id'           => $order->tenant_id,
+
+            // ★ Frozen pricing
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $item->quantity * $pricing['cost'],
+            'total_selling_value' => $item->quantity * $pricing['selling'],
         ]);
 
         Log::info('[Invoice] Void - Stock restored (Multi Shop)', [
@@ -2302,6 +2256,83 @@ class InvoiceController extends Controller
             'order_id' => $order->id
         ]);
     }
+
+    /**
+     * Resolve cost + selling price to freeze onto an inventory log.
+     *
+     * Cascade:
+     *   1. InventoryItems override at this location/department
+     *      — only when has_custom_pricing = 1
+     *   2. Variant's grand_total_cost_price / selling_price
+     *   3. Recompute cost from variant components
+     *
+     * Returns [cost, selling, source]
+     *   source ∈ { 'item', 'variant' }
+     */
+    private function resolveLogPricing(
+        ?InventoryItems $inventory,
+        ProductVariant $variant,
+        ?float $frozenSellingPrice = null   // ★ from order_items.unit_price
+    ): array {
+        // ── Cost ─────────────────────────────────────────────────────
+        $cost   = 0.0;
+        $source = 'variant';
+
+        if ($inventory && (float) ($inventory->grand_total_cost_price ?? 0) > 0) {
+            $cost   = (float) $inventory->grand_total_cost_price;
+            $source = 'item';
+        } else {
+            $grand = (float) ($variant->grand_total_cost_price ?? 0);
+            if ($grand > 0) {
+                $cost = $grand;
+            } else {
+                $cost = (float) ($variant->supplier_cost_price ?? 0)
+                    + (float) ($variant->total_shipping_cost ?? 0)
+                    + (float) ($variant->ura_taxes_applied   ?? 0)
+                    + (float) ($variant->additional_expenses ?? 0);
+            }
+        }
+
+        // ── Selling price ────────────────────────────────────────────
+        // Priority:
+        //   1. Frozen on the sale line — what the customer actually paid
+        //   2. InventoryItems override at this location/department
+        //   3. Variant default
+        $selling = 0.0;
+
+        if ($frozenSellingPrice !== null && $frozenSellingPrice > 0) {
+            $selling = $frozenSellingPrice;
+        } elseif ($inventory && (float) ($inventory->selling_price ?? 0) > 0) {
+            $selling = (float) $inventory->selling_price;
+        } else {
+            $selling = (float) ($variant->selling_price ?? 0);
+        }
+
+        return ['cost' => $cost, 'selling' => $selling, 'source' => $source];
+    }
+
+    /**
+     * Safely read $item->inventory_data. Handles Eloquent's array cast,
+     * a raw JSON string, or a plain array.
+     */
+    private function extractInventoryData($item): array
+    {
+        if (is_object($item)) {
+            $raw = $item->inventory_data ?? null;
+        } elseif (is_array($item)) {
+            $raw = $item['inventory_data'] ?? null;
+        } else {
+            return [];
+        }
+
+        if (is_array($raw)) return $raw;
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
+    }
+
 
 
 }

@@ -35,25 +35,6 @@ class ChartOfAccount extends Model
         'is_system_account' => 'boolean',
     ];
 
-    // No need
-    // public function getBalanceAttribute(): float
-    // {
-    //     // Get raw sums from general ledger (stored as integers)
-    //     $debits = $this->generalLedgerEntries()->sum('debit_amount');
-    //     $credits = $this->generalLedgerEntries()->sum('credit_amount');
-        
-    //     // Convert from stored integers to display floats
-    //     $debitSum = from_base_currency($debits) ?: 0;
-    //     $creditSum = from_base_currency($credits) ?: 0;
-
-    //     if ($this->normal_balance === 'D') {
-    //         return $debitSum - $creditSum;
-    //     }
-
-    //     return $creditSum - $debitSum;
-    // }
-    
-
 
 
     

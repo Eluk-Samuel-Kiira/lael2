@@ -346,8 +346,191 @@ return [
     '_upload_receipt' => 'Upload Receipt',
     '_users' => 'Users',
     '_view' => 'View',
+    '_save' => 'Save',
+    'templates_likely_due_message' => ':count template is likely due based on its last usage.|:count templates are likely due based on their last usage.',
     'cost_of_goods_sold' => 'Cost of Goods sold',
     'sold_inventory_profit' => 'Sold Inventory Profit',
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // EXPENSE TEMPLATES — Page & Navigation
+    // ═══════════════════════════════════════════════════════════════
+    'expense_templates'          => 'Expense Templates',
+    'expense_template'           => 'Expense Template',
+    'all_templates'              => 'All Templates',
+    'back_to_expenses'           => 'Back to Expenses',
+    'no_templates_found'         => 'No expense templates found.',
+    'create_first_template'      => 'Create your first template to speed up recurring expense entry.',
+
+    // ═══════════════════════════════════════════════════════════════
+    // EXPENSE TEMPLATES — Bulk Create Modal
+    // ═══════════════════════════════════════════════════════════════
+    'bulk_add_templates'         => 'Bulk Add Expense Templates',
+    'expense_names'              => 'Expense Names',
+    'bulk_names_hint'            => 'Separate with commas or new lines. Duplicates are ignored.',
+    'bulk_names_placeholder'     => 'Heller repair, Mill repair, Sponge / Batulisa, Bearing, Saucepan, Plates, Firewood, Diesel…',
+    'names_detected'             => 'names detected',
+    'shared_defaults'            => 'Shared Defaults',
+    'select_category'            => 'Select a category…',
+    'select_department'          => 'Select a department…',
+    'default_location'           => 'Default Location',
+    'default_location_hint'      => 'Optional — pre-fills the location when logging an occurrence.',
+    'default_department'         => 'Default Department',
+    'default_department_hint'    => 'Optional — pre-fills the department when logging an occurrence.',
+    'default_amount_optional'    => 'Default Amount (optional)',
+    'default_amount_hint'        => 'Suggested amount. Can be overridden when logging.',
+    'requires_receipt'           => 'Requires Receipt',
+    'requires_approval'          => 'Requires Approval',
+    'create_templates'           => 'Create Templates',
+    'no_valid_names_found'       => 'No valid names found in the input.',
+    'templates_created_message'  => ':count templates created, :skipped skipped.',
+    'no_departments_for_location'=> 'No departments are configured for this location.',
+
+    // ═══════════════════════════════════════════════════════════════
+    // FREQUENCY LABELS
+    // ═══════════════════════════════════════════════════════════════
+    'frequency_random'           => 'Random / As needed',
+    'frequency_daily'            => 'Daily',
+    'frequency_weekly'           => 'Weekly',
+    'frequency_biweekly'         => 'Every 2 weeks',
+    'frequency_monthly'          => 'Monthly',
+    'frequency_quarterly'        => 'Quarterly',
+    'frequency_annually'         => 'Annually',
+    'frequency_once'             => 'One-time',
+
+    // ═══════════════════════════════════════════════════════════════
+    // QUICK LOG PANEL
+    // ═══════════════════════════════════════════════════════════════
+    'quick_log'                  => 'Quick Log',
+    'log_now'                    => 'Log Now',
+    'log_again'                  => 'Log Again',
+    'never_used'                 => 'Never used',
+    'no_amount_yet'              => 'No amount yet',
+    'usage_count'                => 'Usage Count',
+    'last_amount'                => 'Last Amount',
+    'last_used_at'               => 'Last Used',
+    'last_used'                  => 'Last used',
+
+    // ═══════════════════════════════════════════════════════════════
+    // LIKELY DUE PANEL
+    // ═══════════════════════════════════════════════════════════════
+    'likely_due'                 => 'Likely Due',
+    'templates_likely_due_message' => ':count template is likely due based on its last usage.|:count templates are likely due based on their last usage.',
+
+    // ═══════════════════════════════════════════════════════════════
+    // LOG MODAL
+    // ═══════════════════════════════════════════════════════════════
+    'log_expense_again'          => 'Log Expense Again',
+    'log_occurrence'             => 'Log Occurrence',
+    'suggested_amount'           => 'Suggested Amount',
+    'amount_required'            => 'Amount is required',
+    'date_required'              => 'Date is required',
+    'payment_method_required'    => 'Select a payment method',
+    'use_default'                => 'Use default',
+    'default_amount'             => 'Default Amount',
+    'times_used'                 => 'Times Used',
+    'template'                   => 'Template',
+    'from_template'              => 'From template',
+
+    // ═══════════════════════════════════════════════════════════════
+    // TEMPLATE TABLE / FILTERS
+    // ═══════════════════════════════════════════════════════════════
+    'template_name'              => 'Template Name',
+    'template_code'              => 'Template Code',
+    'templates'                  => 'Templates',
+    'all_categories'             => 'All Categories',
+    'filter'                     => 'Filter',
+    'show'                       => 'Show',
+
+    // ═══════════════════════════════════════════════════════════════
+    // REUSABLE / GENERAL (only add if missing in your auth.php)
+    // ═══════════════════════════════════════════════════════════════
+    'none'                       => 'None',
+    'optional'                   => 'Optional',
+    'select'                     => 'Select',
+    'clear'                      => 'Clear',
+    'save'                       => 'Save',
+    'cancel'                     => 'Cancel',
+    'create'                     => 'Create',
+    'submit'                     => 'Submit',
+
+
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // EXPENSE TEMPLATES — Bulk Create Modal
+    // ═══════════════════════════════════════════════════════════════
+
+    'bulk_add_templates'        => 'Bulk Add Expense Templates',
+    'expense_names'             => 'Expense Names',
+    'bulk_names_hint'           => 'Paste from your notebook. Separate with commas or new lines. Duplicates are ignored.',
+    'names_detected'            => 'names detected',
+    'shared_defaults'           => 'Shared Defaults',
+    'select_category'           => 'Select a category…',
+    'default_location'          => 'Default Location',
+    'default_location_hint'     => 'Optional — pre-fills the location when logging an occurrence.',
+    'default_department'        => 'Default Department',
+    'default_department_hint'   => 'Optional — pre-fills the department when logging an occurrence.',
+    'default_amount_optional'   => 'Default Amount (optional)',
+    'default_amount_hint'       => 'Suggested amount. Can be overridden when logging.',
+    'requires_receipt'          => 'Requires Receipt',
+    'requires_approval'         => 'Requires Approval',
+    'create_templates'          => 'Create Templates',
+    'no_valid_names_found'      => 'No valid names found in the input.',
+    'templates_created_message' => ':count templates created. :skipped skipped.',
+
+    // ═══════════════════════════════════════════════════════════════
+    // FREQUENCY LABELS
+    // ═══════════════════════════════════════════════════════════════
+
+    'frequency_random'    => 'Random / As needed',
+    'frequency_daily'     => 'Daily',
+    'frequency_weekly'    => 'Weekly',
+    'frequency_biweekly'  => 'Every 2 weeks',
+    'frequency_monthly'   => 'Monthly',
+    'frequency_quarterly' => 'Quarterly',
+    'frequency_annually'  => 'Annually',
+    'frequency_once'      => 'One-time',
+
+    // ═══════════════════════════════════════════════════════════════
+    // REUSABLE (if not already present)
+    // ═══════════════════════════════════════════════════════════════
+
+    'none'      => 'None',
+    'optional'  => 'Optional',
+
+    // ═══════════════════════════════════════════════════════════════
+    // LOG AGAIN MODAL (next step)
+    // ═══════════════════════════════════════════════════════════════
+
+    'log_expense_again'   => 'Log Expense Again',
+    'log_occurrence'      => 'Log Occurrence',
+    'suggested_amount'    => 'Suggested Amount',
+    'last_used'           => 'Last Used',
+    'times_used'          => 'Times Used',
+    'log_now'             => 'Log Now',
+    'template'            => 'Template',
+    'from_template'       => 'From template',
+    'amount_required'     => 'Amount is required',
+    'date_required'       => 'Date is required',
+    'payment_method_required' => 'Select a payment method',
+
+    // ═══════════════════════════════════════════════════════════════
+    // TEMPLATES LIST PAGE (if you build one)
+    // ═══════════════════════════════════════════════════════════════
+
+    'expense_templates'      => 'Expense Templates',
+    'expense_template'       => 'Expense Template',
+    'new_template'           => 'New Template',
+    'templates'              => 'Templates',
+    'template_name'          => 'Template Name',
+    'template_code'          => 'Template Code',
+    'usage_count'            => 'Usage Count',
+    'last_used_at'           => 'Last Used',
+    'likely_due'             => 'Likely Due',
+    'log_again'              => 'Log Again',
+    'no_templates_found'     => 'No expense templates found.',
+    'create_first_template'  => 'Create your first template to speed up recurring expense entry.',
     
     // Settings Module
     'account_deactivate' => 'Account Deactivation',

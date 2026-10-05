@@ -30,6 +30,438 @@
 
 
 <script>
+(function () {
+    'use strict';
+
+    const LOG_FORM_URL_TPL = @json(route('expense-templates.log-form', ['template' => '__ID__']));
+    const LOG_POST_URL_TPL = @json(route('expense-templates.log',      ['template' => '__ID__']));
+
+    let logModal = null;
+
+    // ─── Open the Log modal and prefill ─────────────────────────
+    window.logTemplate = function (templateId) {
+        const modalEl = document.getElementById('logTemplateModal');
+        if (!modalEl) return;
+        logModal = logModal || new bootstrap.Modal(modalEl);
+
+        // Reset + show
+        document.getElementById('logTemplateForm').reset();
+        document.getElementById('logDate').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('logTemplateId').value = templateId;
+
+        logModal.show();
+
+        // Fetch context for this template
+        const url = LOG_FORM_URL_TPL.replace('__ID__', templateId);
+
+        fetch(url, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+        .then(r => r.json())
+        .then(data => {
+            const t = data.template;
+
+            // Header + read-only context
+            document.getElementById('logTemplateTitle').textContent =
+                '{{ __("auth.log_expense_again") }} — ' + t.name;
+
+            document.getElementById('logCategoryName').textContent   = t.category_name   ?? '—';
+            document.getElementById('logSupplierName').textContent   = t.supplier_name   ?? '—';
+            document.getElementById('logLocationName').textContent   = t.location_name   ?? '—';
+            document.getElementById('logDepartmentName').textContent = t.department_name ?? '—';
+
+            // Amount: prefer last, then default
+            const amountInput = document.getElementById('logGrossAmount');
+            const suggested = t.last_amount ?? t.default_amount ?? '';
+            amountInput.value = suggested;
+
+            const hint = document.getElementById('logAmountHint');
+            if (t.last_amount) {
+                hint.textContent =
+                    '{{ __("auth.last_used") }}: {{ currency_symbol() }}' +
+                    Number(t.last_amount).toLocaleString() +
+                    (t.last_used_at ? ' (' + t.last_used_at + ')' : '');
+            } else if (t.default_amount) {
+                hint.textContent =
+                    '{{ __("auth.default_amount") }}: {{ currency_symbol() }}' +
+                    Number(t.default_amount).toLocaleString();
+            } else {
+                hint.textContent = '';
+            }
+
+            // Payment methods
+            const pmSelect = document.getElementById('logPaymentMethod');
+            pmSelect.innerHTML = '<option value="">{{ __("payments.select_payment_method") }}</option>';
+            data.payment_methods.forEach(pm => {
+                const opt = document.createElement('option');
+                opt.value = pm.id;
+                opt.textContent = pm.name;
+                if (pm.is_default) opt.selected = true;
+                pmSelect.appendChild(opt);
+            });
+            if (window.jQuery && window.jQuery(pmSelect).data('select2')) {
+                window.jQuery(pmSelect).trigger('change.select2');
+            }
+
+            // Location list
+            const locSelect = document.getElementById('logLocationId');
+            locSelect.innerHTML = '<option value="">{{ __("auth.use_default") }}</option>';
+            data.locations.forEach(loc => {
+                const opt = document.createElement('option');
+                opt.value = loc.id;
+                opt.textContent = loc.name;
+                if (loc.id === t.location_id) opt.selected = true;
+                locSelect.appendChild(opt);
+            });
+            if (window.jQuery && window.jQuery(locSelect).data('select2')) {
+                window.jQuery(locSelect).trigger('change.select2');
+            }
+
+            // Department list
+            const depSelect = document.getElementById('logDepartmentId');
+            depSelect.innerHTML = '<option value="">{{ __("auth.use_default") }}</option>';
+            data.departments.forEach(dep => {
+                const opt = document.createElement('option');
+                opt.value = dep.id;
+                opt.textContent = dep.name;
+                if (dep.id === t.department_id) opt.selected = true;
+                depSelect.appendChild(opt);
+            });
+            if (window.jQuery && window.jQuery(depSelect).data('select2')) {
+                window.jQuery(depSelect).trigger('change.select2');
+            }
+        })
+        .catch(err => {
+            console.error('[log template] load failed:', err);
+            if (window.toastr) toastr.error('Failed to load template');
+        });
+    };
+
+    // ─── Submit the log form ────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('logTemplateForm');
+        if (!form) return;
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const templateId = document.getElementById('logTemplateId').value;
+            const submitBtn = document.getElementById('logTemplateSubmit');
+            const label = submitBtn.querySelector('.indicator-label');
+            const prog  = submitBtn.querySelector('.indicator-progress');
+
+            label.style.display = 'none';
+            prog.style.display  = 'inline-block';
+
+            const url = LOG_POST_URL_TPL.replace('__ID__', templateId);
+            const formData = new FormData(form);
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: formData,
+            })
+            .then(async r => {
+                const data = await r.json();
+                if (!r.ok || !data.success) throw new Error(data.message || 'Failed');
+                return data;
+            })
+            .then(data => {
+                logModal?.hide();
+                if (window.toastr) toastr.success(data.message);
+
+                // Reload the expense component (Liveblade or hard reload)
+                if (typeof reloadComponent === 'function') {
+                    reloadComponent('reloadExpenseComponent');
+                }
+                // Refresh the templates page so last_used updates
+                setTimeout(() => window.location.reload(), 700);
+            })
+            .catch(err => {
+                if (window.toastr) toastr.error(err.message);
+                else alert(err.message);
+            })
+            .finally(() => {
+                label.style.display = 'inline-block';
+                prog.style.display  = 'none';
+            });
+        });
+    });
+})();
+</script>
+
+
+<script>
+(function () {
+    'use strict';
+
+    // ── Route template — safe serialisation for JS ─────────────
+    const DEPT_URL_TEMPLATE = @json(route('get.departments.by.location', ['locationId' => '__LOC__']));
+
+    // ── State ──────────────────────────────────────────────────
+    let locationSelect, departmentSelect, emptyHint, hintEl;
+    let initialised = false;
+
+    // ── URL helper ─────────────────────────────────────────────
+    function departmentsByLocationUrl(locationId) {
+        return DEPT_URL_TEMPLATE.replace('__LOC__', encodeURIComponent(locationId));
+    }
+
+    // ── Select2-safe refresh ───────────────────────────────────
+    function refreshSelect2(el) {
+        if (window.jQuery && window.jQuery(el).data('select2')) {
+            window.jQuery(el).trigger('change.select2');
+        }
+    }
+
+    // ── Load departments for a location ────────────────────────
+    async function loadDepartments(locationId) {
+        if (!departmentSelect) return;
+
+        // Reset — keep the placeholder only
+        departmentSelect.innerHTML =
+            `<option value="">{{ __('auth.none') }}</option>`;
+        departmentSelect.disabled = true;
+        emptyHint?.classList.add('d-none');
+        hintEl?.classList.remove('d-none');
+        refreshSelect2(departmentSelect);
+
+        if (!locationId) return;
+
+        try {
+            const res = await fetch(departmentsByLocationUrl(locationId), {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            const data = await res.json();
+
+            // Normalise: array | { departments: [...] } | { data: [...] } | nested keys
+            let list = [];
+            if (Array.isArray(data)) {
+                list = data;
+            } else if (data && typeof data === 'object') {
+                const raw = data.departments ?? data.data ?? data;
+                if (Array.isArray(raw)) {
+                    list = raw;
+                } else if (raw && typeof raw === 'object') {
+                    list = Object.values(raw);
+                }
+            }
+            list = list.filter(d => d && typeof d === 'object' && d.id);
+
+            list.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = d.name;
+                departmentSelect.appendChild(opt);
+            });
+
+            departmentSelect.disabled = list.length === 0;
+            hintEl?.classList.toggle('d-none', list.length === 0);
+            emptyHint?.classList.toggle('d-none', list.length > 0);
+
+            refreshSelect2(departmentSelect);
+        } catch (err) {
+            console.error('[bulk-templates] department fetch failed:', err);
+            emptyHint?.classList.remove('d-none');
+            refreshSelect2(departmentSelect);
+        }
+    }
+
+    // ── Wire everything ────────────────────────────────────────
+    function init() {
+        const modal = document.getElementById('kt_modal_bulk_templates');
+        if (!modal) return;
+
+        locationSelect   = document.getElementById('bulkLocationId');
+        departmentSelect = document.getElementById('bulkDepartmentId');
+        emptyHint        = document.getElementById('bulkDepartmentEmptyHint');
+        hintEl           = document.getElementById('bulkDepartmentHint');
+
+        if (!locationSelect || !departmentSelect) return;
+        if (initialised) return;
+        initialised = true;
+
+        // ── Location change → fetch departments ────────────────
+        const onChange = function () {
+            loadDepartments(locationSelect.value);
+        };
+
+        // Native (works even without Select2)
+        locationSelect.addEventListener('change', onChange);
+
+        // Select2 (fires when the user clicks the styled dropdown)
+        if (window.jQuery) {
+            window.jQuery(locationSelect).on('change',           onChange);
+            window.jQuery(locationSelect).on('select2:select',   onChange);
+            window.jQuery(locationSelect).on('select2:unselect', onChange);
+            window.jQuery(locationSelect).on('select2:clear',    onChange);
+        }
+
+        // ── Reset the department when the modal reopens ────────
+        modal.addEventListener('shown.bs.modal', function () {
+            // If a location is already set (unlikely, but defensive), refetch
+            if (locationSelect.value) {
+                loadDepartments(locationSelect.value);
+            } else {
+                // Clean slate
+                departmentSelect.innerHTML =
+                    `<option value="">{{ __('auth.none') }}</option>`;
+                departmentSelect.disabled = true;
+                emptyHint?.classList.add('d-none');
+                hintEl?.classList.remove('d-none');
+                refreshSelect2(departmentSelect);
+            }
+        });
+
+        // ── Clear state on close ───────────────────────────────
+        modal.addEventListener('hidden.bs.modal', function () {
+            locationSelect.value = '';
+            departmentSelect.innerHTML =
+                `<option value="">{{ __('auth.none') }}</option>`;
+            departmentSelect.disabled = true;
+            emptyHint?.classList.add('d-none');
+            refreshSelect2(departmentSelect);
+            refreshSelect2(locationSelect);
+        });
+    }
+
+    // ── Run init once DOM ready + watch for the modal to appear ─
+    function boot() {
+        if (!init()) {
+            // Modal not yet on the page — watch for it
+            const observer = new MutationObserver(function () {
+                if (document.getElementById('kt_modal_bulk_templates')) {
+                    init();
+                    if (initialised) observer.disconnect();
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            setTimeout(function () { observer.disconnect(); }, 30000);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+})();
+</script>
+
+
+
+<script>
+    // ─── Live name counter ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    const ta = document.getElementById('bulkNamesRaw');
+    const badge = document.getElementById('bulkNameCount');
+    if (!ta || !badge) return;
+
+    const updateCount = () => {
+        const names = (ta.value || '')
+            .split(/[\r\n,;]+/)
+            .map(s => s.trim())
+            .filter(s => s.length >= 2);
+        const uniq = new Set(names.map(s => s.toLowerCase()));
+        badge.textContent = uniq.size + ' {{ __("auth.names_detected") }}';
+    };
+    ta.addEventListener('input', updateCount);
+    updateCount();
+});
+
+// ─── Submit ────────────────────────────────────────────────────
+function submitBulkTemplates() {
+    const form = document.getElementById('bulkTemplatesForm');
+    const btn  = document.getElementById('bulkTemplatesSubmit');
+    const label = btn.querySelector('.indicator-label');
+    const prog  = btn.querySelector('.indicator-progress');
+
+    // Reset error states
+    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    form.querySelectorAll('.invalid-feedback').forEach(el => el.textContent = '');
+
+    const formData = new FormData(form);
+
+    // Ensure unchecked checkboxes send explicit 0
+    formData.set('requires_receipt',
+        form.querySelector('[name="requires_receipt"]').checked ? '1' : '0');
+    formData.set('requires_approval',
+        form.querySelector('[name="requires_approval"]').checked ? '1' : '0');
+
+    label.style.display = 'none';
+    prog.style.display  = 'inline-block';
+
+    fetch('{{ route("expense-templates.bulk-store") }}', {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Accept': 'application/json',
+        },
+        body: formData,
+    })
+    .then(async res => {
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            // Handle validation errors
+            if (data.errors) {
+                Object.entries(data.errors).forEach(([field, msgs]) => {
+                    const input = form.querySelector(`[name="${field}"]`);
+                    if (input) input.classList.add('is-invalid');
+                    const errBox = document.getElementById(`${field}_error`);
+                    if (errBox) errBox.textContent = msgs[0];
+                });
+            }
+            throw new Error(data.message || 'Failed');
+        }
+        return data;
+    })
+    .then(data => {
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('kt_modal_bulk_templates'))?.hide();
+
+        // Reset form
+        form.reset();
+        document.getElementById('bulkNameCount').textContent = '0 {{ __("auth.names_detected") }}';
+
+        // Toast
+        if (typeof toastr !== 'undefined') {
+            toastr.success(data.message || 'Templates created');
+        }
+
+        // Reload the templates list (Liveblade-style)
+        if (typeof reloadComponent === 'function') {
+            reloadComponent('reloadExpenseTemplateComponent');
+        } else {
+            // Fallback: hard reload
+            setTimeout(() => window.location.reload(), 600);
+        }
+    })
+    .catch(err => {
+        if (typeof toastr !== 'undefined') {
+            toastr.error(err.message || 'Failed to create templates');
+        } else {
+            alert(err.message);
+        }
+    })
+    .finally(() => {
+        label.style.display = 'inline-block';
+        prog.style.display  = 'none';
+    });
+}
+</script>
+
+<script>
     // Function to print purchase order as receipt
     function printPurchaseOrder(orderId) {
         const modalElement = document.getElementById('viewPurchase' + orderId);
