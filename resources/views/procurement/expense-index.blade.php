@@ -69,7 +69,14 @@
                         <span class="d-none d-sm-inline">{{ __('passwords.expense_new') }}</span>
                         <span class="d-inline d-sm-none">{{ __('auth._add') }}</span>
                     </button>
+                    <a href="{{ route('expense-templates.index') }}" class="btn btn-light-primary">
+                        <i class="ki-duotone ki-flash fs-2 me-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('auth.quick_log') }}</span>
+                    </a>
                 @endcan
+
+
+                @include('procurement.expense-template.bulk-create')
 
                 @include('procurement.expense.create')
             </div>

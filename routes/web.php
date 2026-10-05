@@ -9,7 +9,7 @@ use App\Http\Controllers\Catalog\ { SerialController, RecipeController, Category
     InventoryAdjustmentsController, ProductController, ProductCategoryController, ProductImportController};
 use App\Http\Controllers\Orders\{ OrderController, POSController};
 use App\Http\Controllers\Setting\{ TaxController,PromotionController, PaymentMethodController, TaxLiabilityController };
-use App\Http\Controllers\Procurement\{ SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
+use App\Http\Controllers\Procurement\{ ExpenseTemplateController, SupplierController, PurchaseOrderController, ExpenseCategoryController, ExpenseController };
 use App\Http\Controllers\Accounts\{ AccountingController };
 use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsController, ProductsController, InventoryReportsController,
     PurchasingReportsController, InventoryStrategyReportController, ProductionOrderReportController, InvoiceReportsController };
@@ -411,6 +411,25 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/expenses/{id}/approve', [ExpenseController::class, 'approve'])
             ->name('expenses.approve')
             ->middleware('auth');
+
+
+        Route::prefix('expense-templates')->name('expense-templates.')->group(function () {
+            // List / index (Quick Log + All Templates)
+            Route::get('/',                          [ExpenseTemplateController::class, 'index'])->name('index');
+
+            // Bulk-create modal
+            Route::get('/bulk-create',               [ExpenseTemplateController::class, 'create'])->name('create');
+            Route::post('/bulk-store',               [ExpenseTemplateController::class, 'bulkStore'])->name('bulk-store');
+
+            // Single template CRUD
+            Route::get('/{template}/edit',           [ExpenseTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{template}',                [ExpenseTemplateController::class, 'update'])->name('update');
+            Route::delete('/{template}',             [ExpenseTemplateController::class, 'destroy'])->name('destroy');
+
+            // ★ The log-again flow
+            Route::get('/{template}/log-form',       [ExpenseTemplateController::class, 'logForm'])->name('log-form');
+            Route::post('/{template}/log',           [ExpenseTemplateController::class, 'logOccurrence'])->name('log');
+        });
 
         
 

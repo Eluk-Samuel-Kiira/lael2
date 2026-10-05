@@ -2329,9 +2329,9 @@ class POSController extends Controller
      */
     private function depleteSingleBatch($variant, $item, $order)
     {
-        $tenantId       = $order->tenant_id;
-        $quantityNeeded = (float) $item->quantity;
-        $batchId        = $item->batch_id ?? null;
+        $tenantId         = $order->tenant_id;
+        $quantityOriginal = (float) $item->quantity;   // ★ capture
+        $quantityNeeded   = $quantityOriginal;
 
         // ★ Resolve pricing ONCE so every BatchLog shares the same snapshot
         $pricing = $this->resolveLogPricing(null, $variant);
@@ -2414,10 +2414,7 @@ class POSController extends Controller
             ]);
 
             // Single overall decrement
-            $variant->overal_quantity_at_hand = max(
-                0,
-                ($variant->overal_quantity_at_hand ?? 0) - $quantityNeeded
-            );
+            $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - $quantityOriginal);
             $variant->save();
 
             return;
@@ -2712,35 +2709,34 @@ class POSController extends Controller
      */
     private function depleteMultiBatch($variant, $item, $order)
     {
-        $user        = Auth::user();
-        $tenantId    = $order->tenant_id;
-        $quantityNeeded = $item->quantity;
-        $batchId        = $item->batch_id ?? null;
+        $user             = Auth::user();
+        $tenantId         = $order->tenant_id;
+        $quantityOriginal = (float) $item->quantity;   // ★ capture BEFORE FIFO mutates
+        $quantityNeeded   = $quantityOriginal;
+        $batchId          = $item->batch_id ?? null;
 
-        // Inventory data
-        $inventoryData = [];
+        // ★ Capture the frozen unit price once
+        $frozenUnitPrice = is_object($item)
+            ? (float) ($item->unit_price ?? 0)
+            : (float) ($item['unit_price'] ?? 0);
+
+
+        // ─── Inventory data ────────────────────────────────────────
         $inventoryData = $this->extractInventoryData($item);
-
-        $inventoryId  = $inventoryData['inventory_id']  ?? null;
-        $departmentId = $inventoryData['department_id'] ?? null;
-
-        $quantityOriginal = $item->quantity;
-        $quantityNeeded   = $item->quantity;
+        $inventoryId   = $inventoryData['inventory_id']  ?? null;
+        $departmentId  = $inventoryData['department_id'] ?? null;
 
         $itemName = is_object($item)
             ? ($item->item_name ?? $item->name ?? $variant->name)
             : ($item['name'] ?? $variant->name);
 
-        // Find inventory
-        $inventory = null;
-        if ($inventoryId) {
-            $inventory = InventoryItems::find($inventoryId);
-            $pricing = $this->resolveLogPricing($inventory, $variant);
-        }
+        // ─── Find the inventory row (with fallback) ────────────────
+        $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
 
-        // ✅ Resolve location_id from inventory → department → user pivot
+        // Resolve location from inventory → department → user pivot
         $locationId = $this->resolveDepletionLocationId($inventory, $departmentId, $user);
 
+        // Fallback: query by variant + location + department
         if (!$inventory && $locationId && $departmentId) {
             $inventory = InventoryItems::where('variant_id', $variant->id)
                 ->where('tenant_id', $tenantId)
@@ -2749,11 +2745,13 @@ class POSController extends Controller
                 ->first();
         }
 
+        // ─── HARD GUARD ────────────────────────────────────────────
         if (!$inventory) {
             throw new \Exception("No inventory found for {$variant->name} at this location/department");
         }
+        $pricing = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
 
-        // ✅ Inventory's own location_id is authoritative
+        // ★ Inventory's own location_id / department_id are authoritative
         $locationId   = (int) $inventory->location_id;
         $departmentId = (int) $inventory->department_id;
 
@@ -2855,7 +2853,6 @@ class POSController extends Controller
                 // ✅ No batch_id specified - use FIFO
                 foreach ($batches as $batch) {
                     if ($quantityNeeded <= 0) break;
-                    $deduct = min($effectiveQuantity, $quantityNeeded);
 
                     $effectiveQuantity = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
                     $deduct = min($effectiveQuantity, $quantityNeeded);
@@ -2922,8 +2919,8 @@ class POSController extends Controller
             // ★
             'unit_cost_price'     => $pricing['cost'],
             'unit_selling_price'  => $pricing['selling'],
-            'total_cost_value'    => -$quantityNeeded * $pricing['cost'],
-            'total_selling_value' => -$quantityNeeded * $pricing['selling'],
+            'total_cost_value'    => -$quantityOriginal * $pricing['cost'],
+            'total_selling_value' => -$quantityOriginal * $pricing['selling'],
         ]);
 
         // \Log::info('[Multi Shop] Batch depleted', [
@@ -2970,6 +2967,13 @@ class POSController extends Controller
             throw new \Exception("No inventory found for {$variant->name} at this location/department");
         }
 
+        // ★ Resolve pricing from the confirmed inventory row
+        $frozenUnitPrice = is_object($item)
+            ? (float) ($item->unit_price ?? 0)
+            : (float) ($item['unit_price'] ?? 0);
+
+        $pricing = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
         // ✅ Prefer inventory's own location/department
         $locationId   = (int) $inventory->location_id;
         $departmentId = (int) $inventory->department_id;
@@ -2992,12 +2996,13 @@ class POSController extends Controller
             }
             
             $serial->update([
-                'status' => SerialNumber::STATUS_SOLD,
-                'sold_unit_price'   => $pricing['selling'], 
+                'status'            => SerialNumber::STATUS_SOLD,
+                'order_id'          => $order->id,
+                'sold_at'           => now(),
+                'sold_by'           => auth()->id(),
+                'sold_unit_price'   => $pricing['selling'],
+                'sold_total_price'  => $pricing['selling'],
                 'sold_gross_profit' => $pricing['selling'] - $pricing['cost'],
-                'order_id' => $order->id,
-                'sold_at' => now(),
-                'sold_by' => auth()->id(),
             ]);
             
             $quantity = 1;
@@ -3022,6 +3027,9 @@ class POSController extends Controller
                     'order_id' => $order->id,
                     'sold_at' => now(),
                     'sold_by' => auth()->id(),
+                    'sold_unit_price'   => $pricing['selling'],
+                    'sold_total_price'  => $pricing['selling'],
+                    'sold_gross_profit' => $pricing['selling'] - $pricing['cost'],
                 ]);
             }
             
@@ -3193,37 +3201,35 @@ class POSController extends Controller
 
         // ── MULTI SHOP — resolve the SAME inventory row depletion will use ──
         $inventoryData = $this->extractInventoryData($item);
-
-        $inventoryId  = $inventoryData['inventory_id']  ?? null;
-        $departmentId = $inventoryData['department_id']
+        $inventoryId   = $inventoryData['inventory_id']  ?? null;
+        $departmentId  = $inventoryData['department_id']
             ?? (is_object($item) ? ($item->department_id ?? null) : null)
             ?? ($order->department_id ?? null);
-        $locationId   = $inventoryData['location_id'] ?? ($order->location_id ?? null);
+        $locationId    = $inventoryData['location_id'] ?? ($order->location_id ?? null);
 
-        // \Log::info('[POS] resolve inventory', [
-        //     'variant'      => $variant->name,
-        //     'item_id'      => $item->id ?? null,
-        //     'raw_type'     => gettype($item->inventory_data),
-        //     'inventory_id' => $inventoryId,
-        //     'location_id'  => $locationId,
-        //     'department_id'=> $departmentId,
-        // ]);
+        $inventory = $inventoryId ? InventoryItems::find((int) $inventoryId) : null;
 
-        $inventory = null;
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $tenantId)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
 
-        if ($inventoryId) {
-            $inventory = InventoryItems::find((int) $inventoryId);
-            if ($inventory) {
-                // \Log::info('[POS] Resolved by inventory_data.inventory_id', [
-                //     'inventory_id'  => $inventory->id,
-                //     'location_id'   => $inventory->location_id,
-                //     'department_id' => $inventory->department_id,
-                //     'available'     => $inventory->quantity_allocated,
-                // ]);
-            }
+        if (!$inventory) {
+            throw new \Exception("No inventory allocation found for {$variant->name}");
+        }
+
+        if ((float) $inventory->quantity_allocated < (float) $requiredQuantity) {
+            throw new \Exception(
+                "Insufficient stock for {$variant->name}. " .
+                "Available: {$inventory->quantity_allocated}, Required: {$requiredQuantity}"
+            );
         }
 
         return true;
+
     }
 
     private function extractInventoryData($item): array
@@ -3309,45 +3315,49 @@ class POSController extends Controller
      *
      * $inventory may be null (single-shop mode, or if resolution failed).
      */
-    private function resolveLogPricing(?InventoryItems $inventory, ProductVariant $variant): array
-    {
-        // ── Cost ────────────────────────────────────────────────
-        $cost = 0.0;
+    private function resolveLogPricing(
+        ?InventoryItems $inventory,
+        ProductVariant $variant,
+        ?float $frozenSellingPrice = null   // ★ new — from order_items.unit_price
+    ): array {
+        // ── Cost ─────────────────────────────────────────────────────
+        $cost   = 0.0;
         $source = 'variant';
 
         if ($inventory && (float) ($inventory->grand_total_cost_price ?? 0) > 0) {
-            $cost = (float) $inventory->grand_total_cost_price;
+            $cost   = (float) $inventory->grand_total_cost_price;
             $source = 'item';
         } else {
             $grand = (float) ($variant->grand_total_cost_price ?? 0);
             if ($grand > 0) {
                 $cost = $grand;
             } else {
-                // Fall back to recomputing components
                 $cost = (float) ($variant->supplier_cost_price ?? 0)
-                      + (float) ($variant->total_shipping_cost ?? 0)
-                      + (float) ($variant->ura_taxes_applied   ?? 0)
-                      + (float) ($variant->additional_expenses ?? 0);
+                    + (float) ($variant->total_shipping_cost ?? 0)
+                    + (float) ($variant->ura_taxes_applied   ?? 0)
+                    + (float) ($variant->additional_expenses ?? 0);
             }
         }
 
-        // ── Selling price ──────────────────────────────────────
+        // ── Selling price ────────────────────────────────────────────
+        // Priority:
+        //   1. Frozen on the sale line (what the customer paid)
+        //   2. InventoryItems override
+        //   3. Variant default
         $selling = 0.0;
 
-        if ($inventory && (float) ($inventory->discount_selling_price ?? 0) > 0) {
-            $selling = (float) $inventory->discount_selling_price;
+        if ($frozenSellingPrice !== null && $frozenSellingPrice > 0) {
+            $selling = $frozenSellingPrice;
         } elseif ($inventory && (float) ($inventory->selling_price ?? 0) > 0) {
             $selling = (float) $inventory->selling_price;
         } else {
-            $selling = (float) ($variant->discount_selling_price
-                ?? $variant->selling_price
-                ?? 0);
+            $selling = (float) ($variant->selling_price ?? 0);
         }
 
         return [
-            'cost'         => $cost,
-            'selling'      => $selling,
-            'pricing_source' => $source,   // 'item' | 'variant'
+            'cost'           => $cost,
+            'selling'        => $selling,
+            'pricing_source' => $source,
         ];
     }
 
@@ -3441,9 +3451,6 @@ class POSController extends Controller
             ],
         ]);
 
-        // Update overall quantity
-        $variant->overal_quantity_at_hand = max(0, ($variant->overal_quantity_at_hand ?? 0) - 1);  // ← SECOND decrement
-        $variant->save();
     }
 
 

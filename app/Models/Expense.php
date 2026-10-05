@@ -103,6 +103,11 @@ class Expense extends Model
     }
 
 
+    public function template()
+    {
+        return $this->belongsTo(ExpenseTemplate::class, 'template_id');
+    }
+
 
     /**
      * Get the tenant that owns the expense.
