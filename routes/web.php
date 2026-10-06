@@ -414,21 +414,17 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         Route::prefix('expense-templates')->name('expense-templates.')->group(function () {
-            // List / index (Quick Log + All Templates)
-            Route::get('/',                          [ExpenseTemplateController::class, 'index'])->name('index');
+            Route::get('/',                    [ExpenseTemplateController::class, 'index'])->name('index');
+            Route::get('/bulk-create',         [ExpenseTemplateController::class, 'create'])->name('create');
+            Route::post('/bulk-store',         [ExpenseTemplateController::class, 'bulkStore'])->name('bulk-store');
 
-            // Bulk-create modal
-            Route::get('/bulk-create',               [ExpenseTemplateController::class, 'create'])->name('create');
-            Route::post('/bulk-store',               [ExpenseTemplateController::class, 'bulkStore'])->name('bulk-store');
+            // ★ These two only
+            Route::get('/available-templates', [ExpenseTemplateController::class, 'availableTemplates'])->name('available-templates');
+            Route::post('/bulk-log',           [ExpenseTemplateController::class, 'bulkLog'])->name('bulk-log');
 
-            // Single template CRUD
-            Route::get('/{template}/edit',           [ExpenseTemplateController::class, 'edit'])->name('edit');
-            Route::put('/{template}',                [ExpenseTemplateController::class, 'update'])->name('update');
-            Route::delete('/{template}',             [ExpenseTemplateController::class, 'destroy'])->name('destroy');
-
-            // ★ The log-again flow
-            Route::get('/{template}/log-form',       [ExpenseTemplateController::class, 'logForm'])->name('log-form');
-            Route::post('/{template}/log',           [ExpenseTemplateController::class, 'logOccurrence'])->name('log');
+            // existing wildcard routes at the bottom
+            Route::get('/{template}/log-form', [ExpenseTemplateController::class, 'logForm'])->name('log-form');
+            Route::post('/{template}/log',     [ExpenseTemplateController::class, 'logOccurrence'])->name('log');
         });
 
         

@@ -452,6 +452,236 @@ class ExpenseTemplateController extends Controller
         return $prefix . '-' . str_pad($next, 5, '0', STR_PAD_LEFT);
     }
 
+        /**
+     * Return the list of templates the current user can bulk-log.
+     * Used by the Bulk Log modal's template picker (fetched via AJAX).
+     */
+    public function availableTemplates(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasPermissionTo('create expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $tenantId        = $user->tenant_id;
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        $query = ExpenseTemplate::with(['category', 'supplier', 'location', 'department'])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true);
+
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($userLocationIds) {
+                $q->whereNull('location_id')
+                  ->orWhereIn('location_id', $userLocationIds);
+            });
+        }
+
+        $templates = $query->orderBy('name')->get()->map(function ($t) {
+            return [
+                'id'              => $t->id,
+                'name'            => $t->name,
+                'category_name'   => $t->category->name   ?? '',
+                'supplier_name'   => $t->supplier->name   ?? '',
+                'location_name'   => $t->location->name   ?? '',
+                'department_name' => $t->department->name ?? '',
+                'last_amount'     => $t->last_amount,
+                'default_amount'  => $t->default_amount,
+                'suggested_amount'=> $t->suggestedAmount(),
+            ];
+        });
+
+        return response()->json([
+            'success'   => true,
+            'templates' => $templates,
+        ]);
+    }
+
+    /**
+     * Create multiple expenses at once from templates.
+     * Accepts a single shared date + payment method, plus an array of
+     * { template_id, gross_amount, notes } items (max 10).
+     */
+    public function bulkLog(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasPermissionTo('create expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $tenantId = $user->tenant_id;
+
+        $validated = $request->validate([
+            'date'                => 'required|date',
+            'payment_method_id'   => 'required|exists:payment_methods,id',
+            'items'               => 'required|array|min:1|max:10',
+            'items.*.template_id' => 'required|exists:expense_templates,id',
+            'items.*.gross_amount'=> 'required|numeric|min:0.01',
+            'items.*.notes'       => 'nullable|string|max:255',
+        ]);
+
+        // Verify the payment method belongs to this tenant
+        $paymentMethod = PaymentMethod::where('id', $validated['payment_method_id'])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$paymentMethod) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.payment_method_not_found'),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $createdNumbers = [];
+            $createdIds     = [];
+
+            foreach ($validated['items'] as $item) {
+                $template = ExpenseTemplate::where('id', $item['template_id'])
+                    ->where('tenant_id', $tenantId)
+                    ->first();
+
+                if (!$template) {
+                    throw new \RuntimeException("Template #{$item['template_id']} not found.");
+                }
+
+                $grossAmount = (float) $item['gross_amount'];
+
+                // ── Tax calculation (same cascade as logOccurrence) ──
+                $taxIds         = collect($template->default_tax_ids ?? [])->filter()->toArray();
+                $additiveTax    = 0;
+                $withholdingTax = 0;
+                $taxBreakdown   = [];
+
+                if (!empty($taxIds)) {
+                    $taxes = Tax::whereIn('id', $taxIds)
+                        ->where('tenant_id', $tenantId)
+                        ->where('is_active', true)
+                        ->get();
+
+                    foreach ($taxes as $tax) {
+                        $taxAmount = $tax->type === Tax::TYPE_PERCENTAGE
+                            ? $grossAmount * ($tax->rate / 100)
+                            : $tax->rate;
+
+                        if ($tax->is_withholding_tax) {
+                            $withholdingTax += $taxAmount;
+                        } else {
+                            $additiveTax += $taxAmount;
+                        }
+
+                        $taxBreakdown[] = [
+                            'tax_id'             => $tax->id,
+                            'tax_name'           => $tax->name,
+                            'tax_code'           => $tax->code,
+                            'rate'               => $tax->rate,
+                            'type'               => $tax->type,
+                            'amount'             => $taxAmount,
+                            'is_withholding_tax' => $tax->is_withholding_tax,
+                        ];
+                    }
+                }
+
+                $totalTax    = $additiveTax + $withholdingTax;
+                $netAmount   = $grossAmount + $additiveTax - $withholdingTax;
+                $totalAmount = $grossAmount + $additiveTax;
+
+                // ── Retry loop for expense_number collision ──
+                $expense = null;
+                $maxAttempts = 5;
+
+                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                    try {
+                        $expenseNumber = $this->generateExpenseNumber($tenantId);
+
+                        $expense = Expense::create([
+                            'tenant_id'         => $tenantId,
+                            'template_id'       => $template->id,
+                            'expense_number'    => $expenseNumber,
+                            'description'       => $item['notes']
+                                                    ? $template->name . ' — ' . $item['notes']
+                                                    : ($template->description ?? $template->name),
+                            'gross_amount'      => $grossAmount,
+                            'tax_amount'        => $totalTax,
+                            'net_amount'        => $netAmount,
+                            'total_amount'      => $totalAmount,
+                            'supplier_id'       => $template->supplier_id,
+                            'vendor_name'       => $template->supplier?->name,
+                            'category_id'       => $template->category_id,
+                            'department_id'     => $template->department_id,
+                            'location_id'       => $template->location_id,
+                            'employee_id'       => $template->employee_id,
+                            'date'              => $validated['date'],
+                            'paid_date'         => null,
+                            'payment_method_id' => $paymentMethod->id,
+                            'payment_status'    => 'pending',
+                            'receipt_url'       => null,
+                            'tax_breakdown'     => json_encode($taxBreakdown),
+                            'created_by'        => $user->id,
+                        ]);
+                        break;
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        $isDuplicate = ($e->errorInfo[1] ?? null) === 1062;
+
+                        if (! $isDuplicate || $attempt === $maxAttempts) {
+                            throw $e;
+                        }
+
+                        usleep(50_000 * $attempt);
+                    }
+                }
+
+                if (!$expense) {
+                    throw new \RuntimeException("Could not create expense for template #{$template->id}");
+                }
+
+                $template->markUsed($grossAmount);
+
+                $createdNumbers[] = $expense->expense_number;
+                $createdIds[]     = $expense->id;
+            }
+
+            DB::commit();
+
+            $count = count($createdNumbers);
+
+            return response()->json([
+                'success'         => true,
+                'message'         => trans_choice(
+                    'auth.bulk_log_success_message',
+                    $count,
+                    ['count' => $count]
+                ),
+                'created'         => $count,
+                'expense_ids'     => $createdIds,
+                'expense_numbers' => $createdNumbers,
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            \Log::error('Bulk log failed', [
+                'tenant_id' => $tenantId,
+                'user_id'   => $user->id,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.error_occurred') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /**
      * Show the bulk-create modal form.
      */

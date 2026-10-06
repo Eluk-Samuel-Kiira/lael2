@@ -25,12 +25,19 @@
                     <i class="ki-duotone ki-arrow-left fs-2"></i>
                     {{ __('auth.back_to_expenses') }}
                 </a>
+
                 @can('create expense')
                     <button type="button" class="btn btn-light-primary"
                             data-bs-toggle="modal"
                             data-bs-target="#kt_modal_bulk_templates">
                         <i class="ki-duotone ki-list-check fs-2 me-1"></i>
                         {{ __('auth.bulk_add_templates') }}
+                    </button>
+
+                    <button type="button" class="btn btn-primary"
+                            onclick="openBulkLogModal()">
+                        <i class="ki-duotone ki-basket fs-2 me-1"></i>
+                        {{ __('auth.bulk_log') }}
                     </button>
                 @endcan
             </div>
@@ -280,7 +287,8 @@
     {{-- The Log modal container --}}
     @include('procurement.expense-template.log-modal')
 
-    {{-- Bulk-create modal --}}
+    @include('procurement.expense-template.bulk-log-modal')
+
     @include('procurement.expense-template.bulk-create')
 
     @endsection
