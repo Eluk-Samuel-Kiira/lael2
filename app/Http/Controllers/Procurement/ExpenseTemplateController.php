@@ -323,48 +323,69 @@ class ExpenseTemplateController extends Controller
             $netAmount   = $grossAmount + $additiveTax - $withholdingTax;
             $totalAmount = $grossAmount + $additiveTax;
 
-            $expenseNumber = $this->generateExpenseNumber($tenantId);
+            // ─── Retry loop for expense number collision ─────────────
+            $expense = null;
+            $maxAttempts = 5;
 
-            $expense = Expense::create([
-                'tenant_id'         => $tenantId,
-                'template_id'       => $template->id,
-                'expense_number'    => $expenseNumber,
-                'description'       => $template->description ?? $template->name,
-                'gross_amount'      => $grossAmount,
-                'tax_amount'        => $totalTax,
-                'net_amount'        => $netAmount,
-                'total_amount'      => $totalAmount,
-                'supplier_id'       => $template->supplier_id,
-                'vendor_name'       => $template->supplier?->name,
-                'category_id'       => $template->category_id,
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                try {
+                    $expenseNumber = $this->generateExpenseNumber($tenantId);
 
-                'department_id'     => $validated['department_id'] ?? $template->department_id,
-                'location_id'       => $validated['location_id']   ?? $template->location_id,
+                    $expense = Expense::create([
+                        'tenant_id'         => $tenantId,
+                        'template_id'       => $template->id,
+                        'expense_number'    => $expenseNumber,
+                        'description'       => $template->description ?? $template->name,
+                        'gross_amount'      => $grossAmount,
+                        'tax_amount'        => $totalTax,
+                        'net_amount'        => $netAmount,
+                        'total_amount'      => $totalAmount,
+                        'supplier_id'       => $template->supplier_id,
+                        'vendor_name'       => $template->supplier?->name,
+                        'category_id'       => $template->category_id,
+                        'department_id'     => $validated['department_id'] ?? $template->department_id,
+                        'location_id'       => $validated['location_id']   ?? $template->location_id,
+                        'employee_id'       => $template->employee_id,
+                        'date'              => $validated['date'],
+                        'paid_date'         => $validated['paid_date'] ?? null,
+                        'payment_method_id' => $paymentMethod->id,
+                        'payment_status'    => $validated['payment_status'],
+                        'receipt_url'       => null,
+                        'tax_breakdown'     => json_encode($taxBreakdown),
+                        'created_by'        => $user->id,
+                    ]);
 
-                'employee_id'       => $template->employee_id,
-                'date'              => $validated['date'],
-                'paid_date'         => $validated['paid_date'] ?? null,
+                    break; // success — exit the loop
 
-                // ★ Use the user's picked payment method
-                'payment_method_id' => $paymentMethod->id,
-                'payment_status'    => $validated['payment_status'],
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // MySQL duplicate key = 1062
+                    $isDuplicate = ($e->errorInfo[1] ?? null) === 1062;
 
-                'receipt_url'       => null,
-                'tax_breakdown'     => json_encode($taxBreakdown),
-                'created_by'        => $user->id,
-            ]);
+                    if (! $isDuplicate || $attempt === $maxAttempts) {
+                        throw $e;   // real error or out of retries
+                    }
+
+                    // Tiny backoff — gives the other transaction time to commit
+                    usleep(50_000 * $attempt);   // 50ms, 100ms, 150ms, 200ms
+                    continue;
+                }
+            }
+
+            if (! $expense) {
+                throw new \RuntimeException('Could not generate a unique expense number after retries.');
+            }
 
             $template->markUsed($grossAmount);
 
             DB::commit();
 
             return response()->json([
-                'success'       => true,
-                'message'       => __('auth.expense_created'),
-                'expense_id'    => $expense->id,
-                'expense_number'=> $expenseNumber,
-                'reload'        => true,
-                'componentId'   => 'reloadExpenseComponent',
+                'success'        => true,
+                'message'        => __('auth.expense_created'),
+                'expense_id'     => $expense->id,
+                'expense_number' => $expense->expense_number,
+                'reload'         => true,
+                'componentId'    => 'reloadExpenseComponent',
             ]);
 
         } catch (\Throwable $e) {
