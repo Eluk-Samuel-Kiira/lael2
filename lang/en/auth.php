@@ -455,6 +455,30 @@ return [
     'submit'                     => 'Submit',
 
 
+    'bulk_log'                       => 'Bulk Log',
+    'bulk_log_expenses'              => 'Bulk Log Expenses',
+    'add_template'                   => 'Add Template',
+    'select_template_to_add'         => 'Select template to add…',
+    'bulk_log_date_hint'             => 'Applies to every expense below',
+    'bulk_log_payment_hint'          => 'Applies to every expense below',
+    'bulk_log_no_rows'               => 'No templates added yet.',
+    'bulk_log_no_rows_hint'          => 'Pick a template from the dropdown above to start.',
+    'bulk_log_items_selected'        => 'item(s) added',
+    'bulk_log_max_10'                => 'Max 10 at a time',
+    'bulk_log_save_all'              => 'Save All',
+    'bulk_log_limit_title'           => 'Limit reached',
+    'bulk_log_limit_text'            => 'You can log at most 10 expenses at once.',
+    'bulk_log_none_title'            => 'Nothing to save',
+    'bulk_log_none_text'             => 'Add at least one template to the list first.',
+    'bulk_log_invalid_amounts_title' => 'Missing amounts',
+    'bulk_log_invalid_amounts_text'  => 'Every row needs an amount greater than zero.',
+    'bulk_log_confirm_title'         => 'Confirm bulk expense',
+    'bulk_log_confirm_intro'         => 'expense(s) will be created:',
+    'bulk_log_confirm_yes'           => 'Yes, save them',
+    'bulk_log_total'                 => 'Total',
+    'bulk_log_success_message'       => ':count expense(s) created.',
+    'bulk_log_failed_templates'      => 'Could not load the template list. Please refresh and try again.',
+    'bulk_log_failed_pm'             => 'Could not load payment methods. Please refresh and try again.',
 
 
     // ═══════════════════════════════════════════════════════════════

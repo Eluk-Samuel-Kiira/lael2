@@ -115,7 +115,7 @@
                         <select name="payment_status" id="logPaymentStatus"
                                 class="form-select form-select-solid" required>
                             <option value="pending" selected>{{ __('pagination.pending') }}</option>
-                            <option value="paid">{{ __('pagination.paid') }}</option>
+                            {{-- <option value="paid">{{ __('pagination.paid') }}</option> --}}
                         </select>
                     </div>
 

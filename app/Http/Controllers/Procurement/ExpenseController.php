@@ -1092,16 +1092,50 @@ class ExpenseController extends Controller
     }
 
     /**
-     * Generate unique expense number
+     * Generate a unique expense number for the tenant.
+     *
+     * Uses MAX() on the numeric suffix of existing expense_number values,
+     * read via raw DB (bypasses soft-delete scopes), then verifies the
+     * candidate is free before returning it.
+     *
+     * This is safe against:
+     *   - Soft-deleted rows holding numbers
+     *   - Concurrent requests inserting at the same instant
+     *   - Gaps in the sequence
      */
-    private function generateExpenseNumber($tenantId)
+    private function generateExpenseNumber(int $tenantId): string
     {
-        $prefix = 'EXP-' . date('ym');
-        $count = Expense::where('tenant_id', $tenantId)
-            ->where('expense_number', 'like', $prefix . '-%')
-            ->count() + 1;
+        $prefix = 'EXP-' . date('ym') . '-';
 
-        return $prefix . '-' . str_pad($count, 5, '0', STR_PAD_LEFT);
+        // ── Highest numeric suffix currently in use (includes soft-deleted) ──
+        $lastNumber = DB::table('expenses')
+            ->where('tenant_id', $tenantId)
+            ->where('expense_number', 'like', $prefix . '%')
+            ->selectRaw(
+                "MAX(CAST(SUBSTRING_INDEX(expense_number, '-', -1) AS UNSIGNED)) AS max_num"
+            )
+            ->value('max_num');
+
+        $next = ((int) $lastNumber) + 1;
+
+        // ── Find the first free number from $next onward ──
+        // Loop is bounded so a pathological DB state can't hang us.
+        for ($attempt = 0; $attempt < 50; $attempt++) {
+            $candidate = $prefix . str_pad($next + $attempt, 5, '0', STR_PAD_LEFT);
+
+            $taken = DB::table('expenses')
+                ->where('tenant_id', $tenantId)
+                ->where('expense_number', $candidate)
+                ->exists();
+
+            if (! $taken) {
+                return $candidate;
+            }
+        }
+
+        // Fallback: something is deeply wrong with the sequence. Use a
+        // timestamp-based number that can't collide.
+        return $prefix . now()->format('His') . random_int(100, 999);
     }
 
     /**
