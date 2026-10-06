@@ -439,10 +439,17 @@ class ExpenseTemplateController extends Controller
     private function generateExpenseNumber($tenantId): string
     {
         $prefix = 'EXP-' . date('ym');
-        $count = Expense::where('tenant_id', $tenantId)
+
+        // Get the highest numeric suffix currently in the DB for this tenant + prefix
+        $lastNumber = DB::table('expenses')
+            ->where('tenant_id', $tenantId)
             ->where('expense_number', 'like', $prefix . '-%')
-            ->count() + 1;
-        return $prefix . '-' . str_pad($count, 5, '0', STR_PAD_LEFT);
+            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(expense_number, '-', -1) AS UNSIGNED)) as max_num")
+            ->value('max_num');
+
+        $next = ((int) $lastNumber) + 1;
+
+        return $prefix . '-' . str_pad($next, 5, '0', STR_PAD_LEFT);
     }
 
     /**
