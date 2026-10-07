@@ -1,5 +1,9 @@
-{{-- resources/views/procurement/expense-template/bulk-create.blade.php --}}
-<div class="modal fade" id="kt_modal_bulk_templates" tabindex="-1" aria-hidden="true">
+<div class="modal fade"
+     id="kt_modal_bulk_templates"
+     tabindex="-1"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">

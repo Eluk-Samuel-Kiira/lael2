@@ -1,5 +1,10 @@
 {{-- resources/views/procurement/expense-template/bulk-log-modal.blade.php --}}
-<div class="modal fade" id="bulkLogModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade"
+     id="bulkLogModal"
+     tabindex="-1"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
         <div class="modal-content">
 
