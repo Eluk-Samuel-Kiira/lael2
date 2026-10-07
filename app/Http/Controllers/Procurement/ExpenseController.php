@@ -13,9 +13,6 @@ use Illuminate\Validation\Rule;
 class ExpenseController extends Controller
 {
 
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
         $user     = Auth::user();
@@ -35,39 +32,90 @@ class ExpenseController extends Controller
         $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
         $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
 
-        // ── per_page ─────────────────────────────────────────────────
-        $perPage = $request->input('per_page', 15);
+        // ── Per page ─────────────────────────────────────────────────
+        $perPage = (int) $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
+        if (!in_array($perPage, $allowedPerPage, true)) {
             $perPage = 15;
         }
 
-        // ── Query ────────────────────────────────────────────────────
-        $query = Expense::with([
-            'tenant',
-            'paymentMethod',
-            'category',
-            'location',
-            'department',
-        ]);
+        // ── Date range (defaults to current month) ───────────────────
+        $startDate = $request->get('start_date', now()->startOfMonth()->toDateString());
+        $endDate   = $request->get('end_date',   now()->toDateString());
 
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+        try {
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate   = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
+
+            if ($startDate > $endDate) {
+                [$startDate, $endDate] = [$endDate, $startDate];
+            }
+        } catch (\Throwable $e) {
+            $startDate = now()->startOfMonth()->toDateString();
+            $endDate   = now()->toDateString();
         }
+
+        // ── Base query ───────────────────────────────────────────────
+        $baseQuery = Expense::query()
+            ->where('tenant_id', $tenantId);
 
         if (!$isAdmin) {
-            $query->where('created_by', $user->id);
+            $baseQuery->where('created_by', $user->id);
         }
 
-        // ── Search ───────────────────────────────────────────────────
+        // ── For summary cards: filter by date range only ────────────
+        $summaryQuery = (clone $baseQuery)
+            ->whereDate('date', '>=', $startDate)
+            ->whereDate('date', '<=', $endDate);
+
+        // Apply location scope to summary too (matches the list filters)
+        if ($request->filled('location_id')) {
+            $requestedLocationId = (int) $request->input('location_id');
+            if ($isAdmin || in_array($requestedLocationId, $userLocationIds, true)) {
+                $summaryQuery->where('location_id', $requestedLocationId);
+            }
+        }
+        if ($request->filled('department_id')) {
+            $summaryQuery->where('department_id', (int) $request->input('department_id'));
+        }
+
+        $summaryRows = (clone $summaryQuery)->get([
+            'gross_amount', 'net_amount', 'tax_amount', 'payment_status',
+        ]);
+
+        $summary = (object) [
+            'total_count'         => $summaryRows->count(),
+            'total_gross'         => (float) $summaryRows->sum('gross_amount'),
+            'total_net'           => (float) $summaryRows->sum('net_amount'),
+            'total_tax'           => (float) $summaryRows->sum('tax_amount'),
+
+            'pending_count'       => $summaryRows->where('payment_status', 'pending')->count(),
+            'pending_amount'      => (float) $summaryRows->where('payment_status', 'pending')->sum('net_amount'),
+
+            'paid_count'          => $summaryRows->where('payment_status', 'paid')->count(),
+            'paid_amount'         => (float) $summaryRows->where('payment_status', 'paid')->sum('net_amount'),
+
+            'reimbursed_count'    => $summaryRows->where('payment_status', 'reimbursed')->count(),
+            'reimbursed_amount'   => (float) $summaryRows->where('payment_status', 'reimbursed')->sum('net_amount'),
+
+            'average'             => $summaryRows->count() > 0
+                                        ? (float) $summaryRows->avg('net_amount')
+                                        : 0,
+        ];
+
+        // ── For the paginated list: apply all filters ────────────────
+        $query = (clone $baseQuery)
+            ->with(['tenant', 'paymentMethod', 'category', 'location', 'department', 'creator'])
+            ->whereDate('date', '>=', $startDate)
+            ->whereDate('date', '<=', $endDate);
+
+        // Search
         if ($request->filled('search')) {
             $search = $request->search;
-
             $query->where(function ($q) use ($search) {
                 $q->where('vendor_name', 'like', "%{$search}%")
                 ->orWhere('expense_number', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%")
-                ->orWhere('payment_status', 'like', "%{$search}%")
                 ->orWhereHas('paymentMethod', fn($p) => $p->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('location', fn($l) => $l->where('name', 'like', "%{$search}%"))
@@ -75,52 +123,55 @@ class ExpenseController extends Controller
             });
         }
 
-        // ── Location filter ──────────────────────────────────────────
+        // Location
         if ($request->filled('location_id')) {
             $requestedLocationId = (int) $request->input('location_id');
-
-            $allowedToFilter = $isAdmin
-                || in_array($requestedLocationId, $userLocationIds, true);
-
-            if ($allowedToFilter) {
+            if ($isAdmin || in_array($requestedLocationId, $userLocationIds, true)) {
                 $query->where('location_id', $requestedLocationId);
             }
         }
 
-        // ── Department filter (optional) ────────────────────────────
+        // Department
         if ($request->filled('department_id')) {
             $query->where('department_id', (int) $request->input('department_id'));
         }
 
-        // ── Status filter (optional) ────────────────────────────────
+        // Status
         if ($request->filled('payment_status')) {
             $query->where('payment_status', $request->input('payment_status'));
         }
 
+        // Payment method
+        if ($request->filled('payment_method_id')) {
+            $query->where('payment_method_id', (int) $request->input('payment_method_id'));
+        }
+
+        // Category
+        if ($request->filled('category_id')) {
+            $query->where('category_id', (int) $request->input('category_id'));
+        }
+
         // ── Paginate ─────────────────────────────────────────────────
-        $expenses = $query->latest()->paginate($perPage);
+        $expenses = $query->latest('date')->latest('id')->paginate($perPage);
 
         $expenses->appends([
-            'per_page'       => $perPage,
-            'search'         => $request->search,
-            'location_id'    => $request->location_id,
-            'department_id'  => $request->department_id,
-            'payment_status' => $request->payment_status,
+            'per_page'          => $perPage,
+            'search'            => $request->search,
+            'start_date'        => $startDate,
+            'end_date'          => $endDate,
+            'location_id'       => $request->location_id,
+            'department_id'     => $request->department_id,
+            'payment_status'    => $request->payment_status,
+            'payment_method_id' => $request->payment_method_id,
+            'category_id'       => $request->category_id,
         ]);
 
-        // ── Payment methods (scoped for non-admins) ─────────────────
+        // ── Dropdown data ────────────────────────────────────────────
         $activePaymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', 1)
-            ->when($user->location_id, function ($query, $locationId) {
-                return $query->where(function ($q) use ($locationId) {
-                    $q->whereNull('location_id')
-                    ->orWhereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((string) $locationId)]);
-                });
-            })
             ->orderBy('name')
             ->get();
 
-        // ── Locations for the filter dropdown ───────────────────────
         $locationsQuery = Location::where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->orderBy('name');
@@ -128,8 +179,20 @@ class ExpenseController extends Controller
         if (!$isAdmin) {
             $locationsQuery->whereIn('id', $userLocationIds);
         }
+        $locations = $locationsQuery->get(['id', 'name']);
 
-        $locations = $locationsQuery->get();
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', 1)
+            ->when($request->filled('location_id'), fn($q) =>
+                $q->where('location_id', (int) $request->input('location_id'))
+            )
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $categories = ExpenseCategory::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // ── AJAX partial reload ─────────────────────────────────────
         $bladeToReload = $request->query('bladeFileToReload');
@@ -139,6 +202,10 @@ class ExpenseController extends Controller
                 'expenses'       => $expenses,
                 'PaymentMethods' => $activePaymentMethods,
                 'locations'      => $locations,
+                'departments'    => $departments,
+                'categories'     => $categories,
+                'startDate'      => $startDate,
+                'endDate'        => $endDate,
             ])->render();
         }
 
@@ -146,6 +213,11 @@ class ExpenseController extends Controller
             'expenses'       => $expenses,
             'PaymentMethods' => $activePaymentMethods,
             'locations'      => $locations,
+            'departments'    => $departments,
+            'categories'     => $categories,
+            'summary'        => $summary,
+            'startDate'      => $startDate,
+            'endDate'        => $endDate,
         ]);
     }
 
@@ -156,6 +228,148 @@ class ExpenseController extends Controller
     {
         //
     }
+
+    /**
+     * JSON endpoint the front-end calls to render the list without a full reload.
+     * Everything the JS needs is in this response.
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view expense')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        // Date range
+        $startDate = $request->get('start_date', now()->startOfMonth()->toDateString());
+        $endDate   = $request->get('end_date',   now()->toDateString());
+        try {
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate   = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
+            if ($startDate > $endDate) [$startDate, $endDate] = [$endDate, $startDate];
+        } catch (\Throwable $e) {
+            $startDate = now()->startOfMonth()->toDateString();
+            $endDate   = now()->toDateString();
+        }
+
+        // ── Base query ─────────────────────────────────────────────
+        $baseQuery = Expense::query()->where('tenant_id', $tenantId);
+        if (!$isAdmin) $baseQuery->where('created_by', $user->id);
+
+        // ── Summary (date + scope only) ────────────────────────────
+        $summaryQuery = (clone $baseQuery)
+            ->whereDate('date', '>=', $startDate)
+            ->whereDate('date', '<=', $endDate);
+
+        if ($request->filled('location_id')) {
+            $req = (int) $request->input('location_id');
+            if ($isAdmin || in_array($req, $userLocationIds, true)) {
+                $summaryQuery->where('location_id', $req);
+            }
+        }
+        if ($request->filled('department_id')) {
+            $summaryQuery->where('department_id', (int) $request->input('department_id'));
+        }
+
+        $summaryRows = (clone $summaryQuery)->get(['net_amount', 'tax_amount', 'payment_status']);
+
+        $summary = [
+            'total_count'       => $summaryRows->count(),
+            'total_net'         => (float) $summaryRows->sum('net_amount'),
+            'total_tax'         => (float) $summaryRows->sum('tax_amount'),
+            'pending_count'     => $summaryRows->where('payment_status', 'pending')->count(),
+            'pending_amount'    => (float) $summaryRows->where('payment_status', 'pending')->sum('net_amount'),
+            'paid_count'        => $summaryRows->where('payment_status', 'paid')->count(),
+            'paid_amount'       => (float) $summaryRows->where('payment_status', 'paid')->sum('net_amount'),
+            'reimbursed_count'  => $summaryRows->where('payment_status', 'reimbursed')->count(),
+            'reimbursed_amount' => (float) $summaryRows->where('payment_status', 'reimbursed')->sum('net_amount'),
+        ];
+
+        // ── List ───────────────────────────────────────────────────
+        $query = (clone $baseQuery)
+            ->with(['paymentMethod', 'category', 'location', 'department', 'creator'])
+            ->whereDate('date', '>=', $startDate)
+            ->whereDate('date', '<=', $endDate);
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('vendor_name', 'like', "%{$s}%")
+                ->orWhere('expense_number', 'like', "%{$s}%")
+                ->orWhere('description', 'like', "%{$s}%")
+                ->orWhereHas('paymentMethod', fn($p) => $p->where('name', 'like', "%{$s}%"))
+                ->orWhereHas('category',      fn($c) => $c->where('name', 'like', "%{$s}%"));
+            });
+        }
+        if ($request->filled('location_id')) {
+            $req = (int) $request->input('location_id');
+            if ($isAdmin || in_array($req, $userLocationIds, true)) {
+                $query->where('location_id', $req);
+            }
+        }
+        if ($request->filled('department_id'))     $query->where('department_id', (int) $request->input('department_id'));
+        if ($request->filled('payment_status'))    $query->where('payment_status', $request->input('payment_status'));
+        if ($request->filled('payment_method_id')) $query->where('payment_method_id', (int) $request->input('payment_method_id'));
+        if ($request->filled('category_id'))       $query->where('category_id', (int) $request->input('category_id'));
+
+        $expenses = $query->latest('date')->latest('id')->paginate($perPage);
+
+        // ── Shape the rows ────────────────────────────────────────
+        $rows = $expenses->map(function ($e) {
+            return [
+                'id'              => $e->id,
+                'expense_number'  => $e->expense_number,
+                'date'            => $e->date?->format('Y-m-d'),
+                'date_formatted'  => $e->date?->format('d M Y'),
+                'description'     => $e->description,
+                'vendor_name'     => $e->vendor_name,
+                'net_amount'      => (float) $e->net_amount,
+                'amount_formatted'=> currency_symbol() . number_format($e->net_amount, 2),
+                'payment_status'  => $e->payment_status,
+                'approved_at'     => $e->approved_at?->format('Y-m-d H:i'),
+                'created_at'      => $e->created_at?->format('Y-m-d H:i'),
+                'category'        => ['id' => $e->category?->id,   'name' => $e->category?->name   ?? 'N/A'],
+                'department'      => ['id' => $e->department?->id, 'name' => $e->department?->name ?? 'N/A'],
+                'location'        => ['id' => $e->location?->id,   'name' => $e->location?->name   ?? 'N/A'],
+                'payment_method'  => [
+                    'id'         => $e->paymentMethod?->id,
+                    'name'       => $e->paymentMethod?->name ?? null,
+                    'type'       => $e->paymentMethod?->type ?? 'other',
+                    'is_default' => (bool) ($e->paymentMethod?->is_default ?? false),
+                ],
+                'creator'         => ['name' => $e->creator?->name ?? 'N/A'],
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $expenses->currentPage(),
+                'last_page'    => $expenses->lastPage(),
+                'per_page'     => $expenses->perPage(),
+                'total'        => $expenses->total(),
+                'from'         => $expenses->firstItem(),
+                'to'           => $expenses->lastItem(),
+                'has_more'     => $expenses->hasMorePages(),
+            ],
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date'   => $endDate,
+            ],
+        ]);
+    }
+
+
 
     public function store(Request $request)
     {
@@ -566,6 +780,67 @@ class ExpenseController extends Controller
             'total_tax' => $totalTax,
             'additive_tax' => $additiveTax,
             'withholding_tax' => $withholdingTax,
+        ]);
+    }
+
+    /**
+     * Return a single expense as JSON.
+     * Used by the edit modal and the upload-receipt modal to prefill fields.
+     */
+    public function show($id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view expense')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $expense = Expense::with(['category', 'supplier', 'location', 'department', 'paymentMethod', 'creator'])
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->first();
+
+        if (!$expense) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.expense_not_found'),
+            ], 404);
+        }
+
+        // Return the fields the JS actually reads.
+        // Amounts are already converted to display currency by the model accessors.
+        return response()->json([
+            'success' => true,
+            'expense' => [
+                'id'                => $expense->id,
+                'expense_number'    => $expense->expense_number,
+                'date'              => optional($expense->date)->format('Y-m-d'),
+                'description'       => $expense->description,
+                'category_id'       => $expense->category_id,
+                'supplier_id'       => $expense->supplier_id,
+                'employee_id'       => $expense->employee_id,
+                'department_id'     => $expense->department_id,
+                'location_id'       => $expense->location_id,
+
+                'gross_amount'      => (float) $expense->gross_amount,
+                'tax_amount'        => (float) $expense->tax_amount,
+                'net_amount'        => (float) $expense->net_amount,
+                'total_amount'      => (float) $expense->total_amount,
+
+                'payment_method_id' => $expense->payment_method_id,
+                'payment_status'    => $expense->payment_status,
+                'paid_date'         => optional($expense->paid_date)->format('Y-m-d'),
+
+                'receipt_url'       => $expense->receipt_url,
+                'approved_at'       => optional($expense->approved_at)->format('Y-m-d H:i'),
+                'notes'             => $expense->notes,
+
+                'vendor_name'       => $expense->vendor_name,
+            ],
         ]);
     }
 

@@ -401,16 +401,16 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Expenses
         Route::resource('expense-category', ExpenseCategoryController::class);
 
-        Route::resource('expense', ExpenseController::class);
-        Route::post('/expense-status/{id}', [ExpenseController::class, 'updateExpenseStatus'])->name('updateExpenseStatus');
-        Route::post('/{id}/approve', [ExpenseController::class, 'approve'])->name('approveExpense');
+        
+        // ── Specific routes FIRST (before the resource) ──
+        Route::get('/expense/data',              [ExpenseController::class, 'data'])->name('expense.data');
+        Route::post('/expense-status/{id}',      [ExpenseController::class, 'updateExpenseStatus'])->name('updateExpenseStatus');
+        Route::post('/expense/{id}/approve',     [ExpenseController::class, 'approve'])->name('expense.approve');
+        Route::put('/expenses/{id}/receipt',     [ExpenseController::class, 'updateReceipt'])->name('expenses.update-receipt');
+        Route::post('/expenses/{id}/approve',    [ExpenseController::class, 'approve'])->name('expenses.approve');
 
-        Route::put('/expenses/{id}/receipt', [ExpenseController::class, 'updateReceipt'])
-            ->name('expenses.update-receipt')
-            ->middleware('auth');
-        Route::post('/expenses/{id}/approve', [ExpenseController::class, 'approve'])
-            ->name('expenses.approve')
-            ->middleware('auth');
+        // ── Resource LAST ──
+        Route::resource('expense', ExpenseController::class);
 
 
         Route::prefix('expense-templates')->name('expense-templates.')->group(function () {
