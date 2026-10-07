@@ -560,6 +560,8 @@ class ExpenseController extends Controller
             'total_tax' => $totalTax,
             'additive_tax' => $additiveTax,
             'withholding_tax' => $withholdingTax,
+            'js_callback' => 'reloadExpenseList',
+            'expense_id'  => $expense->id,
         ]);
     }
 
