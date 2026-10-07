@@ -287,6 +287,37 @@ const LiveBladeResponse = (() => {
         reloadOrRedirect(response) {
             if (!response) return false;
 
+            // ── JS-rendered component escape hatch ─────────────────
+            // If the server returned `js_callback`, call that global function
+            // instead of trying to fetch and swap HTML.
+            if (response.js_callback) {
+                if (typeof window[response.js_callback] === 'function') {
+                    if (response.success) {
+                        this.displaySuccessMessage(response.message || 'Done');
+                    } else {
+                        this.displayErrorMessage(response.message || 'Failed');
+                    }
+
+                    try {
+                        window[response.js_callback]();
+                    } catch (err) {
+                        console.error(
+                            `[LiveBlade] js_callback "${response.js_callback}" threw:`, err
+                        );
+                        this.displayErrorMessage(`Failed to refresh view: ${err.message}`);
+                    }
+
+                    return true;
+                }
+
+                console.warn(
+                    `[LiveBlade] js_callback "${response.js_callback}" was requested ` +
+                    `but is not defined on window. Falling back to default reload.`
+                );
+                // falls through to the legacy branches below
+            }
+
+            // ── Existing behaviour unchanged below ────────────────
             if (response.redirect === '/dashboard') return true;
 
             if (response.success && response.reload && !response.refresh) {
