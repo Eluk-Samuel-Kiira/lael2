@@ -11,6 +11,7 @@
                         </div>
                     </th>
                     <th class="min-w-125px">{{__('payments.description')}}</th>
+                    <th class="min-w-125px">{{__('payments.date')}}</th>
                     <th class="min-w-125px">{{__('auth.supplier')}}</th>
                     <th class="min-w-125px">{{__('pagination.amount')}}</th> 
                     <th class="min-w-125px">{{__('payments.payment_method')}}</th>
@@ -33,6 +34,12 @@
                             </td>
                             <td>
                                 <div class="badge badge-light fw-bold">{{ $expense->description }}</div>
+                            </td>
+                            <td>
+                                <span class="badge badge-light-success fw-bold px-3 py-2">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    {{ $expense->date->format('d M Y, h:i a') }} 
+                                <span>
                             </td>
                             <td>{{ $expense->vendor_name ?? '' }}</td>
                             <td>
