@@ -459,6 +459,7 @@ return [
     'results'          => 'results',
     'per_page'         => 'Per page',
     'today'            => 'Today',
+    'loading'            => 'loading...',
     'this_week'        => 'This Week',
     'this_month'       => 'This Month',
     'last_month'       => 'Last Month',

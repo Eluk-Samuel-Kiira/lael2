@@ -2334,5 +2334,91 @@ class InvoiceController extends Controller
     }
 
 
+    /**
+     * Update the issue date on an invoice.
+     * Blocks updates once the invoice is paid or voided.
+     */
+    public function updateIssueDate(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if (! $user->hasPermissionTo('edit invoice')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'issue_date' => 'required|date',
+            'due_date'   => 'nullable|date|after_or_equal:issue_date',
+        ]);
+
+        $invoice = Invoice::where('tenant_id', $user->tenant_id)
+            ->findOrFail($id);
+
+        // Block editing on locked invoices
+        if (in_array($invoice->status, ['paid', 'void', 'cancelled'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.invoice_locked'),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $update = ['issue_date' => $validated['issue_date']];
+
+            // If a new due_date was supplied, use it. Otherwise recompute the
+            // due_date from the ORIGINAL offset between the old issue and due dates.
+            if (! empty($validated['due_date'])) {
+                $update['due_date'] = $validated['due_date'];
+            } elseif ($invoice->issue_date && $invoice->due_date) {
+                $offset = $invoice->issue_date->diffInDays($invoice->due_date, false);
+                $update['due_date'] = Carbon::parse($validated['issue_date'])
+                    ->copy()
+                    ->addDays($offset)
+                    ->toDateString();
+            }
+
+            // Keep the linked order's created_at in sync so reports agree
+            if ($invoice->order) {
+                $invoice->order->update([
+                    'created_at' => \Carbon\Carbon::parse($validated['issue_date'])->startOfDay(),
+                ]);
+            }
+
+            $invoice->update($update);
+
+            DB::commit();
+
+            return response()->json([
+                'success'     => true,
+                'reload'      => true,
+                'componentId' => 'reloadInvoiceComponent',
+                'refresh'     => false,
+                'redirect'    => route('invoices.index'),
+                'message'     => __('payments.invoice_issue_date_updated'),
+                'invoice'     => [
+                    'id'               => $invoice->id,
+                    'issue_date'       => $invoice->issue_date->format('Y-m-d'),
+                    'issue_date_human' => $invoice->issue_date->format('d M Y'),
+                    'due_date'         => optional($invoice->due_date)->format('Y-m-d'),
+                    'due_date_human'   => optional($invoice->due_date)->format('d M Y'),
+                ],
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('[Invoice] issue-date update failed', [
+                'invoice_id' => $id,
+                'error'      => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.error_occurred') . ': ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 
 }

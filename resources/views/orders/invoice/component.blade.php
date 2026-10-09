@@ -180,6 +180,18 @@
                                             </button>
                                         @endif
                                     @endcan
+                                    @can('edit invoice')
+                                        @if(! in_array($invoice->status, ['paid', 'void', 'cancelled'], true))
+                                            <button type="button"
+                                                    class="btn btn-sm btn-icon btn-light-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#editIssueDateModal{{ $invoice->id }}"
+                                                    data-bs-toggle="tooltip"
+                                                    title="{{ __('payments.edit_issue_date') }}">
+                                                <i class="bi bi-calendar-event fs-5"></i>
+                                            </button>
+                                        @endif
+                                    @endcan
                                     @can('send invoice')
                                         @if($invoice->status !== 'void' && $invoice->status !== 'paid')
                                             <button 
@@ -234,6 +246,7 @@
                                     @endcan
                                 </div>
                                 @include('orders.invoice.modals')
+                                @include('orders.invoice.edit')
                             </td>
                         </tr>
                     @endforeach
