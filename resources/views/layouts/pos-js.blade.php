@@ -1946,7 +1946,50 @@ function formatPaymentType(type) {
     }
 </script>
 
+
 <script>
+
+    /**
+     * Submit an issue-date update for an invoice.
+     * Routes through handleEditResponse() so the whole invoice
+     * module uses the same LiveBlade feedback path.
+     */
+    function submitIssueDate(invoiceId) {
+        const form = document.getElementById('editIssueDateForm' + invoiceId);
+        const btn  = document.getElementById('editIssueDateButton' + invoiceId);
+
+        if (!form || !btn) return;
+
+        const issueDate = form.querySelector('[name="issue_date"]')?.value ?? '';
+        const dueDate   = form.querySelector('[name="due_date"]')?.value ?? '';
+
+        if (!issueDate) {
+            LiveBladeResponse.displayErrorMessage('{{ __("payments.issue_date_required") }}');
+            return;
+        }
+
+        if (dueDate && dueDate < issueDate) {
+            LiveBladeResponse.displayErrorMessage('{{ __("payments.due_date_after_issue") }}');
+            return;
+        }
+
+        // Build the payload in the shape handleEditResponse expects.
+        // Note: `_method` is not needed here — the route is a plain POST.
+        const data = {
+            issue_date: issueDate,
+            due_date:   dueDate || null,
+            _token:     form.querySelector('[name="_token"]')?.value ?? '',
+        };
+
+        const updateUrl = `/invoices/${invoiceId}/issue-date`;
+
+        // Show the loading state on the button
+        LiveBlade.toggleButtonLoading(btn, true);
+
+        // Delegate to the shared handler
+        handleEditResponse(data, updateUrl, invoiceId, btn);
+    }
+
     // Update invoice status — 'paid' and 'partially_paid' are intercepted
     // and redirected to the Record Payment modal, since the backend now
     // rejects those two values on this endpoint (they need an amount +

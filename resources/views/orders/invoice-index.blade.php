@@ -41,6 +41,26 @@
                     />
                 </div>
 
+                {{-- Status filter --}}
+                <div class="w-100 w-sm-200px">
+                    <select id="invoiceStatusFilter"
+                            class="form-select form-select-solid"
+                            data-control="select2"
+                            data-placeholder="{{ __('payments.all_statuses') }}"
+                            data-allow-clear="true"
+                            onchange="filterInvoicesByStatus(this.value)">
+                        <option value="">{{ __('payments.all_statuses') }}</option>
+                        <option value="draft"          @selected(request('status') === 'draft')>📄 {{ __('payments.draft') }}</option>
+                        <option value="sent"           @selected(request('status') === 'sent')>📨 {{ __('payments.sent') }}</option>
+                        <option value="viewed"         @selected(request('status') === 'viewed')>👁️ {{ __('payments.viewed') }}</option>
+                        <option value="partially_paid" @selected(request('status') === 'partially_paid')>💳 {{ __('payments.partially_paid') }}</option>
+                        <option value="paid"           @selected(request('status') === 'paid')>✅ {{ __('payments.paid') }}</option>
+                        <option value="overdue"        @selected(request('status') === 'overdue')>⚠️ {{ __('payments.overdue') }}</option>
+                        <option value="void"           @selected(request('status') === 'void')>🚫 {{ __('payments.void') }}</option>
+                        <option value="cancelled"      @selected(request('status') === 'cancelled')>❌ {{ __('payments.cancelled') }}</option>
+                    </select>
+                </div>
+
                 {{-- Location filter --}}
                 @if(isset($locations) && $locations->count() > 0)
                     <div class="w-100 w-sm-200px">
@@ -103,6 +123,43 @@
                 url.searchParams.set('status', statusFilter.value);
             } else {
                 url.searchParams.delete('status');
+            }
+
+            window.location.href = url.toString();
+        }
+    </script>
+
+    <script>
+        /**
+         * Filter invoices by status.
+         * Mirrors filterInvoicesByLocation() — preserves the other query params.
+         */
+        function filterInvoicesByStatus(status) {
+            const url = new URL(window.location.href);
+
+            if (status) {
+                url.searchParams.set('status', status);
+            } else {
+                url.searchParams.delete('status');
+            }
+
+            // Reset to page 1 whenever the filter changes
+            url.searchParams.delete('page');
+
+            // Preserve location filter
+            const locationFilter = document.getElementById('invoiceLocationFilter');
+            if (locationFilter && locationFilter.value) {
+                url.searchParams.set('location_id', locationFilter.value);
+            } else {
+                url.searchParams.delete('location_id');
+            }
+
+            // Preserve search
+            const searchInput = document.getElementById('invoiceSearchInput');
+            if (searchInput && searchInput.value) {
+                url.searchParams.set('search', searchInput.value);
+            } else {
+                url.searchParams.delete('search');
             }
 
             window.location.href = url.toString();
