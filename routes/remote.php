@@ -67,6 +67,7 @@ Route::prefix('public/invoices')->name('public.invoice.')->group(function () {
 });
 
 
+
 use App\Http\Controllers\Manufacturing\ProductionOrderController;
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -74,9 +75,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('production-orders')->name('production-orders.')->group(function () {
         Route::get('/', [ProductionOrderController::class, 'index'])->name('index');
         Route::post('/', [ProductionOrderController::class, 'store'])->name('store');
+        
+        // ─── Edit / Update ──────────────────────────────────────────
+        Route::get('/{id}/edit', [ProductionOrderController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [ProductionOrderController::class, 'update'])->name('update');
+        
+        // ─── Actions ────────────────────────────────────────────────
         Route::post('/{id}/start-with-payment', [ProductionOrderController::class, 'startWithPayment'])->name('start-with-payment');
         Route::post('/{id}/start', [ProductionOrderController::class, 'start'])->name('start');
-        // Route::post('/{id}/complete', [ProductionOrderController::class, 'complete'])->name('complete');
         Route::post('/{id}/cancel', [ProductionOrderController::class, 'cancel'])->name('cancel');
         Route::post('/{id}/update-output', [ProductionOrderController::class, 'updateOutput'])->name('update-output');
         Route::get('/available-batches', [ProductionOrderController::class, 'getAvailableBatches'])->name('available-batches');
@@ -84,7 +90,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('complete-with-outputs');
     });
 });
-
 
 Route::resource('customer', CustomerController::class);
 Route::post('/customer-status/{id}', [CustomerController::class, 'updateStatus'])

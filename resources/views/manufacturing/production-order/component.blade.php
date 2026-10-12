@@ -108,6 +108,18 @@
                                     @endcan
                                 @endif
 
+                                {{-- Add this in the actions column, before the view button --}}
+                                @if(in_array($order->status, ['draft', 'in_progress', 'completed']))
+                                    @can('edit production_orders')
+                                        <button type="button"
+                                                class="btn btn-sm btn-light btn-active-color-primary"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editProductionModal{{ $order->id }}">
+                                            <i class="bi bi-pencil fs-5"></i>
+                                        </button>
+                                    @endcan
+                                @endif
+
                                 @can('view production_orders')
                                     <button type="button"
                                             class="btn btn-sm btn-light btn-active-color-success"
@@ -121,6 +133,7 @@
 
                             @include('manufacturing.production-order.view', ['order' => $order])
                             @include('manufacturing.production-order.update-modal', ['order' => $order])
+                            @include('manufacturing.production-order.edit-modal', ['order' => $order])
                         </td>
                     </tr>
                 @empty

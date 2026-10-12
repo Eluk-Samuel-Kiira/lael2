@@ -110,11 +110,18 @@ class ProductionOrderController extends Controller
             ->where('is_active', 1)
             ->get();
 
+        $uoms = \App\Models\UnitOfMeasure::where(function ($q) use ($tenantId) {
+            $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+        })
+        ->where('isActive', 1)
+        ->get();
+
         return view('manufacturing.production-index', [
             'productionOrders' => $productionOrders,
             'variants'         => $variants,
             'locations'        => $locations,
             'paymentMethods'   => $paymentMethods,
+            'uoms'             => $uoms,
         ]);
     }
 
@@ -736,37 +743,37 @@ class ProductionOrderController extends Controller
      * Reduce overal_quantity_at_hand and log to SingleShopInventoryLog.
      * Keeps the tenant-wide tally in sync with batch movements.
      */
-    private function decrementOverallQuantity(
-        ProductVariant $variant,
-        float $quantity,
-        $input,
-        ProductionOrder $productionOrder,
-        string $reason
-    ): void {
-        $before = (float) ($variant->overal_quantity_at_hand ?? 0);
-        $after  = max(0, $before - $quantity);
+    // private function decrementOverallQuantity(
+    //     ProductVariant $variant,
+    //     float $quantity,
+    //     $input,
+    //     ProductionOrder $productionOrder,
+    //     string $reason
+    // ): void {
+    //     $before = (float) ($variant->overal_quantity_at_hand ?? 0);
+    //     $after  = max(0, $before - $quantity);
 
-        $variant->overal_quantity_at_hand = $after;
-        $variant->save();
+    //     $variant->overal_quantity_at_hand = $after;
+    //     $variant->save();
 
-        SingleShopInventoryLog::create([
-            'variant_id'      => $variant->id,
-            'order_id'        => $productionOrder->id,
-            'tenant_id'       => $productionOrder->tenant_id,
-            'created_by'      => auth()->id(),
-            'quantity_before' => $before,
-            'quantity_after'  => $after,
-            'quantity_change' => -$quantity,
-            'reason'          => $reason,
-            'notes'           => "Consumed in production #{$productionOrder->production_number} - {$variant->name}",
-            'source'          => 'production',
-            'metadata' => [
-                'input_id'              => $input->id,
-                'production_number'     => $productionOrder->production_number,
-                'purchase_receipt_item' => $input->purchase_receipt_item_id,
-            ],
-        ]);
-    }
+    //     SingleShopInventoryLog::create([
+    //         'variant_id'      => $variant->id,
+    //         'order_id'        => $productionOrder->id,
+    //         'tenant_id'       => $productionOrder->tenant_id,
+    //         'created_by'      => auth()->id(),
+    //         'quantity_before' => $before,
+    //         'quantity_after'  => $after,
+    //         'quantity_change' => -$quantity,
+    //         'reason'          => $reason,
+    //         'notes'           => "Consumed in production #{$productionOrder->production_number} - {$variant->name}",
+    //         'source'          => 'production',
+    //         'metadata' => [
+    //             'input_id'              => $input->id,
+    //             'production_number'     => $productionOrder->production_number,
+    //             'purchase_receipt_item' => $input->purchase_receipt_item_id,
+    //         ],
+    //     ]);
+    // }
         
     /**
      * Complete production with outputs (update actual quantities and complete in one step)
@@ -1336,7 +1343,7 @@ class ProductionOrderController extends Controller
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (!$user->hasPermissionTo('update production_orders')) {
+        if (!$user->hasPermissionTo('edit production_orders')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -1507,6 +1514,1127 @@ class ProductionOrderController extends Controller
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+
+        
+    /**
+     * Show the edit modal data for a production order
+     */
+    public function edit(Request $request, $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit production_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $productionOrder = ProductionOrder::where('tenant_id', $tenantId)
+            ->with([
+                'inputs.productVariant.product',
+                'inputs.purchaseReceiptItem',
+                'outputs.productVariant.product',
+                'location',
+            ])
+            ->findOrFail($id);
+
+        // Can only edit draft or in_progress orders
+        if (!in_array($productionOrder->status, [
+            ProductionOrder::STATUS_DRAFT,
+            ProductionOrder::STATUS_IN_PROGRESS,
+        ])) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.can_only_edit_draft_or_in_progress'),
+            ]);
+        }
+
+        $variants = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->with('product')
+            ->get();
+
+        $uoms = \App\Models\UnitOfMeasure::where('tenant_id', $tenantId)
+            ->orWhereNull('tenant_id')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'order' => [
+                'id' => $productionOrder->id,
+                'production_number' => $productionOrder->production_number,
+                'status' => $productionOrder->status,
+                'location_id' => $productionOrder->location_id,
+                'location_name' => $productionOrder->location->name ?? null,
+                'scheduled_date' => $productionOrder->scheduled_date?->format('Y-m-d\TH:i'),
+                'notes' => $productionOrder->notes,
+                'estimated_cost' => $productionOrder->estimated_cost,
+                'inputs' => $productionOrder->inputs->map(function ($input) {
+                    return [
+                        'id' => $input->id,
+                        'product_variant_id' => $input->product_variant_id,
+                        'product_variant_name' => $input->productVariant->name ?? null,
+                        'product_variant_sku' => $input->productVariant->sku ?? null,
+                        'planned_quantity' => $input->planned_quantity,
+                        'actual_quantity' => $input->actual_quantity,
+                        'unit' => $input->unit,
+                        'estimated_cost' => $input->estimated_cost,
+                        'actual_cost' => $input->actual_cost,
+                        'purchase_receipt_item_id' => $input->purchase_receipt_item_id,
+                        'batch_number' => $input->purchaseReceiptItem->batch_number ?? null,
+                        'batch_quantity_remaining' => $input->purchaseReceiptItem->quantity_remaining ?? null,
+                        'is_consumed' => $input->actual_quantity > 0,
+                    ];
+                }),
+                'outputs' => $productionOrder->outputs->map(function ($output) {
+                    return [
+                        'id' => $output->id,
+                        'product_variant_id' => $output->product_variant_id,
+                        'product_variant_name' => $output->productVariant->name ?? null,
+                        'product_variant_sku' => $output->productVariant->sku ?? null,
+                        'planned_quantity' => $output->planned_quantity,
+                        'actual_quantity' => $output->actual_quantity,
+                        'defective_quantity' => $output->defective_quantity,
+                        'unit' => $output->unit,
+                        'production_cost' => $output->production_cost,
+                        'selling_price' => $output->selling_price,
+                        'inventory_strategy' => $output->inventory_strategy,
+                        'batch_number' => $output->batch_number,
+                        'expiry_date' => $output->expiry_date?->format('Y-m-d'),
+                    ];
+                }),
+            ],
+            'variants' => $variants->map(fn($v) => [
+                'id' => $v->id,
+                'name' => $v->name,
+                'sku' => $v->sku,
+                'weight_unit' => $v->weight_unit,
+                'supplier_cost_price' => $v->supplier_cost_price,
+                'selling_price' => $v->selling_price,
+                'inventory_strategy' => $v->product?->resolvedInventoryStrategy() ?? 'quantity',
+            ]),
+            'uoms' => $uoms->map(fn($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'symbol' => $u->symbol,
+            ]),
+        ]);
+    }
+
+    /**
+     * Update the production order - handles both inputs and outputs
+     * with full inventory reconciliation
+     */
+    public function update(Request $request, $id)
+    {
+        // \Log::info('[ProductionUpdate] Incoming payload', [
+        //     'production_order_id' => $id,
+        //     'inputs_count'        => count($request->input('inputs', [])),
+        //     'outputs_count'       => count($request->input('outputs', [])),
+        //     'inputs'              => $request->input('inputs', []),
+        //     'outputs'             => $request->input('outputs', []),
+        //     'raw_output_keys'     => array_keys($request->input('outputs', [])),
+        // ]);
+
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit production_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ]);
+        }
+
+        $productionOrder = ProductionOrder::where('tenant_id', $tenantId)
+            ->with(['inputs.purchaseReceiptItem', 'outputs'])
+            ->findOrFail($id);
+
+        if (!in_array($productionOrder->status, [
+            ProductionOrder::STATUS_COMPLETED,
+            ProductionOrder::STATUS_DRAFT,
+            ProductionOrder::STATUS_IN_PROGRESS,
+        ])) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.can_only_edit_draft_or_in_progress'),
+            ]);
+        }
+
+        // ── Pre-process: auto-fill unit from variant if missing ─────────────
+        $inputsPayload = $request->input('inputs', []);
+        foreach ($inputsPayload as $key => &$row) {
+            if (empty($row['unit']) && !empty($row['product_variant_id'])) {
+                $v = ProductVariant::find($row['product_variant_id']);
+                if ($v && $v->weight_unit) {
+                    $row['unit'] = (string) $v->weight_unit;
+                }
+            }
+        }
+        unset($row);
+        $request->merge(['inputs' => $inputsPayload]);
+
+        $outputsPayload = $request->input('outputs', []);
+        foreach ($outputsPayload as $key => &$row) {
+            if (empty($row['unit']) && !empty($row['product_variant_id'])) {
+                $v = ProductVariant::find($row['product_variant_id']);
+                if ($v && $v->weight_unit) {
+                    $row['unit'] = (string) $v->weight_unit;
+                }
+            }
+        }
+        unset($row);
+        $request->merge(['outputs' => $outputsPayload]);
+
+        $validated = $request->validate([
+            'scheduled_date' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
+            
+            // Inputs validation
+            'inputs' => 'required|array|min:1',
+            'inputs.*.id' => 'nullable|integer|exists:production_order_inputs,id',
+            'inputs.*.product_variant_id' => 'required|exists:product_variants,id',
+            'inputs.*.planned_quantity' => 'required|numeric|min:0.01',
+            'inputs.*.purchase_receipt_item_id' => 'nullable|exists:purchase_receipt_items,id',
+            'inputs.*.unit' => 'required|string|max:20',
+            'inputs.*.estimated_cost' => 'nullable|numeric|min:0',
+            
+            // Outputs validation
+            'outputs' => 'required|array|min:1',
+            'outputs.*.id' => 'nullable|integer|exists:production_order_outputs,id',
+            'outputs.*.product_variant_id' => 'required|exists:product_variants,id',
+            'outputs.*.planned_quantity' => 'required|numeric|min:0.01',
+            'outputs.*.actual_quantity' => 'nullable|numeric|min:0',
+            'outputs.*.defective_quantity' => 'nullable|numeric|min:0',
+            'outputs.*.unit' => 'required|string|max:20',
+            'outputs.*.production_cost' => 'nullable|numeric|min:0',
+            'outputs.*.selling_price' => 'nullable|numeric|min:0',
+            'outputs.*.inventory_strategy' => 'required|in:quantity,batch,serial',
+            
+            // Multi-shop allocation
+            'output_location_id' => 'nullable|integer|exists:locations,id',
+            'output_department_id' => 'nullable|integer|exists:departments,id',
+        ]);
+
+        // Validate duplicate batches
+        $batchIds = collect($validated['inputs'])
+            ->pluck('purchase_receipt_item_id')
+            ->filter()
+            ->values();
+
+        $duplicates = $batchIds->duplicates()->unique()->values();
+        if ($duplicates->isNotEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The same batch was selected more than once.',
+                'errors' => ['inputs' => ['Duplicate batch IDs: ' . $duplicates->implode(', ')]],
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // ─────────────────────────────────────────────────────────────
+            // STEP 1: Handle INPUT changes (batch reconciliation)
+            // ─────────────────────────────────────────────────────────────
+            $this->reconcileInputs($productionOrder, $validated['inputs']);
+
+            // ─────────────────────────────────────────────────────────────
+            // STEP 2: Handle OUTPUT changes (add/remove/update)
+            // ─────────────────────────────────────────────────────────────
+            $this->reconcileOutputs($productionOrder, $validated['outputs'], $validated);
+
+            // ─────────────────────────────────────────────────────────────
+            // STEP 3: Recalculate totals
+            // ─────────────────────────────────────────────────────────────
+            $productionOrder->refresh();
+            
+            $estimatedInputCost = $productionOrder->inputs->sum('estimated_cost');
+            $estimatedOutputCost = $productionOrder->outputs->sum('production_cost');
+            $totalEstimatedCost = $estimatedInputCost + $estimatedOutputCost;
+
+            $totalInputQuantity = $productionOrder->inputs->sum('actual_quantity');
+            $totalOutputQuantity = $productionOrder->outputs->sum('actual_quantity');
+            $totalInputCost = $productionOrder->inputs->sum('actual_cost');
+            $totalOutputCost = $productionOrder->outputs->sum('production_cost');
+            $totalCost = $totalInputCost + $totalOutputCost;
+
+            $productionOrder->update([
+                'scheduled_date' => $validated['scheduled_date'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'estimated_cost' => $totalEstimatedCost,
+                'total_input_quantity' => $totalInputQuantity,
+                'total_output_quantity' => $totalOutputQuantity,
+                'total_input_cost' => $totalInputCost,
+                'total_output_cost' => $totalOutputCost,
+                'total_cost' => $totalCost,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => __('passwords.production_order_updated'),
+                'reload' => true,
+                'componentId' => 'reloadProductionComponent',
+                'redirect' => route('production-orders.index'),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Production order update failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'production_order_id' => $id,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Reconcile input changes - handles batch swaps, quantity changes, additions, removals
+     */
+    private function reconcileInputs(ProductionOrder $productionOrder, array $newInputs): void
+    {
+        $existingInputs = $productionOrder->inputs->keyBy('id');
+        $processedIds = [];
+
+        foreach ($newInputs as $inputData) {
+            $inputId = $inputData['id'] ?? null;
+            $newBatchId = $inputData['purchase_receipt_item_id'] ?? null;
+            $newQuantity = (float) $inputData['planned_quantity'];
+            $variant = ProductVariant::find($inputData['product_variant_id']);
+            $newEstimatedCost = $inputData['estimated_cost'] ?? ($variant?->supplier_cost_price ?? 0) * $newQuantity;
+
+            if ($inputId && isset($existingInputs[$inputId])) {
+                // ─── UPDATE EXISTING INPUT ─────────────────────────────
+                $input = $existingInputs[$inputId];
+                $oldBatchId = $input->purchase_receipt_item_id;
+                $oldQuantity = (float) $input->actual_quantity; // Already consumed quantity
+                $wasConsumed = $oldQuantity > 0;
+
+                // Check if batch changed
+                $batchChanged = $oldBatchId != $newBatchId;
+
+                if ($wasConsumed && $batchChanged) {
+                    // Restore old batch and consume from new batch
+                    $this->handleBatchSwap($input, $oldBatchId, $newBatchId, $oldQuantity, $newQuantity);
+                } elseif ($wasConsumed && !$batchChanged && $oldQuantity != $newQuantity) {
+                    // Same batch, quantity changed - adjust batch
+                    $this->handleQuantityAdjustment($input, $newQuantity, $oldQuantity);
+                }
+
+                // Update the input record
+                $input->update([
+                    'product_variant_id' => $inputData['product_variant_id'],
+                    'purchase_receipt_item_id' => $newBatchId,
+                    'planned_quantity' => $newQuantity,
+                    'unit' => $inputData['unit'],
+                    'estimated_cost' => $newEstimatedCost,
+                ]);
+
+                $processedIds[] = $inputId;
+
+            } else {
+                // ─── CREATE NEW INPUT ──────────────────────────────────
+                $newInput = ProductionOrderInput::create([
+                    'production_order_id' => $productionOrder->id,
+                    'product_variant_id' => $inputData['product_variant_id'],
+                    'purchase_receipt_item_id' => $newBatchId,
+                    'planned_quantity' => $newQuantity,
+                    'actual_quantity' => 0,
+                    'waste_quantity' => 0,
+                    'unit' => $inputData['unit'],
+                    'estimated_cost' => $newEstimatedCost,
+                    'actual_cost' => 0,
+                ]);
+
+                // If order is in progress, consume immediately
+                if ($productionOrder->status === ProductionOrder::STATUS_IN_PROGRESS) {
+                    $this->consumeInput($newInput, $productionOrder);
+                }
+
+                $processedIds[] = $newInput->id;
+            }
+        }
+
+        // ─── DELETE REMOVED INPUTS ─────────────────────────────────────
+        $keptInputIds = collect($newInputs)
+            ->pluck('id')
+            ->filter(fn($id) => $id !== null && $id !== '' && $id !== 'null')
+            ->map(fn($id) => (int) $id)
+            ->values()
+            ->all();
+
+        $toDeleteInputs = $existingInputs->keys()->diff($keptInputIds);
+
+        foreach ($toDeleteInputs as $deleteId) {
+            $input = $existingInputs[$deleteId] ?? null;
+            if (!$input) continue;
+
+            // Restore consumed stock before deletion
+            if ((float) $input->actual_quantity > 0) {
+                $this->restoreInputStock($input, $productionOrder);
+            }
+
+            $input->delete();
+        }
+        
+    }
+
+    /**
+     * Handle batch swap for an already-consumed input
+     */
+    private function handleBatchSwap(
+        ProductionOrderInput $input,
+        ?int $oldBatchId,
+        ?int $newBatchId,
+        float $oldQuantity,
+        float $newQuantity
+    ): void {
+        $variant = $input->productVariant;
+        if (!$variant) return;
+
+        $productionOrder = $input->productionOrder;
+        $tenantId = $productionOrder->tenant_id;
+
+        // ─── RESTORE OLD BATCH ─────────────────────────────────────────
+        if ($oldBatchId) {
+            $oldBatch = PurchaseReceiptItem::where('id', $oldBatchId)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if ($oldBatch) {
+                $beforeRestore = (float) ($oldBatch->quantity_remaining ?? 0);
+                $afterRestore = $beforeRestore + $oldQuantity;
+                
+                $oldBatch->quantity_remaining = $afterRestore;
+                $oldBatch->save();
+
+                // Log the restoration
+                BatchLog::create([
+                    'batch_id' => $oldBatch->id,
+                    'batch_number' => $oldBatch->batch_number,
+                    'variant_id' => $variant->id,
+                    'variant_name' => $variant->name,
+                    'variant_sku' => $variant->sku,
+                    'type' => BatchLog::TYPE_ADJUSTED,
+                    'quantity_change' => $oldQuantity,
+                    'quantity_before' => $beforeRestore,
+                    'quantity_after' => $afterRestore,
+                    'unit_cost' => $oldBatch->unit_cost ?? 0,
+                    'total_cost' => ($oldBatch->unit_cost ?? 0) * $oldQuantity,
+                    'production_order_id' => $productionOrder->id,
+                    'production_order_input_id' => $input->id,
+                    'tenant_id' => $tenantId,
+                    'location_id' => $oldBatch->location_id ?? $productionOrder->location_id,
+                    'event_date' => now(),
+                    'performed_by' => auth()->id(),
+                    'metadata' => [
+                        'source' => 'production_input_batch_swap_restore',
+                        'production_number' => $productionOrder->production_number,
+                        'reason' => 'Batch swapped to different batch',
+                        'new_batch_id' => $newBatchId,
+                    ],
+                ]);
+            }
+        }
+
+        // Restore overall quantity for old batch consumption
+        $this->incrementOverallQuantity(
+            $variant,
+            $oldQuantity,
+            $input,
+            $productionOrder,
+            'production_input_batch_swap_restore'
+        );
+
+        // ─── CONSUME NEW BATCH ─────────────────────────────────────────
+        if ($newBatchId) {
+            $newBatch = PurchaseReceiptItem::where('id', $newBatchId)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if (!$newBatch) {
+                throw new \Exception("New batch not found: {$newBatchId}");
+            }
+
+            $available = (float) ($newBatch->quantity_remaining ?? $newBatch->quantity_received ?? 0);
+            if ($available < $newQuantity) {
+                throw new \Exception(
+                    "Insufficient stock in new batch for {$variant->name}. " .
+                    "Available: {$available}, Required: {$newQuantity}"
+                );
+            }
+
+            $beforeConsume = $available;
+            $afterConsume = $beforeConsume - $newQuantity;
+
+            $newBatch->quantity_remaining = $afterConsume;
+            $newBatch->save();
+
+            // Log the consumption
+            $origin = $this->resolveBatchOrigin($newBatch);
+
+            BatchLog::create(array_merge([
+                'batch_id' => $newBatch->id,
+                'batch_number' => $newBatch->batch_number,
+                'variant_id' => $variant->id,
+                'variant_name' => $variant->name,
+                'variant_sku' => $variant->sku,
+                'type' => BatchLog::TYPE_DEPLETED,
+                'quantity_change' => -$newQuantity,
+                'quantity_before' => $beforeConsume,
+                'quantity_after' => $afterConsume,
+                'unit_cost' => $newBatch->unit_cost ?? 0,
+                'total_cost' => ($newBatch->unit_cost ?? 0) * $newQuantity,
+                'production_order_id' => $productionOrder->id,
+                'production_order_input_id' => $input->id,
+                'tenant_id' => $tenantId,
+                'location_id' => $newBatch->location_id ?? $productionOrder->location_id,
+                'department_id' => $newBatch->department_id,
+                'expiry_date' => $newBatch->expiry_date,
+                'event_date' => now(),
+                'performed_by' => auth()->id(),
+                'metadata' => [
+                    'source' => 'production_input_batch_swap_consume',
+                    'production_number' => $productionOrder->production_number,
+                    'reason' => 'Batch swapped from different batch',
+                    'old_batch_id' => $oldBatchId,
+                ],
+            ], $origin));
+
+            // Update overall quantity
+            $this->decrementOverallQuantity(
+                $variant,
+                $newQuantity,
+                $input,
+                $productionOrder,
+                'production_input_batch_swap_consume'
+            );
+        }
+
+        // Update the input's actual quantity to match new consumption
+        $input->update([
+            'actual_quantity' => $newQuantity,
+            'actual_cost' => $input->estimated_cost,
+        ]);
+    }
+
+    /**
+     * Handle quantity adjustment for an already-consumed input (same batch)
+     */
+    private function handleQuantityAdjustment(
+        ProductionOrderInput $input,
+        float $newQuantity,
+        float $oldQuantity
+    ): void {
+        $variant = $input->productVariant;
+        if (!$variant) return;
+
+        $productionOrder = $input->productionOrder;
+        $difference = $newQuantity - $oldQuantity;
+
+        if (abs($difference) < 0.0001) return; // No change
+
+        if ($difference > 0) {
+            // Need to consume MORE from the batch
+            $this->consumeAdditionalQuantity($input, $variant, $difference);
+        } else {
+            // Need to restore SOME to the batch
+            $this->restorePartialQuantity($input, $variant, abs($difference));
+        }
+
+        // Update actual quantity on input
+        $input->update([
+            'actual_quantity' => $newQuantity,
+            'actual_cost' => $input->estimated_cost,
+        ]);
+    }
+
+    /**
+     * Consume additional quantity from a batch
+     */
+    private function consumeAdditionalQuantity(
+        ProductionOrderInput $input,
+        ProductVariant $variant,
+        float $additionalQuantity
+    ): void {
+        $productionOrder = $input->productionOrder;
+        $tenantId = $productionOrder->tenant_id;
+        $batchId = $input->purchase_receipt_item_id;
+
+        if ($batchId) {
+            $batch = PurchaseReceiptItem::where('id', $batchId)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if (!$batch) {
+                throw new \Exception("Batch not found for additional consumption");
+            }
+
+            $available = (float) ($batch->quantity_remaining ?? 0);
+            if ($available < $additionalQuantity) {
+                throw new \Exception(
+                    "Insufficient batch stock for additional consumption. " .
+                    "Available: {$available}, Required: {$additionalQuantity}"
+                );
+            }
+
+            $before = $available;
+            $after = $before - $additionalQuantity;
+
+            $batch->quantity_remaining = $after;
+            $batch->save();
+
+            BatchLog::create([
+                'batch_id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'variant_id' => $variant->id,
+                'variant_name' => $variant->name,
+                'variant_sku' => $variant->sku,
+                'type' => BatchLog::TYPE_DEPLETED,
+                'quantity_change' => -$additionalQuantity,
+                'quantity_before' => $before,
+                'quantity_after' => $after,
+                'unit_cost' => $batch->unit_cost ?? 0,
+                'total_cost' => ($batch->unit_cost ?? 0) * $additionalQuantity,
+                'production_order_id' => $productionOrder->id,
+                'production_order_input_id' => $input->id,
+                'tenant_id' => $tenantId,
+                'location_id' => $batch->location_id ?? $productionOrder->location_id,
+                'event_date' => now(),
+                'performed_by' => auth()->id(),
+                'metadata' => [
+                    'source' => 'production_input_quantity_increase',
+                    'production_number' => $productionOrder->production_number,
+                ],
+            ]);
+
+            $this->decrementOverallQuantity(
+                $variant,
+                $additionalQuantity,
+                $input,
+                $productionOrder,
+                'production_input_quantity_increase'
+            );
+        } else {
+            // No specific batch - just decrement overall
+            $this->decrementOverallQuantity(
+                $variant,
+                $additionalQuantity,
+                $input,
+                $productionOrder,
+                'production_input_quantity_increase'
+            );
+        }
+    }
+
+    /**
+     * Restore partial quantity to a batch
+     */
+    private function restorePartialQuantity(
+        ProductionOrderInput $input,
+        ProductVariant $variant,
+        float $restoreQuantity
+    ): void {
+        $productionOrder = $input->productionOrder;
+        $tenantId = $productionOrder->tenant_id;
+        $batchId = $input->purchase_receipt_item_id;
+
+        if ($batchId) {
+            $batch = PurchaseReceiptItem::where('id', $batchId)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if ($batch) {
+                $before = (float) ($batch->quantity_remaining ?? 0);
+                $after  = $before + $restoreQuantity;
+
+                $batch->quantity_remaining = $after;
+                $batch->save();   // ✅ REQUIRED
+
+                BatchLog::create([
+                    'batch_id'                   => $batch->id,
+                    'batch_number'               => $batch->batch_number,
+                    'variant_id'                 => $variant->id,
+                    'variant_name'               => $variant->name,
+                    'variant_sku'                => $variant->sku,
+                    'type'                       => BatchLog::TYPE_ADJUSTED,
+                    'quantity_change'            => $restoreQuantity,
+                    'quantity_before'            => $before,
+                    'quantity_after'             => $after,
+                    'unit_cost'                  => $batch->unit_cost ?? 0,
+                    'total_cost'                 => ($batch->unit_cost ?? 0) * $restoreQuantity,
+                    'production_order_id'        => $productionOrder->id,
+                    'production_order_input_id'  => $input->id,
+                    'tenant_id'                  => $tenantId,
+                    'location_id'                => $batch->location_id ?? $productionOrder->location_id,
+                    'department_id'              => $batch->department_id,
+                    'expiry_date'                => $batch->expiry_date,
+                    'event_date'                 => now(),
+                    'performed_by'               => auth()->id(),
+                    'metadata' => [
+                        'source'            => 'production_input_quantity_decrease',
+                        'production_number' => $productionOrder->production_number,
+                    ],
+                ]);
+            }
+        }
+
+        $this->incrementOverallQuantity(
+            $variant,
+            $restoreQuantity,
+            $input,
+            $productionOrder,
+            'production_input_quantity_decrease'
+        );
+    }
+
+    /**
+     * Restore input stock completely (for deletion)
+     */
+    private function restoreInputStock(ProductionOrderInput $input, ProductionOrder $productionOrder): void
+    {
+        $variant = $input->productVariant;
+        if (!$variant) return;
+
+        $quantity = (float) $input->actual_quantity;
+        if ($quantity <= 0) return;
+
+        $tenantId = $productionOrder->tenant_id;
+        $batchId = $input->purchase_receipt_item_id;
+
+        if ($batchId) {
+            $batch = PurchaseReceiptItem::where('id', $batchId)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if ($batch) {
+                $before = (float) ($batch->quantity_remaining ?? 0);
+                $after = $before + $quantity;
+
+                $batch->quantity_remaining = $after;
+                $batch->save();
+
+                BatchLog::create([
+                    'batch_id' => $batch->id,
+                    'batch_number' => $batch->batch_number,
+                    'variant_id' => $variant->id,
+                    'variant_name' => $variant->name,
+                    'variant_sku' => $variant->sku,
+                    'type' => BatchLog::TYPE_ADJUSTED,
+                    'quantity_change' => $quantity,
+                    'quantity_before' => $before,
+                    'quantity_after' => $after,
+                    'unit_cost' => $batch->unit_cost ?? 0,
+                    'total_cost' => ($batch->unit_cost ?? 0) * $quantity,
+                    'production_order_id' => $productionOrder->id,
+                    'production_order_input_id' => $input->id,
+                    'tenant_id' => $tenantId,
+                    'location_id' => $batch->location_id ?? $productionOrder->location_id,
+                    'event_date' => now(),
+                    'performed_by' => auth()->id(),
+                    'metadata' => [
+                        'source' => 'production_input_deletion_restore',
+                        'production_number' => $productionOrder->production_number,
+                    ],
+                ]);
+            }
+        }
+
+        $this->incrementOverallQuantity(
+            $variant,
+            $quantity,
+            $input,
+            $productionOrder,
+            'production_input_deletion_restore'
+        );
+    }
+
+    
+    /**
+     * Reconcile output changes - handles additions, removals, and quantity updates
+     */
+    private function reconcileOutputs(
+        ProductionOrder $productionOrder,
+        array $newOutputs,
+        array $validated
+    ): void {
+        $existingOutputs = $productionOrder->outputs->keyBy('id');
+
+        \Log::info('[ReconcileOutputs] Starting', [
+            'po_id'             => $productionOrder->id,
+            'existing_ids'      => $existingOutputs->keys()->all(),
+            'incoming_count'    => count($newOutputs),
+            'incoming_ids'      => collect($newOutputs)->pluck('id')->all(),
+        ]);
+
+        // ✅ Collect kept IDs (existing rows user kept in the modal)
+        $keptIds = collect($newOutputs)
+            ->pluck('id')
+            ->filter(fn($id) => $id !== null && $id !== '' && $id !== 'null')
+            ->map(fn($id) => (int) $id)
+            ->values()
+            ->all();
+
+        $isSingleShop      = tenant_is_single_shop($productionOrder->tenant_id);
+        $allocLocationId   = $validated['output_location_id']   ?? null;
+        $allocDepartmentId = $validated['output_department_id'] ?? null;
+
+        // ── Track which NEW rows we create so we don't delete them ──
+        $createdIds = [];
+
+        foreach ($newOutputs as $outputData) {
+            $outputId        = $outputData['id'] ?? null;
+            $newActualQty    = (float) ($outputData['actual_quantity']    ?? 0);
+            $newDefectiveQty = (float) ($outputData['defective_quantity'] ?? 0);
+            $variant         = ProductVariant::find($outputData['product_variant_id']);
+
+            if ($outputId && isset($existingOutputs[$outputId])) {
+                // ─── UPDATE EXISTING ────────────────────────────────────
+                $output             = $existingOutputs[$outputId];
+                $oldActualQty       = (float) $output->actual_quantity;
+                $quantityDifference = $newActualQty - $oldActualQty;
+
+                $output->update([
+                    'product_variant_id' => $outputData['product_variant_id'],
+                    'planned_quantity'   => $outputData['planned_quantity'],
+                    'actual_quantity'    => $newActualQty,
+                    'defective_quantity' => $newDefectiveQty,
+                    'unit'               => $outputData['unit'],
+                    'production_cost'    => ($outputData['production_cost'] ?? 0) * ($outputData['planned_quantity'] ?? 0),
+                    'selling_price'      => $outputData['selling_price'] ?? 0,
+                    'inventory_strategy' => $outputData['inventory_strategy'],
+                ]);
+
+                if (abs($quantityDifference) > 0.0001) {
+                    $this->adjustOutputInventory(
+                        $output, $variant, $productionOrder, $quantityDifference,
+                        $isSingleShop, $allocLocationId, $allocDepartmentId
+                    );
+                }
+
+            } else {
+                // ─── CREATE NEW ─────────────────────────────────────────
+                $newOutput = ProductionOrderOutput::create([
+                    'production_order_id' => $productionOrder->id,
+                    'product_variant_id'  => $outputData['product_variant_id'],
+                    'planned_quantity'    => $outputData['planned_quantity'],
+                    'actual_quantity'     => $newActualQty,
+                    'defective_quantity'  => $newDefectiveQty,
+                    'unit'                => $outputData['unit'],
+                    'production_cost'     => ($outputData['production_cost'] ?? 0) * ($outputData['planned_quantity'] ?? 0),
+                    'selling_price'       => $outputData['selling_price'] ?? 0,
+                    'inventory_strategy'  => $outputData['inventory_strategy'],
+                ]);
+
+                $createdIds[] = $newOutput->id;
+
+                \Log::info('[ReconcileOutputs] Created new output', [
+                    'new_output_id' => $newOutput->id,
+                    'variant_id'    => $outputData['product_variant_id'],
+                    'actual_qty'    => $newActualQty,
+                ]);
+
+                if (
+                    $productionOrder->status === ProductionOrder::STATUS_IN_PROGRESS
+                    && $newActualQty > 0
+                ) {
+                    $this->allocateProductionOutput(
+                        $variant, $newOutput, $productionOrder, $newActualQty,
+                        $productionOrder->production_number . '-' . date('Ymd'),
+                        null, $isSingleShop, $allocLocationId, $allocDepartmentId
+                    );
+                }
+            }
+        }
+
+        // ─── DELETE REMOVED OUTPUTS ─────────────────────────────────────
+        // Only delete EXISTING rows that were present before but NOT kept now.
+        // New rows we just created are excluded by design — they weren't in
+        // $existingOutputs to begin with.
+        $toDelete = $existingOutputs->keys()->diff($keptIds);
+
+        \Log::info('[ReconcileOutputs] Deleting orphans', [
+            'kept_ids'    => $keptIds,
+            'created_ids' => $createdIds,
+            'to_delete'   => $toDelete->values()->all(),
+        ]);
+
+        foreach ($toDelete as $deleteId) {
+            $output = $existingOutputs[$deleteId] ?? null;
+            if (!$output) continue;
+
+            if (
+                (float) $output->actual_quantity > 0
+                && $productionOrder->status === ProductionOrder::STATUS_IN_PROGRESS
+            ) {
+                $this->reverseOutputInventory(
+                    $output, $output->productVariant, $productionOrder,
+                    (float) $output->actual_quantity,
+                    $isSingleShop, $allocLocationId, $allocDepartmentId
+                );
+            }
+
+            $output->delete();
+        }
+    }
+
+    /**
+     * Adjust output inventory when quantity changes
+     */
+    private function adjustOutputInventory(
+        ProductionOrderOutput $output,
+        ProductVariant $variant,
+        ProductionOrder $productionOrder,
+        float $quantityDifference,
+        bool $isSingleShop,
+        ?int $allocLocationId,
+        ?int $allocDepartmentId
+    ): void {
+        if ($productionOrder->status !== ProductionOrder::STATUS_IN_PROGRESS) {
+            return; // Only adjust inventory for in-progress orders
+        }
+
+        if ($quantityDifference > 0) {
+            // Adding more output - allocate additional inventory
+            $this->allocateProductionOutput(
+                $variant,
+                $output,
+                $productionOrder,
+                $quantityDifference,
+                $output->batch_number ?? $productionOrder->production_number . '-' . date('Ymd'),
+                $output->expiry_date?->format('Y-m-d'),
+                $isSingleShop,
+                $allocLocationId,
+                $allocDepartmentId
+            );
+        } else {
+            // Reducing output - reverse some inventory
+            $this->reverseOutputInventory(
+                $output,
+                $variant,
+                $productionOrder,
+                abs($quantityDifference),
+                $isSingleShop,
+                $allocLocationId,
+                $allocDepartmentId
+            );
+        }
+    }
+
+    /**
+     * Reverse output inventory when quantity is reduced or output is deleted
+     */
+    private function reverseOutputInventory(
+        ProductionOrderOutput $output,
+        ProductVariant $variant,
+        ProductionOrder $productionOrder,
+        float $quantity,
+        bool $isSingleShop,
+        ?int $allocLocationId,
+        ?int $allocDepartmentId
+    ): void {
+        if (!$variant || $quantity <= 0) return;
+
+        $tenantId = $productionOrder->tenant_id;
+
+        // ─── REDUCE OVERALL QUANTITY ───────────────────────────────
+        $beforeOverall = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $afterOverall  = max(0, $beforeOverall - $quantity);
+
+        $variant->overal_quantity_at_hand = $afterOverall;
+        $variant->save();
+
+        // ─── SINGLE SHOP LOG ───────────────────────────────────────
+        if ($isSingleShop) {
+            SingleShopInventoryLog::create([
+                'variant_id'      => $variant->id,
+                'order_id'        => $productionOrder->id,
+                'tenant_id'       => $tenantId,
+                'created_by'      => auth()->id(),
+                'quantity_before' => $beforeOverall,
+                'quantity_after'  => $afterOverall,
+                'quantity_change' => -$quantity,
+                'reason'          => 'production_output_reversal',
+                'notes'           => "Output reduced/deleted from production #{$productionOrder->production_number} - {$variant->name}",
+                'source'          => 'production',
+                'metadata'        => [
+                    'production_number' => $productionOrder->production_number,
+                    'output_id'         => $output->id,
+                    'reversal_reason'   => 'edit_update',
+                ],
+            ]);
+        } else {
+            // ─── MULTI-SHOP: REDUCE ALLOCATED QUANTITY ─────────────
+            // ✅ Fall back to the output's own location/department if not passed
+            $targetLocationId   = $allocLocationId   ?: $output->location_id   ?? $productionOrder->location_id;
+            $targetDepartmentId = $allocDepartmentId ?: $output->department_id ?? null;
+
+            if ($targetLocationId && $targetDepartmentId) {
+                $item = InventoryItems::where([
+                    'variant_id'    => $variant->id,
+                    'location_id'   => $targetLocationId,
+                    'department_id' => $targetDepartmentId,
+                    'tenant_id'     => $tenantId,
+                ])->first();
+
+                if ($item) {
+                    $beforeAlloc = (int) $item->quantity_allocated;
+                    $afterAlloc  = max(0, $beforeAlloc - (int) $quantity);
+
+                    $item->quantity_allocated = $afterAlloc;
+                    $item->save();
+
+                    InventoryAdjustments::create([
+                        'inventory_id'    => $item->id,
+                        'quantity_before' => $beforeAlloc,
+                        'quantity_after'  => $afterAlloc,
+                        'reason'          => 'production_output_reversal',
+                        'notes'           => "Output reduced from production #{$productionOrder->production_number}",
+                        'created_by'      => auth()->id(),
+                        'tenant_id'       => $tenantId,
+                    ]);
+
+                    InventoryTransactions::create([
+                        'inventory_id'   => $item->id,
+                        'quantity'       => -(int) $quantity,
+                        'reference_id'   => $productionOrder->id,
+                        'reference_type' => 'production_order_reversal',
+                        'type'           => 'transfer_out',
+                        'notes'          => "Production output reversal #{$productionOrder->production_number}",
+                        'created_by'     => auth()->id(),
+                        'tenant_id'      => $tenantId,
+                    ]);
+                }
+            }
+        }
+
+        // ─── HANDLE BATCH STRATEGY ─────────────────────────────────
+        if ($output->inventory_strategy === 'batch' && $output->batch_number) {
+            $batch = PurchaseReceiptItem::where('batch_number', $output->batch_number)
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if ($batch) {
+                $beforeBatch = (float) ($batch->quantity_remaining ?? 0);
+                $afterBatch  = max(0, $beforeBatch - $quantity);
+
+                $batch->quantity_remaining = $afterBatch;
+                $batch->save();
+
+                BatchLog::create([
+                    'batch_id'                   => $batch->id,
+                    'batch_number'               => $batch->batch_number,
+                    'variant_id'                 => $variant->id,
+                    'variant_name'               => $variant->name,
+                    'variant_sku'                => $variant->sku,
+                    'type'                       => BatchLog::TYPE_ADJUSTED,
+                    'quantity_change'            => -$quantity,
+                    'quantity_before'            => $beforeBatch,
+                    'quantity_after'             => $afterBatch,
+                    'unit_cost'                  => $batch->unit_cost ?? 0,
+                    'total_cost'                 => ($batch->unit_cost ?? 0) * $quantity,
+                    'production_order_id'        => $productionOrder->id,
+                    'production_order_output_id' => $output->id,
+                    'tenant_id'                  => $tenantId,
+                    'location_id'                => $batch->location_id ?? $productionOrder->location_id,
+                    'department_id'              => $batch->department_id,  // ✅ added
+                    'expiry_date'                => $batch->expiry_date,    // ✅ added
+                    'event_date'                 => now(),
+                    'performed_by'               => auth()->id(),
+                    'metadata'                   => [
+                        'source'            => 'production_output_reversal',
+                        'production_number' => $productionOrder->production_number,
+                    ],
+                ]);
+            }
+        }
+    }
+
+    
+
+    /**
+     * Reduce variant.overal_quantity_at_hand and log to SingleShopInventoryLog.
+     * Keeps the tenant-wide tally in sync with batch movements.
+     */
+    private function decrementOverallQuantity(
+        ProductVariant $variant,
+        float $quantity,
+        $input,
+        ProductionOrder $productionOrder,
+        string $reason
+    ): void {
+        if ($quantity <= 0) return;
+
+        $before = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $after  = max(0, $before - $quantity);
+
+        $variant->overal_quantity_at_hand = $after;
+        $variant->save();
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $productionOrder->id,
+            'tenant_id'       => $productionOrder->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $after,
+            'quantity_change' => -$quantity,
+            'reason'          => $reason,
+            'notes'           => "Consumed in production #{$productionOrder->production_number} - {$variant->name}",
+            'source'          => 'production',
+            'metadata'        => [
+                'input_id'              => $input->id ?? null,
+                'production_number'     => $productionOrder->production_number,
+                'purchase_receipt_item' => $input->purchase_receipt_item_id ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * Increase variant.overal_quantity_at_hand and log to SingleShopInventoryLog.
+     * Used when restoring stock during edit (batch swap, quantity decrease, row deletion).
+     */
+    private function incrementOverallQuantity(
+        ProductVariant $variant,
+        float $quantity,
+        $input,
+        ProductionOrder $productionOrder,
+        string $reason
+    ): void {
+        if ($quantity <= 0) return;
+
+        $before = (float) ($variant->overal_quantity_at_hand ?? 0);
+        $after  = $before + $quantity;
+
+        $variant->overal_quantity_at_hand = $after;
+        $variant->save();
+
+        SingleShopInventoryLog::create([
+            'variant_id'      => $variant->id,
+            'order_id'        => $productionOrder->id,
+            'tenant_id'       => $productionOrder->tenant_id,
+            'created_by'      => auth()->id(),
+            'quantity_before' => $before,
+            'quantity_after'  => $after,
+            'quantity_change' => $quantity,
+            'reason'          => $reason,
+            'notes'           => "Restored to stock from production #{$productionOrder->production_number} - {$variant->name}",
+            'source'          => 'production',
+            'metadata'        => [
+                'input_id'              => $input->id ?? null,
+                'production_number'     => $productionOrder->production_number,
+                'purchase_receipt_item' => $input->purchase_receipt_item_id ?? null,
+            ],
+        ]);
     }
     
 }

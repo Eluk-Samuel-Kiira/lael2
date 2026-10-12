@@ -1692,8 +1692,49 @@ return [
     'department'        => 'Department',
     'sold_price'        => 'Sold Price',
     'order'             => 'Order',
+    'warning'             => 'Warning',
     'custom_pricing'    => 'Custom pricing',
     'variant_pricing'   => 'Variant pricing',
+
+
+    // ─── Edit Production Order ────────────────────────────────────
+    'edit_production_order'                     => 'Edit Production Order',
+    'save_changes'                              => 'Save Changes',
+    'saving'                                    => 'Saving',
+    'type_or_select_material'                   => 'Type or select material...',
+    'type_or_select_product'                    => 'Type or select product...',
+    'left'                                      => 'left',
+    'new'                                       => 'New',
+    'consumed'                                  => 'Consumed',
+    'pending'                                   => 'Pending',
+    'loading_batches'                           => 'Loading batches...',
+    'batches_loaded'                            => 'batches loaded',
+    'no_batches_available'                      => 'No batches available for this material.',
+    'failed_to_load_batches'                    => 'Failed to load batches. Please try again.',
+    'select_material_first'                     => 'Please select a material first.',
+    'add_at_least_one_input'                    => 'Please add at least one input material.',
+    'add_at_least_one_output'                   => 'Please add at least one output product.',
+    'at_least_one_input_required'               => 'At least one input material is required.',
+    'at_least_one_output_required'              => 'At least one output product is required.',
+    'failed_to_update'                          => 'Failed to update the production order. Please try again.',
+    'production_order_updated'                  => 'Production order updated successfully.',
+
+    // ─── Edit in-progress warning ─────────────────────────────────
+    'edit_in_progress_warning'                  => 'This production order is in progress. Changing consumed inputs or produced outputs will automatically adjust inventory and log every movement.',
+
+    // ─── Delete confirmations ─────────────────────────────────────
+    'confirm_deletion'                          => 'Confirm Deletion',
+    'consumed_input_delete_warning'             => 'This input has already been <strong>consumed</strong> from stock. Deleting it will <strong>restore</strong> the batch and overall quantity. Continue?',
+    'produced_output_delete_warning'            => 'This output has already been <strong>produced</strong>. Deleting it will <strong>reverse</strong> the inventory movement. Continue?',
+    'yes_delete_and_restore'                    => 'Yes, Delete & Restore',
+    'yes_delete_and_reverse'                    => 'Yes, Delete & Reverse',
+
+    // ─── Batch swap warning ───────────────────────────────────────
+    'batch_swap_warning'                        => 'Batch changed. The previous batch will be restored and the new batch will be consumed.',
+
+    // ─── Edit modal submit guard ──────────────────────────────────
+    'can_only_edit_draft_or_in_progress'        => 'Only draft or in-progress orders can be edited.',
+
 
     'recipes'                          => 'Recipes',
     'no_recipes_found'                 => 'No recipes found',
