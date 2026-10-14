@@ -15,6 +15,7 @@ return [
     'billing_settings'   => 'Billing Settings',
     'payment_type' => 'Type',
     'description' => 'Description',
+    'partial_payment_recorded' => 'Partial Payment Recorded',
     'all_statuses' => 'All Statuses',
     'amount' => 'Amount',
     'edit_issue_date'                   => 'Edit Issue Date',

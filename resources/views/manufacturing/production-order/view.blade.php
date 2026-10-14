@@ -157,8 +157,8 @@
                                         </label>
                                         <select name="payment_method_id" class="form-select form-select-solid" required>
                                             <option value="">{{ __('payments.select_payment_method') }}</option>
-                                            @if(isset($paymentMethods) && $paymentMethods->count() > 0)
-                                                @foreach($paymentMethods as $method)
+                                            @if(isset($active_payment_methods) && $active_payment_methods->count() > 0)
+                                                @foreach($active_payment_methods as $method)
                                                     <option value="{{ $method->id }}">
                                                         {{ $method->name }}
                                                         @if($method->account_number)

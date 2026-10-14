@@ -341,7 +341,7 @@ class BatchController extends Controller
                 $createdIds[] = $child->id;
 
                 // Log each split as a transfer
-                $this->logBatchSplit($parent, $child, $split, $user, $tenantId);
+                $this->logBatchSplit($parent, $child, $split, $user, $tenantId, parentQty);
             }
 
             // Handle the parent: reduce or delete
@@ -502,56 +502,88 @@ class BatchController extends Controller
     /**
      * Log batch assignment to BatchLog table
      */
-    private function logBatchAssignment($batch, $oldLocationId, $oldDepartmentId, $newLocationId, $newDepartmentId, $user, $tenantId)
-    {
+    private function logBatchAssignment(
+        $batch,
+        $oldLocationId,
+        $oldDepartmentId,
+        $newLocationId,
+        $newDepartmentId,
+        $user,
+        $tenantId
+    ) {
         try {
-            // Get variant details
-            $variant = $batch->purchaseOrderItem->productVariant ?? null;
-            
-            // Get purchase order details
+            $variant       = $batch->purchaseOrderItem->productVariant ?? null;
             $purchaseOrder = $batch->purchaseReceipt->purchaseOrder ?? null;
-            
-            BatchLog::create([
-                'batch_id' => $batch->id,
-                'batch_number' => $batch->batch_number,
-                'variant_id' => $variant ? $variant->id : null,
-                'variant_name' => $variant ? $variant->name : 'Unknown',
-                'variant_sku' => $variant ? $variant->sku : 'Unknown',
-                'type' => BatchLog::TYPE_TRANSFERRED,
-                'quantity_change' => 0, // No quantity change, just location change
-                'quantity_before' => $batch->quantity_remaining ?? $batch->quantity_received,
-                'quantity_after' => $batch->quantity_remaining ?? $batch->quantity_received,
-                'unit_cost' => $batch->unit_cost ?? 0,
-                'total_cost' => 0,
-                'order_id' => null,
-                'order_number' => null,
-                'purchase_order_id' => $purchaseOrder ? $purchaseOrder->id : null,
-                'purchase_order_number' => $purchaseOrder ? $purchaseOrder->po_number : null,
-                'purchase_receipt_id' => $batch->purchase_receipt_id,
-                'supplier_id' => $purchaseOrder ? $purchaseOrder->supplier_id : null,
-                'supplier_name' => $purchaseOrder && $purchaseOrder->supplier ? $purchaseOrder->supplier->name : null,
-                'tenant_id' => $tenantId,
-                'location_id' => $newLocationId,
-                'department_id' => $newDepartmentId,
-                'expiry_date' => $batch->expiry_date,
-                'event_date' => now(),
-                'performed_by' => $user->id,
-                'metadata' => [
-                    'action' => 'assigned',
-                    'old_location_id' => $oldLocationId,
-                    'old_department_id' => $oldDepartmentId,
-                    'new_location_id' => $newLocationId,
-                    'new_department_id' => $newDepartmentId,
-                    'assigned_by' => $user->name,
-                    'assigned_at' => now()->toDateTimeString(),
-                ],
-            ]);
 
-            \Log::info('Batch assignment logged to BatchLog', [
-                'batch_id' => $batch->id,
-                'batch_number' => $batch->batch_number,
-                'old_location' => $oldLocationId,
-                'new_location' => $newLocationId,
+            $actor       = $this->actorLabel($user);
+            $variantName = $variant->name ?? 'Unknown Item';
+            $variantSku  = $variant->sku  ?? 'N/A';
+            $qty         = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+
+            $fromLabel   = $this->contextLabel($oldLocationId, $oldDepartmentId);
+            $toLabel     = $this->contextLabel($newLocationId, $newDepartmentId);
+
+            // ── The narrative sentence ───────────────────────────────
+            $narrative = sprintf(
+                '%s assigned batch "%s" (%s, SKU %s, %s unit(s)) from %s to %s. '
+                . 'Batch stock is unchanged — this is a location/department move only. '
+                . 'Supplier: %s. PO: %s.',
+                $actor,
+                $batch->batch_number,
+                $variantName,
+                $variantSku,
+                number_format((float) $qty, 2),
+                $fromLabel,
+                $toLabel,
+                optional(optional($purchaseOrder)->supplier)->name ?? 'N/A',
+                $purchaseOrder->po_number ?? 'N/A'
+            );
+
+            BatchLog::create([
+                'batch_id'              => $batch->id,
+                'batch_number'          => $batch->batch_number,
+                'variant_id'            => $variant?->id,
+                'variant_name'          => $variantName,
+                'variant_sku'           => $variantSku,
+                'type'                  => BatchLog::TYPE_TRANSFERRED,
+                'quantity_change'       => 0,
+                'quantity_before'       => $qty,
+                'quantity_after'        => $qty,
+                'unit_cost'             => $batch->unit_cost ?? 0,
+                'total_cost'            => 0,
+                'order_id'              => null,
+                'order_number'          => null,
+                'purchase_order_id'     => $purchaseOrder?->id,
+                'purchase_order_number' => $purchaseOrder?->po_number,
+                'purchase_receipt_id'   => $batch->purchase_receipt_id,
+                'supplier_id'           => $purchaseOrder?->supplier_id,
+                'supplier_name'         => optional(optional($purchaseOrder)->supplier)->name,
+                'tenant_id'             => $tenantId,
+                'location_id'           => $newLocationId,
+                'department_id'         => $newDepartmentId,
+                'expiry_date'           => $batch->expiry_date,
+                'event_date'            => now(),
+                'performed_by'          => $user->id,
+                'metadata' => [
+                    // ★ The full story — what any auditor reads first
+                    'narrative'        => $narrative,
+
+                    // Structured fields for filtering/reporting
+                    'action'           => 'assigned',
+                    'from_location_id' => $oldLocationId,
+                    'from_location'    => $this->locationLabel($oldLocationId),
+                    'from_department_id' => $oldDepartmentId,
+                    'from_department'  => $this->departmentLabel($oldDepartmentId),
+                    'to_location_id'   => $newLocationId,
+                    'to_location'      => $this->locationLabel($newLocationId),
+                    'to_department_id' => $newDepartmentId,
+                    'to_department'    => $this->departmentLabel($newDepartmentId),
+                    'quantity_at_move' => (float) $qty,
+                    'actor_name'       => $user->name,
+                    'actor_email'      => $user->email,
+                    'actor_id'         => $user->id,
+                    'occurred_at'      => now()->toDateTimeString(),
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -568,51 +600,70 @@ class BatchController extends Controller
     private function logBatchUnassignment($batch, $oldLocationId, $oldDepartmentId, $user, $tenantId)
     {
         try {
-            // Get variant details
-            $variant = $batch->purchaseOrderItem->productVariant ?? null;
-            
-            // Get purchase order details
+            $variant       = $batch->purchaseOrderItem->productVariant ?? null;
             $purchaseOrder = $batch->purchaseReceipt->purchaseOrder ?? null;
-            
-            BatchLog::create([
-                'batch_id' => $batch->id,
-                'batch_number' => $batch->batch_number,
-                'variant_id' => $variant ? $variant->id : null,
-                'variant_name' => $variant ? $variant->name : 'Unknown',
-                'variant_sku' => $variant ? $variant->sku : 'Unknown',
-                'type' => BatchLog::TYPE_TRANSFERRED,
-                'quantity_change' => 0, // No quantity change, just location change
-                'quantity_before' => $batch->quantity_remaining ?? $batch->quantity_received,
-                'quantity_after' => $batch->quantity_remaining ?? $batch->quantity_received,
-                'unit_cost' => $batch->unit_cost ?? 0,
-                'total_cost' => 0,
-                'order_id' => null,
-                'order_number' => null,
-                'purchase_order_id' => $purchaseOrder ? $purchaseOrder->id : null,
-                'purchase_order_number' => $purchaseOrder ? $purchaseOrder->po_number : null,
-                'purchase_receipt_id' => $batch->purchase_receipt_id,
-                'supplier_id' => $purchaseOrder ? $purchaseOrder->supplier_id : null,
-                'supplier_name' => $purchaseOrder && $purchaseOrder->supplier ? $purchaseOrder->supplier->name : null,
-                'tenant_id' => $tenantId,
-                'location_id' => null,
-                'department_id' => null,
-                'expiry_date' => $batch->expiry_date,
-                'event_date' => now(),
-                'performed_by' => $user->id,
-                'metadata' => [
-                    'action' => 'unassigned',
-                    'old_location_id' => $oldLocationId,
-                    'old_department_id' => $oldDepartmentId,
-                    'unassigned_by' => $user->name,
-                    'unassigned_at' => now()->toDateTimeString(),
-                ],
-            ]);
 
-            \Log::info('Batch unassignment logged to BatchLog', [
-                'batch_id' => $batch->id,
-                'batch_number' => $batch->batch_number,
-                'old_location' => $oldLocationId,
-                'old_department' => $oldDepartmentId,
+            $actor       = $this->actorLabel($user);
+            $variantName = $variant->name ?? 'Unknown Item';
+            $variantSku  = $variant->sku  ?? 'N/A';
+            $qty         = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+
+            $fromLabel = $this->contextLabel($oldLocationId, $oldDepartmentId);
+
+            $narrative = sprintf(
+                '%s unassigned batch "%s" (%s, SKU %s, %s unit(s)) from %s. '
+                . 'The batch is now unassigned — it is no longer tied to any location or department. '
+                . 'Batch stock is unchanged. Supplier: %s. PO: %s.',
+                $actor,
+                $batch->batch_number,
+                $variantName,
+                $variantSku,
+                number_format((float) $qty, 2),
+                $fromLabel,
+                optional(optional($purchaseOrder)->supplier)->name ?? 'N/A',
+                $purchaseOrder->po_number ?? 'N/A'
+            );
+
+            BatchLog::create([
+                'batch_id'              => $batch->id,
+                'batch_number'          => $batch->batch_number,
+                'variant_id'            => $variant?->id,
+                'variant_name'          => $variantName,
+                'variant_sku'           => $variantSku,
+                'type'                  => BatchLog::TYPE_TRANSFERRED,
+                'quantity_change'       => 0,
+                'quantity_before'       => $qty,
+                'quantity_after'        => $qty,
+                'unit_cost'             => $batch->unit_cost ?? 0,
+                'total_cost'            => 0,
+                'order_id'              => null,
+                'order_number'          => null,
+                'purchase_order_id'     => $purchaseOrder?->id,
+                'purchase_order_number' => $purchaseOrder?->po_number,
+                'purchase_receipt_id'   => $batch->purchase_receipt_id,
+                'supplier_id'           => $purchaseOrder?->supplier_id,
+                'supplier_name'         => optional(optional($purchaseOrder)->supplier)->name,
+                'tenant_id'             => $tenantId,
+                'location_id'           => null,
+                'department_id'         => null,
+                'expiry_date'           => $batch->expiry_date,
+                'event_date'            => now(),
+                'performed_by'          => $user->id,
+                'metadata' => [
+                    'narrative'            => $narrative,
+                    'action'               => 'unassigned',
+                    'from_location_id'     => $oldLocationId,
+                    'from_location'        => $this->locationLabel($oldLocationId),
+                    'from_department_id'   => $oldDepartmentId,
+                    'from_department'      => $this->departmentLabel($oldDepartmentId),
+                    'to_location_id'       => null,
+                    'to_department_id'     => null,
+                    'quantity_at_move'     => (float) $qty,
+                    'actor_name'           => $user->name,
+                    'actor_email'          => $user->email,
+                    'actor_id'             => $user->id,
+                    'occurred_at'          => now()->toDateTimeString(),
+                ],
             ]);
 
         } catch (\Exception $e) {
@@ -623,31 +674,90 @@ class BatchController extends Controller
     }
 
     /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)".
+     * Prefers names; falls back to IDs so the string is never broken.
+     */
+    private function locationLabel(?int $locationId): string
+    {
+        if (!$locationId) return 'Unassigned';
+        $name = Location::find($locationId)?->name;
+        return $name ?? "Location #{$locationId}";
+    }
+
+    private function departmentLabel(?int $departmentId): string
+    {
+        if (!$departmentId) return 'Unassigned';
+        $name = Department::find($departmentId)?->name;
+        return $name ?? "Department #{$departmentId}";
+    }
+
+    private function contextLabel(?int $locationId, ?int $departmentId): string
+    {
+        return 'at ' . $this->locationLabel($locationId)
+            . ' (' . $this->departmentLabel($departmentId) . ')';
+    }
+
+    /**
      * Log a batch split event to BatchLog.
      * Called once per child batch created during a split.
      */
-    private function logBatchSplit($parent, $child, array $split, $user, int $tenantId): void
+    private function logBatchSplit($parent, $child, array $split, $user, int $tenantId, ?float $parentQtyAtSplit = null): void
     {
         try {
-            // Resolve variant via the parent's purchase order item
-            $variant = optional($parent->purchaseOrderItem)->productVariant;
-
-            // Resolve purchase order via the parent's receipt
+            $variant       = optional($parent->purchaseOrderItem)->productVariant;
             $purchaseOrder = optional($parent->purchaseReceipt)->purchaseOrder;
+
+            $actor       = $this->actorLabel($user);
+            $variantName = $variant?->name ?? 'Unknown Item';
+            $variantSku  = $variant?->sku  ?? 'N/A';
+
+            $childQty     = (float) ($child->quantity_remaining ?? 0);
+            $parentQtyAtSplit = $parentQtyAtSplit
+                ?? (float) ($parent->quantity_remaining ?? $parent->quantity_received ?? 0);
+            $parentLeftover   = max(0, $parentQtyAtSplit - $childQty);
+
+            $childContext = $this->contextLabel($child->location_id, $child->department_id);
+
+            $narrative = sprintf(
+                '%s split batch "%s" (%s, SKU %s). Created child batch "%s" with %s unit(s) %s. '
+                . 'Parent batch "%s" now holds %s unit(s) (%s unit(s) at time of split). '
+                . 'Supplier: %s. PO: %s.',
+                $actor,
+                $parent->batch_number,
+                $variantName,
+                $variantSku,
+                $child->batch_number,
+                number_format($childQty, 2),
+                $childContext,
+                $parent->batch_number,
+                number_format($parentLeftover, 2),
+                number_format($parentQtyAtSplit, 2),
+                optional(optional($purchaseOrder)->supplier)->name ?? 'N/A',
+                $purchaseOrder->po_number ?? 'N/A'
+            );
 
             BatchLog::create([
                 'batch_id'              => $child->id,
                 'batch_number'          => $child->batch_number,
                 'variant_id'            => $variant?->id,
-                'variant_name'          => $variant?->name ?? 'Unknown',
-                'variant_sku'           => $variant?->sku  ?? 'Unknown',
+                'variant_name'          => $variantName,
+                'variant_sku'           => $variantSku,
 
                 'type'                  => BatchLog::TYPE_TRANSFERRED,
                 'quantity_change'       => 0,
                 'quantity_before'       => 0,
-                'quantity_after'        => $child->quantity_remaining,
+                'quantity_after'        => $childQty,
                 'unit_cost'             => $child->unit_cost ?? 0,
-                'total_cost'            => ($child->unit_cost ?? 0) * $child->quantity_remaining,
+                'total_cost'            => ($child->unit_cost ?? 0) * $childQty,
 
                 'purchase_order_id'     => $purchaseOrder?->id,
                 'purchase_order_number' => $purchaseOrder?->po_number,
@@ -664,12 +774,21 @@ class BatchController extends Controller
                 'performed_by'          => $user->id,
 
                 'metadata' => [
-                    'action'              => 'split',
-                    'parent_batch_id'     => $parent->id,
-                    'parent_batch_number' => $parent->batch_number,
-                    'split_quantity'      => (float) $split['quantity'],
-                    'split_by'            => $user->name,
-                    'split_at'            => now()->toDateTimeString(),
+                    'narrative'          => $narrative,
+                    'action'             => 'split',
+                    'parent_batch_id'    => $parent->id,
+                    'parent_batch_number'=> $parent->batch_number,
+                    'parent_quantity_at_split' => $parentQtyAtSplit,
+                    'parent_leftover'    => $parentLeftover,
+                    'child_quantity'     => $childQty,
+                    'child_location_id'  => $child->location_id,
+                    'child_location'     => $this->locationLabel($child->location_id),
+                    'child_department_id' => $child->department_id,
+                    'child_department'   => $this->departmentLabel($child->department_id),
+                    'actor_name'         => $user->name,
+                    'actor_email'        => $user->email,
+                    'actor_id'           => $user->id,
+                    'occurred_at'        => now()->toDateTimeString(),
                 ],
             ]);
         } catch (\Exception $e) {

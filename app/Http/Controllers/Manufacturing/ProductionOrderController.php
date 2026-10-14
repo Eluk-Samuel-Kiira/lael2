@@ -125,6 +125,41 @@ class ProductionOrderController extends Controller
         ]);
     }
 
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)" — from a resolved context.
+     */
+    private function productionContextLabel(ProductionOrder $po): string
+    {
+        $loc = $po->location?->name ?? "Location #{$po->location_id}";
+        return " at {$loc}";
+    }
+
+    /**
+     * Short label for a variant: "Widget Pro (SKU WG-001)".
+     */
+    private function variantLabel(?ProductVariant $variant): string
+    {
+        if (!$variant) return 'Unknown Item';
+        return $variant->name . ' (SKU ' . ($variant->sku ?? 'N/A') . ')';
+    }
+
+    /**
+     * Short label for a batch: "LOT-A" or "#123".
+     */
+    private function batchLabel($batch): string
+    {
+        if (!$batch) return 'unknown batch';
+        return $batch->batch_number ? "batch {$batch->batch_number}" : "batch #{$batch->id}";
+    }
 
     public function store(Request $request)
     {
@@ -341,27 +376,43 @@ class ProductionOrderController extends Controller
                     throw new \Exception(__('pagination.payment_method_not_found'));
                 }
 
+                $actor          = $this->actorLabel($user);
+                $context        = $this->productionContextLabel($productionOrder);
+                $currency       = $paymentMethod->currency->code ?? 'UGX';
+                $amountStr      = number_format($withdrawalAmount, 2) . ' ' . $currency;
+                $methodName     = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
+
+                $narrative = "{$actor} withdrew {$amountStr} from {$methodName} "
+                    . "to fund production {$productionOrder->production_number}{$context}. "
+                    . "Estimated cost: " . number_format($estimatedCost, 2) . " {$currency}. "
+                    . "The withdrawal is logged as a FEE against {$methodName}.";
+
                 $transactionData = [
-                    'user_id' => $user->id,
-                    'tenant_id' => $tenantId,
-                    'payment_method_id' => $paymentMethod->id,
-                    'transaction_type' => 'WITHDRAWAL',
+                    'user_id'              => $user->id,
+                    'tenant_id'            => $tenantId,
+                    'payment_method_id'    => $paymentMethod->id,
+                    'transaction_type'     => 'WITHDRAWAL',
                     'transaction_category' => 'FEE',
-                    'amount' => $withdrawalAmount,
-                    'currency_id' => $paymentMethod->currency_id ?? Currency::default()->id,
-                    'reference_table' => 'production_orders',
-                    'reference_id' => $productionOrder->id,
-                    'description' => 'Production Cost Withdrawal - #' . $productionOrder->production_number,
-                    'notes' => 'Withdrawal of ' . number_format($withdrawalAmount, 2) . ' for production #' . $productionOrder->production_number . 
-                            ($validated['notes'] ? ' - ' . $validated['notes'] : ''),
+                    'amount'               => $withdrawalAmount,
+                    'currency_id'          => $paymentMethod->currency_id ?? Currency::default()->id,
+                    'reference_table'      => 'production_orders',
+                    'reference_id'         => $productionOrder->id,
+
+                    // ★ Full-sentence description
+                    'description' => $narrative,
+
+                    // Short tag for the ledger list
+                    'notes' => "Production cost withdrawal — {$methodName}",
+
                     'metadata' => [
-                        'production_number' => $productionOrder->production_number,
-                        'estimated_cost' => $estimatedCost,
-                        'withdrawal_amount' => $withdrawalAmount,
-                        'payment_method' => $paymentMethod->name,
-                        'transaction_nature' => 'PRODUCTION_COST_WITHDRAWAL',
-                        'processed_by_id' => $user->id,
-                        'processed_by_name' => $user->name,
+                        'production_number'   => $productionOrder->production_number,
+                        'estimated_cost'      => $estimatedCost,
+                        'withdrawal_amount'   => $withdrawalAmount,
+                        'payment_method'      => $methodName,
+                        'transaction_nature'  => 'PRODUCTION_COST_WITHDRAWAL',
+                        'processed_by_id'     => $user->id,
+                        'processed_by_name'   => $actor,
+                        'narrative'           => $narrative,
                     ],
                 ];
 
@@ -598,6 +649,25 @@ class ProductionOrderController extends Controller
         // ✅ Preserve the PO / supplier chain from the batch's origin
         $origin = $this->resolveBatchOrigin($batch);
 
+        $actor        = $this->actorLabel();
+        $productionN° = $productionOrder->production_number;
+        $context      = $this->productionContextLabel($productionOrder);
+        $variantStr   = $this->variantLabel($variant);
+        $batchStr     = $this->batchLabel($batch);
+
+        $narrative = sprintf(
+            '%s consumed %s × "%s" from %s for production %s%s. '
+            . 'Batch stock: %s → %s. Consumed as raw material input.',
+            $actor,
+            number_format($quantity, 2),
+            $variant->name,
+            $batchStr,
+            $productionN°,
+            $context,
+            number_format($before, 2),
+            number_format($after, 2)
+        );
+
         BatchLog::create(array_merge([
             'batch_id'                   => $batch->id,
             'batch_number'               => $batch->batch_number,
@@ -620,10 +690,16 @@ class ProductionOrderController extends Controller
             'performed_by'               => auth()->id(),
             'metadata' => [
                 'source'            => $source,
-                'production_number' => $productionOrder->production_number,
+                'production_number' => $productionN°,
                 'reason'            => $reason,
+
+                // ★ the full audit story
+                'narrative'         => $narrative,
+                'quantity_before'   => $before,
+                'quantity_after'    => $after,
+                'batch_number'      => $batch->batch_number,
             ],
-        ], $origin));   // ← merge the PO context
+        ], $origin));   
     }
 
     /**
@@ -703,6 +779,24 @@ class ProductionOrderController extends Controller
             $unitCost = (float) ($batch->unit_cost ?? 0);
             $origin   = $this->resolveBatchOrigin($batch);
 
+            $actor        = $this->actorLabel();
+            $productionN° = $productionOrder->production_number;
+            $context      = $this->productionContextLabel($productionOrder);
+
+            $narrative = sprintf(
+                '%s consumed %s × "%s" from %s (FIFO) for production %s%s. '
+                . 'Batch stock: %s → %s. Consumed as raw material input%s.',
+                $actor,
+                number_format($deduct, 2),
+                $variant->name,
+                $this->batchLabel($batch),
+                $productionN°,
+                $context,
+                number_format($before, 2),
+                number_format($after, 2),
+                $deduct < $before ? ' (partial depletion)' : ''
+            );
+
             BatchLog::create(array_merge([
                 'batch_id'                   => $batch->id,
                 'batch_number'               => $batch->batch_number,
@@ -725,8 +819,9 @@ class ProductionOrderController extends Controller
                 'performed_by'               => auth()->id(),
                 'metadata' => [
                     'source'            => 'production_consumption_fifo',
-                    'production_number' => $productionOrder->production_number,
+                    'production_number' => $productionN°,
                     'partial'           => $deduct < $before,
+                    'narrative'         => $narrative,
                 ],
             ], $origin));
         }
@@ -1048,11 +1143,26 @@ class ProductionOrderController extends Controller
         $beforeOverall = (float) ($variant->overal_quantity_at_hand ?? 0);
         $afterOverall  = $beforeOverall + $quantity;
 
+        $actor   = $this->actorLabel();
+        $context = $this->productionContextLabel($productionOrder);
+
         $variant->overal_quantity_at_hand = $afterOverall;
         $variant->save();
 
         // ── Single-shop ───────────────────────────────────────────────
         if ($isSingleShop) {
+
+            $narrative = sprintf(
+                '%s produced %s × "%s" in production %s%s. '
+                . 'Overall stock: %s → %s. Output allocated to the single-shop pool.',
+                $actor,
+                number_format($quantity, 2),
+                $variant->name,
+                $productionOrder->production_number,
+                $context,
+                number_format($beforeOverall, 2),
+                number_format($afterOverall, 2)
+            );
             SingleShopInventoryLog::create([
                 'variant_id'      => $variant->id,
                 'order_id'        => $productionOrder->id,
@@ -1062,7 +1172,7 @@ class ProductionOrderController extends Controller
                 'quantity_after'  => $afterOverall,
                 'quantity_change' => $quantity,
                 'reason'          => 'production_output',
-                'notes'           => "Produced in #{$productionOrder->production_number} - {$variant->name}",
+                'notes'           => $narrative,
                 'source'          => 'production',
                 'metadata'        => [
                     'mode'              => 'single_shop',
@@ -1070,6 +1180,7 @@ class ProductionOrderController extends Controller
                     'output_id'         => $output->id,
                     'batch_number'      => $batchNumber,
                     'expiry_date'       => $expiryDate,
+                    'narrative' => $narrative,
                 ],
             ]);
         }
@@ -1093,12 +1204,31 @@ class ProductionOrderController extends Controller
             $item->quantity_allocated = $beforeAlloc + (int) $quantity;
             $item->save();
 
+            $locName  = $item->itemLocation?->name ?? "Location #{$item->location_id}";
+            $deptName = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+
+            $narrative = sprintf(
+                '%s produced %s × "%s" in production %s%s and allocated it to %s (%s). '
+                . 'Branch allocation: %s → %s units. Overall stock: %s → %s.',
+                $actor,
+                number_format($quantity, 2),
+                $variant->name,
+                $productionOrder->production_number,
+                $context,
+                $locName,
+                $deptName,
+                number_format($beforeAlloc),
+                number_format($item->quantity_allocated),
+                number_format($beforeOverall, 2),
+                number_format($afterOverall, 2)
+            );
+
             InventoryAdjustments::create([
                 'inventory_id'    => $item->id,
                 'quantity_before' => $beforeAlloc,
                 'quantity_after'  => $item->quantity_allocated,
                 'reason'          => 'production_output',
-                'notes'           => "Allocated {$quantity} of {$variant->name} from #{$productionOrder->production_number}",
+                'notes'           => $narrative,
                 'created_by'      => auth()->id(),
                 'tenant_id'       => $productionOrder->tenant_id,
             ]);
@@ -1109,7 +1239,7 @@ class ProductionOrderController extends Controller
                 'reference_id'   => $productionOrder->id,
                 'reference_type' => 'production_order',
                 'type'           => 'transfer_in',
-                'notes'          => "Production output #{$productionOrder->production_number}",
+                'notes'          => $narrative,
                 'created_by'     => auth()->id(),
                 'tenant_id'      => $productionOrder->tenant_id,
             ]);
@@ -1139,6 +1269,19 @@ class ProductionOrderController extends Controller
             //    carry the provenance forward onto the produced batch.
             $sourcePOs = $this->resolveSourcePurchaseOrders($productionOrder);
 
+            $narrative = sprintf(
+                '%s created %s with %s × "%s" produced in production %s%s. '
+                . 'Batch starts at %s units. Cost per unit: %s.',
+                $actor,
+                $this->batchLabel($batch),
+                number_format($quantity, 2),
+                $variant->name,
+                $productionOrder->production_number,
+                $context,
+                number_format($quantity, 2),
+                number_format($unitCost, 2)
+            );
+
             BatchLog::create([
                 'batch_id'                    => $batch->id,
                 'batch_number'                => $batch->batch_number,
@@ -1162,7 +1305,7 @@ class ProductionOrderController extends Controller
                 'metadata' => [
                     'production_number'       => $productionOrder->production_number,
                     'batch_generated'         => true,
-                    // 👇 Carries the PO chain from the inputs that fed this run
+                    'narrative'              => $narrative,
                     'source_purchase_orders'  => $sourcePOs,
                     'source_po_ids'           => collect($sourcePOs)->pluck('po_id')->filter()->unique()->values()->all(),
                 ],
@@ -1402,6 +1545,20 @@ class ProductionOrderController extends Controller
                     $variant->overal_quantity_at_hand = $afterQty;
                     $variant->save();
 
+                    $narrative = sprintf(
+                        '%s increased output of "%s" by %s for production %s%s. '
+                        . 'Overall stock: %s → %s. Output row: #%s.',
+                        $this->actorLabel(),
+                        $variant->name,
+                        number_format($quantityDifference, 2),
+                        $productionOrder->production_number,
+                        $this->productionContextLabel($productionOrder),
+                        number_format($beforeQty, 2),
+                        number_format($afterQty, 2),
+                        $output->id
+                    );
+
+
                     // ✅ Audit trail - SingleShopInventoryLog
                     SingleShopInventoryLog::create([
                         'variant_id' => $variant->id,
@@ -1414,6 +1571,7 @@ class ProductionOrderController extends Controller
                         'reason' => 'production_output_update',
                         'notes' => "Production output updated - Order #{$productionOrder->production_number} - {$variant->name}",
                         'source' => 'production',
+                        'notes'     => $narrative,
                         'metadata' => [
                             'production_order_id' => $productionOrder->id,
                             'production_number' => $productionOrder->production_number,
@@ -1421,6 +1579,7 @@ class ProductionOrderController extends Controller
                             'quantity_added' => $quantityDifference,
                             'cost' => $output->production_cost,
                             'inventory_strategy' => $output->inventory_strategy,
+                            'narrative' => $narrative,
                         ],
                     ]);
 
@@ -1477,6 +1636,8 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
+
+    
 
     public function start(Request $request, $id)
     {
@@ -1917,6 +2078,19 @@ class ProductionOrderController extends Controller
                 $oldBatch->quantity_remaining = $afterRestore;
                 $oldBatch->save();
 
+                $narrative = sprintf(
+                    '%s restored %s × "%s" to %s during batch swap on production %s%s. '
+                    . 'Batch stock: %s → %s. The original batch was swapped out.',
+                    $actor,
+                    number_format($oldQuantity, 2),
+                    $variant->name,
+                    $this->batchLabel($oldBatch),
+                    $productionN°,
+                    $context,
+                    number_format($beforeRestore, 2),
+                    number_format($afterRestore, 2)
+                );
+
                 // Log the restoration
                 BatchLog::create([
                     'batch_id' => $oldBatch->id,
@@ -1941,6 +2115,7 @@ class ProductionOrderController extends Controller
                         'production_number' => $productionOrder->production_number,
                         'reason' => 'Batch swapped to different batch',
                         'new_batch_id' => $newBatchId,
+                        'narrative' => $narrative,
                     ],
                 ]);
             }
@@ -1981,6 +2156,18 @@ class ProductionOrderController extends Controller
 
             // Log the consumption
             $origin = $this->resolveBatchOrigin($newBatch);
+            $narrative = sprintf(
+                '%s consumed %s × "%s" from %s during batch swap on production %s%s. '
+                . 'Batch stock: %s → %s. Replacing the previous batch.',
+                $actor,
+                number_format($newQuantity, 2),
+                $variant->name,
+                $this->batchLabel($newBatch),
+                $productionN°,
+                $context,
+                number_format($beforeConsume, 2),
+                number_format($afterConsume, 2)
+            );
 
             BatchLog::create(array_merge([
                 'batch_id' => $newBatch->id,
@@ -2007,6 +2194,7 @@ class ProductionOrderController extends Controller
                     'production_number' => $productionOrder->production_number,
                     'reason' => 'Batch swapped from different batch',
                     'old_batch_id' => $oldBatchId,
+                    'narrative' => $narrative,
                 ],
             ], $origin));
 
@@ -2092,6 +2280,18 @@ class ProductionOrderController extends Controller
 
             $batch->quantity_remaining = $after;
             $batch->save();
+            $narrative = sprintf(
+                '%s consumed an additional %s × "%s" from %s for production %s%s '
+                . '(input quantity increased). Batch stock: %s → %s.',
+                $this->actorLabel(),
+                number_format($additionalQuantity, 2),
+                $variant->name,
+                $this->batchLabel($batch),
+                $productionOrder->production_number,
+                $this->productionContextLabel($productionOrder),
+                number_format($before, 2),
+                number_format($after, 2)
+            );
 
             BatchLog::create([
                 'batch_id' => $batch->id,
@@ -2114,6 +2314,7 @@ class ProductionOrderController extends Controller
                 'metadata' => [
                     'source' => 'production_input_quantity_increase',
                     'production_number' => $productionOrder->production_number,
+                    'narrative' => $narrative,
                 ],
             ]);
 
@@ -2158,7 +2359,20 @@ class ProductionOrderController extends Controller
                 $after  = $before + $restoreQuantity;
 
                 $batch->quantity_remaining = $after;
-                $batch->save();   // ✅ REQUIRED
+                $batch->save();   
+
+                $narrative = sprintf(
+                    '%s restored %s × "%s" to %s on production %s%s '
+                    . '(input quantity reduced). Batch stock: %s → %s.',
+                    $this->actorLabel(),
+                    number_format($restoreQuantity, 2),
+                    $variant->name,
+                    $this->batchLabel($batch),
+                    $productionOrder->production_number,
+                    $this->productionContextLabel($productionOrder),
+                    number_format($before, 2),
+                    number_format($after, 2)
+                );
 
                 BatchLog::create([
                     'batch_id'                   => $batch->id,
@@ -2183,6 +2397,7 @@ class ProductionOrderController extends Controller
                     'metadata' => [
                         'source'            => 'production_input_quantity_decrease',
                         'production_number' => $productionOrder->production_number,
+                        'narrative' => $narrative,
                     ],
                 ]);
             }
@@ -2223,6 +2438,19 @@ class ProductionOrderController extends Controller
                 $batch->quantity_remaining = $after;
                 $batch->save();
 
+                $narrative = sprintf(
+                    '%s restored %s × "%s" to %s after removing the input line from production %s%s. '
+                    . 'Batch stock: %s → %s.',
+                    $this->actorLabel(),
+                    number_format($quantity, 2),
+                    $variant->name,
+                    $this->batchLabel($batch),
+                    $productionOrder->production_number,
+                    $this->productionContextLabel($productionOrder),
+                    number_format($before, 2),
+                    number_format($after, 2)
+                );
+
                 BatchLog::create([
                     'batch_id' => $batch->id,
                     'batch_number' => $batch->batch_number,
@@ -2244,6 +2472,7 @@ class ProductionOrderController extends Controller
                     'metadata' => [
                         'source' => 'production_input_deletion_restore',
                         'production_number' => $productionOrder->production_number,
+                        'narrative' => $narrative,
                     ],
                 ]);
             }
@@ -2455,6 +2684,18 @@ class ProductionOrderController extends Controller
 
         // ─── SINGLE SHOP LOG ───────────────────────────────────────
         if ($isSingleShop) {
+
+            $narrative = sprintf(
+                '%s reversed %s × "%s" from production %s%s '
+                . '(output reduced or deleted). Overall stock: %s → %s.',
+                $actor,
+                number_format($quantity, 2),
+                $variant->name,
+                $productionOrder->production_number,
+                $context,
+                number_format($beforeOverall, 2),
+                number_format($afterOverall, 2)
+            );
             SingleShopInventoryLog::create([
                 'variant_id'      => $variant->id,
                 'order_id'        => $productionOrder->id,
@@ -2464,12 +2705,13 @@ class ProductionOrderController extends Controller
                 'quantity_after'  => $afterOverall,
                 'quantity_change' => -$quantity,
                 'reason'          => 'production_output_reversal',
-                'notes'           => "Output reduced/deleted from production #{$productionOrder->production_number} - {$variant->name}",
+                'notes'           => $narrative,
                 'source'          => 'production',
                 'metadata'        => [
                     'production_number' => $productionOrder->production_number,
                     'output_id'         => $output->id,
                     'reversal_reason'   => 'edit_update',
+                    'narrative'           => $narrative,
                 ],
             ]);
         } else {
@@ -2493,12 +2735,31 @@ class ProductionOrderController extends Controller
                     $item->quantity_allocated = $afterAlloc;
                     $item->save();
 
+                    $locName  = $item->itemLocation?->name ?? "Location #{$item->location_id}";
+                    $deptName = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+
+                    $narrative = sprintf(
+                        '%s reversed %s × "%s" produced by production %s%s from %s (%s). '
+                        . 'Branch allocation: %s → %s units. Overall stock: %s → %s.',
+                        $actor,
+                        number_format($quantity, 2),
+                        $variant->name,
+                        $productionOrder->production_number,
+                        $context,
+                        $locName,
+                        $deptName,
+                        number_format($beforeAlloc),
+                        number_format($afterAlloc),
+                        number_format($beforeOverall, 2),
+                        number_format($afterOverall, 2)
+                    );
+
                     InventoryAdjustments::create([
                         'inventory_id'    => $item->id,
                         'quantity_before' => $beforeAlloc,
                         'quantity_after'  => $afterAlloc,
                         'reason'          => 'production_output_reversal',
-                        'notes'           => "Output reduced from production #{$productionOrder->production_number}",
+                        'notes'           => $narrative,
                         'created_by'      => auth()->id(),
                         'tenant_id'       => $tenantId,
                     ]);
@@ -2509,7 +2770,7 @@ class ProductionOrderController extends Controller
                         'reference_id'   => $productionOrder->id,
                         'reference_type' => 'production_order_reversal',
                         'type'           => 'transfer_out',
-                        'notes'          => "Production output reversal #{$productionOrder->production_number}",
+                        'notes'          => $narrative,
                         'created_by'     => auth()->id(),
                         'tenant_id'      => $tenantId,
                     ]);
@@ -2529,6 +2790,18 @@ class ProductionOrderController extends Controller
 
                 $batch->quantity_remaining = $afterBatch;
                 $batch->save();
+
+                $narrative = sprintf(
+                    '%s reduced %s to %s on production %s%s '
+                    . '(produced output reversed). Batch stock: %s → %s.',
+                    $actor,
+                    $this->batchLabel($batch),
+                    number_format($quantity, 2),
+                    $productionOrder->production_number,
+                    $context,
+                    number_format($beforeBatch, 2),
+                    number_format($afterBatch, 2)
+                );
 
                 BatchLog::create([
                     'batch_id'                   => $batch->id,
@@ -2553,6 +2826,7 @@ class ProductionOrderController extends Controller
                     'metadata'                   => [
                         'source'            => 'production_output_reversal',
                         'production_number' => $productionOrder->production_number,
+                        'narrative'           => $narrative,
                     ],
                 ]);
             }
@@ -2580,6 +2854,33 @@ class ProductionOrderController extends Controller
         $variant->overal_quantity_at_hand = $after;
         $variant->save();
 
+        $actor        = $this->actorLabel();
+        $productionN° = $productionOrder->production_number;
+        $context      = $this->productionContextLabel($productionOrder);
+
+        // Human phrase for the reason
+        $reasonText = match (true) {
+            str_contains($reason, 'batch_fifo')      => 'consumed as raw material (FIFO)',
+            str_contains($reason, 'batch_swap')      => 'consumed as raw material (batch swap)',
+            str_contains($reason, 'quantity_increase') => 'consumed as additional raw material',
+            str_contains($reason, 'quantity_decrease') => 'returned excess raw material',
+            str_contains($reason, 'deletion_restore')  => 'restored after input removal',
+            default                                  => 'consumed as raw material',
+        };
+
+        $narrative = sprintf(
+            '%s %s %s × "%s" for production %s%s. '
+            . 'Overall stock: %s → %s.',
+            $actor,
+            $reasonText,
+            number_format($quantity, 2),
+            $variant->name,
+            $productionN°,
+            $context,
+            number_format($before, 2),
+            number_format($after, 2)
+        );
+
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
             'order_id'        => $productionOrder->id,
@@ -2589,12 +2890,13 @@ class ProductionOrderController extends Controller
             'quantity_after'  => $after,
             'quantity_change' => -$quantity,
             'reason'          => $reason,
-            'notes'           => "Consumed in production #{$productionOrder->production_number} - {$variant->name}",
+            'notes'           => $narrative,   // ★
             'source'          => 'production',
             'metadata'        => [
                 'input_id'              => $input->id ?? null,
-                'production_number'     => $productionOrder->production_number,
+                'production_number'     => $productionN°,
                 'purchase_receipt_item' => $input->purchase_receipt_item_id ?? null,
+                'narrative'             => $narrative,
             ],
         ]);
     }
@@ -2618,6 +2920,26 @@ class ProductionOrderController extends Controller
         $variant->overal_quantity_at_hand = $after;
         $variant->save();
 
+        $reasonText = match (true) {
+            str_contains($reason, 'batch_swap')       => 'restored to stock during batch swap',
+            str_contains($reason, 'quantity_decrease') => 'restored to stock after reducing input quantity',
+            str_contains($reason, 'deletion_restore')  => 'restored to stock after input removal',
+            default                                    => 'restored to stock',
+        };
+
+        $narrative = sprintf(
+            '%s %s: %s × "%s" for production %s%s. '
+            . 'Overall stock: %s → %s.',
+            $actor,
+            $reasonText,
+            number_format($quantity, 2),
+            $variant->name,
+            $productionN°,
+            $context,
+            number_format($before, 2),
+            number_format($after, 2)
+        );
+
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
             'order_id'        => $productionOrder->id,
@@ -2627,7 +2949,7 @@ class ProductionOrderController extends Controller
             'quantity_after'  => $after,
             'quantity_change' => $quantity,
             'reason'          => $reason,
-            'notes'           => "Restored to stock from production #{$productionOrder->production_number} - {$variant->name}",
+            'notes'           => $narrative,
             'source'          => 'production',
             'metadata'        => [
                 'input_id'              => $input->id ?? null,

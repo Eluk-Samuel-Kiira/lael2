@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\Payment\PaymentTransactionService;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
+use App\Services\InventoryPricingHistoryRecorder;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,6 +35,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton('payment-transaction', function ($app) {
             return new PaymentTransactionService();
         });
+        
+        $this->app->bind('inventory-pricing-history', fn () => new InventoryPricingHistoryRecorder());
     }
 
     /**

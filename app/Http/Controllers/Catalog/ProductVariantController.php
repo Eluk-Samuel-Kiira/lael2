@@ -10,6 +10,7 @@ use App\Models\{ Product, UnitOfMeasure, Tax, Promotion, Recipe, RecipeIngredien
 use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use App\Models\InventoryPricingHistory;
 
 class ProductVariantController extends Controller
 {
@@ -270,12 +271,10 @@ class ProductVariantController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        // Log::info($request->all());
-        // Log::info($id);
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
-        if (!$user->hasPermissionTo('edit variant')) {
+
+        if (! $user->hasPermissionTo('edit variant')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
@@ -283,10 +282,10 @@ class ProductVariantController extends Controller
         }
 
         $productVariant = ProductVariant::where('id', $id)
-                                    ->where('tenant_id', $tenantId)
-                                    ->first();
+            ->where('tenant_id', $tenantId)
+            ->first();
 
-        if (!$productVariant) {
+        if (! $productVariant) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
@@ -295,7 +294,7 @@ class ProductVariantController extends Controller
 
         try {
             $data = $request->validate([
-                'name' => [
+                'name'     => [
                     'required',
                     'max:100',
                     Rule::unique('product_variants')->where(function ($query) use ($tenantId, $id) {
@@ -310,7 +309,7 @@ class ProductVariantController extends Controller
                         $product = Product::where('id', $value)
                                         ->where('tenant_id', $tenantId)
                                         ->first();
-                        if (!$product) {
+                        if (! $product) {
                             $fail('The selected product is invalid.');
                         }
                     }
@@ -333,32 +332,44 @@ class ProductVariantController extends Controller
                                 ->where('id', '!=', $id);
                     }),
                 ],
-                
-                // ✅ NEW COST FIELDS
-                'supplier_cost_price' => 'nullable|numeric|min:0',
-                'total_shipping_cost' => 'nullable|numeric|min:0',
-                'ura_taxes_applied' => 'nullable|numeric|min:0',
-                'additional_expenses' => 'nullable|numeric|min:0',
+
+                // Cost fields
+                'supplier_cost_price'    => 'nullable|numeric|min:0',
+                'total_shipping_cost'    => 'nullable|numeric|min:0',
+                'ura_taxes_applied'      => 'nullable|numeric|min:0',
+                'additional_expenses'    => 'nullable|numeric|min:0',
                 'grand_total_cost_price' => 'nullable|numeric|min:0',
-                
-                // ✅ PRICING FIELDS
-                'selling_price' => 'required|numeric|min:0',
-                'discount_selling_price' => 'nullable|numeric|min:0',
-                
-                // ✅ DISCOUNT & MARKUP
-                'discount_percentage' => 'nullable|numeric|min:0|max:100',
-                'markup_percentage' => 'nullable|numeric|min:0',
-                
+
+                // Pricing
+                'selling_price'          => 'required|numeric|min:0',
+                'discount_selling_price' => [
+                    'nullable',
+                    'numeric',
+                    'min:0',
+                    // ★ Ceiling rule — the discount price can never exceed the selling price
+                    function ($attribute, $value, $fail) use ($request) {
+                        if ($value === null) return;
+                        $selling = (float) $request->input('selling_price', 0);
+                        if ((float) $value > $selling) {
+                            $fail('The discount selling price must be less than or equal to the selling price.');
+                        }
+                    },
+                ],
+
+                // Discount & markup
+                'discount_percentage'    => 'nullable|numeric|min:0|max:100',
+                'markup_percentage'      => 'nullable|numeric|min:0',
+
                 'overal_quantity_at_hand' => 'required|integer|min:0',
-                'weight' => 'required|numeric|min:0',
-                'weight_unit' => [
+                'weight'                  => 'required|numeric|min:0',
+                'weight_unit'             => [
                     'required',
                     'integer',
                     function ($attribute, $value, $fail) use ($tenantId) {
                         $uom = UnitOfMeasure::where('id', $value)
                                         ->where('tenant_id', $tenantId)
                                         ->first();
-                        if (!$uom) {
+                        if (! $uom) {
                             $fail(__('payments.uom_invalid'));
                         }
                     }
@@ -367,39 +378,100 @@ class ProductVariantController extends Controller
 
             $data['created_by'] = $user->id;
 
-            // ✅ Calculate Grand Total Cost Price if not provided
+            // ── Cost — prefer explicit grand_total, else recompute ──
             if (empty($data['grand_total_cost_price']) || $data['grand_total_cost_price'] == 0) {
-                $data['grand_total_cost_price'] = 
-                    ($data['supplier_cost_price'] ?? 0) + 
-                    ($data['total_shipping_cost'] ?? 0) + 
-                    ($data['ura_taxes_applied'] ?? 0) + 
+                $data['grand_total_cost_price'] =
+                    ($data['supplier_cost_price'] ?? 0) +
+                    ($data['total_shipping_cost'] ?? 0) +
+                    ($data['ura_taxes_applied'] ?? 0) +
                     ($data['additional_expenses'] ?? 0);
             }
 
-            // ✅ Set default values for new fields if not provided
-            $data['discount_selling_price'] = $data['discount_selling_price'] ?? $data['selling_price'];
-            $data['discount_percentage'] = $data['discount_percentage'] ?? 0;
-            $data['markup_percentage'] = $data['markup_percentage'] ?? 0;
+            // ── Selling price (required) ──
+            $selling = (float) $data['selling_price'];
 
-            $productVariant->update($data);
+            // ── Discount price: trust the user's value, else keep DB value ──
+            $userSentDiscount = array_key_exists('discount_selling_price', $data)
+                            && $data['discount_selling_price'] !== null;
+
+            $discount = $userSentDiscount
+                ? (float) $data['discount_selling_price']
+                : (float) ($productVariant->discount_selling_price ?? $selling);
+
+            // ★ Ceiling rule (inherited-value path).
+            //   The user's own input was already validated above — the only way
+            //   we reach this branch is if the user edited ONLY the selling
+            //   price and lowered it below the existing discount. In that case,
+            //   silently clamp the discount and log so it's traceable.
+            if ($discount > $selling) {
+                Log::warning('Discount selling price clamped to match lowered selling price', [
+                    'variant_id'        => $productVariant->id,
+                    'requested_selling' => $selling,
+                    'old_discount'      => $discount,
+                    'clamped_discount'  => $selling,
+                ]);
+                $discount = $selling;
+            }
+
+            $data['discount_selling_price'] = $discount;
+
+            // ── Discount percentage — a derived display field ──
+            $data['discount_percentage'] = $selling > 0
+                ? max(0, round((($selling - $discount) / $selling) * 100, 2))
+                : 0;
+
+            // ── Markup ──
+            $cost = (float) ($data['grand_total_cost_price'] ?? 0);
+            if ($cost > 0 && $selling > 0) {
+                $data['markup_percentage'] = (($selling - $cost) / $cost) * 100;
+            } else {
+                $data['markup_percentage'] = 0;
+            }
+
+            // ── Snapshot BEFORE mutation ──
+            $recorder  = app('inventory-pricing-history');
+            $oldValues = $recorder->snapshot($productVariant);
+
+            DB::beginTransaction();
+            try {
+                $productVariant->update($data);
+                $productVariant->refresh();
+
+                $recorder->record(
+                    $productVariant,
+                    $oldValues,
+                    InventoryPricingHistory::CHANGE_UPDATED,
+                    $request->input('pricing_change_reason')
+                );
+
+                DB::commit();
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                throw $e;
+            }
 
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
                 'componentId' => 'reloadVariantComponent',
-                'message' => __('auth._updated'),
-                'redirect' => route('products.show', $data['product_id']),
+                'message'     => __('auth._updated'),
+                'redirect'    => route('products.show', $data['product_id']),
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $e->errors(),
+                'errors'  => $e->errors(),
             ], 422);
-        } catch (\Exception $e) {
-            Log::error('Variant update error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Variant update error: ' . $e->getMessage(), [
+                'variant_id' => $id,
+                'tenant_id'  => $tenantId,
+                'error_type' => get_class($e),
+                'trace'      => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred: ' . $e->getMessage(),
