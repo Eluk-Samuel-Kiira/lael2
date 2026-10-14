@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\{ Auth, DB, Log };
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
+use App\Models\InventoryPricingHistory;
 
 class InventoryItemController extends Controller
 {
@@ -128,6 +129,26 @@ class InventoryItemController extends Controller
             'departments' => $departments,
             'variants' => $variants,
         ]);
+    }
+
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)" — from a resolved item.
+     */
+    private function itemContextLabel(?InventoryItems $item): string
+    {
+        if (!$item) return '';
+        $loc  = $item->itemLocation?->name   ?? "Location #{$item->location_id}";
+        $dept = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+        return " at {$loc} ({$dept})";
     }
 
     /**
@@ -258,15 +279,66 @@ class InventoryItemController extends Controller
                     'overal_quantity_at_hand' => $variant->overal_quantity_at_hand - $data['quantity_allocated'],
                 ]);
 
+            // ─── Gather context ────────────────────────────────────────
+            $actor = $this->actorLabel($user);
+
+            $variantName = $variant->name ?? 'Unknown Item';
+            $variantSku  = $variant->sku  ?? 'N/A';
+
+            $locationName   = Location::find($data['location_id'])?->name   ?? "Location #{$data['location_id']}";
+            $departmentName = Department::find($data['department_id'])?->name ?? "Department #{$data['department_id']}";
+
+            $allocated = (int) $data['quantity_allocated'];
+            $overallBefore = (int) $variant->overal_quantity_at_hand;
+            $overallAfter  = $overallBefore - $allocated;
+
+            // ★ The full audit sentence
+            $narrative = sprintf(
+                '%s created an inventory record for "%s" (SKU %s)%s and allocated %s unit(s) to that branch. '
+                . 'Branch allocation: 0 → %s units. Overall stock: %s → %s units.',
+                $actor,
+                $variantName,
+                $variantSku,
+                " at {$locationName} ({$departmentName})",
+                number_format($allocated),
+                number_format($allocated),
+                number_format($overallBefore),
+                number_format($overallAfter)
+            );
+
+            InventoryAdjustments::create([
+                'inventory_id'    => $inventoryItem->id,
+                'quantity_before' => 0,
+                'quantity_after'  => $allocated,
+                'reason'          => 'inventory_created',
+                'notes'           => $narrative,
+                'created_by'      => $user->id,
+                'tenant_id'       => $tenantId,
+            ]);
+
+            if ($allocated > 0) {
+                InventoryTransactions::create([
+                    'inventory_id'   => $inventoryItem->id,
+                    'quantity'       => $allocated,
+                    'reference_id'   => $variant->id,
+                    'reference_type' => 'inventory_creation',
+                    'type'           => 'transfer_in',
+                    'notes'          => $narrative,
+                    'created_by'     => $user->id,
+                    'tenant_id'      => $tenantId,
+                ]);
+            }
+
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
                 'componentId' => 'reloadItemComponent',
-                'message' => __('auth._created'),
-                'redirect' => route('items.index'),
+                'message'     => __('auth._created')
+                                . " — \"{$variantName}\" allocated to {$locationName} ({$departmentName})",
+                'redirect'    => route('items.index'),
             ]);
 
         } catch (\Exception $e) {
@@ -550,58 +622,107 @@ class InventoryItemController extends Controller
                 throw new \Exception("Insufficient stock available");
             }
 
-            // ─── Get Location and Department Names ────────────────────
-            $locationName = $item->itemLocation ? $item->itemLocation->name : 'Unknown Location';
-            $departmentName = $item->departmentItem ? $item->departmentItem->name : 'Unknown Department';
-            $variantName = $variant->name ?? 'Unknown Variant';
-            $adjustAmount = abs($allocationDiff);
-            
-            // ─── Build Readable Notes ──────────────────────────────────
+            // ─── Gather context ────────────────────────────────────────
+            $actor = $this->actorLabel($user);
+
+            $variantName = $variant->name ?? 'Unknown Item';
+            $variantSku  = $variant->sku  ?? 'N/A';
+
+            $locationName   = $item->itemLocation?->name   ?? "Location #{$item->location_id}";
+            $departmentName = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+
+            $oldAllocated   = (int) $item->quantity_allocated;
+            $newAllocated   = (int) $validated['quantity_allocated'];
+            $allocationDiff = $newAllocated - $oldAllocated;
+            $absDiff        = abs($allocationDiff);
+
+            $overallBefore = (int) $variant->overal_quantity_at_hand;
+            $overallAfter  = $overallBefore - $allocationDiff;
+
+            // ★ The full audit sentence — shape varies by direction
             if ($allocationDiff > 0) {
-                // Allocating MORE to branch (moving from overall to branch)
-                $action = 'Allocated';
-                $directionText = $adjustAmount . ' unit(s) of "' . $variantName . '" from Overall Stock to ' 
-                                . $locationName . ' (' . $departmentName . ')';
+                $narrative = sprintf(
+                    '%s increased branch allocation of "%s" (SKU %s) at %s (%s) by %s unit(s). '
+                    . 'Branch allocation: %s → %s units. Overall stock: %s → %s units. '
+                    . 'Stock moved from Overall into this branch.',
+                    $actor,
+                    $variantName,
+                    $variantSku,
+                    $locationName,
+                    $departmentName,
+                    number_format($absDiff),
+                    number_format($oldAllocated),
+                    number_format($newAllocated),
+                    number_format($overallBefore),
+                    number_format($overallAfter)
+                );
             } elseif ($allocationDiff < 0) {
-                // Returning from branch to overall (reducing branch allocation)
-                $action = 'Returned';
-                $directionText = $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
-                                . $locationName . ' (' . $departmentName . ') back to Overall Stock';
+                $narrative = sprintf(
+                    '%s reduced branch allocation of "%s" (SKU %s) at %s (%s) by %s unit(s). '
+                    . 'Branch allocation: %s → %s units. Overall stock: %s → %s units. '
+                    . 'Stock returned from this branch back into Overall.',
+                    $actor,
+                    $variantName,
+                    $variantSku,
+                    $locationName,
+                    $departmentName,
+                    number_format($absDiff),
+                    number_format($oldAllocated),
+                    number_format($newAllocated),
+                    number_format($overallBefore),
+                    number_format($overallAfter)
+                );
             } else {
-                // No change
-                $action = 'No change';
-                $directionText = 'No allocation change for "' . $variantName . '" at ' 
-                                . $locationName . ' (' . $departmentName . ')';
+                // Metadata-only edit (no allocation change) — still worth recording
+                $narrative = sprintf(
+                    '%s edited the inventory record for "%s" (SKU %s) at %s (%s) — '
+                    . 'no allocation change (still %s unit(s)). Edited fields: %s.',
+                    $actor,
+                    $variantName,
+                    $variantSku,
+                    $locationName,
+                    $departmentName,
+                    number_format($newAllocated),
+                    implode(', ', array_diff(array_keys($validated), ['quantity_allocated']))
+                );
             }
 
-            // ✅ Record adjustment BEFORE updating (audit trail)
+            // Short label for toast
+            $shortNote = $allocationDiff > 0
+                ? "Allocated {$absDiff} × \"{$variantName}\" to {$locationName}"
+                : ($allocationDiff < 0
+                    ? "Returned {$absDiff} × \"{$variantName}\" from {$locationName}"
+                    : "Updated \"{$variantName}\" metadata (no stock change)");
+                    
+
+            // ✅ Record adjustment (audit trail — always written, even for metadata edits)
             InventoryAdjustments::create([
                 'quantity_before' => $oldAllocated,
                 'quantity_after'  => $newAllocated,
-                'reason'          => 'inventory_allocation_update',
-                'notes'           => $directionText,
+                'reason'          => $allocationDiff === 0 ? 'inventory_metadata_update' : 'inventory_allocation_update',
+                'notes'           => $narrative,
                 'inventory_id'    => $item->id,
-                'created_by'      => auth()->id() ?? null,
+                'created_by'      => $user->id,
                 'tenant_id'       => $item->tenant_id,
             ]);
 
             // ✅ Update inventory item
             $item->update($validated);
 
-            // ✅ Update variant stock
-            $variant->overal_quantity_at_hand = $variant->overal_quantity_at_hand - $allocationDiff;
+            // ✅ Update variant overall stock
+            $variant->overal_quantity_at_hand = $overallAfter;
             $variant->save();
 
-            // ✅ Record transaction (movement) ONLY if there's an actual change
-            if ($allocationDiff != 0) {
+            // ✅ Record transaction ONLY if allocation actually moved
+            if ($allocationDiff !== 0) {
                 InventoryTransactions::create([
                     'quantity'       => $allocationDiff,
                     'reference_id'   => $item->id,
                     'reference_type' => 'inventory_item',
                     'type'           => $allocationDiff > 0 ? 'transfer_in' : 'transfer_out',
-                    'notes'          => $directionText,
+                    'notes'          => $narrative,
                     'inventory_id'   => $item->id,
-                    'created_by'     => auth()->id() ?? null,
+                    'created_by'     => $user->id,
                     'tenant_id'      => $item->tenant_id,
                 ]);
             }
@@ -609,12 +730,12 @@ class InventoryItemController extends Controller
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
                 'componentId' => 'reloadItemComponent',
-                'message' => __('auth._updated'),
-                'redirect' => route('items.index'),
+                'message'     => __('auth._updated') . " ({$shortNote})",
+                'redirect'    => route('items.index'),
             ]);
 
         } catch (\Exception $e) {
@@ -637,25 +758,108 @@ class InventoryItemController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $item = InventoryItems::find($id);
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
 
-        $item->delete();
+        if (!$user->hasPermissionTo('delete inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
 
-        return response()->json([
-            'success' => true,
-            'reload' => true,
-            'refresh' => false,
-            'componentId' => 'reloadItemComponent',
-            'message' => __('auth._deleted'),
-            'redirect' => route('items.index'),
-        ]);
+        $item = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+            ->where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        // ─── Refuse to delete a branch row that still has stock ───
+        // Force the user to return stock to Overall first, so we never
+        // silently vaporize inventory. Adjust the guard as your policy dictates.
+        if ((int) $item->quantity_allocated > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This inventory record still holds '
+                        . $item->quantity_allocated
+                        . ' unit(s). Return them to Overall Stock before deleting.',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $actor = $this->actorLabel($user);
+
+            $variantName = $item->variant?->name ?? 'Unknown Item';
+            $variantSku  = $item->variant?->sku  ?? 'N/A';
+
+            $locationName   = $item->itemLocation?->name   ?? "Location #{$item->location_id}";
+            $departmentName = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+
+            $narrative = sprintf(
+                '%s deleted the inventory record for "%s" (SKU %s) at %s (%s). '
+                . 'The record held %s unit(s) at the time of deletion (all returned previously). '
+                . 'Overall stock is unchanged.',
+                $actor,
+                $variantName,
+                $variantSku,
+                $locationName,
+                $departmentName,
+                number_format((int) $item->quantity_allocated)
+            );
+
+            // Write the audit row BEFORE deleting, so the FK still resolves
+            InventoryAdjustments::create([
+                'inventory_id'    => $item->id,
+                'quantity_before' => (int) $item->quantity_allocated,
+                'quantity_after'  => 0,
+                'reason'          => 'inventory_record_deleted',
+                'notes'           => $narrative,
+                'created_by'      => $user->id,
+                'tenant_id'       => $item->tenant_id,
+            ]);
+
+            $item->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
+                'componentId' => 'reloadItemComponent',
+                'message'     => __('auth._deleted') . " ({$variantName} at {$locationName})",
+                'redirect'    => route('items.index'),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Inventory item deletion failed', [
+                'item_id'   => $id,
+                'tenant_id' => $tenantId,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.delete_failed') . ': ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
 
 
-        /**
+    /**
      * Return the resolved pricing for one inventory item.
      *
      * Cascade:
@@ -769,18 +973,19 @@ class InventoryItemController extends Controller
         $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
-        if (! $user->hasPermissionTo('edit inventory')) {
+        if (!$user->hasPermissionTo('edit inventory')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
             ], 403);
         }
 
-        $item = InventoryItems::where('id', $id)
+        $item = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+            ->where('id', $id)
             ->where('tenant_id', $tenantId)
             ->first();
 
-        if (! $item) {
+        if (!$item) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth._not_found'),
@@ -788,20 +993,28 @@ class InventoryItemController extends Controller
         }
 
         $validated = $request->validate([
-            'has_custom_pricing'     => 'required|boolean',
-            'supplier_cost_price'    => 'nullable|numeric|min:0',
-            'total_shipping_cost'    => 'nullable|numeric|min:0',
-            'ura_taxes_applied'      => 'nullable|numeric|min:0',
-            'additional_expenses'    => 'nullable|numeric|min:0',
-            'selling_price'          => 'nullable|numeric|min:0',
-            'discount_percentage'    => 'nullable|numeric|min:0|max:100',
+            'has_custom_pricing'  => 'required|boolean',
+            'supplier_cost_price' => 'nullable|numeric|min:0',
+            'total_shipping_cost' => 'nullable|numeric|min:0',
+            'ura_taxes_applied'   => 'nullable|numeric|min:0',
+            'additional_expenses' => 'nullable|numeric|min:0',
+            'selling_price'       => 'nullable|numeric|min:0',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'reason'              => 'nullable|string|max:191',
         ]);
+
+        $recorder = app('inventory-pricing-history');
+
+        // ── Snapshot BEFORE any mutation ──────────────────────────
+        $oldValues = $recorder->snapshot($item);
+        $hadCustomBefore = (bool) $item->has_custom_pricing;
 
         DB::beginTransaction();
 
         try {
+            // ── Determine which change type this is ────────────────
             if (! $validated['has_custom_pricing']) {
-                // ★ Turn off — clear all override columns, revert to variant
+                // ★ Turning OFF — clear every override, revert to variant
                 $item->fill([
                     'has_custom_pricing'     => 0,
                     'supplier_cost_price'    => null,
@@ -817,6 +1030,17 @@ class InventoryItemController extends Controller
                 ]);
                 $item->save();
 
+                // Record history ONLY if it was on before — turning off
+                // an already-off item is a no-op.
+                if ($hadCustomBefore) {
+                    $recorder->record(
+                        $item,
+                        $oldValues,
+                        InventoryPricingHistory::CHANGE_DISABLED,
+                        $validated['reason'] ?? null
+                    );
+                }
+
                 DB::commit();
 
                 return response()->json([
@@ -826,7 +1050,7 @@ class InventoryItemController extends Controller
                 ]);
             }
 
-            // ★ Turn on (or update) — write the override values
+            // ★ Turning ON (or already ON and being updated)
             $item->fill([
                 'supplier_cost_price' => $validated['supplier_cost_price'] ?? null,
                 'total_shipping_cost' => $validated['total_shipping_cost'] ?? null,
@@ -840,11 +1064,11 @@ class InventoryItemController extends Controller
 
             // Recompute grand_total_cost_price from components
             $item->grand_total_cost_price = (float) ($item->supplier_cost_price ?? 0)
-                                          + (float) ($item->total_shipping_cost ?? 0)
-                                          + (float) ($item->ura_taxes_applied   ?? 0)
-                                          + (float) ($item->additional_expenses ?? 0);
+                                        + (float) ($item->total_shipping_cost ?? 0)
+                                        + (float) ($item->ura_taxes_applied   ?? 0)
+                                        + (float) ($item->additional_expenses ?? 0);
 
-            // Recompute discount_selling_price from selling price and %
+            // Recompute discount_selling_price
             if ($item->selling_price !== null) {
                 $item->discount_selling_price = ($item->discount_percentage > 0)
                     ? $item->selling_price - (($item->selling_price * (float) $item->discount_percentage) / 100)
@@ -860,12 +1084,27 @@ class InventoryItemController extends Controller
 
             $item->save();
 
+            // ★ Record history — pick ENABLED if it wasn't custom before,
+            //   otherwise UPDATED.
+            $changeType = $hadCustomBefore
+                ? InventoryPricingHistory::CHANGE_UPDATED
+                : InventoryPricingHistory::CHANGE_ENABLED;
+
+            $recorder->record(
+                $item,
+                $oldValues,
+                $changeType,
+                $validated['reason'] ?? null
+            );
+
             DB::commit();
 
             return response()->json([
                 'success' => true,
                 'reload'  => true,
-                'message' => __('passwords.custom_pricing_updated'),
+                'message' => $hadCustomBefore
+                    ? __('passwords.custom_pricing_updated')
+                    : __('passwords.custom_pricing_enabled'),
                 'data'    => [
                     'grand_total_cost_price' => $item->grand_total_cost_price,
                     'selling_price'          => $item->selling_price,

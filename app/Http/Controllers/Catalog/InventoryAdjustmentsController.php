@@ -241,67 +241,83 @@ class InventoryAdjustmentsController extends Controller
             ], 422);
         }
 
-        // ✅ Additional check: Ensure overall stock doesn't go negative
-        $newOverallQuantity = $item->variant->overal_quantity_at_hand;
-        if ($validated['adjust_amount'] > 0) {
-            $newOverallQuantity = $item->variant->overal_quantity_at_hand - $validated['adjust_amount'];
-        } else {
-            $newOverallQuantity = $item->variant->overal_quantity_at_hand + abs($validated['adjust_amount']);
-        }
-        
-        if ($newOverallQuantity < 0) {
+        // Capture BEFORE mutation
+        $beforeOverall = (int) $item->variant->overal_quantity_at_hand;
+
+        // Compute AFTER
+        $afterOverall = $validated['adjust_amount'] > 0
+            ? $beforeOverall - (int) $validated['adjust_amount']   // inbound to branch ⇒ drain overall
+            : $beforeOverall + (int) abs($validated['adjust_amount']); // outbound from branch ⇒ refund overall
+
+        if ($afterOverall < 0) {
             return response()->json([
                 'success' => false,
                 'message' => __('pagination.overall_stock_cannot_be_negative'),
-                'errors' => [
-                    'adjust_amount' => [__('pagination.overall_stock_cannot_be_negative')]
-                ]
+                'errors'  => ['adjust_amount' => [__('pagination.overall_stock_cannot_be_negative')]],
             ], 422);
         }
+
+
 
         // Start transaction
         DB::beginTransaction();
 
         try {
-            // Update inventory item quantity with calculated value
-            $item->update([
-                'quantity_allocated' => (int) $validated['new_quantity']
-            ]);
 
-            // Update variant overall quantity
-            $item->variant->overal_quantity_at_hand = max(0, $newOverallQuantity);
+            $item->update(['quantity_allocated' => (int) $validated['new_quantity']]);
+            $item->variant->overal_quantity_at_hand = max(0, $afterOverall);
             $item->variant->save();
 
-            // ─── Get Location and Department Names ────────────────────
-            $locationName = $item->itemLocation ? $item->itemLocation->name : 'Unknown Location';
-            $departmentName = $item->departmentItem ? $item->departmentItem->name : 'Unknown Department';
-            $variantName = $item->variant->name ?? 'Unknown Variant';
-            
-            // ─── Determine Direction and Build Readable Note ──────────
-            $adjustAmount = abs($validated['adjust_amount']);
-            $direction = $validated['adjust_amount'] > 0 ? 'inbound' : 'outbound';
-            
-            // ✅ Build readable sentence
-            if ($validated['adjust_amount'] > 0) {
-                // Moving FROM overall stock TO branch
-                $action = 'Moved';
-                $directionText = 'from Overall Stock to ' . $locationName . ' (' . $departmentName . ')';
-            } else {
-                // Moving FROM branch back TO overall stock
-                $action = 'Returned';
-                $directionText = 'from ' . $locationName . ' (' . $departmentName . ') back to Overall Stock';
-            }
-            
-            $readableNote = $action . ' ' . $adjustAmount . ' unit(s) of "' . $variantName . '" ' . $directionText;
+            // ─── Gather context ────────────────────────────────────────
+            $actor          = $this->actorLabel($user);
+            $variantName    = $item->variant->name ?? 'Unknown Item';
+            $variantSku     = $item->variant->sku  ?? 'N/A';
+            $locationName   = $item->itemLocation?->name   ?? "Location #{$item->location_id}";
+            $departmentName = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+
+            $adjustAmount = (int) abs($validated['adjust_amount']);
+            $isInbound    = $validated['adjust_amount'] > 0;
+
+            $beforeAllocated = (int) $validated['current_quantity'];
+            $afterAllocated  = (int) $validated['new_quantity'];
+
+            $beforeOverall   = (int) $item->variant->overall_quantity_at_hand
+                                + ($isInbound ? $adjustAmount : -$adjustAmount); // original before mutation
+            $afterOverall    = (int) $item->variant->overal_quantity_at_hand;    // already saved above
+
+            $action  = $isInbound ? 'moved' : 'returned';
+            $flowTxt = $isInbound
+                ? "from Overall Stock into {$locationName} ({$departmentName})"
+                : "from {$locationName} ({$departmentName}) back into Overall Stock";
+
+            // ★ The full audit sentence
+            $narrative = sprintf(
+                '%s %s %s unit(s) of "%s" (SKU %s) %s. '
+                . 'Branch allocation: %s → %s units. Overall stock: %s → %s units.',
+                $actor,
+                $action,
+                number_format($adjustAmount),
+                $variantName,
+                $variantSku,
+                $flowTxt,
+                number_format($beforeAllocated),
+                number_format($afterAllocated),
+                number_format($beforeOverall),
+                number_format($afterOverall)
+            );
+
+            // Short label for the response message (used in the toast)
+            $shortNote = ucfirst($action) . " {$adjustAmount} × \"{$variantName}\" {$flowTxt}";
+
 
             // ✅ Record adjustment (audit trail)
             InventoryAdjustments::create([
                 'quantity_before' => (int) $validated['current_quantity'],
                 'quantity_after'  => (int) $validated['new_quantity'],
                 'reason'          => 'stock_adjustment',
-                'notes'           => $readableNote,
+                'notes'           => $narrative,
                 'inventory_id'    => $item->id,
-                'created_by'      => auth()->id() ?? null,
+                'created_by'      => $user->id,
                 'tenant_id'       => $item->tenant_id,
             ]);
 
@@ -311,21 +327,21 @@ class InventoryAdjustmentsController extends Controller
                 'reference_id'   => $item->id,
                 'reference_type' => 'adjustment',
                 'type'           => 'adjustment',
-                'notes'          => $readableNote,
+                'notes'          => $narrative,
                 'inventory_id'   => $item->id,
-                'created_by'     => auth()->id() ?? null,
+                'created_by'     => $user->id, 
                 'tenant_id'      => $item->tenant_id,
             ]);
 
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
                 'componentId' => 'reloadStockComponent',
-                'message' => __('passwords._stock_adjusted') . ' (' . $adjustAmount . ' units ' . strtolower($directionText) . ')',
-                'redirect' => route('stocks.index'),
+                'message'     => __('passwords._stock_adjusted') . " ({$shortNote})",
+                'redirect'    => route('stocks.index'),
             ]);
 
         } catch (\Exception $e) {
@@ -370,6 +386,7 @@ class InventoryAdjustmentsController extends Controller
             ]);
         }
         
+        DB::beginTransaction();
         try {
             // ✅ Validate the essential fields
             $validated = $request->validate([
@@ -486,20 +503,69 @@ class InventoryAdjustmentsController extends Controller
                 ]);
             }
 
-            // ─── Get Names for Readable Notes ──────────────────────────
-            $sourceLocationName = $sourceItem->itemLocation ? $sourceItem->itemLocation->name : 'Unknown Location';
-            $sourceDepartmentName = $sourceItem->departmentItem ? $sourceItem->departmentItem->name : 'Unknown Department';
-            $targetLocationName = $targetLocation->name;
+            // ─── Gather context ────────────────────────────────────────
+            $actor = $this->actorLabel($user);
+
+            $variantName = $sourceItem->variant?->name ?? 'Unknown Item';
+            $variantSku  = $sourceItem->variant?->sku  ?? 'N/A';
+
+            $sourceLocationName   = $sourceItem->itemLocation?->name   ?? "Location #{$sourceItem->location_id}";
+            $sourceDepartmentName = $sourceItem->departmentItem?->name ?? "Department #{$sourceItem->department_id}";
+            $targetLocationName   = $targetLocation->name;
             $targetDepartmentName = $targetDepartment->name;
-            $variantName = $sourceItem->variant ? $sourceItem->variant->name : 'Unknown Variant';
 
-            // ─── Build Readable Transfer Notes ─────────────────────────
-            $transferNote = 'Transferred ' . $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
-                            . $sourceLocationName . ' (' . $sourceDepartmentName . ') to ' 
-                            . $targetLocationName . ' (' . $targetDepartmentName . ')';
+            // ✅ Update target stock
+            $targetBefore = (int) $targetItem->quantity_allocated;
+            $targetItem->quantity_allocated += $adjustAmount;
+            $targetItem->save();
+            $targetAfter = (int) $targetItem->quantity_allocated;
 
-            $receivedNote = 'Received ' . $adjustAmount . ' unit(s) of "' . $variantName . '" from ' 
-                            . $sourceLocationName . ' (' . $sourceDepartmentName . ')';
+            // ✅ Update source stock
+            $sourceBefore = (int) $sourceItem->quantity_allocated;
+            $sourceItem->quantity_allocated -= $adjustAmount;
+            $sourceItem->save();
+            $sourceAfter = (int) $sourceItem->quantity_allocated;
+
+            // ─── The two sides of the story ────────────────────────────
+            $sharedHeader = sprintf(
+                '%s transferred %s unit(s) of "%s" (SKU %s)',
+                $actor,
+                number_format($adjustAmount),
+                $variantName,
+                $variantSku
+            );
+
+            $fromTo = sprintf(
+                'from %s (%s) to %s (%s)',
+                $sourceLocationName,
+                $sourceDepartmentName,
+                $targetLocationName,
+                $targetDepartmentName
+            );
+
+            // ★ Source side: sending
+            $transferNarrative = sprintf(
+                '%s %s. Source branch stock: %s → %s units. '
+                . 'The stock now belongs to %s (%s).',
+                $sharedHeader,
+                $fromTo,
+                number_format($sourceBefore),
+                number_format($sourceAfter),
+                $targetLocationName,
+                $targetDepartmentName
+            );
+
+            // ★ Target side: receiving
+            $receivedNarrative = sprintf(
+                '%s %s. Receiving branch stock: %s → %s units. '
+                . 'The stock came from %s (%s).',
+                $sharedHeader,
+                $fromTo,
+                number_format($targetBefore),
+                number_format($targetAfter),
+                $sourceLocationName,
+                $sourceDepartmentName
+            );
 
             // ✅ Update target stock
             $targetBefore = $targetItem->quantity_allocated;
@@ -513,51 +579,57 @@ class InventoryAdjustmentsController extends Controller
             $sourceItem->save();
             $sourceAfter = $sourceItem->quantity_allocated;
 
-            Log::info("Source: $sourceBefore → $sourceAfter, Target: $targetBefore → $targetAfter");
+            // Log::info("Source: $sourceBefore → $sourceAfter, Target: $targetBefore → $targetAfter");
 
-            // ✅ Log adjustments
+            // ✅ Source adjustment
             InventoryAdjustments::create([
                 'inventory_id'    => $sourceItem->id,
                 'quantity_before' => $sourceBefore,
                 'quantity_after'  => $sourceAfter,
                 'reason'          => 'stock_transfer',
-                'notes'           => $transferNote,
-                'created_by'      => auth()->id() ?? null,
+                'notes'           => $transferNarrative,
+                'created_by'      => $user->id,
                 'tenant_id'       => $sourceItem->tenant_id,
             ]);
 
+            // ✅ Target adjustment
             InventoryAdjustments::create([
                 'inventory_id'    => $targetItem->id,
                 'quantity_before' => $targetBefore,
                 'quantity_after'  => $targetAfter,
                 'reason'          => 'stock_transfer',
-                'notes'           => $receivedNote,
-                'created_by'      => auth()->id() ?? null,
+                'notes'           => $receivedNarrative,
+                'created_by'      => $user->id,
                 'tenant_id'       => $targetItem->tenant_id,
             ]);
 
-            // ✅ Log transactions
+            // ✅ Source transaction (money OUT)
             InventoryTransactions::create([
                 'inventory_id'   => $sourceItem->id,
                 'quantity'       => -$adjustAmount,
                 'reference_id'   => $targetItem->id,
                 'reference_type' => 'transfer',
                 'type'           => 'transfer_out',
-                'notes'          => $transferNote,
-                'created_by'     => auth()->id() ?? null,
+                'notes'          => $transferNarrative,
+                'created_by'     => $user->id,
                 'tenant_id'      => $sourceItem->tenant_id,
+
+                
             ]);
 
+            // ✅ Target transaction (money IN)
             InventoryTransactions::create([
                 'inventory_id'   => $targetItem->id,
                 'quantity'       => $adjustAmount,
                 'reference_id'   => $sourceItem->id,
                 'reference_type' => 'transfer',
                 'type'           => 'transfer_in',
-                'notes'          => $receivedNote,
-                'created_by'     => auth()->id() ?? null,
+                'notes'          => $receivedNarrative,
+                'created_by'     => $user->id,
                 'tenant_id'      => $targetItem->tenant_id,
             ]);
+
+            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -569,6 +641,7 @@ class InventoryAdjustmentsController extends Controller
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
             Log::error('Validation errors:', $e->errors());
             return response()->json([
                 'success' => false,
@@ -584,4 +657,24 @@ class InventoryAdjustmentsController extends Controller
         }
     }
     
+
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)" — from a resolved item.
+     */
+    private function itemContextLabel(?InventoryItems $item): string
+    {
+        if (!$item) return '';
+        $loc  = $item->itemLocation?->name   ?? "Location #{$item->location_id}";
+        $dept = $item->departmentItem?->name ?? "Department #{$item->department_id}";
+        return " at {$loc} ({$dept})";
+    }
 }

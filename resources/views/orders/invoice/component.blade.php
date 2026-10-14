@@ -132,30 +132,56 @@
                                     "
                                     onchange="updateInvoiceStatus({{ $invoice->id }}, this.value)"
                                     @cannot('edit invoice') disabled @endcannot>
-                                    <option value="draft" {{ $invoice->status == 'draft' ? 'selected' : '' }} style="background-color: #e9ecef; color: #495057; padding: 5px;">
-                                        📄 {{__('payments.draft')}}
-                                    </option>
-                                    <option value="sent" {{ $invoice->status == 'sent' ? 'selected' : '' }} style="background-color: #cce5ff; color: #004085; padding: 5px;">
-                                        📨 {{__('payments.sent')}}
-                                    </option>
-                                    <option value="viewed" {{ $invoice->status == 'viewed' ? 'selected' : '' }} style="background-color: #cce5ff; color: #004085; padding: 5px;">
-                                        👁️ {{__('payments.viewed')}}
-                                    </option>
-                                    <option value="partially_paid" {{ $invoice->status == 'partially_paid' ? 'selected' : '' }} style="background-color: #fff3cd; color: #856404; padding: 5px;">
-                                        💳 {{__('payments.partially_paid')}}
-                                    </option>
-                                    <option value="paid" {{ $invoice->status == 'paid' ? 'selected' : '' }} style="background-color: #d4edda; color: #155724; padding: 5px;">
-                                        ✅ {{__('payments.paid')}}
-                                    </option>
-                                    <option value="overdue" {{ $invoice->status == 'overdue' ? 'selected' : '' }} style="background-color: #f8d7da; color: #721c24; padding: 5px;">
-                                        ⚠️ {{__('payments.overdue')}}
-                                    </option>
-                                    <option value="void" {{ $invoice->status == 'void' ? 'selected' : '' }} style="background-color: #e2e3e5; color: #383d41; padding: 5px;">
-                                        🚫 {{__('payments.void')}}
-                                    </option>
-                                    <option value="cancelled" {{ $invoice->status == 'cancelled' ? 'selected' : '' }} style="background-color: #f8d7da; color: #721c24; padding: 5px;">
-                                        ❌ {{__('payments.cancelled')}}
-                                    </option>
+
+                                    @php
+                                        // 'sent' and 'viewed' are event-driven — set by the send() endpoint
+                                        // and the public-view tracker. They are NOT user-selectable.
+                                        $isPayable = in_array($invoice->status, ['sent', 'viewed', 'partially_paid', 'overdue'], true);
+                                        $isEventDriven = in_array($invoice->status, ['sent', 'viewed'], true);
+                                    @endphp
+
+                                    {{-- If the invoice is currently 'sent' or 'viewed', render a locked
+                                        placeholder so the select has something to display. It is not
+                                        an editable target — picking anything else replaces it. --}}
+                                    @if ($isEventDriven)
+                                        <option value="{{ $invoice->status }}" selected disabled
+                                                style="background-color: #cce5ff; color: #004085; padding: 5px;">
+                                            @if ($invoice->status === 'sent')
+                                                📨 {{__('payments.sent')}} (set by send action)
+                                            @else
+                                                👁️ {{__('payments.viewed')}} (set by customer view)
+                                            @endif
+                                        </option>
+                                    @endif
+
+                                    {{-- Only show 'draft' if we're still a draft --}}
+                                    @if ($invoice->status === 'draft')
+                                        <option value="draft" selected
+                                                style="background-color: #e9ecef; color: #495057; padding: 5px;">
+                                            📄 {{__('payments.draft')}}
+                                        </option>
+                                    @endif
+
+                                    {{-- Payment statuses ONLY after the invoice has been sent --}}
+                                    @if ($isPayable || $invoice->status === 'paid')
+                                        <option value="partially_paid" {{ $invoice->status == 'partially_paid' ? 'selected' : '' }}
+                                                style="background-color: #fff3cd; color: #856404; padding: 5px;">
+                                            💳 {{__('payments.partially_paid')}}
+                                        </option>
+
+                                        <option value="paid" {{ $invoice->status == 'paid' ? 'selected' : '' }}
+                                                style="background-color: #d4edda; color: #155724; padding: 5px;">
+                                            ✅ {{__('payments.paid')}}
+                                        </option>
+                                    @endif
+
+                                    {{-- 'overdue' only makes sense once the invoice is out in the wild --}}
+                                    @if ($isPayable)
+                                        <option value="overdue" {{ $invoice->status == 'overdue' ? 'selected' : '' }}
+                                                style="background-color: #f8d7da; color: #721c24; padding: 5px;">
+                                            ⚠️ {{__('payments.overdue')}}
+                                        </option>
+                                    @endif
                                 </select>
                             </td>
                             <td>
@@ -204,7 +230,7 @@
                                         @endif
                                     @endcan
                                     @can('record invoice payment')
-                                        @if(!in_array($invoice->status, ['void', 'paid', 'cancelled', 'draft']))
+                                        @if($invoice->isPayable())
                                             <button type="button"
                                                 class="btn btn-sm btn-icon btn-light-success"
                                                 data-bs-toggle="modal"

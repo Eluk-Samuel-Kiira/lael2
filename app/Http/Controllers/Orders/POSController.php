@@ -662,6 +662,36 @@ class POSController extends Controller
         ]);
     }
 
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function posActorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)" from an order.
+     */
+    private function posContextLabel(?Order $order): string
+    {
+        if (!$order) return '';
+        $loc  = $order->location?->name   ?? 'Unknown Location';
+        $dept = $order->department?->name ?? 'Unknown Department';
+        return " at {$loc} ({$dept})";
+    }
+
+    /**
+     * Sentence fragment: "at Main Store (Sales)" from an inventory row.
+     */
+    private function posContextLabelFromInventory(?InventoryItems $inventory): string
+    {
+        if (!$inventory) return '';
+        $loc  = $inventory->itemLocation?->name   ?? "Location #{$inventory->location_id}";
+        $dept = $inventory->departmentItem?->name ?? "Department #{$inventory->department_id}";
+        return " at {$loc} ({$dept})";
+    }
     
     /**
      * Resolve the location_id for a given department.
@@ -1883,26 +1913,49 @@ class POSController extends Controller
     private function recordOrderPaymentTransaction($order, $paymentMethod, $amount, $paymentDetails = []): void
     {
         try {
+            $actor        = $this->posActorLabel();
+            $customerName = $order->customer_name
+                ?? ($order->customer_id ? optional(Customer::find($order->customer_id))->first_name . ' ' . optional(Customer::find($order->customer_id))->last_name : null)
+                ?? 'walk-in customer';
+            $context      = $this->posContextLabel($order);
+            $currency     = $paymentMethod->currency->code ?? 'UGX';
+            $methodName   = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
+
+            $amountStr = number_format((float) $amount, 2) . ' ' . $currency;
+
+            $narrative = "{$actor} received {$amountStr} from {$customerName} "
+                . "via {$methodName} for order {$order->order_number}{$context}. "
+                . "Order total: " . number_format((float) $order->total, 2) . " {$currency}. "
+                . "Payment recorded as DEPOSIT into {$methodName}.";
+
             $transactionData = [
-                'tenant_id' => $order->tenant_id,
-                'user_id' => auth()->id(),
-                'payment_method_id' => $paymentMethod->id,
-                'transaction_type' => 'DEPOSIT', 
+                'tenant_id'            => $order->tenant_id,
+                'user_id'              => auth()->id(),
+                'payment_method_id'    => $paymentMethod->id,
+                'transaction_type'     => 'DEPOSIT',
                 'transaction_category' => 'ORDER',
-                'amount' => $amount,
-                'currency_id' => $paymentMethod->currency_id ?? Currency::default()->id,
-                'reference_table' => 'orders',
-                'reference_id' => $order->id,
-                'description' => 'POS Sale - Order #' . $order->order_number,
-                'notes' => 'Payment received for order',
+                'amount'               => $amount,
+                'currency_id'          => $paymentMethod->currency_id ?? Currency::default()->id,
+                'reference_table'      => 'orders',
+                'reference_id'         => $order->id,
+
+                // Explicit, sentence-shaped description
+                'description' => $narrative,
+
+                // Short human-readable tag for the ledger list
+                'notes' => "POS sale — {$methodName} deposit",
+
                 'metadata' => [
-                    'order_number' => $order->order_number,
-                    'customer_id' => $order->customer_id,
-                    'customer_name' => $order->customer?->name,
-                    'items_count' => $order->items()->count(),
-                    'payment_type' => $paymentMethod->type,
-                    'payment_details' => $paymentDetails,
-                    'transaction_nature' => 'SALE_RECEIPT', // Indicates this is money received from sales
+                    'order_number'       => $order->order_number,
+                    'customer_id'        => $order->customer_id,
+                    'customer_name'      => $customerName,
+                    'items_count'        => $order->items()->count(),
+                    'payment_type'       => $paymentMethod->type,
+                    'payment_details'    => $paymentDetails,
+                    'transaction_nature' => 'SALE_RECEIPT',
+                    'recorded_by'        => $actor,
+                    'recorded_at'        => now()->toIso8601String(),
+                    'narrative'          => $narrative,
                 ],
             ];
 
@@ -2002,6 +2055,25 @@ class POSController extends Controller
             // ✅ Set balance_before and balance_after to SAME value
             $currentBalance = $paymentMethod->current_balance;
 
+            $actor        = $this->posActorLabel();
+            $customerName = $order->customer_name
+                ?? ($order->customer_id ? optional(Customer::find($order->customer_id))->first_name . ' ' . optional(Customer::find($order->customer_id))->last_name : null)
+                ?? 'walk-in customer';
+            $context      = $this->posContextLabel($order);
+
+            $promoCount = count($itemPromotions);
+            $promoNames = collect($itemPromotions)
+                ->flatMap(fn($p) => collect($p['promotions'])->pluck('name'))
+                ->unique()->take(3)->implode(', ');
+
+            $narrative = "{$actor} applied " . number_format((float) $discountAmount, 2)
+                . " in promotions across {$promoCount} line item(s) "
+                . ($promoNames ? "({$promoNames}) " : '')
+                . "for {$customerName} on order {$order->order_number}{$context}. "
+                . "Final total: " . number_format((float) $order->total, 2) . ". "
+                . "Recorded as ADJUSTMENT — no cash movement.";
+
+
             $transactionData = [
                 'tenant_id' => $order->tenant_id,
                 'user_id' => auth()->id(),
@@ -2012,8 +2084,8 @@ class POSController extends Controller
                 'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
                 'reference_table' => 'orders',
                 'reference_id' => $order->id,
-                'description' => 'Promotion/Discount - Order #' . $order->order_number,
-                'notes' => 'Revenue reduction from applied promotions and item discounts',
+                'description' => $narrative,
+                'notes'       => "Promotion discount — no balance effect.",
                 // ✅ CRITICAL: Same balance before and after = NO EFFECT
                 'balance_before' => $currentBalance,
                 'balance_after' => $currentBalance, // No change!
@@ -2031,7 +2103,8 @@ class POSController extends Controller
                     'items_with_promotions' => $itemPromotions,
                     'is_discount' => true,
                     'discount_category' => 'promotion',
-                    'balance_effect' => 'none',  // ✅ Explicitly mark no balance effect
+                    'balance_effect' => 'none',  
+                    'narrative' => $narrative,
                 ],
             ];
 
@@ -2074,6 +2147,20 @@ class POSController extends Controller
             // This ensures NO balance effect
             $currentBalance = $paymentMethod->current_balance;
 
+            $actor        = $this->posActorLabel();
+            $customerName = $order->customer_name
+                ?? ($order->customer_id ? optional(Customer::find($order->customer_id))->first_name . ' ' . optional(Customer::find($order->customer_id))->last_name : null)
+                ?? 'walk-in customer';
+            $context      = $this->posContextLabel($order);
+            $discount     = (float) $order->bargain_discount_applied;
+
+            $narrative = "{$actor} granted a bargain discount of "
+                . number_format($discount, 2) . " to {$customerName} on order "
+                . "{$order->order_number}{$context}. "
+                . "Pre-discount subtotal: " . number_format((float) $order->subtotal_before_bargain, 2) . ". "
+                . "Final total after discount: " . number_format((float) $order->total, 2) . ". "
+                . "Recorded as ADJUSTMENT — no cash movement.";
+
             $transactionData = [
                 'tenant_id' => $order->tenant_id,
                 'user_id' => auth()->id(),
@@ -2084,8 +2171,8 @@ class POSController extends Controller
                 'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
                 'reference_table' => 'orders',
                 'reference_id' => $order->id,
-                'description' => 'Bargain Discount - Order #' . $order->order_number,
-                'notes' => 'Negotiated discount given to customer',
+                'description' => $narrative,
+                'notes'       => "Bargain discount — no balance effect. Reason: negotiated price.",
                 // ✅ CRITICAL: Same balance before and after = NO EFFECT
                 'balance_before' => $currentBalance,
                 'balance_after' => $currentBalance, // No change!
@@ -2102,7 +2189,9 @@ class POSController extends Controller
                     'processed_by_name' => auth()->user()->name,
                     'is_discount' => true,
                     'discount_category' => 'bargain',
-                    'balance_effect' => 'none',  // ✅ Explicitly mark no balance effect
+                    'balance_effect' => 'none',
+                    'narrative' => $narrative,
+                    'reason'    => 'Negotiated at POS counter',
                 ],
             ];
 
@@ -2294,6 +2383,15 @@ class POSController extends Controller
         // Resolve pricing snapshot
         $pricing = $this->resolveLogPricing(null, $variant);
 
+        $actor        = $this->posActorLabel();
+        $customerName = $order->customer_name ?? 'walk-in customer';
+        $context      = $this->posContextLabel($order);
+
+        $narrative = "{$actor} sold {$item->quantity} × \"{$variant->name}\" "
+            . "(SKU " . ($variant->sku ?? 'N/A') . ") to {$customerName} on order "
+            . "{$order->order_number} — {$before} → {$after} units in the single-shop "
+            . "pool{$context}.";
+
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
             'order_id'        => $order->id,
@@ -2303,10 +2401,9 @@ class POSController extends Controller
             'quantity_after'  => $after,
             'quantity_change' => -$item->quantity,
             'reason'          => 'pos_sale',
-            'notes'           => "POS sale - Order #{$order->order_number}",
+            'notes'           => $narrative,
             'source'          => 'pos',
 
-            // ★ Frozen pricing at the moment of the sale
             'unit_cost_price'     => $pricing['cost'],
             'unit_selling_price'  => $pricing['selling'],
             'total_cost_value'    => -$item->quantity * $pricing['cost'],
@@ -2376,7 +2473,15 @@ class POSController extends Controller
             }
             $batch->save();
 
-            // Log
+            $actor        = $this->posActorLabel();
+            $customerName = $order->customer_name ?? 'walk-in customer';
+            $context      = $this->posContextLabel($order);
+
+            $narrative = "{$actor} sold {$quantityNeeded} × \"{$variant->name}\" "
+                . "(SKU " . ($variant->sku ?? 'N/A') . ") from batch {$batch->batch_number} "
+                . "to {$customerName} on order {$order->order_number} — batch stock "
+                . "{$beforeQty} → {$afterQty} units{$context}.";
+
             BatchLog::create([
                 'batch_id'        => $batch->id,
                 'batch_number'    => $batch->batch_number,
@@ -2388,7 +2493,6 @@ class POSController extends Controller
                 'quantity_before' => $beforeQty,
                 'quantity_after'  => $afterQty,
 
-                // ★ frozen pricing
                 'unit_cost'           => $pricing['cost'],
                 'total_cost'          => -$quantityNeeded * $pricing['cost'],
                 'unit_selling_price'  => $pricing['selling'],
@@ -2408,8 +2512,9 @@ class POSController extends Controller
                     'strategy'      => 'batch',
                     'mode'          => 'specific',
                     'item_name'     => $item->name ?? $variant->name,
-                    'customer_name' => $order->customer_name,
+                    'customer_name' => $customerName,
                     'unit_price'    => $item->price ?? 0,
+                    'narrative'     => $narrative,   // ← story travels with the row
                 ],
             ]);
 
@@ -2474,6 +2579,11 @@ class POSController extends Controller
             }
             $batch->save();
 
+            $narrative = "{$actor} sold {$deduct} × \"{$variant->name}\" "
+                . "(SKU " . ($variant->sku ?? 'N/A') . ") from batch {$batch->batch_number} "
+                . "(FIFO) to {$customerName} on order {$order->order_number} — batch stock "
+                . "{$beforeQty} → {$afterQty} units{$context}.";
+
             // Log this partial depletion
             BatchLog::create([
                 'batch_id'        => $batch->id,
@@ -2507,6 +2617,7 @@ class POSController extends Controller
                     'item_name'     => $item->name ?? $variant->name,
                     'customer_name' => $order->customer_name,
                     'unit_price'    => $item->price ?? 0,
+                    'narrative'     => $narrative,
                 ],
             ]);
 
@@ -2670,17 +2781,24 @@ class POSController extends Controller
         // Resolve pricing from the inventory row (authoritative), fall back to variant
         $pricing = $this->resolveLogPricing($inventory, $variant);
 
+        $actor        = $this->posActorLabel();
+        $customerName = $order->customer_name ?? $order->customer?->name ?? 'walk-in customer';
+        $context      = $this->posContextLabelFromInventory($inventory);
+        $quantityStr  = "{$quantity} × \"{$variant->name}\" (SKU " . ($variant->sku ?? 'N/A') . ")";
+
+        $narrative = "{$actor} sold {$quantityStr} to {$customerName} "
+            . "on order {$order->order_number} — {$before} → {$after} units remaining{$context}.";
+
         InventoryTransactions::create([
             'quantity'       => -$quantity,
             'reference_id'   => $order->id,
             'reference_type' => 'order',
             'type'           => 'sale',
-            'notes'          => "POS sale - Order #{$order->order_number} - {$variant->name}",
+            'notes'          => $narrative,
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $tenantId,
 
-            // ★ Frozen pricing
             'unit_cost_price'     => $pricing['cost'],
             'unit_selling_price'  => $pricing['selling'],
             'total_cost_value'    => -$quantity * $pricing['cost'],
@@ -2691,12 +2809,11 @@ class POSController extends Controller
             'quantity_before' => $before,
             'quantity_after'  => $after,
             'reason'          => 'order_sale',
-            'notes'           => "POS sale - Order #{$order->order_number} - {$variant->name}",
+            'notes'           => $narrative,
             'inventory_id'    => $inventory->id,
             'created_by'      => auth()->id(),
             'tenant_id'       => $tenantId,
 
-            // ★ Frozen pricing
             'unit_cost_price'    => $pricing['cost'],
             'unit_selling_price' => $pricing['selling'],
             'total_value_change' => -$quantity * $pricing['cost'],
@@ -2809,6 +2926,15 @@ class POSController extends Controller
             }
             $targetBatch->save();
             
+            $actor        = $this->posActorLabel();
+            $customerName = $order->customer_name ?? 'walk-in customer';
+            $context      = $this->posContextLabelFromInventory($inventory);
+
+            $narrative = "{$actor} sold {$quantityNeeded} × \"{$variant->name}\" "
+                . "(SKU " . ($variant->sku ?? 'N/A') . ") from batch {$targetBatch->batch_number} "
+                . "to {$customerName} on order {$order->order_number} — batch stock "
+                . "{$effectiveQuantity} → {$targetBatch->quantity_remaining} units{$context}.";
+
             // Log batch depletion
             BatchLog::create([
                 'batch_id'        => $targetBatch->id,
@@ -2839,6 +2965,7 @@ class POSController extends Controller
                     'customer_name'        => $order->customer_name,
                     'item_name'            => $itemName,
                     'deducted_from_batch'  => $targetBatch->batch_number,
+                    'narrative'     => $narrative,
                 ],
             ]);
             
@@ -2866,6 +2993,11 @@ class POSController extends Controller
                         $batch->quantity_remaining = ($batch->quantity_received ?? 0) - $deduct;
                     }
                     $batch->save();
+
+                    $narrative = "{$actor} sold {$deduct} × \"{$variant->name}\" "
+                        . "(SKU " . ($variant->sku ?? 'N/A') . ") from batch {$batch->batch_number} "
+                        . "(FIFO) to {$customerName} on order {$order->order_number} — batch stock "
+                        . "{$beforeQty} → {$afterQty} units{$context}.";
 
                     BatchLog::create([
                         'batch_id'        => $batch->id,
@@ -2895,6 +3027,7 @@ class POSController extends Controller
                             'inventory_id'  => $inventory->id,
                             'customer_name' => $order->customer_name,
                             'item_name'     => $itemName,
+                            'narrative'     => $narrative,
                         ],
                     ]);
 
@@ -2906,6 +3039,12 @@ class POSController extends Controller
         $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantityOriginal);
         $inventory->save();
 
+        $narrative = "{$actor} sold {$quantityOriginal} × \"{$variant->name}\" "
+            . "(SKU " . ($variant->sku ?? 'N/A') . ") to {$customerName} on order "
+            . "{$order->order_number} (batch strategy){$context}. "
+            . "Inventory allocated: {$before} → {$inventory->quantity_allocated}.";
+
+
         InventoryTransactions::create([
             'quantity'       => -$quantityOriginal,
             'reference_id'   => $order->id,
@@ -2915,6 +3054,7 @@ class POSController extends Controller
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $tenantId,
+            'notes'          => $narrative,
 
             // ★
             'unit_cost_price'     => $pricing['cost'],
@@ -3040,13 +3180,25 @@ class POSController extends Controller
         $inventory->quantity_allocated = max(0, $inventory->quantity_allocated - $quantity);
         $inventory->save();
 
+        $actor        = $this->posActorLabel();
+        $customerName = $order->customer_name ?? 'walk-in customer';
+        $context      = $this->posContextLabelFromInventory($inventory);
+        $serialStr    = $serialId
+            ? "serial #{$item->serial_number}"
+            : "{$quantity} serial(s) via FIFO";
+
+        $narrative = "{$actor} sold {$serialStr} of \"{$variant->name}\" "
+            . "(SKU " . ($variant->sku ?? 'N/A') . ") to {$customerName} on order "
+            . "{$order->order_number}{$context}. Serial(s) marked SOLD. "
+            . "Inventory allocated: {$before} → {$inventory->quantity_allocated}.";
+
         // Log inventory transaction
         InventoryTransactions::create([
             'quantity'       => -$quantity,
             'reference_id'   => $order->id,
             'reference_type' => 'order',
             'type'           => 'sale',
-            'notes'          => "POS sale - Order #{$order->order_number} - {$variant->name} (SERIAL)",
+            'notes'          => $narrative,
             'inventory_id'   => $inventory->id,
             'created_by'     => auth()->id(),
             'tenant_id'      => $tenantId,
@@ -3268,6 +3420,15 @@ class POSController extends Controller
         // ★ Resolve pricing — single-shop has no inventory item, so fall back to variant
         $pricing = $this->resolveLogPricing(null, $variant);
 
+        $actor        = $this->posActorLabel();
+        $customerName = $order->customer_name ?? 'walk-in customer';
+        $context      = $this->posContextLabel($order);
+
+        $narrative = "{$actor} depleted {$quantityDeducted} × \"{$variant->name}\" "
+            . "(SKU " . ($variant->sku ?? 'N/A') . ") from batch {$batch->batch_number} "
+            . "for {$customerName} on order {$order->order_number} — batch stock "
+            . "{$beforeQty} → {$afterQty} units{$context}.";
+
         BatchLog::create([
             'batch_id'        => $batch->id,
             'batch_number'    => $batch->batch_number,
@@ -3299,6 +3460,7 @@ class POSController extends Controller
                 'item_name'     => $item->name ?? $variant->name,
                 'customer_name' => $order->customer_name,
                 'unit_price'    => $item->price ?? 0,
+                'narrative'     => $narrative,
             ],
         ]);
     }
@@ -3426,6 +3588,16 @@ class POSController extends Controller
         // ★ Snapshot pricing and log the movement
         $pricing = $this->resolveLogPricing(null, $variant);
 
+        $actor        = $this->posActorLabel();
+        $customerName = $order->customer_name ?? 'walk-in customer';
+        $context      = $this->posContextLabel($order);
+
+        $narrative = "{$actor} sold serial #{$serial->serial_number} "
+            . "(\"{$variant->name}\", SKU " . ($variant->sku ?? 'N/A') . ") "
+            . "to {$customerName} on order {$order->order_number} — "
+            . "{$before} → {$variant->overal_quantity_at_hand} units in the "
+            . "single-shop pool{$context}. Serial marked SOLD.";
+
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
             'order_id'        => $order->id,
@@ -3435,7 +3607,7 @@ class POSController extends Controller
             'quantity_after'  => $variant->overal_quantity_at_hand,
             'quantity_change' => -1,
             'reason'          => 'pos_sale',
-            'notes'           => "Serial sale - {$serial->serial_number} - Order #{$order->order_number}",
+            'notes' => $narrative,
             'source'          => 'pos',
 
             'unit_cost_price'     => $pricing['cost'],
