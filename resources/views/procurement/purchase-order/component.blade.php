@@ -131,7 +131,7 @@
                                         @endcan
                                     @endif
                                     
-                                    @if(in_array($order->status, ['draft', 'pending_approval', 'approved']))
+                                    @if(in_array($order->status, ['draft', 'approved', 'pending_approval','sent']))
                                         @can('cancel purchase_orders')
                                             <button class="btn btn-sm btn-danger" onclick="cancelPurchaseOrder({{ $order->id }})">
                                                 {{ __('passwords.cancel') }}

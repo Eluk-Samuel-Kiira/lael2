@@ -20,91 +20,29 @@ class ProductionOrderController extends Controller
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view production_orders')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
 
-        // ── Visibility rule ─────────────────────────────────────────
         $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
         $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
 
-        // ── Pagination ──────────────────────────────────────────────
-        $perPage = $request->input('per_page', 15);
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
-        }
+        $isSingleShop = tenant_is_single_shop($tenantId);
 
-        // ── Base query ──────────────────────────────────────────────
-        $query = ProductionOrder::with([
-                'inputs.productVariant',
-                'outputs.productVariant',
-                'createdBy',
-                'location',
-            ])
-            ->where('tenant_id', $tenantId);
-
-        // ── Non-admins: only orders at their assigned locations ─────
-        if (!$isAdmin) {
-            if (empty($userLocationIds)) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn('location_id', $userLocationIds);
-            }
-        }
-
-        // ── Search ──────────────────────────────────────────────────
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('production_number', 'like', "%{$search}%")
-                ->orWhere('status', 'like', "%{$search}%")
-                ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
-            });
-        }
-
-        // ── Location filter (admins) ────────────────────────────────
-        if ($request->filled('location_id')) {
-            $requestedLocationId = (int) $request->input('location_id');
-
-            // Non-admins can only filter within their own locations
-            if ($isAdmin || in_array($requestedLocationId, $userLocationIds, true)) {
-                $query->where('location_id', $requestedLocationId);
-            }
-        }
-
-        $productionOrders = $query->latest()->paginate($perPage);
-        $productionOrders->appends([
-            'per_page'    => $perPage,
-            'search'      => $request->search,
-            'location_id' => $request->location_id,
-        ]);
-
-        // ── AJAX partial reload ─────────────────────────────────────
-        $bladeToReload = $request->query('bladeFileToReload');
-        if ($request->ajax() && $bladeToReload === 'reloadProductionComponent') {
-            return view('manufacturing.production-order.component', [
-                'productionOrders' => $productionOrders,
-            ])->render();
-        }
-
-        // ── Dropdown data ───────────────────────────────────────────
+        // ── Dropdown data for the create modal ─────────────────────
         $variants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', 1)
             ->get();
 
         $locationsQuery = Location::where('tenant_id', $tenantId);
-
         if (!$isAdmin) {
             $locationsQuery->whereIn('id', $userLocationIds);
         }
-
         $locations = $locationsQuery->get();
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id']);
 
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', 1)
@@ -116,14 +54,162 @@ class ProductionOrderController extends Controller
         ->where('isActive', 1)
         ->get();
 
-        return view('manufacturing.production-index', [
-            'productionOrders' => $productionOrders,
-            'variants'         => $variants,
-            'locations'        => $locations,
-            'paymentMethods'   => $paymentMethods,
-            'uoms'             => $uoms,
+        // ── Initial filter state (URL preserved on refresh) ────────
+        $initialFilters = [
+            'search'      => (string) $request->get('search', ''),
+            'location_id' => (string) $request->get('location_id', ''),
+            'status'      => (string) $request->get('status', 'all'),
+            'per_page'    => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                ? (int) $request->get('per_page', 15)
+                                : 15,
+        ];
+
+        return view('manufacturing.production-index', compact(
+            'variants',
+            'locations',
+            'departments',
+            'paymentMethods',
+            'uoms',
+            'isSingleShop',
+            'initialFilters',
+        ));
+    }
+
+    /**
+     * JSON endpoint for the production orders list.
+     *
+     * Mirrors the filters and scoping rules in index(), but returns
+     * a JS-shaped payload for the vanilla-JS table renderer.
+     *
+     * GET /production-orders/data
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view production_orders')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ── Filters ────────────────────────────────────────────────
+        $search     = trim((string) $request->get('search', ''));
+        $locationId = $request->get('location_id');
+        $status     = $request->get('status');
+        $perPage    = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
+
+        // ── Base query ─────────────────────────────────────────────
+        $query = ProductionOrder::with([
+                'location:id,name',
+                'createdBy:id,name',
+            ])
+            ->withCount(['inputs', 'outputs'])
+            ->where('tenant_id', $tenantId);
+
+        if (!$isAdmin) {
+            if (empty($userLocationIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('location_id', $userLocationIds);
+            }
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('production_number', 'like', "%{$search}%")
+                ->orWhere('status',          'like', "%{$search}%")
+                ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($locationId) {
+            $requestedLocationId = (int) $locationId;
+            if ($isAdmin || in_array($requestedLocationId, $userLocationIds, true)) {
+                $query->where('location_id', $requestedLocationId);
+            }
+        }
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        // ── Summary from the FILTERED set (before pagination) ─────
+        $allFiltered = (clone $query)->get([
+            'id', 'status', 'total_cost', 'total_input_quantity', 'total_output_quantity',
+        ]);
+
+        $summary = [
+            'total'          => $allFiltered->count(),
+            'draft'          => $allFiltered->where('status', ProductionOrder::STATUS_DRAFT)->count(),
+            'in_progress'    => $allFiltered->where('status', ProductionOrder::STATUS_IN_PROGRESS)->count(),
+            'completed'      => $allFiltered->where('status', ProductionOrder::STATUS_COMPLETED)->count(),
+            'cancelled'      => $allFiltered->where('status', ProductionOrder::STATUS_CANCELLED)->count(),
+            'total_cost'     => (float) $allFiltered->sum('total_cost'),
+            'total_input'    => (float) $allFiltered->sum('total_input_quantity'),
+            'total_output'   => (float) $allFiltered->sum('total_output_quantity'),
+        ];
+
+        // ── Paginate ───────────────────────────────────────────────
+        $paginator = $query->latest()->paginate($perPage);
+
+        // ── Shape rows for JS ──────────────────────────────────────
+        $rows = collect($paginator->items())->map(function (ProductionOrder $order) {
+            return [
+                'id'                => $order->id,
+                'production_number' => $order->production_number,
+                'location_id'       => $order->location_id,
+                'location_name'     => $order->location?->name ?? __('pagination._none'),
+                'status'            => $order->status,
+                'status_label'      => $order->status_label ?? $order->status,
+                'status_badge'      => $order->status_badge ?? 'secondary',
+
+                'inputs_count'      => $order->inputs_count ?? 0,
+                'outputs_count'     => $order->outputs_count ?? 0,
+                'total_input_quantity'  => (float) ($order->total_input_quantity ?? 0),
+                'total_output_quantity' => (float) ($order->total_output_quantity ?? 0),
+
+                'total_cost'        => (float) ($order->total_cost ?? 0),
+                'total_cost_formatted' => currency_symbol() . number_format((float) ($order->total_cost ?? 0), 2),
+
+                'scheduled_date'    => optional($order->scheduled_date)->format('Y-m-d'),
+                'scheduled_date_human' => optional($order->scheduled_date)->format('M d, Y') ?? __('pagination._none'),
+
+                'created_by_name'   => $order->createdBy?->name ?? __('pagination._none'),
+                'created_at'        => optional($order->created_at)->format('d M Y H:i'),
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+            'filters' => [
+                'search'      => $search,
+                'location_id' => $locationId,
+                'status'      => $status,
+            ],
         ]);
     }
+
+
 
     /**
      * Sentence fragment: "Fred (fred@shop.com)".

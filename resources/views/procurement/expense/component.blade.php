@@ -44,6 +44,7 @@
     <div class="app-content flex-column-fluid">
         <div class="app-container container-xxl">
 
+            @can('approve expense')
             {{-- ═══════════════════════════════════════════════════════ --}}
             {{-- SUMMARY CARDS (JS-populated)                              --}}
             {{-- ═══════════════════════════════════════════════════════ --}}
@@ -204,6 +205,7 @@
                     </div>
                 </div>
             </div>
+            @endcan
 
             {{-- ═══════════════════════════════════════════════════════ --}}
             {{-- TABLE — JS fills tbody                                     --}}

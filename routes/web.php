@@ -317,11 +317,14 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Batch routes
         Route::prefix('batches')->name('batches.')->group(function () {
             Route::get('/', [BatchController::class, 'index'])->name('index');
+            Route::get('/data', [BatchController::class, 'data'])->name('data');   // ← NEW
             Route::post('/assign', [BatchController::class, 'assign'])->name('assign');
             Route::post('/unassign', [BatchController::class, 'unassign'])->name('unassign');
             Route::post('/details', [BatchController::class, 'details'])->name('details');
             Route::post('/split', [BatchController::class, 'split'])->name('split');
         });
+        Route::get('departments/by-location/{locationId}', [BatchController::class, 'departmentsByLocation'])
+            ->name('get.departments.by.location');
 
 
         Route::prefix('serials')->name('serials.')->group(function () {
@@ -528,6 +531,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         Route::prefix('reports/production')->name('reports.production.')->group(function () {
             Route::get('/', [ProductionOrderReportController::class, 'index'])->name('index');
+            Route::get('/data', [ProductionOrderController::class, 'data'])->name('data'); 
             Route::get('/summary', [ProductionOrderReportController::class, 'summary'])->name('summary');
             Route::get('/detail/{orderId}', [ProductionOrderReportController::class, 'detail'])->name('detail');
             Route::get('/cost-analysis', [ProductionOrderReportController::class, 'costAnalysis'])->name('cost-analysis');

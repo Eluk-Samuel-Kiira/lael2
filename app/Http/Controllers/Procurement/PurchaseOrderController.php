@@ -174,6 +174,22 @@ class PurchaseOrderController extends Controller
                 'created_by' => $user->id,
             ]);
 
+            $actor    = $this->actorLabel($user);
+            $supplier = $this->supplierLabel($purchaseOrder->supplier);
+            $itemCount = $purchaseOrder->items()->count();
+
+            $line = sprintf(
+                '%s created purchase order %s for %s. Items: %d. Subtotal: %s. Expected delivery: %s. Status: draft.',
+                $actor,
+                $purchaseOrder->po_number,
+                $supplier,
+                $itemCount,
+                currency_symbol() . number_format((float) $subtotal, 2),
+                $purchaseOrder->expected_delivery_date?->format('d M Y') ?? 'N/A'
+            );
+
+            $purchaseOrder->update(['notes' => $this->appendNote($purchaseOrder->notes, $line)]);
+
             // Create purchase order items
             foreach ($request->items as $item) {
                 // Only create items that have a product selected
@@ -230,6 +246,32 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "supplier 'Acme Supplies'".
+     */
+    private function supplierLabel(?Supplier $supplier): string
+    {
+        if (!$supplier) return 'supplier';
+        return "supplier \"{$supplier->name}\"";
+    }
+
+    /**
+     * Append a timestamped line to a model's notes field (idempotent).
+     */
+    private function appendNote(?string $existing, string $line): string
+    {
+        $stamped = '[' . now()->format('Y-m-d H:i:s') . '] ' . $line;
+        return $existing ? $existing . "\n" . $stamped : $stamped;
+    }
 
     /**
      * Update the specified resource in storage.
@@ -287,6 +329,25 @@ class PurchaseOrderController extends Controller
                 'total' => $total,
                 'notes' => $validated['notes'] ?? null,
             ]);
+
+            $actor = $this->actorLabel($user);
+
+            $changedFields = [];
+            foreach (['supplier_id', 'location_id', 'expected_delivery_date', 'subtotal', 'total'] as $f) {
+                if ($purchaseOrder->wasChanged($f)) {
+                    $changedFields[] = $f;
+                }
+            }
+
+            $line = sprintf(
+                '%s edited purchase order %s. Fields changed: %s. New total: %s.',
+                $actor,
+                $purchaseOrder->po_number,
+                $changedFields ? implode(', ', $changedFields) : 'line items only',
+                currency_symbol() . number_format((float) $total, 2)
+            );
+
+            $purchaseOrder->update(['notes' => $this->appendNote($purchaseOrder->notes, $line)]);
 
             // Delete existing items
             $purchaseOrder->items()->delete();
@@ -522,6 +583,16 @@ class PurchaseOrderController extends Controller
             $purchase->submitted_at = now();
             $purchase->submitted_by = auth()->id();
 
+            $actor = $this->actorLabel($user);
+
+            $line = sprintf(
+                '%s submitted purchase order %s for approval. Status: draft → pending_approval.',
+                $actor,
+                $purchase->po_number
+            );
+
+            $purchase->notes = $this->appendNote($purchase->notes, $line);
+
             
             if ($purchase->save()) {  
                 DB::commit();
@@ -610,7 +681,20 @@ class PurchaseOrderController extends Controller
             $purchase->approved_at = now();
             $purchase->approved_by = auth()->id();
             
+            $actor = $this->actorLabel($user);
+
+
             if ($purchase->save()) {  
+                
+                $line = sprintf(
+                    '%s approved purchase order %s. Status: pending_approval → approved. Total: %s.',
+                    $actor,
+                    $purchase->po_number,
+                    currency_symbol() . number_format((float) $purchase->total, 2)
+                );
+
+                $purchase->notes = $this->appendNote($purchase->notes, $line);
+
                 DB::commit();
 
                 return response()->json([
@@ -703,6 +787,25 @@ class PurchaseOrderController extends Controller
         DB::beginTransaction();
         try {
             $purchase->status = 'sent';
+            $actor    = $this->actorLabel($user);
+            $supplier = $this->supplierLabel($purchase->supplier);
+            $channelName = strtoupper($channel);
+
+            $recipient = $channel === 'email'
+                ? ($validated['supplier_email'] ?? $purchase->supplier->email)
+                : ($validated['supplier_phone'] ?? $purchase->supplier->phone);
+
+            $line = sprintf(
+                '%s sent purchase order %s to %s via %s (%s). Status: approved → sent.',
+                $actor,
+                $purchase->po_number,
+                $supplier,
+                $channelName,
+                $recipient
+            );
+
+            $purchase->notes = $this->appendNote($purchase->notes, $line);
+
             $purchase->sent_at = now();
             $purchase->sent_by = $user->id;
             if (!empty($validated['notes'])) {
@@ -749,6 +852,15 @@ class PurchaseOrderController extends Controller
         } catch (\Exception $e) {
             $notifyWarning = $e->getMessage();
             \Log::error('Failed to notify supplier: ' . $e->getMessage(), ['purchase_order_id' => $id]);
+        }
+
+        if ($notifyWarning) {
+            $line = sprintf(
+                'Notification delivery FAILED via %s. Reason: %s. Status remains sent — follow up manually.',
+                strtoupper($channel),
+                $notifyWarning
+            );
+            $purchase->update(['notes' => $this->appendNote($purchase->notes, $line)]);
         }
 
         return response()->json([
@@ -952,6 +1064,22 @@ class PurchaseOrderController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
+            
+            $actor    = $this->actorLabel($user);
+            $supplier = $this->supplierLabel($purchaseOrder->supplier);
+
+            $receiptLine = sprintf(
+                '%s received goods on purchase order %s from %s. Batch: %s. Receipt #%s. Expiry: %s.',
+                $actor,
+                $purchaseOrder->po_number,
+                $supplier,
+                $validated['batch_number'],
+                $purchaseReceipt->id,
+                $validated['expiry_date'] ?? 'N/A'
+            );
+
+            $purchaseReceipt->update(['notes' => $this->appendNote($purchaseReceipt->notes, $receiptLine)]);
+
             // Process each item and calculate current receipt subtotal
             foreach ($validated['items'] as $itemData) {
                 $quantityReceived = $itemData['quantity_received'];
@@ -980,31 +1108,32 @@ class PurchaseOrderController extends Controller
                     // supplier_cost_price. This ensures the cost reflects the actual
                     // price paid to the supplier.
                     if ($actualUnitCost != $variant->supplier_cost_price) {
+                        $recorder  = app('inventory-pricing-history');
+                        $oldValues = $recorder->snapshot($variant);
+
                         $variant->supplier_cost_price = $actualUnitCost;
-                        
-                        // Recalculate grand_total_cost_price if there are other costs
-                        // This depends on your business logic - you might want to
-                        // recalculate based on other cost components
                         if ($variant->total_shipping_cost || $variant->ura_taxes_applied || $variant->additional_expenses) {
-                            $variant->grand_total_cost_price = $actualUnitCost 
-                                + ($variant->total_shipping_cost ?? 0) 
-                                + ($variant->ura_taxes_applied ?? 0) 
+                            $variant->grand_total_cost_price = $actualUnitCost
+                                + ($variant->total_shipping_cost ?? 0)
+                                + ($variant->ura_taxes_applied   ?? 0)
                                 + ($variant->additional_expenses ?? 0);
                         } else {
                             $variant->grand_total_cost_price = $actualUnitCost;
                         }
-                        
                         $variant->save();
-                        
-                        // Log the cost change for audit
-                        // \Log::info('Variant cost updated from PO receipt', [
-                        //     'variant_id' => $variant->id,
-                        //     'variant_sku' => $variant->sku,
-                        //     'old_cost' => $variant->supplier_cost_price,
-                        //     'new_cost' => $actualUnitCost,
-                        //     'purchase_order_id' => $purchaseOrder->id,
-                        //     'purchase_receipt_id' => $purchaseReceipt->id,
-                        // ]);
+
+                        $recorder->record(
+                            $variant,
+                            $oldValues,
+                            \App\Models\InventoryPricingHistory::CHANGE_UPDATED,
+                            sprintf(
+                                'Cost updated from PO receipt %s (PO %s, receipt #%s, supplier %s).',
+                                $purchaseReceipt->batch_number ?? 'N/A',
+                                $purchaseOrder->po_number,
+                                $purchaseReceipt->id,
+                                $purchaseOrder->supplier?->name ?? 'unknown supplier'
+                            )
+                        );
                     }
 
                     // Determine inventory strategy for THIS variant's product
@@ -1059,6 +1188,23 @@ class PurchaseOrderController extends Controller
                         );
                     }
 
+                    $actor = $this->actorLabel($user);
+
+                    $lineNote = sprintf(
+                        '%s received %s × "%s" (SKU %s) from purchase order %s receipt #%s. '
+                        . 'Unit cost: %s. Line total: %s. Inventory: %s → %s.',
+                        $actor,
+                        number_format($quantityReceived, 2),
+                        $variant->name,
+                        $variant->sku ?? 'N/A',
+                        $purchaseOrder->po_number,
+                        $purchaseReceipt->id,
+                        currency_symbol() . number_format($actualUnitCost, 2),
+                        currency_symbol() . number_format($itemCost, 2),
+                        number_format($quantityBefore, 2),
+                        number_format($quantityAfter, 2)
+                    );
+
                     // Log received product variant
                     ReceivedProductVariant::create([
                         'purchase_order_id' => $purchaseOrder->id,
@@ -1075,10 +1221,31 @@ class PurchaseOrderController extends Controller
                         'inventory_quantity_after' => $quantityAfter,
                         'received_by' => $user->id,
                         'tenant_id' => $tenantId,
+                        'notes' => $lineNote,
+                        
                     ]);
 
                     // LOG TO SINGLE SHOP INVENTORY LOG
                     if ($isSingleShop && $strategy === 'quantity') {
+                        $actor = $this->actorLabel($user);
+
+                        $logNarrative = sprintf(
+                            '%s received %s × "%s" (SKU %s) from purchase order %s via receipt #%s. '
+                            . 'Supplier: %s. Unit cost: %s. Stock: %s → %s. Batch: %s.',
+                            $actor,
+                            number_format($quantityReceived, 2),
+                            $variant->name,
+                            $variant->sku ?? 'N/A',
+                            $purchaseOrder->po_number,
+                            $purchaseReceipt->id,
+                            $purchaseOrder->supplier->name ?? 'unknown supplier',
+                            currency_symbol() . number_format($actualUnitCost, 2),
+                            number_format($quantityBefore, 2),
+                            number_format($quantityAfter, 2),
+                            $validated['batch_number']
+                        );
+
+                        
                         SingleShopInventoryLog::create([
                             'variant_id' => $variant->id,
                             'order_id' => $purchaseOrder->id,
@@ -1088,8 +1255,7 @@ class PurchaseOrderController extends Controller
                             'quantity_after' => $quantityAfter,
                             'quantity_change' => $quantityReceived,
                             'reason' => 'purchase_receipt',
-                            'notes' => 'Stock received from Purchase Order #' . $purchaseOrder->po_number . 
-                                    ' - Receipt #' . $purchaseReceipt->id,
+                            'notes'    => $logNarrative,
                             'source' => 'purchase',
                             'metadata' => [
                                 'purchase_order_id' => $purchaseOrder->id,
@@ -1101,6 +1267,7 @@ class PurchaseOrderController extends Controller
                                 'total_cost' => $itemCost,
                                 'inventory_strategy' => $strategy,
                                 'supplier_cost_updated' => true,
+                                'narrative' => $logNarrative,
                             ],
                         ]);
                     }
@@ -1150,6 +1317,24 @@ class PurchaseOrderController extends Controller
                         'is_withholding_tax' => $tax->is_withholding_tax ?? false,
                     ];
                     
+                    $actor  = $this->actorLabel($user);
+                    $isWith = (bool) ($tax->is_withholding_tax ?? false);
+
+                    $taxNarrative = sprintf(
+                        '%s recorded a %s tax liability of %s on receipt #%s from PO %s (supplier %s). '
+                        . 'Tax: %s @ %s%%. Taxable base: %s. Due %s. Status: pending.',
+                        $actor,
+                        $isWith ? 'withholding' : 'additive',
+                        currency_symbol() . number_format($taxAmount, 2),
+                        $purchaseReceipt->id,
+                        $purchaseOrder->po_number,
+                        $purchaseOrder->supplier->name ?? 'unknown supplier',
+                        $tax->name,
+                        number_format((float) $tax->rate, 2),
+                        currency_symbol() . number_format($taxableAmount, 2),
+                        $this->calculateTaxDueDate()->format('d M Y')
+                    );
+
                     $taxLiabilities[] = SupplierTaxLiability::create([
                         'tenant_id' => $tenantId,
                         'supplier_id' => $purchaseOrder->supplier_id,
@@ -1169,12 +1354,13 @@ class PurchaseOrderController extends Controller
                         'tax_month' => now()->month,
                         'tax_quarter' => ceil(now()->month / 3),
                         'is_withholding_tax' => $tax->is_withholding_tax ?? false,
-                        'notes' => 'Receipt #' . $purchaseReceipt->id . ' from PO #' . $purchaseOrder->po_number,
+                        'notes' => $taxNarrative,
                         'metadata' => [
                             'purchase_order_number' => $purchaseOrder->po_number,
                             'receipt_id' => $purchaseReceipt->id,
                             'supplier_name' => $purchaseOrder->supplier->name,
                             'items_received' => $totalReceived,
+                            'narrative'             => $taxNarrative,
                         ],
                     ]);
                 }
@@ -1213,6 +1399,26 @@ class PurchaseOrderController extends Controller
                     ]);
                 }
 
+                $actor        = $this->actorLabel($user);
+                $supplierName = $purchaseOrder->supplier->name ?? 'unknown supplier';
+                $methodName   = $paymentMethod->name ?? 'payment method';
+                $currency     = $paymentMethod->currency->code ?? 'UGX';
+
+                $amountStr  = number_format($paymentAmount, 2) . ' ' . $currency;
+                $receiptStr = number_format((float) $currentReceiptPayable, 2) . ' ' . $currency;
+                $itemCount  = count(array_filter($validated['items'], fn($i) => ($i['quantity_received'] ?? 0) > 0));
+
+                $narrative = "{$actor} paid {$amountStr} from {$methodName} to {$supplierName} "
+                    . "for goods received on PO {$purchaseOrder->po_number} (receipt #{$purchaseReceipt->id}). "
+                    . "Receipt payable: {$receiptStr}. "
+                    . "Line items received: {$itemCount}.";
+
+                if ($paymentAmount < $requestedAmount) {
+                    $narrative .= " Payment was clamped to the receipt payable (requested "
+                        . number_format($requestedAmount, 2) . " {$currency}).";
+                }
+
+
                 $transactionLog = app('payment-transaction')->recordTransaction([
                     'user_id' => $user->id,
                     'tenant_id' => $tenantId,
@@ -1223,11 +1429,12 @@ class PurchaseOrderController extends Controller
                     'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
                     'reference_table' => 'purchase_orders',
                     'reference_id' => $purchaseOrder->id,
-                    'description' => 'Purchase Order Payment - PO #' . $purchaseOrder->po_number . ' (Receipt #' . $purchaseReceipt->id . ')',
+                    'description' => $narrative,
                     'notes' => 'Payment against goods actually received, not original PO estimate.',
                     'metadata' => [
                         'purchase_receipt_id' => $purchaseReceipt->id,
                         'receipt_payable' => $currentReceiptPayable,
+                        'narrative'           => $narrative,
                     ],
                 ]);
 
@@ -1244,6 +1451,27 @@ class PurchaseOrderController extends Controller
             $purchaseOrder->status = $validated['status'];
             $purchaseOrder->received_at = now();
             $purchaseOrder->received_by = $user->id;
+            $actor = $this->actorLabel($user);
+
+            $summaryLine = sprintf(
+                '%s received goods for PO %s. Status: %s → %s. '
+                . 'Receipt #%s — subtotal %s, tax %s, payable %s. '
+                . 'Cumulative received: subtotal %s, tax %s, total %s.',
+                $actor,
+                $purchaseOrder->po_number,
+                $purchaseOrder->getOriginal('status'),
+                $validated['status'],
+                $purchaseReceipt->id,
+                currency_symbol() . number_format($currentReceiptSubtotal, 2),
+                currency_symbol() . number_format($currentReceiptTaxAmount, 2),
+                currency_symbol() . number_format($currentReceiptPayable, 2),
+                currency_symbol() . number_format($newCumulativeSubtotal, 2),
+                currency_symbol() . number_format($newCumulativeTaxTotal, 2),
+                currency_symbol() . number_format($newCumulativeTotal, 2)
+            );
+
+            $purchaseOrder->notes = $this->appendNote($purchaseOrder->notes, $summaryLine);
+
             $purchaseOrder->save();
 
             DB::commit();
@@ -1322,6 +1550,24 @@ class PurchaseOrderController extends Controller
 
             $batchNumber = $batchItem->batch_number ?? 'BATCH-' . $batchItem->id;
 
+            $actor = $this->actorLabel($user);
+
+            $narrative = sprintf(
+                '%s received %s × "%s" (SKU %s) from purchase order %s via receipt #%s. '
+                . 'Batch: %s. Supplier: %s. Unit cost: %s. Total cost: %s.',
+                $actor,
+                number_format($quantityReceived, 2),
+                $variant->name,
+                $variant->sku ?? 'N/A',
+                $purchaseOrder->po_number,
+                $purchaseReceipt->id,
+                $batchNumber,
+                $purchaseOrder->supplier?->name ?? 'unknown supplier',
+                currency_symbol() . number_format($unitCost, 2),
+                currency_symbol() . number_format($totalCost, 2)
+            );
+
+     
             BatchLog::create([
                 'batch_id' => $batchItem->id,
                 'batch_number' => $batchNumber,
@@ -1349,6 +1595,7 @@ class PurchaseOrderController extends Controller
                     'inventory_strategy' => 'batch',
                     'receipt_notes' => $purchaseReceipt->notes,
                     'actual_unit_cost' => $unitCost,
+                    'narrative'           => $narrative,
                 ],
             ]);
 
@@ -1484,13 +1731,13 @@ class PurchaseOrderController extends Controller
         }
 
         // Validate that status transition is allowed (only from draft, pending_approval, or approved)
-        $allowedStatuses = ['draft', 'pending_approval', 'approved'];
-        if (!in_array($purchase->status, $allowedStatuses)) {
-            return response()->json([
-                'success' => false,
-                'message' => __('passwords.can_only_cancel_from_allowed_status'),
-            ]);
-        }
+        // $allowedStatuses = ['draft', 'pending_approval', 'approved'];
+        // if (!in_array($purchase->status, $allowedStatuses)) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => __('passwords.can_only_cancel_from_allowed_status'),
+        //     ]);
+        // }
 
         // Validate that the requested status is cancelled
         if ($validated['status'] !== 'cancelled') {
@@ -1507,6 +1754,17 @@ class PurchaseOrderController extends Controller
             $purchase->cancelled_at = now();
             $purchase->cancelled_by = auth()->id();
             
+            $actor = $this->actorLabel($user);
+
+            $line = sprintf(
+                '%s cancelled purchase order %s. Previous status: %s. Status → cancelled.',
+                $actor,
+                $purchase->po_number,
+                $purchase->getOriginal('status')
+            );
+
+            $purchase->notes = $this->appendNote($purchase->notes, $line);
+
             if ($purchase->save()) {  
                 DB::commit();
                 

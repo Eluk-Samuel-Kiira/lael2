@@ -369,6 +369,33 @@ class ExpenseController extends Controller
         ]);
     }
 
+    /**
+     * Sentence fragment: "Fred (fred@shop.com)".
+     */
+    private function actorLabel($user = null): string
+    {
+        $user = $user ?? Auth::user();
+        return $user ? "{$user->name} ({$user->email})" : 'System';
+    }
+
+    /**
+     * Sentence fragment: "vendor 'Acme Supplies'".
+     */
+    private function vendorLabel(Expense $expense): string
+    {
+        return $expense->vendor_name
+            ? "vendor \"{$expense->vendor_name}\""
+            : 'vendor';
+    }
+
+    /**
+     * Short label for a payment method.
+     */
+    private function methodLabel(?PaymentMethod $method): string
+    {
+        return $method?->name ?? 'payment method';
+    }
+
 
 
     public function store(Request $request)
@@ -545,6 +572,19 @@ class ExpenseController extends Controller
             'receipt_url' => $receiptUrl,
             'tax_breakdown' => json_encode($taxBreakdown),
             'created_by' => $user->id,
+            'notes' => sprintf(
+                '[%s] %s created expense %s ("%s") for %s. Gross: %s; tax: %s; net: %s. Status: %s. Category: %s.',
+                now()->format('Y-m-d H:i:s'),
+                $this->actorLabel($user),
+                $expenseNumber,
+                $validated['description'],
+                $supplier->name,
+                currency_symbol() . number_format($grossAmount, 2),
+                currency_symbol() . number_format($totalTax, 2),
+                currency_symbol() . number_format($netAmount, 2),
+                $validated['payment_status'],
+                $category->name
+            ),
         ]);
 
         return response()->json([
@@ -759,6 +799,36 @@ class ExpenseController extends Controller
             'next_recurring_date' => $validated['next_recurring_date'] ?? null,
             'receipt_url' => $receiptUrl,
             'tax_breakdown' => json_encode($taxBreakdown), // Update tax breakdown
+        ]);
+
+        $actor = $this->actorLabel($user);
+
+        $changedFields = [];
+        foreach ([
+            'description', 'gross_amount', 'supplier_id', 'category_id',
+            'department_id', 'location_id', 'date', 'payment_status',
+        ] as $field) {
+            if (array_key_exists($field, $validated) && $expense->getOriginal($field) != $validated[$field]) {
+                $changedFields[] = $field;
+            }
+        }
+
+        $approvalReset = $expense->wasChanged('approved_by') || $expense->wasChanged('approved_at');
+
+        $line = sprintf(
+            '[%s] %s edited expense %s. Fields changed: %s.%s',
+            now()->format('Y-m-d H:i:s'),
+            $actor,
+            $expense->expense_number,
+            $changedFields ? implode(', ', $changedFields) : 'none',
+            $approvalReset ? ' Approval was reset because of the significant change.' : ''
+        );
+
+        // Append to notes
+        $expense->update([
+            'notes' => $expense->notes
+                ? $expense->notes . "\n" . $line
+                : $line,
         ]);
 
         // Reset approval if significant changes were made
@@ -1036,23 +1106,42 @@ class ExpenseController extends Controller
      */
     private function updateExpenseStatusData($expense, $status, $user)
     {
+        $actor = $this->actorLabel($user);
+
+        // ★ Capture prior state before mutation
+        $oldStatus = $expense->payment_status;
+        $oldPaidDate = $expense->paid_date;
+
         $updateData = [
             'payment_status' => $status,
-            'updated_at' => now(),
+            'updated_at'     => now(),
         ];
 
         if ($status === 'paid') {
             $updateData['paid_date'] = now();
-            $updateData['paid_by'] = null;
+            $updateData['paid_by']   = null;
         } elseif ($status === 'reimbursed') {
             $updateData['paid_date'] = now();
-            $updateData['paid_by'] = $user->id;
+            $updateData['paid_by']   = $user->id;
         } else {
-            // When reverting to pending
-            $updateData['paid_date'] = null;
-            $updateData['paid_by'] = null;
-            $updateData['payment_transaction_ref'] = null;
+            $updateData['paid_date']                = null;
+            $updateData['paid_by']                  = null;
+            $updateData['payment_transaction_ref']  = null;
         }
+
+        $line = sprintf(
+            '[%s] %s changed expense %s payment status: %s → %s. Amount: %s.',
+            now()->format('Y-m-d H:i:s'),
+            $actor,
+            $expense->expense_number,
+            $oldStatus,
+            $status,
+            currency_symbol() . number_format((float) $expense->net_amount, 2)
+        );
+
+        $updateData['notes'] = $expense->notes
+            ? $expense->notes . "\n" . $line
+            : $line;
 
         $expense->update($updateData);
     }
@@ -1085,44 +1174,72 @@ class ExpenseController extends Controller
         if (is_string($taxBreakdown)) {
             $taxBreakdown = json_decode($taxBreakdown, true);
         }
-        
-        if (empty($taxBreakdown)) {
-            return;
-        }
-        
+
+        if (empty($taxBreakdown)) return;
+
+        $user   = Auth::user();
+        $actor  = $this->actorLabel($user);
+        $vendor = $this->vendorLabel($expense);
+
         $supplierId = $expense->supplier_id;
-        
+
         foreach ($taxBreakdown as $tax) {
-            // Skip taxes with zero amount
-            if (empty($tax['amount']) || $tax['amount'] <= 0) {
-                continue;
-            }
-            
+            if (empty($tax['amount']) || $tax['amount'] <= 0) continue;
+
+            $taxName   = $tax['tax_name'] ?? 'Tax';
+            $taxAmount = (float) $tax['amount'];
+            $taxRate   = $tax['rate'] ?? 0;
+            $isWith    = (bool) ($tax['is_withholding_tax'] ?? false);
+
+            // ★ The story for this one liability
+            $narrative = sprintf(
+                '%s recorded a %s tax liability of %s %s for %s '
+                . 'on expense %s ("%s"). Tax: %s @ %s%%. '
+                . 'Taxable base (gross): %s. Due %s. Status: pending.',
+                $actor,
+                $isWith ? 'withholding' : 'additive',
+                number_format($taxAmount, 2),
+                currency_symbol(),
+                $vendor,
+                $expense->expense_number,
+                $expense->description,
+                $taxName,
+                number_format((float) $taxRate, 2),
+                number_format((float) $expense->gross_amount, 2),
+                now()->addMonth()->startOfMonth()->addDays(14)->format('d M Y')
+            );
+
             SupplierTaxLiability::create([
-                'tenant_id' => $tenantId,
-                'expense_id' => $expense->id,
-                'supplier_id' => $supplierId,
-                'tax_id' => $tax['tax_id'] ?? null,
-                'taxable_amount' => $expense->gross_amount,
-                'tax_amount' => $tax['amount'],
-                'tax_rate' => $tax['rate'] ?? 0,
-                'tax_name' => $tax['tax_name'] ?? 'Tax',
-                'tax_code' => $tax['tax_code'] ?? null,
-                'tax_type' => $tax['type'] ?? 'percentage',
-                'is_withholding_tax' => $tax['is_withholding_tax'] ?? false,
-                'reference_number' => $expense->expense_number,
-                'transaction_date' => $expense->date,
-                'due_date' => now()->addMonth()->startOfMonth()->addDays(14),
-                'status' => 'pending',
-                'tax_year' => now()->year,
-                'tax_month' => now()->month,
-                'tax_quarter' => ceil(now()->month / 3),
-                'notes' => $expense->description,
+                'tenant_id'             => $tenantId,
+                'expense_id'            => $expense->id,
+                'supplier_id'           => $supplierId,
+                'tax_id'                => $tax['tax_id'] ?? null,
+                'taxable_amount'        => $expense->gross_amount,
+                'tax_amount'            => $taxAmount,
+                'tax_rate'              => $taxRate,
+                'tax_name'              => $taxName,
+                'tax_code'              => $tax['tax_code'] ?? null,
+                'tax_type'              => $tax['type'] ?? 'percentage',
+                'is_withholding_tax'    => $isWith,
+                'reference_number'      => $expense->expense_number,
+                'transaction_date'      => $expense->date,
+                'due_date'              => now()->addMonth()->startOfMonth()->addDays(14),
+                'status'                => 'pending',
+                'tax_year'              => now()->year,
+                'tax_month'             => now()->month,
+                'tax_quarter'           => (int) ceil(now()->month / 3),
+
+                // ★ Full narrative
+                'notes' => $narrative,
+
                 'metadata' => [
                     'expense_number' => $expense->expense_number,
-                    'vendor_name' => $expense->vendor_name,
-                    'category_id' => $expense->category_id,
-                    'expense_date' => $expense->date->format('Y-m-d'),
+                    'vendor_name'    => $expense->vendor_name,
+                    'category_id'    => $expense->category_id,
+                    'expense_date'   => $expense->date->format('Y-m-d'),
+                    'recorded_by'    => $actor,
+                    'recorded_at'    => now()->toIso8601String(),
+                    'narrative'      => $narrative,
                 ],
             ]);
         }
@@ -1184,35 +1301,58 @@ class ExpenseController extends Controller
                 }
             }
         }
+              
         
+        $actor       = $this->actorLabel($user);
+        $vendor      = $this->vendorLabel($expense);
+        $methodName  = $this->methodLabel($paymentMethod);
+        $currency    = $paymentMethod->currency->code ?? 'UGX';
+
+        $netStr       = number_format($amount, 2) . ' ' . $currency;
+        $grossStr     = number_format((float) $expense->gross_amount, 2) . ' ' . $currency;
+        $taxStr       = number_format((float) $expense->tax_amount, 2) . ' ' . $currency;
+        $additiveStr  = number_format($additiveTax, 2) . ' ' . $currency;
+        $withholdStr  = number_format($withholdingTax, 2) . ' ' . $currency;
+
+        $narrative = "{$actor} paid {$netStr} to {$vendor} for expense "
+            . "{$expense->expense_number} (\"{$expense->description}\") via {$methodName}. "
+            . "Gross: {$grossStr}; additive tax: {$additiveStr}; withholding tax: {$withholdStr}; "
+            . "net paid to vendor: {$netStr}. Expense was pending — now marked as PAID.";
+
         $transactionData = [
-            'user_id' => $user->id,
-            'payment_method_id' => $paymentMethod->id,
-            'tenant_id' => $tenantId,
-            'transaction_type' => 'WITHDRAWAL',
+            'user_id'              => $user->id,
+            'payment_method_id'    => $paymentMethod->id,
+            'tenant_id'            => $tenantId,
+            'transaction_type'     => 'WITHDRAWAL',
             'transaction_category' => 'EXPENSE',
-            'amount' => $amount,
-            'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-            'reference_table' => 'expenses',
-            'reference_id' => $expense->id,
-            'description' => 'Expense Payment - ' . $expense->expense_number,
-            'notes' => 'Payment for expense',
+            'amount'               => $amount,
+            'currency_id'          => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+            'reference_table'      => 'expenses',
+            'reference_id'         => $expense->id,
+
+            // ★ Full sentence
+            'description' => $narrative,
+
+            // Short tag for the ledger list
+            'notes' => "Expense payment to {$vendor} — {$methodName}",
+
             'metadata' => [
-                'expense_number' => $expense->expense_number,
+                'expense_number'      => $expense->expense_number,
                 'expense_description' => $expense->description,
-                'vendor_name' => $expense->vendor_name,
-                'supplier_id' => $expense->supplier_id,
-                'category_id' => $expense->category_id,
-                'department_id' => $expense->department_id,
-                'location_id' => $expense->location_id,
-                'gross_amount' => $expense->gross_amount,
-                'tax_amount' => $expense->tax_amount,
-                'net_amount' => $amount,
-                'additive_tax' => $additiveTax,
-                'withholding_tax' => $withholdingTax,
-                'processed_by_id' => $user->id,
-                'processed_by_name' => $user->name,
-                'transaction_nature' => 'EXPENSE_PAYMENT',
+                'vendor_name'         => $expense->vendor_name,
+                'supplier_id'         => $expense->supplier_id,
+                'category_id'         => $expense->category_id,
+                'department_id'       => $expense->department_id,
+                'location_id'         => $expense->location_id,
+                'gross_amount'        => $expense->gross_amount,
+                'tax_amount'          => $expense->tax_amount,
+                'net_amount'          => $amount,
+                'additive_tax'        => $additiveTax,
+                'withholding_tax'     => $withholdingTax,
+                'processed_by_id'     => $user->id,
+                'processed_by_name'   => $actor,
+                'transaction_nature'  => 'EXPENSE_PAYMENT',
+                'narrative'           => $narrative,   // ★ so it survives in metadata too
             ],
         ];
         
@@ -1269,6 +1409,18 @@ class ExpenseController extends Controller
             }
         }
         
+        $actor       = $this->actorLabel($user);
+        $vendor      = $this->vendorLabel($expense);
+        $methodName  = $this->methodLabel($paymentMethod);
+        $currency    = $paymentMethod->currency->code ?? 'UGX';
+
+        $amountStr = number_format($amount, 2) . ' ' . $currency;
+
+        $narrative = "{$actor} reimbursed {$amountStr} to {$methodName} for expense "
+            . "{$expense->expense_number} (\"{$expense->description}\") from {$vendor}. "
+            . "Expense was previously PAID — now marked as REIMBURSED. "
+            . "Money has come back into the account.";
+
         $transactionData = [
             'user_id' => $user->id,
             'payment_method_id' => $paymentMethod->id,
@@ -1279,8 +1431,8 @@ class ExpenseController extends Controller
             'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
             'reference_table' => 'expenses',
             'reference_id' => $expense->id,
-            'description' => 'Expense Reimbursement - ' . $expense->expense_number,
-            'notes' => 'Reimbursement back to account',
+            'description' => $narrative,
+            'notes'       => "Expense reimbursement from {$vendor} — {$methodName}",
             'metadata' => [
                 'expense_number' => $expense->expense_number,
                 'expense_description' => $expense->description,
@@ -1297,6 +1449,7 @@ class ExpenseController extends Controller
                 'processed_by_id' => $user->id,
                 'processed_by_name' => $user->name,
                 'transaction_nature' => 'EXPENSE_REIMBURSEMENT',
+                'narrative' => $narrative,
             ],
         ];
         
@@ -1325,9 +1478,9 @@ class ExpenseController extends Controller
      */
     public function approve($id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('approve expense')) {
             return response()->json([
                 'success' => false,
@@ -1353,18 +1506,34 @@ class ExpenseController extends Controller
             ]);
         }
 
+        $actor = $this->actorLabel($user);
+
+        $line = sprintf(
+            '[%s] %s approved expense %s ("%s") for %s. Amount: %s. Status was: %s.',
+            now()->format('Y-m-d H:i:s'),
+            $actor,
+            $expense->expense_number,
+            $expense->description,
+            $expense->vendor_name ?? 'vendor',
+            currency_symbol() . number_format((float) $expense->net_amount, 2),
+            $expense->payment_status
+        );
+
         $expense->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'updated_at' => now(),
+            'updated_at'  => now(),
+            'notes'       => $expense->notes
+                                ? $expense->notes . "\n" . $line
+                                : $line,
         ]);
 
         return response()->json([
-            'success' => true,
-            'reload' => true,
+            'success'     => true,
+            'reload'      => true,
             'componentId' => 'reloadExpenseComponent',
-            'message' => __('auth.expense_approved'),
-            'redirect' => route('expense.index'),
+            'message'     => __('auth.expense_approved'),
+            'redirect'    => route('expense.index'),
         ]);
     }
 
@@ -1461,10 +1630,24 @@ class ExpenseController extends Controller
             // Upload new receipt
             $path = $request->file('receipt')->store('receipts/tenant-' . $tenantId, 'public');
 
+            $actor = $this->actorLabel($user);
+
+            $line = sprintf(
+                '[%s] %s uploaded a new receipt for expense %s ("%s"). Old receipt: %s.',
+                now()->format('Y-m-d H:i:s'),
+                $actor,
+                $expense->expense_number,
+                $expense->description,
+                $expense->receipt_url ? 'replaced' : 'none'
+            );
+
             $expense->update([
                 'receipt_url' => $path,
                 'description' => $request->description ?? $expense->description,
-                'updated_at' => now(),
+                'updated_at'  => now(),
+                'notes'       => $expense->notes
+                                    ? $expense->notes . "\n" . $line
+                                    : $line,
             ]);
 
             session()->flash('toast', [
