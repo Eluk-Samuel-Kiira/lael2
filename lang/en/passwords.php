@@ -1695,6 +1695,62 @@ return [
     'warning'             => 'Warning',
     'custom_pricing'    => 'Custom pricing',
     'variant_pricing'   => 'Variant pricing',
+    'production_order_details'   => 'Production Order Details',
+
+
+    // Cancel confirmation dialog
+    'confirm_cancel'             => 'Cancel this production order?',
+    'cancel_production_warning'  => 'This will cancel the production order. If production had already started, the consumed stock and any produced output will be reversed. This action cannot be undone.',
+    'yes_cancel_it'              => 'Yes, cancel it',
+    'cancelling'                 => 'Cancelling...',
+    
+
+    
+    // ── Batch inventory ───────────────────────────────────────
+    'batch_inventory'                    => 'Batch Inventory',
+    'batch_number'                       => 'Batch Number',
+    'batches'                            => 'Batches',
+    'search_batches'                     => 'Search batches',
+    'all_locations'                      => 'All Locations',
+    'all_departments'                    => 'All Departments',
+    'total_batches'                      => 'Total Batches',
+    'total_quantity_remaining'           => 'Total Quantity Remaining',
+    'no_batches_found'                   => 'No batches found',
+    'try_adjusting_filters'              => 'Try adjusting the filters or search query.',
+    'reset_filters'                      => 'Reset Filters',
+    'failed_to_load_batches'             => 'Failed to load batches.',
+    'batch_not_found'                    => 'Batch not found.',
+    'failed_to_load_details'             => 'Failed to load batch details.',
+    'view_details'                       => 'View Details',
+
+    // ── Assign / Unassign ─────────────────────────────────────
+    'assign_batches'                     => 'Assign Batches',
+    'assign'                             => 'Assign',
+    'unassign'                           => 'Unassign',
+    'selected_batches'                   => 'Selected batches',
+    'select_location'                    => 'Select location',
+    'select_department'                  => 'Select department',
+    'no_departments_for_location'        => 'No departments available for this location.',
+    'assignment_warning'                 => 'Assignment Warning',
+    'assignment_warning_description'     => 'Reassigning a batch moves it between locations/departments. Batch stock is preserved.',
+    'at_least_one_assignment_required'   => 'Please select at least a location or department.',
+    'no_batches_selected'                => 'No batches selected.',
+    'error_assigning_batches'            => 'Failed to assign batches.',
+    'error_unassigning_batches'          => 'Failed to unassign batches.',
+    'confirm_unassign_batches'           => 'Are you sure you want to unassign the selected batches?',
+
+    // ── Split ─────────────────────────────────────────────────
+    'split_batch'                        => 'Split Batch',
+    'split_batch_instruction'            => 'Create two or more child batches from this parent batch.',
+    'source_batch'                       => 'Source batch',
+    'available'                          => 'Available',
+    'add_split'                          => 'Add Split',
+    'split_total'                        => 'Split Total',
+    'exceeds_available'                  => 'Exceeds available quantity',
+    'need_at_least_two_splits'           => 'Please provide at least two valid split rows.',
+    'split_exceeds_available_quantity'   => 'Total split quantity exceeds the available quantity.',
+    'split_failed'                       => 'Split failed',
+    'batch_split_success'                => '{1} Batch split into :count children| [2,*] Batch split into :count children',
 
 
     // ─── Edit Production Order ────────────────────────────────────

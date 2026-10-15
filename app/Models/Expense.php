@@ -20,6 +20,7 @@ class Expense extends Model
         'tenant_id',
         'expense_number',
         'date',
+        'notes', 
         'description',
         'category_id',
         'location_id',

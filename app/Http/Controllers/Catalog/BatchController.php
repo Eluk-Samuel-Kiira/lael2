@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\PurchaseReceiptItem;
 use App\Models\{ Location, BatchLog };
 use App\Models\Department;
+use App\Models\ProductionOrder;
 
 class BatchController extends Controller
 {
@@ -18,22 +19,90 @@ class BatchController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view inventory')) {
             abort(403, __('payments.not_authorized'));
         }
 
-        // ── Visibility rule ─────────────────────────────────────────
-        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        $locationsQuery = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name');
+
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+
+        $locations = $locationsQuery->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)
+            ->when(!$isAdmin, fn($q) => $q->whereIn('location_id', $userLocationIds))
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id']);
+
+        $initialFilters = [
+            'search'        => (string) $request->get('search', ''),
+            'location_id'   => (string) $request->get('location_id', ''),
+            'department_id' => (string) $request->get('department_id', ''),
+            'per_page'      => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                ? (int) $request->get('per_page', 15)
+                                : 15,
+        ];
+
+        return view('inventory.batch.index', compact('locations', 'initialFilters', 'departments'));
+    }
+
+    public function departmentsByLocation(Request $request, $locationId)
+    {
+        $user = Auth::user();
+
+        $departments = Department::where('tenant_id', $user->tenant_id)
+            ->where('location_id', $locationId)
+            ->where('isActive', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json($departments);
+    }
+
+    /**
+     * JSON endpoint for the batch listing.
+     *
+     * Returns the same rows the index view shows, shaped for vanilla JS
+     * rendering. Filters, search, pagination, tenant visibility and the
+     * admin/non-admin location rules all mirror index().
+     *
+     * GET /batches/data
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
         $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
 
         $search       = $request->get('search');
         $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $perPage      = $request->get('per_page', 15);
+        $perPage      = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
 
+        // ── Base query (identical to index()) ───────────────────────
         $query = PurchaseReceiptItem::query()
             ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
             ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
@@ -58,17 +127,14 @@ class BatchController extends Controller
                 'departments.name as department_name'
             );
 
-        // ── Non-admins: only batches at their assigned locations ────
         if (!$isAdmin) {
             if (empty($userLocationIds)) {
-                // User has no locations assigned → return nothing
                 $query->whereRaw('1 = 0');
             } else {
                 $query->whereIn('purchase_receipt_items.location_id', $userLocationIds);
             }
         }
 
-        // ── Search ──────────────────────────────────────────────────
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('purchase_receipt_items.batch_number', 'like', "%{$search}%")
@@ -78,52 +144,86 @@ class BatchController extends Controller
             });
         }
 
-        // ── Location filter (only meaningful for admins) ────────────
         if ($locationId) {
-            // For non-admins, ensure the requested location is within their allowed set
             if ($isAdmin || in_array((int) $locationId, $userLocationIds, true)) {
                 $query->where('purchase_receipt_items.location_id', $locationId);
             }
         }
 
-        // ── Department filter ───────────────────────────────────────
         if ($departmentId) {
             $query->where('purchase_receipt_items.department_id', $departmentId);
         }
 
-        $batches = $query->orderBy('purchase_receipt_items.created_at', 'desc')->paginate($perPage);
+        // ── Summary counts before pagination ─────────────────────────
+        $summaryRow = (clone $query)
+            ->select([])
+            ->selectRaw('COUNT(*) as total_batches')
+            ->selectRaw('COALESCE(SUM(purchase_receipt_items.quantity_remaining), 0) as total_quantity')
+            ->first();
 
-        // ── Locations list for the filter dropdown ──────────────────
-        $locationsQuery = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name');
+        $paginator = $query->orderBy('purchase_receipt_items.created_at', 'desc')->paginate($perPage);
 
-        if (!$isAdmin) {
-            $locationsQuery->whereIn('id', $userLocationIds);
-        }
+        // ── Shape the rows for JS ────────────────────────────────────
+        $rows = collect($paginator->items())->map(function ($batch) {
+            $remaining = $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+            $expiry    = $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null;
 
-        $locations = $locationsQuery->get();
+            // Expiry badge class
+            $expiryBadge = 'secondary';
+            $expiryText  = $expiry ?? 'No expiry';
 
-        $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get();
+            if ($batch->expiry_date) {
+                $daysLeft = now()->diffInDays($batch->expiry_date, false);
+                if ($daysLeft < 0)        $expiryBadge = 'danger';
+                elseif ($daysLeft <= 7)   $expiryBadge = 'warning';
+                elseif ($daysLeft <= 30)  $expiryBadge = 'info';
+                else                      $expiryBadge = 'success';
 
-        $summary = [
-            'total_batches'  => $query->count(),
-            'total_quantity' => $query->sum('purchase_receipt_items.quantity_remaining') ?? 0,
-        ];
+                $expiryText = $batch->expiry_date->format('d M Y');
+            }
 
-        return view('inventory.batch.index', compact(
-            'batches',
-            'locations',
-            'departments',
-            'summary',
-            'search',
-            'locationId',
-            'departmentId',
-            'perPage'
-        ));
+            return [
+                'id'                 => $batch->id,
+                'batch_number'       => $batch->batch_number,
+                'variant_name'       => $batch->variant_name ?? $batch->product_name ?? 'N/A',
+                'sku'                => $batch->sku ?? '—',
+                'quantity_remaining' => (float) $remaining,
+                'quantity_received'  => (float) ($batch->quantity_received ?? 0),
+                'unit_cost'          => (float) ($batch->unit_cost ?? 0),
+                'unit_cost_formatted'=> currency_symbol() . number_format((float) ($batch->unit_cost ?? 0), 2),
+                'expiry_date'        => $expiry,
+                'expiry_text'        => $expiryText,
+                'expiry_badge'       => $expiryBadge,
+                'location_id'        => $batch->location_id,
+                'location_name'      => $batch->location_name ?? 'Unassigned',
+                'department_id'      => $batch->department_id,
+                'department_name'    => $batch->department_name ?? '—',
+                'created_at'         => optional($batch->created_at)->format('d M Y H:i'),
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => [
+                'total_batches'  => (int) ($summaryRow->total_batches ?? 0),
+                'total_quantity' => (float) ($summaryRow->total_quantity ?? 0),
+            ],
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+            'filters' => [
+                'search'        => $search,
+                'location_id'   => $locationId,
+                'department_id' => $departmentId,
+            ],
+        ]);
     }
 
     /**
@@ -341,7 +441,7 @@ class BatchController extends Controller
                 $createdIds[] = $child->id;
 
                 // Log each split as a transfer
-                $this->logBatchSplit($parent, $child, $split, $user, $tenantId, parentQty);
+                $this->logBatchSplit($parent, $child, $split, $user, $tenantId, $parentQty);$this->logBatchSplit($parent, $child, $split, $user, $tenantId, $parentQty);
             }
 
             // Handle the parent: reduce or delete
@@ -799,12 +899,21 @@ class BatchController extends Controller
         }
     }
 
+
     /**
-     * Get batch details for selected IDs
+     * Get full details for a set of batch IDs.
+     *
+     * Returns, per batch:
+     *   - Provenance: PO, receipt, supplier, original received qty
+     *   - Current state: remaining qty, location, department, cost
+     *   - Movement history: every batch_log row touching this batch
+     *   - Rollup: received / consumed / transferred / remaining
+     *
+     * POST /batches/details
      */
     public function details(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view inventory')) {
@@ -815,39 +924,180 @@ class BatchController extends Controller
         }
 
         $request->validate([
-            'batch_ids' => 'required|array',
-            'batch_ids.*' => 'exists:purchase_receipt_items,id',
+            'batch_ids'   => 'required|array',
+            'batch_ids.*' => 'integer',
         ]);
 
+        // ── Load batches with the full provenance chain ─────────────
         $batches = PurchaseReceiptItem::query()
-            ->join('purchase_receipts', 'purchase_receipt_items.purchase_receipt_id', '=', 'purchase_receipts.id')
-            ->join('purchase_orders', 'purchase_receipts.purchase_order_id', '=', 'purchase_orders.id')
-            ->join('purchase_order_items', 'purchase_receipt_items.purchase_order_item_id', '=', 'purchase_order_items.id')
-            ->join('product_variants', 'purchase_order_items.product_variant_id', '=', 'product_variants.id')
-            ->join('products', 'product_variants.product_id', '=', 'products.id')
-            ->where('purchase_orders.tenant_id', $tenantId)
-            ->where('products.inventory_strategy', 'batch')
-            ->whereIn('purchase_receipt_items.id', $request->batch_ids)
-            ->select(
-                'purchase_receipt_items.*',
-                'product_variants.name as variant_name',
-                'products.name as product_name'
-            )
+            ->whereIn('id', $request->batch_ids)
+            ->where('tenant_id', $tenantId)
+            ->with([
+                'purchaseOrderItem.productVariant.product.category',
+                'purchaseOrderItem.purchaseOrder.supplier',
+                'purchaseReceipt.purchaseOrder.supplier',
+                'location',
+                'department',
+            ])
             ->get();
+
+        if ($batches->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data'    => [],
+            ]);
+        }
+
+        // ── Preload every batch log for these batches ──────────────
+        $batchIds = $batches->pluck('id');
+
+        $logs = BatchLog::query()
+            ->whereIn('batch_id', $batchIds)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('event_date')
+            ->orderBy('id')
+            ->get();
+
+        // Group by batch id for O(1) lookup per batch
+        $logsByBatch = $logs->groupBy('batch_id');
+
+        // ── Preload production order numbers for consumed logs ─────
+        $poIdsInLogs = $logs->pluck('production_order_id')->filter()->unique();
+        $prodOrders  = $poIdsInLogs->isNotEmpty()
+            ? \App\Models\ProductionOrder::whereIn('id', $poIdsInLogs)
+                ->pluck('production_number', 'id')
+            : collect();
+
+        // ── Shape the response ─────────────────────────────────────
+        $payload = $batches->map(function (PurchaseReceiptItem $batch) use (
+            $logsByBatch, $prodOrders
+        ) {
+            // ── Provenance (walk the chain) ───────────────────────
+            $poItem       = $batch->purchaseOrderItem;
+            $purchaseOrder= $poItem?->purchaseOrder
+                        ?? $batch->purchaseReceipt?->purchaseOrder;
+            $supplier     = $purchaseOrder?->supplier;
+
+            $variant = $poItem?->productVariant;
+
+            // ── Current state ─────────────────────────────────────
+            $currentRemaining = (float) ($batch->quantity_remaining
+                                    ?? $batch->quantity_received
+                                    ?? 0);
+            $originalReceived = (float) ($batch->quantity_received ?? 0);
+
+            // ── Movement history, chronological ───────────────────
+            $history = ($logsByBatch[$batch->id] ?? collect())->map(function ($log) use ($prodOrders) {
+                // Resolve a human source label
+                $source = 'Unknown';
+                if ($log->production_order_id) {
+                    $prodNo = $prodOrders[$log->production_order_id] ?? "PRD-#{$log->production_order_id}";
+                    $source = "Production {$prodNo}";
+                } elseif ($log->purchase_order_id) {
+                    $source = "PO " . ($log->purchase_order_number ?? "#{$log->purchase_order_id}");
+                } elseif (isset($log->metadata['action'])) {
+                    $source = ucfirst($log->metadata['action']);
+                }
+
+                // Short readable note
+                $note = $log->metadata['narrative']
+                    ?? $log->metadata['reason']
+                    ?? ucfirst(str_replace('_', ' ', $log->type ?? 'movement'));
+
+                return [
+                    'id'                => $log->id,
+                    'type'              => $log->type,
+                    'type_label'        => $log->type_label ?? ucfirst($log->type),
+                    'event_date'        => optional($log->event_date)->toIso8601String(),
+                    'event_date_human'  => optional($log->event_date)->format('d M Y H:i'),
+                    'quantity_change'   => (float) $log->quantity_change,
+                    'quantity_before'   => (float) $log->quantity_before,
+                    'quantity_after'    => (float) $log->quantity_after,
+                    'unit_cost'         => (float) ($log->unit_cost ?? 0),
+                    'total_cost'        => (float) ($log->total_cost ?? 0),
+                    'performed_by'      => $log->performed_by,
+                    'source'            => $source,
+                    'note'              => $note,
+                    'production_order_id' => $log->production_order_id,
+                    'production_number'   => $log->production_order_id
+                        ? ($prodOrders[$log->production_order_id] ?? null)
+                        : null,
+                    'purchase_order_number' => $log->purchase_order_number,
+                ];
+            })->values();
+
+            // ── Rollup from the history ───────────────────────────
+            // "Consumed" = anything with a negative quantity_change
+            // "Added"    = anything with a positive quantity_change (receipts, splits in, adjustments)
+            $totalConsumed = (float) $history
+                ->where('quantity_change', '<', 0)
+                ->sum('quantity_change');   // negative
+            $totalAdded = (float) $history
+                ->where('quantity_change', '>', 0)
+                ->sum('quantity_change');   // positive
+
+            // Filter consumption strictly to production orders
+            $consumedByProduction = (float) $history
+                ->filter(fn($h) => $h['production_order_id'] && $h['quantity_change'] < 0)
+                ->sum('quantity_change');
+
+            $consumedByProduction = abs($consumedByProduction);
+
+            return [
+                'id'               => $batch->id,
+                'batch_number'     => $batch->batch_number,
+
+                'variant' => [
+                    'id'   => $variant?->id,
+                    'name' => $variant?->name ?? $poItem?->product_name ?? 'N/A',
+                    'sku'  => $variant?->sku  ?? $poItem?->sku ?? null,
+                    'category' => $variant?->product?->category?->name ?? 'Uncategorized',
+                ],
+
+                'provenance' => [
+                    'purchase_order_id'     => $purchaseOrder?->id,
+                    'purchase_order_number' => $purchaseOrder?->po_number,
+                    'purchase_order_date'   => optional($purchaseOrder?->created_at)->format('d M Y'),
+                    'purchase_receipt_id'   => $batch->purchase_receipt_id,
+                    'supplier_id'           => $supplier?->id,
+                    'supplier_name'         => $supplier?->name,
+                    'ordered_quantity'      => (float) ($poItem?->quantity ?? 0),
+                    'original_received'     => $originalReceived,
+                    'unit_cost_at_receipt'  => (float) ($batch->unit_cost ?? $poItem?->unit_cost ?? 0),
+                    'received_at'           => optional($batch->created_at)->format('d M Y H:i'),
+                ],
+
+                'current' => [
+                    'quantity_remaining' => $currentRemaining,
+                    'location_id'        => $batch->location_id,
+                    'location_name'      => $batch->itemLocation?->name ?? 'Unassigned',
+                    'department_id'      => $batch->department_id,
+                    'department_name'    => $batch->departmentItem?->name ?? '—',
+                    'expiry_date'        => optional($batch->expiry_date)->format('Y-m-d'),
+                    'unit_cost'          => (float) ($batch->unit_cost ?? 0),
+                    'status'             => $currentRemaining <= 0
+                        ? 'depleted'
+                        : ($batch->location_id && $batch->department_id ? 'assigned' : 'available'),
+                ],
+
+                'rollup' => [
+                    'original_received'    => $originalReceived,
+                    'total_added'          => round($totalAdded, 2),       // receipts + adjustments in
+                    'total_consumed'       => round(abs($totalConsumed), 2), // any out
+                    'consumed_by_production' => round($consumedByProduction, 2),
+                    'quantity_remaining'   => round($currentRemaining, 2),
+                    'movements_count'      => $history->count(),
+                ],
+
+                'history' => $history,
+            ];
+        });
 
         return response()->json([
             'success' => true,
-            'data' => $batches->map(function($batch) {
-                return [
-                    'id' => $batch->id,
-                    'batch_number' => $batch->batch_number,
-                    'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                    'expiry_date' => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                    'product_name' => $batch->variant_name ?? $batch->product_name ?? 'N/A',
-                    'location_id' => $batch->location_id,
-                    'department_id' => $batch->department_id,
-                ];
-            })
+            'data'    => $payload,
         ]);
     }
+
+
 }

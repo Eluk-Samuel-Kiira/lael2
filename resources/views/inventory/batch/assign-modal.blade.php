@@ -1,7 +1,8 @@
 {{-- ============================================================
-     Assign Batches Modal
+     Assign / Unassign Batches Modal
      - Location → Department cascade (server-fetched)
      - No Select2, no nesting, no duplicate IDs
+     - Vanilla JS only
      ============================================================ --}}
 
 <div class="modal fade" id="assignBatchModal" tabindex="-1" aria-hidden="true">
@@ -33,8 +34,7 @@
                     <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                         <span class="required">{{ __('pagination._location') }}</span>
                     </label>
-                    <select id="assignBatchLocationId"
-                            class="form-select form-select-solid">
+                    <select id="assignBatchLocationId" class="form-select form-select-solid">
                         <option value="">{{ __('passwords.select_location') }}</option>
                         @foreach($locations ?? [] as $location)
                             <option value="{{ $location->id }}">{{ $location->name }}</option>
@@ -47,13 +47,10 @@
                     <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
                         <span class="required">{{ __('auth._department') }}</span>
                     </label>
-                    <select id="assignBatchDepartmentId"
-                            class="form-select form-select-solid"
-                            disabled>
+                    <select id="assignBatchDepartmentId" class="form-select form-select-solid" disabled>
                         <option value="">{{ __('passwords.select_department') }}</option>
                     </select>
-                    <div id="assignBatchDepartmentEmptyHint"
-                         class="text-muted fs-8 mt-2 d-none">
+                    <div id="assignBatchDepartmentEmptyHint" class="text-muted fs-8 mt-2 d-none">
                         {{ __('passwords.no_departments_for_location') }}
                     </div>
                 </div>
@@ -98,70 +95,17 @@
 (function () {
     'use strict';
 
-    // ── Route template (safely serialized for JS) ──────────────
-    const DEPT_URL_TEMPLATE = @json(route('get.departments.by.location', ['locationId' => '__LOC__']));
+    // ── Config ─────────────────────────────────────────────────
+    const ROUTES = {
+        departments: '{{ route("get.departments.by.location", ["locationId" => "__LOC__"]) }}',
+        assign:      '{{ route("batches.assign") }}',
+        unassign:    '{{ route("batches.unassign") }}',
+    };
     const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
-    function departmentsByLocationUrl(locationId) {
-        return DEPT_URL_TEMPLATE.replace('__LOC__', encodeURIComponent(locationId));
-    }
 
     // ── State ──────────────────────────────────────────────────
     let selectedBatchIds = [];
     let locationSelect, departmentSelect, emptyHint;
-
-    // ── Load departments for a given location ──────────────────
-    async function loadDepartments(locationId) {
-        if (!departmentSelect) return;
-
-        // Reset the department select
-        departmentSelect.innerHTML = `<option value="">{{ __("passwords.select_department") }}</option>`;
-        departmentSelect.disabled  = true;
-        emptyHint?.classList.add('d-none');
-
-        if (!locationId) return;
-
-        try {
-            const res = await fetch(departmentsByLocationUrl(locationId), {
-                credentials: 'same-origin',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                },
-            });
-
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-
-            const data = await res.json();
-
-            // Normalize: array | object-with-numeric-keys | nested wrapper
-            let list = [];
-            if (Array.isArray(data)) {
-                list = data;
-            } else if (data && typeof data === 'object') {
-                const raw = data.departments ?? data.data ?? data;
-                if (Array.isArray(raw)) {
-                    list = raw;
-                } else if (raw && typeof raw === 'object') {
-                    list = Object.values(raw);
-                }
-            }
-            list = list.filter(d => d && typeof d === 'object' && d.id);
-
-            list.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d.id;
-                opt.textContent = d.name;
-                departmentSelect.appendChild(opt);
-            });
-
-            departmentSelect.disabled = list.length === 0;
-            emptyHint?.classList.toggle('d-none', list.length > 0);
-        } catch (err) {
-            console.error('[batches] dept fetch failed:', err);
-            emptyHint?.classList.remove('d-none');
-        }
-    }
 
     // ── Public: open modal ─────────────────────────────────────
     window.openAssignBatchModal = function (batchIds) {
@@ -183,7 +127,50 @@
         ).show();
     };
 
-    // ── Helpers ────────────────────────────────────────────────
+    // ── Cascade: location → departments ────────────────────────
+    async function loadDepartments(locationId) {
+        if (!departmentSelect) return;
+
+        departmentSelect.innerHTML = `<option value="">{{ __("passwords.select_department") }}</option>`;
+        departmentSelect.disabled  = true;
+        emptyHint?.classList.add('d-none');
+
+        if (!locationId) return;
+
+        try {
+            const url = ROUTES.departments.replace('__LOC__', encodeURIComponent(locationId));
+            const res = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            const data = await res.json();
+
+            // Normalize to an array of {id, name}
+            let list = Array.isArray(data) ? data : Object.values(data || {});
+            list = list.filter(d => d && typeof d === 'object' && d.id);
+
+            list.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = d.name;
+                departmentSelect.appendChild(opt);
+            });
+
+            departmentSelect.disabled = list.length === 0;
+            emptyHint?.classList.toggle('d-none', list.length > 0);
+        } catch (err) {
+            console.error('[batch-assign] dept fetch failed:', err);
+            emptyHint?.classList.remove('d-none');
+        }
+    }
+
+    // ── Loader helpers ─────────────────────────────────────────
     function toggleBusy(btn, busy) {
         const label    = btn.querySelector('.indicator-label');
         const progress = btn.querySelector('.indicator-progress');
@@ -227,7 +214,7 @@
         toggleBusy(btn, true);
 
         try {
-            const data = await postJson('{{ route("batches.assign") }}', {
+            const data = await postJson(ROUTES.assign, {
                 batch_ids:     selectedBatchIds,
                 location_id:   locationId,
                 department_id: departmentId,
@@ -235,15 +222,22 @@
 
             if (data.success) {
                 toastr.success(data.message);
+
+                // Close modal, refresh the JS-rendered list, clear selection.
+                // No full page reload.
                 setTimeout(() => {
-                    bootstrap.Modal.getInstance(document.getElementById('assignBatchModal'))?.hide();
-                    if (data.reload) location.reload();
-                }, 800);
+                    bootstrap.Modal
+                        .getInstance(document.getElementById('assignBatchModal'))
+                        ?.hide();
+
+                    window.BatchPage?.clearSelection?.();
+                    window.BatchPage?.reload?.();
+                }, 500);
             } else {
                 toastr.error(data.message || '{{ __("passwords.error_assigning_batches") }}');
             }
         } catch (err) {
-            console.error('[batches] assign failed:', err);
+            console.error('[batch-assign] assign failed:', err);
             toastr.error('{{ __("passwords.error_assigning_batches") }}');
         } finally {
             toggleBusy(btn, false);
@@ -254,52 +248,58 @@
     async function handleUnassign(btn) {
         if (!confirm('{{ __("passwords.confirm_unassign_batches") }}')) return;
 
+        if (!selectedBatchIds.length) {
+            toastr.warning('{{ __("passwords.no_batches_selected") }}');
+            return;
+        }
+
         toggleBusy(btn, true);
 
         try {
-            const data = await postJson('{{ route("batches.unassign") }}', {
+            const data = await postJson(ROUTES.unassign, {
                 batch_ids: selectedBatchIds,
             });
 
             if (data.success) {
                 toastr.success(data.message);
                 setTimeout(() => {
-                    bootstrap.Modal.getInstance(document.getElementById('assignBatchModal'))?.hide();
-                    if (data.reload) location.reload();
-                }, 800);
+                    bootstrap.Modal
+                        .getInstance(document.getElementById('assignBatchModal'))
+                        ?.hide();
+
+                    window.BatchPage?.clearSelection?.();
+                    window.BatchPage?.reload?.();
+                }, 500);
             } else {
                 toastr.error(data.message || '{{ __("passwords.error_unassigning_batches") }}');
             }
         } catch (err) {
-            console.error('[batches] unassign failed:', err);
+            console.error('[batch-assign] unassign failed:', err);
             toastr.error('{{ __("passwords.error_unassigning_batches") }}');
         } finally {
             toggleBusy(btn, false);
         }
     }
 
-    // ── Init: wire listeners once DOM is ready ─────────────────
+    // ── Init ───────────────────────────────────────────────────
     function init() {
         locationSelect   = document.getElementById('assignBatchLocationId');
         departmentSelect = document.getElementById('assignBatchDepartmentId');
         emptyHint        = document.getElementById('assignBatchDepartmentEmptyHint');
 
-        // Modal not on this page — nothing to wire up
         if (!locationSelect || !departmentSelect) return;
 
-        // Cascade: location → departments
         locationSelect.addEventListener('change', function () {
             loadDepartments(this.value);
         });
 
-        // Confirm / unassign
         document.getElementById('assignBatchConfirmBtn')
             ?.addEventListener('click', function () { handleAssign(this); });
 
         document.getElementById('assignBatchUnassignBtn')
             ?.addEventListener('click', function () { handleUnassign(this); });
 
-        // Reset state on modal close
+        // Reset state on close
         document.getElementById('assignBatchModal')
             ?.addEventListener('hidden.bs.modal', function () {
                 locationSelect.value = '';

@@ -73,21 +73,25 @@ use App\Http\Controllers\Manufacturing\ProductionOrderController;
 Route::middleware(['auth', 'verified'])->group(function () {
     
     Route::prefix('production-orders')->name('production-orders.')->group(function () {
-        Route::get('/', [ProductionOrderController::class, 'index'])->name('index');
-        Route::post('/', [ProductionOrderController::class, 'store'])->name('store');
-        
-        // ─── Edit / Update ──────────────────────────────────────────
-        Route::get('/{id}/edit', [ProductionOrderController::class, 'edit'])->name('edit');
-        Route::put('/{id}', [ProductionOrderController::class, 'update'])->name('update');
-        
-        // ─── Actions ────────────────────────────────────────────────
-        Route::post('/{id}/start-with-payment', [ProductionOrderController::class, 'startWithPayment'])->name('start-with-payment');
-        Route::post('/{id}/start', [ProductionOrderController::class, 'start'])->name('start');
-        Route::post('/{id}/cancel', [ProductionOrderController::class, 'cancel'])->name('cancel');
-        Route::post('/{id}/update-output', [ProductionOrderController::class, 'updateOutput'])->name('update-output');
-        Route::get('/available-batches', [ProductionOrderController::class, 'getAvailableBatches'])->name('available-batches');
-        Route::post('{id}/complete-with-outputs', [ProductionOrderController::class, 'completeWithOutputs'])
-            ->name('complete-with-outputs');
+
+        // ─── Static routes FIRST — no {id} wildcard should precede them ─
+        Route::get('/',                   [ProductionOrderController::class, 'index'])->name('index');
+        Route::get('/data',               [ProductionOrderController::class, 'data'])->name('data');                 // ← NEW
+        Route::get('/available-batches',  [ProductionOrderController::class, 'getAvailableBatches'])->name('available-batches');
+
+        // ─── Creation ───────────────────────────────────────────────────
+        Route::post('/',                  [ProductionOrderController::class, 'store'])->name('store');
+
+        // ─── Edit / Update ──────────────────────────────────────────────
+        Route::get('/{id}/edit',          [ProductionOrderController::class, 'edit'])->name('edit');
+        Route::put('/{id}',               [ProductionOrderController::class, 'update'])->name('update');
+
+        // ─── Actions ────────────────────────────────────────────────────
+        Route::post('/{id}/start-with-payment',   [ProductionOrderController::class, 'startWithPayment'])->name('start-with-payment');
+        Route::post('/{id}/start',                [ProductionOrderController::class, 'start'])->name('start');
+        Route::post('/{id}/cancel',               [ProductionOrderController::class, 'cancel'])->name('cancel');
+        Route::post('/{id}/update-output',        [ProductionOrderController::class, 'updateOutput'])->name('update-output');
+        Route::post('/{id}/complete-with-outputs',[ProductionOrderController::class, 'completeWithOutputs'])->name('complete-with-outputs');
     });
 });
 
