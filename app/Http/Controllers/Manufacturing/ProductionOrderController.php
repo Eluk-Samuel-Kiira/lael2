@@ -264,7 +264,31 @@ class ProductionOrderController extends Controller
             'scheduled_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
             'inputs' => 'required|array|min:1',
-            'inputs.*.product_variant_id' => 'required|exists:product_variants,id',
+            'inputs.*.product_variant_id' => [
+                'required',
+                'exists:product_variants,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    // Extract the input index: inputs.3.product_variant_id → 3
+                    preg_match('/inputs\.(\d+)\./', $attribute, $m);
+                    $index = $m[1] ?? null;
+                    if ($index === null) return;
+
+                    $variant = ProductVariant::with('product')->find($value);
+                    if (!$variant) return;
+
+                    $strategy = $variant->product?->resolvedInventoryStrategy();
+
+                    if ($strategy === 'batch') {
+                        $batchId = $request->input("inputs.{$index}.purchase_receipt_item_id");
+                        if (empty($batchId)) {
+                            $fail(
+                                "A specific batch must be selected for batch-tracked material '{$variant->name}'. "
+                                . "FIFO is disabled — every input row must point to exactly one batch."
+                            );
+                        }
+                    }
+                },
+            ],
             'inputs.*.planned_quantity' => 'required|numeric|min:0.01',
             'inputs.*.purchase_receipt_item_id' => 'nullable|exists:purchase_receipt_items,id',
             'inputs.*.unit' => 'required|string|max:20',
@@ -626,15 +650,15 @@ class ProductionOrderController extends Controller
     }
 
     /**
-     * Deplete input stock based on strategy.
+     * Consume a production input's quantity from its batch (or overall stock).
      *
-     * - If a specific batch is attached to the input, deplete THAT batch + log it.
-     * - If strategy is batch (no specific batch), FIFO across available batches + log each.
-     * - If strategy is serial, reserve serials.
-     * - Otherwise, deplete overall quantity + log to SingleShopInventoryLog.
+     * STRICT MODE — no FIFO fallback:
+     *   - Batch-strategy inputs MUST have a purchase_receipt_item_id.
+     *   - That batch is the ONLY batch touched.
+     *   - If the batch has less stock than required, throw.
+     *   - If no batch is attached, throw.
      *
-     * Every path that reduces batch quantity writes a BatchLog row with
-     * production_order_id set so the production reports can surface it.
+     * The user is expected to add one input row per batch they want to consume.
      */
     private function consumeInput($input, $productionOrder): void
     {
@@ -651,103 +675,168 @@ class ProductionOrderController extends Controller
             'actual_cost'     => $input->estimated_cost,
         ]);
 
-        // ── 1. Specific batch attached → deplete + log it, then fall through
-        //      to also reduce the overall tally.
-        if ($input->purchase_receipt_item_id) {
-            $this->depleteBatch(
-                batchId:           $input->purchase_receipt_item_id,
-                variant:           $variant,
-                quantity:          $quantity,
-                productionOrder:   $productionOrder,
-                inputId:           $input->id,
-                reason:            'consumed',
-                source:            'production_consumption_batch',
-            );
-            $this->decrementOverallQuantity($variant, $quantity, $input, $productionOrder, 'production_consumption_batch');
-            return;
-        }
-
-        // ── 2. Batch strategy, no specific batch → FIFO across batches
+        // ── 1. Batch strategy — STRICT ────────────────────────────────
         if ($strategy === 'batch') {
-            $this->depleteBatchesFifo($variant, $quantity, $productionOrder, $input);
-            $this->decrementOverallQuantity($variant, $quantity, $input, $productionOrder, 'production_consumption_batch_fifo');
-            return;
-        }
-
-        // ── 3. Serial strategy → reserve serials
-        if ($strategy === 'serial') {
-            $serials = SerialNumber::where('variant_id', $variant->id)
-                ->where('status', SerialNumber::STATUS_AVAILABLE)
-                ->where('tenant_id', $productionOrder->tenant_id)
-                ->limit((int) $quantity)
-                ->get();
-
-            foreach ($serials as $serial) {
-                $serial->update([
-                    'status'              => SerialNumber::STATUS_RESERVED,
-                    'production_order_id' => $productionOrder->id,
-                    'notes'               => "Consumed in production #{$productionOrder->production_number}",
-                ]);
+            if (empty($input->purchase_receipt_item_id)) {
+                throw new \Exception(sprintf(
+                    'Production order %s: input for "%s" uses the batch strategy but no batch was selected. '
+                    . 'Every batch-tracked input must point to exactly one batch. '
+                    . 'FIFO across batches is disabled.',
+                    $productionOrder->production_number,
+                    $variant->name
+                ));
             }
+
+            $this->depleteSpecificBatch(
+                batchId:         (int) $input->purchase_receipt_item_id,
+                variant:         $variant,
+                quantity:        $quantity,
+                productionOrder: $productionOrder,
+                inputId:         $input->id
+            );
+
             return;
         }
 
-        // ── 4. Quantity strategy → overall only
+        // ── 2. Serial strategy — reserve specific serials ────────────
+        if ($strategy === 'serial') {
+            $this->reserveSpecificSerials($variant, $quantity, $productionOrder, $input);
+            return;
+        }
+
+        // ── 3. Quantity strategy — decrement overall stock ───────────
         $this->decrementOverallQuantity($variant, $quantity, $input, $productionOrder, 'production_consumption');
     }
 
 
     /**
-     * Deplete a single batch (by ID) and log the movement.
-     * Throws if the batch can't be found or is short.
+     * Consume from one specific batch — STRICT.
+     *
+     * Validations (all must pass or the whole transaction aborts):
+     *   1. Batch exists.
+     *   2. Batch belongs to the same tenant.
+     *   3. Batch's variant matches the input's variant.
+     *   4. Batch's quantity_remaining is >= quantity requested.
+     *   5. Batch's quantity_remaining is not null (batch has been properly received).
+     *
+     * On success:
+     *   - Decrements the batch's quantity_remaining.
+     *   - Writes a BatchLog with the full narrative.
+     *   - Decrements the variant's overall_quantity_at_hand.
+     *   - Writes a SingleShopInventoryLog for the tenant-wide tally.
      */
-    private function depleteBatch(
+    private function depleteSpecificBatch(
         int $batchId,
         ProductVariant $variant,
         float $quantity,
         ProductionOrder $productionOrder,
-        ?int $inputId,
-        string $reason,
-        string $source
+        ?int $inputId
     ): void {
-        $batch = PurchaseReceiptItem::where('id', $batchId)
+        $batch = PurchaseReceiptItem::query()
+            ->where('id', $batchId)
             ->where('tenant_id', $productionOrder->tenant_id)
             ->first();
 
         if (!$batch) {
-            throw new \Exception("Batch not found for {$variant->name} (batch_id={$batchId})");
+            throw new \Exception(sprintf(
+                'Production order %s: batch id %d not found for tenant %d.',
+                $productionOrder->production_number,
+                $batchId,
+                $productionOrder->tenant_id
+            ));
         }
 
-        $before = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+        // ── Verify the batch belongs to this variant ─────────────────
+        $batchVariantId = $batch->purchaseOrderItem?->product_variant_id
+                    ?? $batch->purchaseOrderItem?->productVariant?->id;
+
+        if ($batchVariantId && (int) $batchVariantId !== (int) $variant->id) {
+            throw new \Exception(sprintf(
+                'Production order %s: batch %s belongs to variant #%d, but input expects variant #%d ("%s").',
+                $productionOrder->production_number,
+                $batch->batch_number,
+                $batchVariantId,
+                $variant->id,
+                $variant->name
+            ));
+        }
+
+        // ── Verify the batch has a real remaining quantity ───────────
+        if ($batch->quantity_remaining === null) {
+            throw new \Exception(sprintf(
+                'Production order %s: batch %s has no quantity_remaining value. '
+                . 'The batch may not have been properly received.',
+                $productionOrder->production_number,
+                $batch->batch_number
+            ));
+        }
+
+        $before = (float) $batch->quantity_remaining;
+
+        // ── Over-consumption: already caught ─────────────────────────
         if ($before < $quantity) {
-            throw new \Exception(
-                "Insufficient batch stock for {$variant->name}. " .
-                "Batch: {$batch->batch_number}, Available: {$before}, Required: {$quantity}"
-            );
+            throw new \Exception(sprintf(
+                'Production order %s: batch %s has %s units remaining, but %s units are needed '
+                . 'for input "%s". FIFO across batches is disabled — add a second input row if you '
+                . 'intend to consume from multiple batches.',
+                $productionOrder->production_number,
+                $batch->batch_number,
+                number_format($before, 2),
+                number_format($quantity, 2),
+                $variant->name
+            ));
         }
 
-        $after = $before - $quantity;
+        // ── NEW: reject a partial draw that leaves an implausibly small remainder.
+        //    This catches the "typed 1 against a 35,349 batch" mistake.
+        //    The threshold is expressed as a fraction of the batch; tune per product.
+        $minFraction    = (float) ($variant->product?->min_batch_consumption_fraction ?? 0);
+        $remainder      = $before - $quantity;
+        $remainderRatio = $before > 0 ? ($remainder / $before) : 1.0;
+        $consumedRatio  = $before > 0 ? ($quantity / $before) : 1.0;
+
+        if ($minFraction > 0
+            && $before > 0
+            && $consumedRatio < $minFraction
+            && $remainder > 0.0001              // not a full depletion
+        ) {
+            throw new \Exception(sprintf(
+                'Production order %s: batch %s holds %s units; you entered %s, which is only %s%% of the batch. '
+                . 'The product "%s" requires at least %s%% of a batch to be consumed per input row. '
+                . 'If this is intentional, set the product\'s minimum batch consumption to 0 or split the batch first.',
+                $productionOrder->production_number,
+                $batch->batch_number,
+                number_format($before, 2),
+                number_format($quantity, 2),
+                number_format($consumedRatio * 100, 1),
+                $variant->name,
+                number_format($minFraction * 100, 1)
+            ));
+        }
+
+        $after    = $before - $quantity;
+        $unitCost = (float) ($batch->unit_cost ?? 0);
+
+        // ── Decrement the batch ──────────────────────────────────────
         $batch->quantity_remaining = $after;
         $batch->save();
 
-        $unitCost = (float) ($batch->unit_cost ?? 0);
-
-        // ✅ Preserve the PO / supplier chain from the batch's origin
+        // ── Resolve the PO / supplier chain for the log ──────────────
         $origin = $this->resolveBatchOrigin($batch);
 
+        // ── Build the narrative ──────────────────────────────────────
         $actor        = $this->actorLabel();
         $productionN° = $productionOrder->production_number;
         $context      = $this->productionContextLabel($productionOrder);
-        $variantStr   = $this->variantLabel($variant);
-        $batchStr     = $this->batchLabel($batch);
 
         $narrative = sprintf(
-            '%s consumed %s × "%s" from %s for production %s%s. '
-            . 'Batch stock: %s → %s. Consumed as raw material input.',
+            '%s consumed %s × "%s" from batch %s for production %s%s. '
+            . 'Batch stock: %s → %s. '
+            . 'This was the only batch touched for this input row — no FIFO fallback.',
             $actor,
             number_format($quantity, 2),
             $variant->name,
-            $batchStr,
+            $batch->batch_number,
             $productionN°,
             $context,
             number_format($before, 2),
@@ -775,17 +864,24 @@ class ProductionOrderController extends Controller
             'event_date'                 => now(),
             'performed_by'               => auth()->id(),
             'metadata' => [
-                'source'            => $source,
+                'source'            => 'production_consumption_strict',
                 'production_number' => $productionN°,
-                'reason'            => $reason,
-
-                // ★ the full audit story
+                'reason'            => 'consumed',
                 'narrative'         => $narrative,
                 'quantity_before'   => $before,
                 'quantity_after'    => $after,
                 'batch_number'      => $batch->batch_number,
             ],
-        ], $origin));   
+        ], $origin));
+
+        // ── Decrement the tenant-wide overall tally ──────────────────
+        $this->decrementOverallQuantity(
+            $variant,
+            $quantity,
+            $inputId ? (object) ['id' => $inputId, 'purchase_receipt_item_id' => $batch->id] : null,
+            $productionOrder,
+            'production_consumption_batch_strict'
+        );
     }
 
     /**
@@ -1944,7 +2040,22 @@ class ProductionOrderController extends Controller
             // Inputs validation
             'inputs' => 'required|array|min:1',
             'inputs.*.id' => 'nullable|integer|exists:production_order_inputs,id',
-            'inputs.*.product_variant_id' => 'required|exists:product_variants,id',
+            'inputs.*.product_variant_id' => [
+                'required',
+                'exists:product_variants,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $variant = ProductVariant::with('product')->find($value);
+                    if (!$variant) return;
+                    $strategy = $variant->product?->resolvedInventoryStrategy();
+                    if ($strategy === 'batch') {
+                        $index = explode('.', $attribute)[1] ?? null;
+                        $batchId = $request->input("inputs.{$index}.purchase_receipt_item_id");
+                        if (empty($batchId)) {
+                            $fail("A batch must be selected for batch-tracked material '{$variant->name}'.");
+                        }
+                    }
+                },
+            ],
             'inputs.*.planned_quantity' => 'required|numeric|min:0.01',
             'inputs.*.purchase_receipt_item_id' => 'nullable|exists:purchase_receipt_items,id',
             'inputs.*.unit' => 'required|string|max:20',
