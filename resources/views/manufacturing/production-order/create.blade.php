@@ -83,12 +83,12 @@
                                                 name="inputs[0][product_variant_id]" 
                                                 id="material_id_input_0">
                                             <datalist id="material_list_input_0">
-                                                <option value="">{{ __('passwords.select_material_first') }}</option>
                                                 @foreach($variants as $variant)
-                                                    <option value="{{ $variant->name }}" 
+                                                    <option value="{{ $variant->name }}"
                                                             data-id="{{ $variant->id }}"
                                                             data-uom-id="{{ $variant->weight_unit }}"
-                                                            data-cost-price="{{ $variant->supplier_cost_price }}">
+                                                            data-cost-price="{{ $variant->supplier_cost_price }}"
+                                                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
                                                     </option>
                                                 @endforeach
                                             </datalist>
@@ -127,7 +127,9 @@
                                         <select name="inputs[0][purchase_receipt_item_id]" class="form-select batch-source-select" data-input-index="0">
                                             <option value="">{{ __('passwords.no_batch') }}</option>
                                         </select>
-                                        <button type="button" class="btn btn-sm btn-info mt-1 load-batches-btn" data-input-index="0" onclick="loadAvailableBatches(0)">
+                                        <button type="button" class="btn btn-sm btn-info mt-1 load-batches-btn"
+                                            data-input-index="0"
+                                            onclick="ProductionCreate.loadAvailableBatches(0)">
                                             <i class="bi bi-arrow-repeat me-1"></i> {{ __('passwords.load_batches') }}
                                         </button>
                                         <div id="inputs.0.purchase_receipt_item_id"></div>

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('expense_number', 50);
             $table->date('date');
             $table->string('description', 255);
+            $table->text('notes')->nullable();
             
             // Categorization
             $table->unsignedBigInteger('category_id');

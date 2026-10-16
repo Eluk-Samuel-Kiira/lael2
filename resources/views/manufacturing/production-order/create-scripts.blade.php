@@ -391,6 +391,26 @@ window.ProductionCreate = (function () {
             }
         }
 
+        // Inside handleVariantSelected(inputEl), after setting strategy
+        if (isInput) {
+            const strategy = matched.getAttribute('data-inventory-strategy');
+            const batchSelect = row.querySelector('.batch-source-select');
+            const batchLabel  = batchSelect?.closest('.col-md-2')?.querySelector('.form-label');
+
+            if (strategy === 'batch' && batchLabel) {
+                // Add a "required" indicator
+                if (!batchLabel.querySelector('.required')) {
+                    batchLabel.insertAdjacentHTML('beforeend',
+                        ' <span class="required text-danger">*</span>');
+                }
+            } else if (batchLabel) {
+                // Remove the indicator if strategy isn't batch
+                batchLabel.querySelectorAll('.required').forEach(el => el.remove());
+            }
+
+            loadAvailableBatches(parseInt(index, 10));
+        }
+
         // Auto-load batches for inputs — debounced
         if (isInput) {
             variantDebounces[rowId] = setTimeout(() => {
@@ -436,6 +456,79 @@ window.ProductionCreate = (function () {
         btn.disabled = busy;
         if (label)    label.style.display    = busy ? 'none' : 'inline';
         if (progress) progress.style.display = busy ? 'inline' : 'none';
+    }
+
+    // ── Batch consumption preview ────────────────────────────────
+    //
+    // Builds a per-row summary of what each input will consume and what
+    // the batch(es) will be left with. Returns { rows, warnings }.
+    //
+    function buildBatchPreview(data) {
+        const rows     = [];
+        const warnings = [];
+
+        data.inputs.forEach((input, i) => {
+            const variantId  = input.product_variant_id;
+            const enteredQty = parseFloat(input.planned_quantity) || 0;
+            if (!variantId) return;
+
+            const rowEl = document.getElementById(`input_${i}`);
+            if (!rowEl) return;
+
+            const typable    = rowEl.querySelector('.material-typable-input');
+            const datalistId = typable?.getAttribute('list');
+            const datalist   = datalistId ? document.getElementById(datalistId) : null;
+
+            let variantName = 'Unknown material';
+            let strategy    = null;
+
+            datalist?.querySelectorAll('option').forEach(opt => {
+                if (String(opt.dataset.id) === String(variantId)) {
+                    variantName = opt.value || variantName;
+                    strategy    = opt.dataset.inventoryStrategy || null;
+                }
+            });
+
+            if (strategy !== 'batch') return;
+
+            const batchSelect = rowEl.querySelector('.batch-source-select');
+            const opt         = batchSelect?.options[batchSelect.selectedIndex];
+
+            if (!opt || !opt.value) return;   // already caught by missing-batch check
+
+            const batchNumber = (opt.textContent || '').split('(')[0].trim();
+            const batchQty    = parseFloat(opt.dataset.quantityRemaining) || 0;
+            const afterQty    = batchQty - enteredQty;
+
+            const consumedRatio = batchQty > 0 ? (enteredQty / batchQty) : 0;
+            const isFull        = Math.abs(afterQty) < 0.0001;
+            const isPartial     = !isFull && afterQty > 0;
+            const isTiny        = batchQty > 0 && enteredQty > 0 && consumedRatio < 0.05;
+
+            rows.push({
+                index:       i + 1,
+                variantName,
+                enteredQty,
+                batchNumber,
+                batchBefore: batchQty,
+                batchAfter:  afterQty,
+                isFull,
+                isPartial,
+                isTiny,
+            });
+
+            if (isTiny) {
+                warnings.push(
+                    `Row ${i + 1} (${variantName}): you are consuming only ` +
+                    `${enteredQty.toLocaleString()} out of ${batchQty.toLocaleString()} ` +
+                    `in batch <code>${batchNumber}</code> ` +
+                    `(${(consumedRatio * 100).toFixed(2)}%). ` +
+                    `Double-check this is intentional.`
+                );
+            }
+        });
+
+        return { rows, warnings };
     }
 
     async function submit() {
@@ -504,6 +597,156 @@ window.ProductionCreate = (function () {
                 confirmButtonColor: '#0d6efd',
             });
             return;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // ★ BATCH STRATEGY CHECK
+        //
+        // Only inputs whose product uses the 'batch' strategy must have
+        // a purchase_receipt_item_id selected. Inputs using 'quantity'
+        // or 'serial' don't need a batch, and 'recipe' isn't valid here.
+        // ═══════════════════════════════════════════════════════════
+        // ── Missing-batch check (unchanged logic) ─────────────────────
+        const missingBatches = [];
+
+        data.inputs.forEach((input, i) => {
+            const variantId = input.product_variant_id;
+            if (!variantId) return;
+
+            const rowEl = document.getElementById(`input_${i}`);
+            if (!rowEl) return;
+
+            const typable    = rowEl.querySelector('.material-typable-input');
+            const datalistId = typable?.getAttribute('list');
+            if (!datalistId) return;
+
+            const datalist = document.getElementById(datalistId);
+            if (!datalist) return;
+
+            let strategy    = null;
+            let variantName = 'Unknown material';
+
+            datalist.querySelectorAll('option').forEach(opt => {
+                if (String(opt.dataset.id) === String(variantId)) {
+                    strategy    = opt.dataset.inventoryStrategy || null;
+                    variantName = opt.value || variantName;
+                }
+            });
+
+            if (strategy !== 'batch') return;
+
+            const hasBatch = input.purchase_receipt_item_id
+                        && input.purchase_receipt_item_id !== ''
+                        && input.purchase_receipt_item_id !== 'null';
+
+            if (!hasBatch) {
+                missingBatches.push({ index: i + 1, variantName });
+            }
+        });
+
+        if (missingBatches.length > 0) {
+            const list = missingBatches
+                .map(m => `<li>Row ${m.index}: <strong>${m.variantName}</strong></li>`)
+                .join('');
+
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                html: `
+                    <p class="mb-3">The following materials use the <strong>batch</strong> tracking strategy
+                    and require a specific batch to be selected:</p>
+                    <ul class="text-start">${list}</ul>
+                    <p class="text-muted fs-7 mt-3 mb-0">
+                        Every batch-tracked input must point to exactly one batch.
+                    </p>
+                `,
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd',
+            });
+            return;
+        }
+
+        // ── Consumption preview + confirmation ─────────────────────────
+        //
+        // Server-side strict mode already rejects over-consumption, so this
+        // dialog only needs to surface two things the server cannot:
+        //   1. What the batch balances will look like after the draw
+        //   2. A loud warning when a tiny fraction of a batch is being drawn
+        //      (the "typed 1 against a 35,349 batch" mistake)
+        //
+        const preview = buildBatchPreview(data);
+
+        if (preview.rows.length > 0) {
+            const tableRows = preview.rows.map(r => {
+                const afterFmt  = r.batchAfter.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                const beforeFmt = r.batchBefore.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                const qtyFmt    = r.enteredQty.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+                let statusCell;
+                if (r.isFull)          statusCell = `<span class="badge bg-success text-nowrap">Full batch</span>`;
+                else if (r.isTiny)     statusCell = `<span class="badge bg-warning text-dark text-nowrap">Tiny draw — verify</span>`;
+                else if (r.isPartial)  statusCell = `<span class="badge bg-info text-dark text-nowrap">Partial draw</span>`;
+                else                   statusCell = `<span class="badge bg-secondary">—</span>`;
+
+                return `
+                    <tr>
+                        <td class="text-start">${r.index}</td>
+                        <td class="text-start">${r.variantName}</td>
+                        <td class="text-start">
+                            <code class="text-break">${r.batchNumber}</code>
+                        </td>
+                        <td class="text-end text-nowrap">${qtyFmt}</td>
+                        <td class="text-end text-nowrap">${beforeFmt}</td>
+                        <td class="text-end text-nowrap"><strong>${afterFmt}</strong></td>
+                        <td class="text-center">${statusCell}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const warningHtml = preview.warnings.length > 0
+                ? `
+                    <div class="alert alert-warning text-start mt-3 mb-0">
+                        <strong>Please review:</strong>
+                        <ul class="mb-0 ps-3">${preview.warnings.map(w => `<li>${w}</li>`).join('')}</ul>
+                    </div>
+                `
+                : '';
+
+            const confirm = await Swal.fire({
+                title: '{{ __("passwords.confirm_consumption") ?? "Confirm consumption" }}',
+                width: '820px',
+                html: `
+                    <p class="text-muted mb-3">
+                        Review what will be drawn from each batch before the order is created.
+                    </p>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-start text-nowrap"  style="width: 6%;">Row</th>
+                                    <th class="text-start text-nowrap"  style="width: 26%;">Material</th>
+                                    <th class="text-start text-nowrap"  style="width: 26%;">Batch</th>
+                                    <th class="text-end text-nowrap"    style="width: 12%;">Consuming</th>
+                                    <th class="text-end text-nowrap"    style="width: 12%;">Before</th>
+                                    <th class="text-end text-nowrap"    style="width: 12%;">After</th>
+                                    <th class="text-center text-nowrap" style="width: 6%;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    </div>
+                    ${warningHtml}
+                `,
+                icon: preview.warnings.length > 0 ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonText: '{{ __("passwords.confirm_and_create") ?? "Confirm and create" }}',
+                cancelButtonText:  '{{ __("passwords.go_back") ?? "Go back" }}',
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor:  '#6c757d',
+                reverseButtons: true,
+                focusCancel: preview.warnings.length > 0,
+            });
+
+            if (!confirm.isConfirmed) return;
         }
 
         delete data._token;
