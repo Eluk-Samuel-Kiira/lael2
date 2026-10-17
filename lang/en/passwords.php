@@ -1793,6 +1793,7 @@ return [
 
 
     'recipes'                          => 'Recipes',
+    'items'                          => 'Items',
     'no_recipes_found'                 => 'No recipes found',
     'recipes_are_created_on_variant_pages' => 'Recipes are created and edited from a product\'s variant page.',
     'no_ingredients_defined'           => 'No ingredients have been added to this recipe yet.',

@@ -38,6 +38,8 @@ Route::prefix('invoices')->name('invoices.')->group(function () {
     Route::get('/', [InvoiceController::class, 'index'])->name('index');
     Route::post('/', [InvoiceController::class, 'store'])->name('store');
     Route::get('/create', [InvoiceController::class, 'create'])->name('create');
+    Route::get('/data', [InvoiceController::class, 'data'])->name('data');
+    Route::get('/{id}/details', [InvoiceController::class, 'details'])->name('details');
     Route::get('/{id}', [InvoiceController::class, 'show'])->name('show');
     Route::put('/{id}/issue-date', [InvoiceController::class, 'updateIssueDate'])->name('update-issue-date');
     Route::get('/{id}/edit', [InvoiceController::class, 'edit'])->name('edit');
