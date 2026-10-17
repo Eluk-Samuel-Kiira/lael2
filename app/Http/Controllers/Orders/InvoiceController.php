@@ -32,11 +32,12 @@ class InvoiceController extends Controller
         $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
         $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
 
-        // Eager-load department.location so correct_location resolves without N+1
+        // ── Base query (filters applied below, mirrors data()) ─────────
         $query = Invoice::with([
                 'order.location',
                 'order.department.location',
                 'customer',
+                'createdBy:id,name',
             ])
             ->where('tenant_id', $tenantId)
             ->latest();
@@ -71,40 +72,39 @@ class InvoiceController extends Controller
             if ($allowedToFilter) {
                 $query->whereHas('order', function ($oq) use ($requestedLocationId) {
                     $oq->where(function ($inner) use ($requestedLocationId) {
-                        // Match if the order's department lives at that location
                         $inner->whereHas('department', fn($dq) => $dq->where('location_id', $requestedLocationId))
-                            // OR the order itself is at that location
                             ->orWhere('location_id', $requestedLocationId);
                     });
                 });
             }
         }
 
-        // ── Mark overdue (scoped) ───────────────────────────────────
-        $overdueQuery = Invoice::where('tenant_id', $tenantId)
-            ->outstanding()
-            ->whereDate('due_date', '<', now());
-
-        if (!$isAdmin) {
-            $overdueQuery->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id)
-                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
-            });
+        // ── NEW: issue-date range (matches data()) ─────────────────────
+        if ($issueFrom = $request->input('issue_date_from')) {
+            $query->whereDate('issue_date', '>=', $issueFrom);
         }
-        $overdueQuery->update(['status' => Invoice::STATUS_OVERDUE]);
+        if ($issueTo = $request->input('issue_date_to')) {
+            $query->whereDate('issue_date', '<=', $issueTo);
+        }
+
+        // ── Mark overdue (scoped) — only on the actual page load ──────
+        $this->markOverdueInvoices($tenantId, $user, $isAdmin);
 
         $perPage = $request->input('per_page', 15);
         $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
+        if (!in_array((int) $perPage, $allowedPerPage, true)) {
             $perPage = 15;
         }
+        $perPage = (int) $perPage;
 
         $invoices = $query->paginate($perPage)
             ->appends([
-                'search'      => $request->search,
-                'status'      => $request->status,
-                'location_id' => $request->location_id,
-                'per_page'    => $perPage,
+                'search'          => $request->search,
+                'status'          => $request->status,
+                'location_id'     => $request->location_id,
+                'issue_date_from' => $request->issue_date_from,
+                'issue_date_to'   => $request->issue_date_to,
+                'per_page'        => $perPage,
             ]);
 
         $locationsQuery = Location::where('tenant_id', $tenantId)
@@ -117,8 +117,8 @@ class InvoiceController extends Controller
 
         $locations = $locationsQuery->get();
 
+        // ── Legacy LiveBlade partial reload (keep for backwards compat) ─
         $bladeToReload = $request->query('bladeFileToReload');
-
         if ($request->ajax() && $bladeToReload === 'reloadInvoiceComponent') {
             return view('orders.invoice.component', [
                 'invoices'  => $invoices,
@@ -126,9 +126,400 @@ class InvoiceController extends Controller
             ])->render();
         }
 
+        // ── Initial filter state for the JS-driven view ────────────────
+        $initialFilters = [
+            'search'          => (string) $request->get('search', ''),
+            'status'          => (string) $request->get('status', ''),
+            'location_id'     => (string) $request->get('location_id', ''),
+            'issue_date_from' => (string) $request->get('issue_date_from', ''),
+            'issue_date_to'   => (string) $request->get('issue_date_to', ''),
+            'per_page'        => $perPage,
+        ];
+
         return view('orders.invoice-index', [
-            'invoices'  => $invoices,
-            'locations' => $locations,
+            'invoices'        => $invoices,                        // kept for backward compat / legacy includes
+            'initialInvoices' => $invoices->getCollection(),       // for the modals hub (if you use Option B)
+            'locations'       => $locations,
+            'initialFilters'  => $initialFilters,
+        ]);
+    }
+
+    /**
+     * Flip outstanding, past-due invoices to the OVERDUE status.
+     *
+     * Called from index() only — NOT from data(). The JSON list endpoint
+     * must not mutate the DB on every debounced keystroke.
+     *
+     * Scoped by tenant and by the same visibility rule the list uses:
+     * non-admins only flip invoices they created or whose order they created.
+     */
+    private function markOverdueInvoices(int $tenantId, $user, bool $isAdmin): void
+    {
+        $query = Invoice::where('tenant_id', $tenantId)
+            ->outstanding()
+            ->whereDate('due_date', '<', now());
+
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
+            });
+        }
+
+        $query->update(['status' => Invoice::STATUS_OVERDUE]);
+    }
+
+    /**
+     * JSON list endpoint for the invoice table.
+     *
+     * Mirrors index()'s filters, visibility rules, and sort order, but
+     * returns JS-shaped rows + summary + pagination. Does NOT mutate
+     * anything — safe to call on every keystroke.
+     *
+     * GET /invoices/data
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view invoice')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // ── Filters ────────────────────────────────────────────────
+        $search         = trim((string) $request->get('search', ''));
+        $status         = (string) $request->get('status', '');
+        $locationId     = $request->get('location_id');
+        $issueFrom      = $request->get('issue_date_from');
+        $issueTo        = $request->get('issue_date_to');
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
+
+        // ── Base query ─────────────────────────────────────────────
+        $query = Invoice::with([
+                'order.location',
+                'order.department.location',
+                'customer',
+                'createdBy:id,name',
+            ])
+            ->where('tenant_id', $tenantId);
+
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
+            });
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                ->orWhere('billing_name', 'like', "%{$search}%")
+                ->orWhere('billing_email', 'like', "%{$search}%")
+                ->orWhere('billing_phone', 'like', "%{$search}%");
+            });
+        }
+
+        if ($status !== '' && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        if ($locationId) {
+            $requestedLocationId = (int) $locationId;
+            $allowedToFilter = $isAdmin || in_array($requestedLocationId, $userLocationIds, true);
+            if ($allowedToFilter) {
+                $query->whereHas('order', function ($oq) use ($requestedLocationId) {
+                    $oq->where(function ($inner) use ($requestedLocationId) {
+                        $inner->whereHas('department', fn($dq) => $dq->where('location_id', $requestedLocationId))
+                            ->orWhere('location_id', $requestedLocationId);
+                    });
+                });
+            }
+        }
+
+        if ($issueFrom) {
+            $query->whereDate('issue_date', '>=', $issueFrom);
+        }
+        if ($issueTo) {
+            $query->whereDate('issue_date', '<=', $issueTo);
+        }
+
+        // ── Summary from the FILTERED set (before pagination) ─────
+        $allFiltered = (clone $query)->get([
+            'id', 'status', 'total', 'balance_due', 'amount_paid',
+        ]);
+
+        $summary = [
+            'total'            => $allFiltered->count(),
+            'draft'            => $allFiltered->where('status', Invoice::STATUS_DRAFT)->count(),
+            'sent'             => $allFiltered->where('status', Invoice::STATUS_SENT)->count(),
+            'viewed'           => $allFiltered->where('status', Invoice::STATUS_VIEWED)->count(),
+            'partially_paid'   => $allFiltered->where('status', Invoice::STATUS_PARTIALLY_PAID)->count(),
+            'paid'             => $allFiltered->where('status', Invoice::STATUS_PAID)->count(),
+            'overdue'          => $allFiltered->where('status', Invoice::STATUS_OVERDUE)->count(),
+            'void'             => $allFiltered->where('status', Invoice::STATUS_VOID)->count(),
+            'cancelled'        => $allFiltered->where('status', Invoice::STATUS_CANCELLED)->count(),
+            'total_amount'     => (float) $allFiltered->sum('total'),
+            'total_paid'       => (float) $allFiltered->sum('amount_paid'),
+            'total_outstanding'=> (float) $allFiltered->sum('balance_due'),
+        ];
+
+        // ── Paginate ───────────────────────────────────────────────
+        $paginator = $query->latest()->paginate($perPage);
+
+        // ── Shape rows for JS ──────────────────────────────────────
+        $rows = collect($paginator->items())->map(function (Invoice $invoice) {
+            $locationName = $invoice->order?->correct_location?->name
+                ?? $invoice->order?->location?->name
+                ?? null;
+
+            return [
+                'id'                 => $invoice->id,
+                'invoice_number'     => $invoice->invoice_number,
+                'order_number'       => $invoice->order?->order_number,
+                'order_id'           => $invoice->order_id,
+
+                'customer_name'      => $invoice->billing_name ?? '—',
+                'customer_email'     => $invoice->billing_email,
+                'customer_initial'   => strtoupper(substr($invoice->billing_name ?? '?', 0, 1)),
+
+                'location_name'      => $locationName ?? '—',
+                'issue_date'         => optional($invoice->issue_date)->format('Y-m-d'),
+                'issue_date_human'   => optional($invoice->issue_date)->format('d M Y'),
+                'due_date'           => optional($invoice->due_date)->format('Y-m-d'),
+                'due_date_human'     => optional($invoice->due_date)->format('d M Y'),
+
+                'status'             => $invoice->status,
+                'status_label'       => $invoice->status_label,
+                'status_color'       => $invoice->status_color,
+                'status_icon'        => $invoice->status_icon,
+                'is_overdue'         => $invoice->isOverdue(),
+                'is_draft'           => $invoice->isDraft(),
+                'is_payable'         => $invoice->isPayable(),
+
+                'total'              => (float) $invoice->total,
+                'total_formatted'    => currency_symbol() . number_format((float) $invoice->total, 2),
+                'amount_paid'        => (float) $invoice->amount_paid,
+                'balance_due'        => (float) $invoice->balance_due,
+                'balance_due_formatted' => currency_symbol() . number_format((float) $invoice->balance_due, 2),
+
+                'created_by_name'    => $invoice->createdBy?->name ?? '—',
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+            'filters' => [
+                'search'          => $search,
+                'status'          => $status,
+                'location_id'     => $locationId,
+                'issue_date_from' => $issueFrom,
+                'issue_date_to'   => $issueTo,
+            ],
+        ]);
+    }
+
+    /**
+     * Full payload for the right-side drawer.
+     *
+     * Returns everything the drawer needs in one round-trip: customer,
+     * order, line items, payments, sends, notes. No nested Blade includes,
+     * no per-row modals in the DOM.
+     *
+     * GET /invoices/{id}/details
+     */
+    public function details(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view invoice')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $isAdmin = $user->hasAnyRole(['super_admin', 'admin']);
+
+        $query = Invoice::with([
+            'order.orderItems.variant',
+            'order.location',
+            'order.department',
+            'customer',
+            'payments.paymentMethod',
+            'payments.processedBy:id,name',
+            'sends',
+            'creator:id,name',
+            'voidedBy:id,name',
+        ])->where('tenant_id', $tenantId);
+
+        if (!$isAdmin) {
+            $query->where(function ($q) use ($user) {
+                $q->where('created_by', $user->id)
+                ->orWhereHas('order', fn($oq) => $oq->where('created_by', $user->id));
+            });
+        }
+
+        $invoice = $query->find($id);
+
+        if (!$invoice) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        // ── Items ─────────────────────────────────────────────────
+        $items = ($invoice->order?->orderItems ?? collect())->map(function ($item) {
+            return [
+                'id'            => $item->id,
+                'item_name'     => $item->item_name,
+                'variant_name'  => $item->variant?->name,
+                'sku'           => $item->sku ?? $item->variant?->sku,
+                'quantity'      => (float) $item->quantity,
+                'unit_price'    => (float) $item->unit_price,
+                'unit_price_formatted' => currency_symbol() . number_format((float) $item->unit_price, 2),
+                'discount'      => (float) ($item->discount ?? 0),
+                'discount_formatted'   => currency_symbol() . number_format((float) ($item->discount ?? 0), 2),
+                'tax_amount'    => (float) ($item->tax_amount ?? 0),
+                'tax_formatted'        => currency_symbol() . number_format((float) ($item->tax_amount ?? 0), 2),
+                'total_price'   => (float) $item->total_price,
+                'total_formatted'      => currency_symbol() . number_format((float) $item->total_price, 2),
+            ];
+        })->values();
+
+        // ── Payments ──────────────────────────────────────────────
+        $payments = $invoice->payments->map(function ($p) {
+            return [
+                'id'                => $p->id,
+                'amount'            => (float) $p->amount,
+                'amount_formatted'  => currency_symbol() . number_format((float) $p->amount, 2),
+                'method_name'       => $p->paymentMethod?->name,
+                'transaction_id'    => $p->transaction_id,
+                'status'            => $p->status,
+                'status_label'      => $p->status_label ?? ucfirst($p->status),
+                'status_color'      => $p->status_color ?? 'secondary',
+                'type'              => $p->type,
+                'type_label'        => $p->type_label ?? ucfirst($p->type ?? '—'),
+                'processed_by_name' => $p->processedBy?->name,
+                'payment_date'      => optional($p->payment_date ?? $p->created_at)->format('Y-m-d H:i'),
+                'notes'             => $p->notes,
+            ];
+        })->values();
+
+        // ── Sends ─────────────────────────────────────────────────
+        $sends = $invoice->sends->map(function ($s) {
+            return [
+                'id'         => $s->id,
+                'channel'    => $s->channel,
+                'recipient'  => $s->recipient,
+                'status'     => $s->status,
+                'sent_at'    => optional($s->sent_at)->format('Y-m-d H:i'),
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'invoice' => [
+                'id'              => $invoice->id,
+                'invoice_number'  => $invoice->invoice_number,
+                'status'          => $invoice->status,
+                'status_label'    => $invoice->status_label,
+                'status_color'    => $invoice->status_color,
+                'status_icon'     => $invoice->status_icon,
+                'is_paid'         => $invoice->isPaid(),
+                'is_partially_paid' => $invoice->isPartiallyPaid(),
+                'is_overdue'      => $invoice->isOverdue(),
+                'is_draft'        => $invoice->isDraft(),
+                'is_payable'      => $invoice->isPayable(),
+                'is_void'         => $invoice->isVoid(),
+
+                'permissions' => [
+                    'can_send'      => $user->can('send invoice')
+                                        && !in_array($invoice->status, ['void', 'paid'], true),
+                    'can_pay'       => $user->can('record invoice payment')
+                                        && $invoice->isPayable(),
+                    'can_void'      => $user->can('void invoice')
+                                        && !in_array($invoice->status, ['void', 'paid', 'cancelled'], true),
+                    'can_discount'  => $user->can('edit invoice')
+                                        && $invoice->isDraft(),
+                    'can_edit_date' => $user->can('edit invoice')
+                                        && !in_array($invoice->status, ['paid', 'void', 'cancelled'], true),
+                    'can_delete'    => $user->can('delete invoice')
+                                        && in_array($invoice->status, ['draft', 'void'], true),
+                    'can_download'  => $user->can('download invoice'),
+                ],
+
+                'billing' => [
+                    'name'    => $invoice->billing_name,
+                    'initial' => strtoupper(substr($invoice->billing_name ?? '?', 0, 1)),
+                    'email'   => $invoice->billing_email,
+                    'phone'   => $invoice->billing_phone,
+                    'address' => $invoice->billing_address,
+                    'tax_id'  => $invoice->tax_id,
+                ],
+
+                'issue_date'      => optional($invoice->issue_date)->format('Y-m-d'),
+                'issue_date_human'=> optional($invoice->issue_date)->format('d M Y, h:i A'),
+                'due_date'        => optional($invoice->due_date)->format('Y-m-d'),
+                'due_date_human'  => optional($invoice->due_date)->format('d M Y'),
+                'sent_at'         => optional($invoice->sent_at)->format('Y-m-d H:i'),
+                'viewed_at'       => optional($invoice->viewed_at)->format('Y-m-d H:i'),
+                'paid_at'         => optional($invoice->paid_at)->format('Y-m-d H:i'),
+                'voided_at'       => optional($invoice->voided_at)->format('Y-m-d H:i'),
+
+                'subtotal'        => (float) $invoice->subtotal,
+                'subtotal_formatted'   => currency_symbol() . number_format((float) $invoice->subtotal, 2),
+                'discount_total'  => (float) $invoice->discount_total,
+                'discount_formatted'   => currency_symbol() . number_format((float) $invoice->discount_total, 2),
+                'tax_total'       => (float) $invoice->tax_total,
+                'tax_formatted'        => currency_symbol() . number_format((float) $invoice->tax_total, 2),
+                'total'           => (float) $invoice->total,
+                'total_formatted'      => currency_symbol() . number_format((float) $invoice->total, 2),
+                'amount_paid'     => (float) $invoice->amount_paid,
+                'amount_paid_formatted'=> currency_symbol() . number_format((float) $invoice->amount_paid, 2),
+                'balance_due'     => (float) $invoice->balance_due,
+                'balance_due_formatted'=> currency_symbol() . number_format((float) $invoice->balance_due, 2),
+
+                'notes'           => $invoice->notes,
+                'terms'           => $invoice->terms,
+                'created_by_name' => $invoice->creator?->name,
+                'voided_by_name'  => $invoice->voidedBy?->name,
+
+                'order' => $invoice->order ? [
+                    'id'             => $invoice->order->id,
+                    'order_number'   => $invoice->order->order_number,
+                    'status'         => $invoice->order->status,
+                    'location_name'  => $invoice->order->correct_location?->name ?? $invoice->order->location?->name,
+                    'department_name'=> $invoice->order->department?->name,
+                    'show_url'       => route('orders.show', $invoice->order->id),
+                ] : null,
+            ],
+            'items'    => $items,
+            'payments' => $payments,
+            'sends'    => $sends,
         ]);
     }
 
