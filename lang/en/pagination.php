@@ -16,6 +16,9 @@ return [
     'previous' => '&laquo; Previous',
     'next' => 'Next &raquo;',
 
+    'refreshing_products' => 'Refreshing products…',
+    'refresh_failed'      => 'Could not refresh products.',
+
 
     //Store  and Inventory 
     'store_catalog' => 'Store Catalog',

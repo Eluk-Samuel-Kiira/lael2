@@ -3,44 +3,14 @@
     <div class="d-flex flex-row-fluid me-xl-9 mb-10 mb-xl-0">
         <div class="card card-flush card-p-0 bg-transparent border-0">
             <div class="card-body">
-                <ul class="nav nav-pills nav-pills-custom gap-3 mb-6 d-flex flex-nowrap" 
+
+                {{-- ═══════════════════════════════════════════════════════════
+                     PRODUCT PILLS — hydrated by PosList after /pos/search
+                     ═══════════════════════════════════════════════════════════ --}}
+                <ul class="nav nav-pills nav-pills-custom gap-3 mb-6 d-flex flex-nowrap"
                     id="productList"
                     style="overflow-x: auto; white-space: nowrap; list-style: none; padding: 0;">
-                    @php $first = true; @endphp
-                    @foreach ($products as $product)
-                        @if ($product->variants->count() > 0)
-                            @php
-                                // Get department IDs as comma-separated string
-                                $departmentIds = $product->departments->pluck('id')->implode(',');
-                            @endphp
-                            <li class="nav-item mb-3 me-0 product-item" 
-                                style="min-width: 180px;"
-                                data-department="{{ $departmentIds }}"> <!-- Added data attribute -->
-                                <a class="nav-link nav-link-border-solid btn btn-outline btn-active-color-primary product-card page-bg {{ $first ? 'active' : '' }}" 
-                                    data-bs-toggle="pill" 
-                                    href="#kt_pos_{{ $product->id }}">
-                                        <div class="product-icon">
-                                            <img src="{{ productImage($product->image_url) }}" class="w-50px" alt="" />
-                                        </div>
-                                        <div class="product-name-wrap">
-                                            <span class="product-name" data-bs-toggle="tooltip" title="{{ $product->name }}">
-                                                {{ $product->name }}
-                                            </span>
-                                        </div>
-                                        <span class="product-options">
-                                            {{ $product->variants->count() }} {{ __('pagination._options') }}
-                                        </span>
-                                    </a>
-                            </li>
-                            @php $first = false; @endphp
-                        @endif
-                    @endforeach
-
-                    @if ($products->filter(fn($p) => $p->variants->count() > 0)->isEmpty())
-                        <div class="card-header pt-5">
-                            <h3 class="card-title fw-bold text-gray-800 fs-2qx">{{ __('pagination.not_assigned') }}</h3>
-                        </div>
-                    @endif
+                    {{-- populated by PosList.renderSearchResults() --}}
                 </ul>
                 <!--end::Nav-->
 
@@ -76,7 +46,6 @@
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
 
-                                {{-- Search bar --}}
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">
                                         <i class="bi bi-search"></i>
@@ -98,7 +67,7 @@
                         </div>
                     </div>
                 </div>
-                                
+
                 <style>
                     .product-item .product-card {
                         display: flex;
@@ -111,16 +80,14 @@
                         box-sizing: border-box;
                     }
 
-                    /* Zone 1: icon — fixed size, never shrinks */
                     .product-item .product-icon {
                         flex: 0 0 auto;
                         margin-bottom: 8px;
                     }
 
-                    /* Zone 2: name — the ONLY flexible zone, allowed to clamp/shrink */
                     .product-item .product-name-wrap {
                         flex: 1 1 auto;
-                        min-height: 0;          /* critical: lets flex child shrink below content size */
+                        min-height: 0;
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -140,10 +107,9 @@
                         line-height: 1.2;
                         font-weight: 700;
                         color: #3f4254;
-                        font-size: clamp(0.75rem, 0.9vw + 0.4rem, 0.95rem); /* smaller, fits 2 lines safely */
+                        font-size: clamp(0.75rem, 0.9vw + 0.4rem, 0.95rem);
                     }
 
-                    /* Zone 3: options — fixed, always rendered, never clipped */
                     .product-item .product-options {
                         flex: 0 0 auto;
                         font-size: 0.75rem;
@@ -153,18 +119,12 @@
                         white-space: nowrap;
                     }
 
-                    /* ============================================================
-                       VARIANT NAME — fixed-height zone so the card size never
-                       changes; the name always wraps in full (no "...") and the
-                       auto-fit script (below) shrinks the font just enough to
-                       keep it inside 2 lines, on both mobile and desktop.
-                       ============================================================ */
                     .variant-item .variant-name-wrap {
                         display: flex;
                         align-items: center;
                         justify-content: center;
                         width: 100%;
-                        height: 48px;      /* fixed zone height — keeps every card the same size */
+                        height: 48px;
                         min-height: 48px;
                         max-height: 48px;
                         overflow: hidden;
@@ -184,7 +144,7 @@
                         color: #3f4254;
                         width: 100%;
                         cursor: pointer;
-                        font-size: 1rem; /* starting size, auto-fit script shrinks this as needed */
+                        font-size: 1rem;
                     }
 
                     @media (max-width: 575.98px) {
@@ -197,185 +157,72 @@
                             font-size: 0.9rem;
                         }
                     }
+
+                    /* Skeleton shimmer (shown before PosList's first fetch resolves) */
+                    @keyframes pos-skeleton-shimmer {
+                        0%   { background-position: 200% 0; }
+                        100% { background-position: -200% 0; }
+                    }
+                    .skeleton-pill,
+                    .skeleton-block,
+                    .skeleton-text {
+                        display: inline-block;
+                        background: linear-gradient(90deg, #f1f1f4 0%, #e9e9ed 50%, #f1f1f4 100%);
+                        background-size: 200% 100%;
+                        animation: pos-skeleton-shimmer 1.4s ease-in-out infinite;
+                        border-radius: 6px;
+                    }
+                    .skeleton-pill { border-radius: 20px; }
                 </style>
 
-                <!--begin::Tab Content-->
-                <div class="tab-content" id="variantTabContent">
-                    @php $firstTab = true; @endphp
-                    @foreach ($products as $product)
-                        @if ($product->variants->count() > 0)
-                            <div class="tab-pane fade {{ $firstTab ? 'show active' : '' }}" id="kt_pos_{{ $product->id }}">
-                                <div class="d-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container">
-                                    @foreach ($product->variants as $variant)
-                                    @php
-                                        $inventoryJson = !$isSingleShop ? json_encode($variant->inventory_by_dept ?? []) : '{}';
-                                        $strategy = $product->resolvedInventoryStrategy();
-                                        
-                                        $strategyColors = [
-                                            'quantity' => 'primary',  
-                                            'batch' => 'info',         
-                                            'serial' => 'warning',     
-                                            'recipe' => 'success'       
-                                        ];
-                                        
-                                        $strategyLabels = [
-                                            'quantity' => __('passwords.quantity'),
-                                            'batch' => __('passwords.batch'),
-                                            'serial' => __('passwords.serial'),
-                                            'recipe' => __('passwords.recipe')
-                                        ];
-                                        
-                                        $strategyColor = $strategyColors[$strategy] ?? 'primary';
-                                        $strategyLabel = $strategyLabels[$strategy] ?? $strategy;
-                                        $badgeClass = 'bg-' . $strategyColor;
-                                        $isRecipe = $product->hasRecipe();
-                                    @endphp
-                                    
-                                    <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative"
-                                        data-name="{{ strtolower($variant->name ?? $product->name) }}"
-                                        data-product="{{ $product->id }}"
-                                        data-variant-id="{{ $variant->id }}"
-
-                                        {{-- ★ Pricing the POS will use --}}
-                                        data-price="{{ $variant->effective_price ?? $variant->selling_price }}"
-                                        data-effective-price="{{ $variant->effective_price ?? $variant->selling_price }}"
-                                        data-effective-selling-price="{{ $variant->effective_selling_price ?? $variant->selling_price }}"
-                                        data-effective-cost-price="{{ $variant->effective_cost_price ?? 0 }}"
-                                        data-effective-discount-price="{{ $variant->effective_discount_price ?? 0 }}"
-                                        data-pricing-source="{{ $variant->pricing_source ?? 'variant' }}"
-                                        data-has-custom-pricing="{{ ($variant->has_custom_pricing ?? false) ? 'true' : 'false' }}"
-
-                                        data-image="{{ productVariantImage($variant->image_url ?? $product->image_url) }}"
-                                        data-taxes='@json($variant->applicable_taxes ?? [])'
-                                        data-promotions='@json($variant->applicable_promotions ?? [])'
-                                        data-strategy="{{ $strategy }}"
-                                        data-is-recipe="{{ $isRecipe ? 'true' : 'false' }}"
-                                        data-batches='@json($variant->available_batches ?? [])'
-                                        data-serials='@json($variant->available_serials ?? [])'
-                                        data-quantity-available="{{ $variant->quantity_available ?? 0 }}"
-                                        data-variant-name="{{ $variant->name ?? $product->name }}"
-                                        @if(!$isSingleShop) data-inventory='{{ $inventoryJson }}' @endif
-                                        onclick="handleVariantClick(this)"
-                                        style="cursor: pointer;">
-
-                                        <!-- ✅ Inventory Strategy Badge - No Icon -->
-                                        <span class="badge {{ $badgeClass }} text-white position-absolute top-0 start-50 translate-middle-x mt-2 px-3 py-2 shadow-sm" 
-                                            style="z-index: 10; min-width: 60px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.3px;">
-                                            {{ $strategyLabel }}
-                                            @if($isRecipe)
-                                                <span class="badge bg-warning text-dark ms-1" style="font-size: 0.55rem; padding: 1px 6px; border-radius: 10px;">
-                                                    Recipe
-                                                </span>
-                                            @endif
-                                        </span>
-
-                                        <!-- ✅ Top-left Badge for Taxes (Red) - No Icon -->
-                                        @if(!empty($variant->applicable_taxes) && count($variant->applicable_taxes) > 0)
-                                            <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
-                                                {{ __('passwords._tax') }}
-                                            </span>
-                                        @endif
-
-                                        <!-- ✅ Top-right Badge for Promotions (Green/Success) - No Icon -->
-                                        @if(!empty($variant->applicable_promotions) && count($variant->applicable_promotions) > 0)
-                                            <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
-                                                {{ __('passwords._promo') }}
-                                            </span>
-                                        @endif
-
-                                        <!-- ✅ Batch indicator badge (bottom) - No Icon -->
-                                        @if($strategy === 'batch' && !empty($variant->available_batches) && count($variant->available_batches) > 0)
-                                            <span class="badge bg-info text-white position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
-                                                style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
-                                                {{ count($variant->available_batches) }} {{ __('passwords.batches_available') }}
-                                            </span>
-                                        @endif
-
-                                        <!-- ✅ Serial indicator badge (bottom) -->
-                                        @if($strategy === 'serial' && !empty($variant->available_serials) && count($variant->available_serials) > 0)
-                                            <span class="badge bg-warning text-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
-                                                style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
-                                                {{ count($variant->available_serials) }} {{ __('passwords.serials_available') }}
-                                            </span>
-                                        @endif
-
-                                        <div class="card-body text-center">
-                                            <img src="{{ productVariantImage($variant->image_url ?? $product->image_url) }}" 
-                                                class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                                alt="{{ $variant->name ?? $product->name }}" />
-
-                                            <div class="mb-2">
-                                                <div class="text-center">
-                                                    <div class="variant-name-wrap">
-                                                        <span class="variant-name"
-                                                            data-bs-toggle="tooltip"
-                                                            title="{{ $variant->name ?? $product->name }}">
-                                                            {{ $variant->name ?? $product->name }}
-                                                        </span>
-                                                    </div>
-                                                    <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
-                                                        {{ $variant->quantity_available ?? 0 }} {{__('pagination._available')}}
-                                                    </span>
-                                                    @if($strategy === 'batch' && !empty($variant->available_batches) && count($variant->available_batches) > 0)
-                                                        <span class="text-muted d-block fs-8">
-                                                            {{ count($variant->available_batches) }} {{ __('passwords.batches') }}
-                                                        </span>
-                                                    @endif
-                                                    <span class="text-secondary text-muted d-block fs-8">
-                                                        {{ __('passwords.sell_per') }} {{ $variant->unitMeasure->name }} 
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span class="text-success text-end fw-bold fs-1">
-                                                {{ $variant->effective_price ?? $variant->selling_price }} {{ currency_symbol() }}
-                                                @if($variant->has_custom_pricing ?? false)
-                                                    <span class="badge badge-light-warning fs-8 ms-1"
-                                                        title="{{ match($variant->pricing_source ?? 'variant') {
-                                                            'item'   => 'Item-level price',
-                                                            'batch'  => 'Batch-level price',
-                                                            'serial' => 'Serial-level price',
-                                                            default  => 'Custom price',
-                                                        } }}">
-                                                        <i class="bi bi-pencil-square"></i>
-                                                    </span>
-                                                @endif
-                                            </span>
-                                        </div>
-                                    </div>
-                                    @endforeach
+                {{-- ═══════════════════════════════════════════════════════════
+                     SKELETON — shown on first load, before PosList fetches.
+                     Hidden as soon as the grid renders.
+                     ═══════════════════════════════════════════════════════════ --}}
+                <div id="variantTabSkeleton">
+                    <div class="d-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container">
+                        @for ($i = 0; $i < 6; $i++)
+                            <div class="card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative" style="opacity: 0.7;">
+                                <span class="skeleton-pill position-absolute top-0 start-50 translate-middle-x mt-2" style="width: 60px; height: 20px;"></span>
+                                <div class="card-body text-center">
+                                    <div class="skeleton-block mb-4 mx-auto" style="width: 150px; height: 150px; border-radius: 8px;"></div>
+                                    <div class="skeleton-text mx-auto mb-2" style="width: 80%; height: 14px;"></div>
+                                    <div class="skeleton-text mx-auto mb-2" style="width: 60%; height: 14px;"></div>
+                                    <div class="skeleton-text mx-auto mb-2" style="width: 40%; height: 12px;"></div>
+                                    <div class="skeleton-text mx-auto mt-3" style="width: 50%; height: 20px;"></div>
                                 </div>
                             </div>
-                            @php $firstTab = false; @endphp
-                        @endif
-                    @endforeach
+                        @endfor
+                    </div>
+                </div>
+
+                {{-- ═══════════════════════════════════════════════════════════
+                     VARIANT GRID — mount point. PosList writes tab panes here.
+                     ═══════════════════════════════════════════════════════════ --}}
+                <div class="tab-content d-none" id="variantTabContent">
+                    {{-- populated by PosList.renderSearchResults() --}}
                 </div>
                 <!--end::Tab Content-->
 
+                {{-- ═══════════════════════════════════════════════════════════
+                     VARIANT NAME AUTO-FIT — unchanged
+                     ═══════════════════════════════════════════════════════════ --}}
                 <script>
-                    // ============================================================
-                    // VARIANT NAME AUTO-FIT
-                    // Keeps the FULL variant name visible (never truncated with
-                    // "...") by shrinking the font size just enough for the text
-                    // to fit inside the fixed-height .variant-name-wrap zone.
-                    // Card size never changes because the wrap height is fixed
-                    // via CSS; only the font size inside it adapts.
-                    // ============================================================
                     function fitVariantName(el) {
                         if (!el) return;
                         const wrap = el.closest('.variant-name-wrap');
                         if (!wrap) return;
 
                         const maxHeight = wrap.clientHeight;
-                        if (!maxHeight) return; // not yet laid out (e.g. hidden tab)
+                        if (!maxHeight) return;
 
                         const isMobile = window.innerWidth < 576;
-                        const baseFontSize = isMobile ? 14.4 : 16; // px, matches CSS starting sizes
-                        const minFontSize = 8.5; // px floor so text stays legible
+                        const baseFontSize = isMobile ? 14.4 : 16;
+                        const minFontSize = 8.5;
 
                         let fontSize = baseFontSize;
                         el.style.fontSize = fontSize + 'px';
 
-                        // Shrink in small steps until the (2-line-clamped) text fits
                         let guard = 0;
                         while (el.scrollHeight > maxHeight && fontSize > minFontSize && guard < 40) {
                             fontSize -= 0.5;
@@ -392,7 +239,6 @@
                         fitAllVariantNames();
                     });
 
-                    // Re-fit on resize (e.g. desktop <-> mobile width changes)
                     let variantNameResizeTimeout = null;
                     window.addEventListener('resize', function () {
                         clearTimeout(variantNameResizeTimeout);
@@ -401,8 +247,6 @@
                         }, 200);
                     });
 
-                    // Re-fit whenever a tab becomes visible (a hidden tab has 0
-                    // height, so its names couldn't be measured/fitted before)
                     document.addEventListener('DOMContentLoaded', function () {
                         document.querySelectorAll('[data-bs-toggle="tab"], [data-bs-toggle="pill"]').forEach(function (trigger) {
                             trigger.addEventListener('shown.bs.tab', function () {
@@ -414,77 +258,10 @@
                     });
                 </script>
 
-                <script>
-                    function filterVariants(searchTerm) {
-                        const searchValue = searchTerm.toLowerCase().trim();
-                        const allVariantItems = document.querySelectorAll('.variant-item');
-                        const allTabPanes = document.querySelectorAll('.tab-pane');
-
-                        if (searchValue === '') {
-                            allVariantItems.forEach(item => { item.style.display = ''; });
-                            return;
-                        }
-
-                        allVariantItems.forEach(item => {
-                            const variantName = item.getAttribute('data-name') || '';
-                            item.style.display = variantName.includes(searchValue) ? '' : 'none';
-                        });
-
-                        const panesWithMatches = [];
-                        allTabPanes.forEach(pane => {
-                            const hasMatch = Array.from(pane.querySelectorAll('.variant-item'))
-                                .some(item => item.style.display !== 'none');
-                            if (hasMatch) panesWithMatches.push(pane);
-                        });
-
-                        const activePane = document.querySelector('.tab-pane.active');
-                        const activeHasMatch = activePane && panesWithMatches.includes(activePane);
-
-                        if (!activeHasMatch && panesWithMatches.length > 0) {
-                            const targetPane = panesWithMatches[0];
-                            const trigger = document.querySelector(
-                                `[data-bs-toggle="tab"][href="#${targetPane.id}"], ` +
-                                `[data-bs-toggle="pill"][href="#${targetPane.id}"], ` +
-                                `[data-bs-toggle="tab"][data-bs-target="#${targetPane.id}"], ` +
-                                `[data-bs-toggle="pill"][data-bs-target="#${targetPane.id}"]`
-                            );
-                            if (trigger) {
-                                if (window.bootstrap?.Tab) {
-                                    bootstrap.Tab.getOrCreateInstance(trigger).show();
-                                } else {
-                                    trigger.click();
-                                }
-                            }
-                        }
-                    }
-
-                    document.addEventListener('DOMContentLoaded', function () {
-                        const tabTriggers = document.querySelectorAll('[data-bs-toggle="tab"], [data-bs-toggle="pill"]');
-
-                        tabTriggers.forEach(trigger => {
-                            trigger.addEventListener('shown.bs.tab', function () {
-                                const searchInput = document.getElementById('variantSearchInput');
-                                if (searchInput && searchInput.value.trim()) {
-                                    const searchValue = searchInput.value.toLowerCase().trim();
-                                    document.querySelectorAll('.variant-item').forEach(item => {
-                                        const variantName = item.getAttribute('data-name') || '';
-                                        item.style.display = variantName.includes(searchValue) ? '' : 'none';
-                                    });
-                                } else {
-                                    document.querySelectorAll('.variant-item').forEach(item => {
-                                        item.style.display = '';
-                                    });
-                                }
-                            });
-                        });
-                    });
-                </script>
-
             </div>
         </div>
     </div>
     <!--end::Content-->
-
 
     <!--begin::Body-->
     <div class="flex-row-auto w-xl-450px">
@@ -516,31 +293,25 @@
 
                 <!--begin::Summary-->
                 <div class="d-flex flex-stack bg-success rounded-3 p-6 mb-11">
-                    <!--begin::Content-->
                     <div class="fs-6 fw-bold text-white">
                         <span class="d-block lh-1 mb-2">{{__('pagination.sub_total')}}</span>
                         <span class="d-block mb-2">{{__('pagination._discount')}}</span>
                         <span class="d-block mb-9">{{__('pagination._tax')}}</span>
                         <span class="d-block fs-2qx lh-1">{{__('pagination.grant_total')}}</span>
                     </div>
-                    <!--end::Content-->
-                    <!--begin::Content-->
                     <div class="fs-6 fw-bold text-white text-end">
                         <span class="d-block lh-1 mb-2" data-kt-pos-element="total">0.00</span>
                         <span class="d-block mb-2" data-kt-pos-element="discount">-0.00</span>
                         <span class="d-block mb-9" data-kt-pos-element="tax">0.20</span>
                         <span class="d-block fs-2qx lh-1" data-kt-pos-element="grant-total">0.00</span>
                     </div>
-                    <!--end::Content-->
                 </div>
-                
-                
+
                 <!--begin::Customer-->
                 <div class="m-0">
                     <div class="mb-8">
                         <h3 class="fw-bold text-gray-800 mb-5">{{ __('pagination.select_customer') }}</h3>
 
-                        <!-- Toggle Buttons -->
                         <div class="row g-3 mb-4">
                             <div class="col-6">
                                 <div class="btn btn-outline btn-outline-dashed btn-outline-default d-flex flex-column align-items-center justify-content-center gap-2 py-4 w-100 cursor-pointer"
@@ -562,11 +333,9 @@
                             </div>
                         </div>
 
-                        <!-- Hidden radio inputs -->
                         <input type="radio" name="cust_mode" id="cust-mode-existing" value="existing" class="d-none">
                         <input type="radio" name="cust_mode" id="cust-mode-new" value="new" class="d-none">
 
-                        <!-- Panel: Existing Customer -->
                         <div id="panel-existing-cust" class="d-none">
                             <label class="form-label fw-semibold text-gray-700">{{ __('pagination.choose_customer') }}</label>
                             <select class="form-select form-select-lg" id="cust-existing-select" style="width: 100%">
@@ -579,7 +348,6 @@
                             </select>
                         </div>
 
-                        <!-- Panel: New Customer -->
                         <div id="panel-new-cust" class="d-none">
                             <label class="form-label fw-semibold text-gray-700">{{ __('pagination.customer_name_placeholder') }}</label>
                             <input type="text"
@@ -587,587 +355,13 @@
                                 id="cust-new-input"
                                 placeholder="{{ __('pagination.customer_name_placeholder') }}">
                         </div>
-
                     </div>
                 </div>
-                                
+
                 <script>
-                    // ============================================================
-                    // SEARCH FUNCTIONALITY
-                    // ============================================================
-                    let searchTimeout = null;
-                    let isSearching = false;
-                    let searchActive = false;
-                    let originalTabContentHTML = null;
-
-                    document.addEventListener('DOMContentLoaded', function () {
-                        const tabContent = document.getElementById('variantTabContent');
-                        if (tabContent) originalTabContentHTML = tabContent.innerHTML;
-                    });
-
-                    function filterProductsAndVariants(searchTerm) {
-                        if (searchTimeout) {
-                            clearTimeout(searchTimeout);
-                        }
-
-                        if (!searchTerm || searchTerm.trim() === '') {
-                            restoreOriginalView();
-                            return;
-                        }
-
-                        searchTimeout = setTimeout(function() {
-                            performSearch(searchTerm.trim());
-                        }, 400);
-                    }
-
-                    function restoreOriginalView() {
-                        searchActive = false;
-
-                        // Remove search result message
-                        const existingMsg = document.getElementById('productList')?.querySelector('.search-result-msg');
-                        if (existingMsg) {
-                            existingMsg.remove();
-                        }
-
-                        // ✅ Show all product pills
-                        document.querySelectorAll('.product-item').forEach(item => {
-                            item.style.display = '';
-                        });
-
-                        // ✅ Restore the original tab content
-                        const tabContent = document.getElementById('variantTabContent');
-                        if (tabContent && originalTabContentHTML !== null) {
-                            tabContent.innerHTML = originalTabContentHTML;
-                        }
-
-                        // ✅ Activate the first product pill
-                        const firstPill = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
-                        if (firstPill) {
-                            if (window.bootstrap?.Tab) {
-                                bootstrap.Tab.getOrCreateInstance(firstPill).show();
-                            } else {
-                                firstPill.click();
-                            }
-                        }
-
-                        // Remove no results message
-                        const noResults = document.querySelector('.no-results-message');
-                        if (noResults) noResults.remove();
-
-                        // Clear search input
-                        const searchInput = document.getElementById('variantSearchInput');
-                        if (searchInput) {
-                            searchInput.value = '';
-                        }
-
-                        // ✅ Re-fit variant names now that the original cards are back
-                        if (typeof fitAllVariantNames === 'function') {
-                            fitAllVariantNames(tabContent);
-                        }
-                    }
-
-
-                    function performSearch(searchTerm) {
-                        if (isSearching) return;
-                        isSearching = true;
-                        searchActive = true;
-
-                        const departmentId = document.getElementById('departmentFilter')?.value || '';
-
-                        @if(!$isSingleShop)
-                        if (!departmentId) {
-                            toastr.warning('Please select a department first');
-                            isSearching = false;
-                            return;
-                        }
-                        @endif
-
-                        const tabContent = document.getElementById('variantTabContent');
-
-                        // ✅ Show loading state inside tab content
-                        if (tabContent) {
-                            tabContent.innerHTML = `
-                                <div class="text-center py-10 w-100">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                    <p class="mt-3 text-gray-500">Searching for "${searchTerm}"...</p>
-                                </div>
-                            `;
-                        }
-
-                        fetch(`/pos/search?search=${encodeURIComponent(searchTerm)}&department=${departmentId}`, {
-                            method: 'GET',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json',
-                            },
-                            credentials: 'same-origin'
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            isSearching = false;
-                            if (data.success && data.products && data.products.length > 0) {
-                                renderSearchResults(data.products, data.is_single_shop);
-                            } else {
-                                showNoResults(searchTerm);
-                            }
-                        })
-                        .catch(error => {
-                            isSearching = false;
-                            console.error('Search error:', error);
-                            toastr.error('Error performing search. Please try again.');
-                            restoreOriginalView();
-                        });
-                    }
-
-                    function renderSearchResults(products, isSingleShop) {
-                        const tabContent = document.getElementById('variantTabContent');
-                        if (!tabContent) return;
-
-                        // Clear ALL existing content first
-                        tabContent.innerHTML = '';
-
-                        let hasProducts = false;
-                        let firstProduct = true;
-                        const foundProductIds = new Set();
-
-                        products.forEach(product => {
-                            if (product.variants && product.variants.length > 0) {
-                                hasProducts = true;
-                                foundProductIds.add(product.id);
-
-                                // Create the tab pane
-                                const tabPane = document.createElement('div');
-                                tabPane.className = `tab-pane fade ${firstProduct ? 'show active' : ''}`;
-                                tabPane.id = `kt_pos_${product.id}`;
-
-                                // Create the variant container INSIDE the tab pane
-                                const grid = document.createElement('div');
-                                grid.className = 'd-flex flex-wrap d-grid gap-5 gap-xxl-9 variant-container';
-
-                                product.variants.forEach(variant => {
-                                    // ✅ Get strategy from product
-                                    const strategy = product.inventory_strategy || 'quantity';
-                                    const isRecipe = strategy === 'recipe' && (product.recipe !== null);
-                                    
-                                    // ✅ Get batches, serials, and quantity from variant
-                                    const batches = variant.available_batches || [];
-                                    const serials = variant.available_serials || [];
-                                    const quantityAvailable = variant.quantity_available || 0;
-                                    
-                                    // ✅ Pass strategy, batches, serials, and quantity to card creation
-                                    const card = createVariantCardWithStrategy(
-                                        variant, 
-                                        product, 
-                                        isSingleShop, 
-                                        strategy, 
-                                        isRecipe,
-                                        batches,
-                                        serials,
-                                        quantityAvailable
-                                    );
-                                    grid.appendChild(card);
-                                });
-
-                                tabPane.appendChild(grid);
-                                tabContent.appendChild(tabPane);
-                                firstProduct = false;
-                            }
-                        });
-
-                        if (!hasProducts) {
-                            showNoResults('');
-                        } else {
-                            // Update product pills - hide all and show only found products
-                            updateProductPills(foundProductIds, products.length);
-                        }
-
-                        // ✅ Now that cards are in the DOM (and the active tab pane is
-                        // visible), fit every variant name's font size to its box.
-                        if (typeof fitAllVariantNames === 'function') {
-                            fitAllVariantNames(tabContent);
-                        }
-                    }
-
-                    function createVariantCardWithStrategy(variant, product, isSingleShop, strategy, isRecipe, batches = [], serials = [], quantityAvailable = 0) {
-                        const card = document.createElement('div');
-                        card.className = 'card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative';
-                        
-                        // Build image URL
-                        let imageUrl = variant.image_url || product.image_url || '';
-                        if (imageUrl) {
-                            imageUrl = imageUrl.replace(/^\/+/, '');
-                            imageUrl = '{{ asset("storage") }}/' + imageUrl;
-                        } else {
-                            imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
-                        }
-                        
-                        // Set data attributes
-                        card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
-                        card.setAttribute('data-product', product.id);
-                        card.setAttribute('data-variant-id', variant.id);
-                        card.setAttribute('data-price', variant.effective_price ?? variant.selling_price);
-                        card.setAttribute('data-image', imageUrl);
-                        card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
-                        card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
-                        card.setAttribute('data-strategy', strategy);
-                        card.setAttribute('data-is-recipe', isRecipe ? 'true' : 'false');
-                        card.setAttribute('data-quantity-available', quantityAvailable);
-                        card.setAttribute('data-variant-name', variant.name || product.name);
-                        card.setAttribute('data-batches', JSON.stringify(batches));
-                        card.setAttribute('data-serials', JSON.stringify(serials));  // ✅ Add serials data
-                        
-                        // Inventory data for multi-shop
-                        if (!isSingleShop && variant.inventory_by_dept) {
-                            card.setAttribute('data-inventory', JSON.stringify(variant.inventory_by_dept || {}));
-                        }
-                        
-                        card.onclick = function() { handleVariantClick(this); };
-                        card.style.cursor = 'pointer';
-
-                        // Strategy badge configuration
-                        const strategyColors = {
-                            'quantity': 'primary',
-                            'batch': 'info',
-                            'serial': 'warning',
-                            'recipe': 'success'
-                        };
-                        const strategyLabels = {
-                            'quantity': '{{ __("passwords.quantity") }}',
-                            'batch': '{{ __("passwords.batch") }}',
-                            'serial': '{{ __("passwords.serial") }}',
-                            'recipe': '{{ __("passwords.recipe") }}'
-                        };
-                        
-                        // const strategyIcons = {
-                        //     'quantity': 'bi-box-seam',
-                        //     'batch': 'bi-layers',
-                        //     'serial': 'bi-upc-scan',
-                        //     'recipe': 'bi-journal-bookmark-fill'
-                        // };
-                        
-                        const strategyColor = strategyColors[strategy] || 'primary';
-                        const strategyLabel = strategyLabels[strategy] || strategy;
-                        // const strategyIcon = strategyIcons[strategy] || 'bi-box-seam';
-                        const badgeClass = 'bg-' + strategyColor;
-
-                        const hasTaxes = variant.applicable_taxes && variant.applicable_taxes.length > 0;
-                        const hasPromos = variant.applicable_promotions && variant.applicable_promotions.length > 0;
-                        const hasBatches = strategy === 'batch' && batches && batches.length > 0;
-                        const hasSerials = strategy === 'serial' && serials && serials.length > 0;
-
-                        // ✅ Always show the FULL variant/product name — the CSS
-                        // fixed-height zone + fitVariantName() JS handle sizing,
-                        // so we never chop it with substring/"...".
-                        const fullName = variant.name || product.name;
-
-                        card.innerHTML = `
-                            <!-- ✅ Inventory Strategy Badge -->
-                            <span class="badge ${badgeClass} text-white position-absolute top-0 start-50 translate-middle-x mt-2 px-3 py-2 shadow-sm" 
-                                style="z-index: 10; min-width: 70px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.3px;">                    
-                                ${strategyLabel}
-                                ${isRecipe ? `
-                                    <span class="badge bg-warning text-dark ms-1" style="font-size: 0.55rem; padding: 1px 6px; border-radius: 10px;">
-                                        <i class="bi bi-info-circle me-1"></i>Recipe
-                                    </span>
-                                ` : ''}
-                            </span>
-
-                            <!-- ✅ Top-left Badge for Taxes (Red) -->
-                            ${hasTaxes ? `
-                                <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
-                                    {{ __("passwords._tax") }}
-                                </span>
-                            ` : ''}
-
-                            <!-- ✅ Top-right Badge for Promotions (Green/Success) -->
-                            ${hasPromos ? `
-                                <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm" style="z-index: 10;">
-                                    {{ __("passwords._promo") }}
-                                </span>
-                            ` : ''}
-
-                            <!-- ✅ Batch indicator badge (bottom) -->
-                            ${hasBatches ? `
-                                <span class="badge bg-info text-white position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
-                                    style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
-                                    ${batches.length} {{ __("passwords.batches_available") }}
-                                </span>
-                            ` : ''}
-
-                            <!-- ✅ Serial indicator badge (bottom) -->
-                            ${hasSerials ? `
-                                <span class="badge bg-warning text-dark position-absolute bottom-0 start-50 translate-middle-x mb-2 px-2 py-1 shadow-sm" 
-                                    style="z-index: 10; font-size: 0.55rem; border-radius: 10px;">
-                                    ${serials.length} {{ __("passwords.serials_available") }}
-                                </span>
-                            ` : ''}
-
-                            <div class="card-body text-center">
-                                <img src="${imageUrl}" 
-                                    class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                    alt="${fullName}"
-                                    onerror="this.src='{{ asset('assets/media/stock/ecommerce/2.png') }}'" />
-
-                                <div class="mb-2">
-                                    <div class="text-center">
-                                        <div class="variant-name-wrap">
-                                            <span class="variant-name"
-                                                data-bs-toggle="tooltip"
-                                                title="${fullName}">
-                                                ${fullName}
-                                            </span>
-                                        </div>
-                                        <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
-                                            ${quantityAvailable} {{ __('pagination._available') }}
-                                        </span>
-                                        ${hasBatches ? `
-                                            <span class="text-muted d-block fs-8">
-                                                ${batches.length} {{ __("passwords.batches") }}
-                                            </span>
-                                        ` : ''}
-                                        ${hasSerials ? `
-                                            <span class="text-muted d-block fs-8">
-                                                ${serials.length} {{ __("passwords.serials") }}
-                                            </span>
-                                        ` : ''}
-                                    </div>
-                                </div>
-
-                                <span class="text-success text-end fw-bold fs-1">
-                                    ${variant.effective_price ?? variant.selling_price} {{ currency_symbol() }}
-                                    ${variant.has_custom_pricing
-                                        ? `<span class="badge badge-light-warning fs-8 ms-1"
-                                                title="${variant.pricing_source === 'item' ? 'Item-level price' :
-                                                        variant.pricing_source === 'batch' ? 'Batch-level price' :
-                                                        variant.pricing_source === 'serial' ? 'Serial-level price' :
-                                                        'Custom price'}">
-                                               <i class="bi bi-pencil-square"></i>
-                                           </span>`
-                                        : ''}
-                                </span>
-                            </div>
-                        `;
-
-                        return card;
-                    }
-
-
-                    function updateProductPills(foundProductIds, totalCount) {
-                        const productList = document.getElementById('productList');
-                        if (!productList) return;
-
-                        // Remove existing search result message
-                        const existingMsg = productList.querySelector('.search-result-msg');
-                        if (existingMsg) {
-                            existingMsg.remove();
-                        }
-
-                        // Add search result message
-                        const msg = document.createElement('li');
-                        msg.className = 'search-result-msg nav-item me-3';
-                        msg.innerHTML = `
-                            <span class="fw-bold text-primary fs-6">
-                                <i class="ki-duotone ki-search-list fs-4 me-1"></i>
-                                Search Results (${totalCount} products)
-                            </span>
-                        `;
-                        productList.prepend(msg);
-
-                        // HIDE ALL product pills first
-                        document.querySelectorAll('.product-item').forEach(item => {
-                            item.style.display = 'none';
-                        });
-
-                        // SHOW ONLY the found products
-                        if (foundProductIds && foundProductIds.size > 0) {
-                            document.querySelectorAll('.product-item').forEach(item => {
-                                const link = item.querySelector('a');
-                                if (link) {
-                                    const href = link.getAttribute('href');
-                                    const match = href ? href.match(/kt_pos_(\d+)/) : null;
-                                    if (match && foundProductIds.has(parseInt(match[1]))) {
-                                        item.style.display = '';
-                                    }
-                                }
-                            });
-
-                            // Activate the first found product tab
-                            const firstVisiblePill = document.querySelector('.product-item:not([style*="none"]) a[data-bs-toggle="pill"]');
-                            if (firstVisiblePill) {
-                                if (window.bootstrap?.Tab) {
-                                    bootstrap.Tab.getOrCreateInstance(firstVisiblePill).show();
-                                } else {
-                                    firstVisiblePill.click();
-                                }
-                            }
-                        }
-                    }
-
-                    function showNoResults(searchTerm) {
-                        const tabContent = document.getElementById('variantTabContent');
-                        if (!tabContent) return;
-
-                        // Clear the tab content and show the no results message
-                        tabContent.innerHTML = `
-                            <div class="text-center py-10 w-100 no-results-message">
-                                <i class="ki-duotone ki-search-list fs-3x text-gray-400 mb-3 d-block">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <span class="text-gray-500 fw-semibold fs-5">
-                                    No products found for "${searchTerm || ''}"
-                                </span>
-                                <div class="mt-3">
-                                    <button class="btn btn-light-primary" onclick="restoreOriginalView()">
-                                        <i class="ki-duotone ki-arrow-left fs-4 me-1"></i>
-                                        {{ __('auth._back') }}
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-
-                        const productList = document.getElementById('productList');
-                        if (productList) {
-                            const existingMsg = productList.querySelector('.search-result-msg');
-                            if (existingMsg) existingMsg.remove();
-
-                            const msg = document.createElement('li');
-                            msg.className = 'search-result-msg nav-item me-3';
-                            msg.innerHTML = `<span class="fw-bold text-danger fs-6">No results found</span>`;
-                            productList.prepend(msg);
-
-                            // Hide all product pills
-                            document.querySelectorAll('.product-item').forEach(item => {
-                                item.style.display = 'none';
-                            });
-                        }
-                    }
-
-                    // Search input handlers
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const searchInput = document.getElementById('variantSearchInput');
-                        if (searchInput) {
-                            searchInput.addEventListener('keypress', function(e) {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    const searchTerm = this.value.trim();
-                                    if (searchTerm) {
-                                        performSearch(searchTerm);
-                                    } else {
-                                        restoreOriginalView();
-                                    }
-                                }
-                            });
-                            
-                            searchInput.addEventListener('input', function(e) {
-                                if (!this.value.trim()) {
-                                    restoreOriginalView();
-                                }
-                            });
-                        }
-                    });
-
-                    // ============================================================
-                    // CREATE VARIANT CARD - FULLY ENABLED (NO DISABLING)
-                    // ============================================================
-                    function createVariantCard(variant, product, isSingleShop) {
-                        const card = document.createElement('div');
-                        card.className = 'card card-flush flex-row-fluid p-6 pb-5 mw-100 variant-item position-relative';
-                        
-                        let imageUrl = variant.image_url || product.image_url || '';
-                        
-                        if (imageUrl) {
-                            imageUrl = imageUrl.replace(/^\/+/, '');
-                            imageUrl = '{{ asset("storage") }}/' + imageUrl;
-                        } else {
-                            imageUrl = '{{ asset("assets/media/stock/ecommerce/2.png") }}';
-                        }
-                        
-                        card.setAttribute('data-name', (variant.name || product.name).toLowerCase());
-                        card.setAttribute('data-product', product.id);
-                        card.setAttribute('data-variant-id', variant.id);
-                        card.setAttribute('data-price', variant.effective_price ?? variant.selling_price);
-                        card.setAttribute('data-image', imageUrl);
-                        card.setAttribute('data-taxes', JSON.stringify(variant.applicable_taxes || []));
-                        card.setAttribute('data-promotions', JSON.stringify(variant.applicable_promotions || []));
-                        
-                        if (!isSingleShop && variant.inventory_by_dept) {
-                            card.setAttribute('data-inventory', JSON.stringify(variant.inventory_by_dept || {}));
-                        }
-                        
-                        // ✅ ALWAYS ENABLED - No disabling logic
-                        card.onclick = function() { handleVariantClick(this); };
-                        card.style.cursor = 'pointer';
-
-                        const hasTaxes = variant.applicable_taxes && variant.applicable_taxes.length > 0;
-                        const hasPromos = variant.applicable_promotions && variant.applicable_promotions.length > 0;
-
-                        // ✅ Show the FULL variant/product name — no substring truncation.
-                        const fullName = variant.name || product.name;
-
-                        card.innerHTML = `
-                            ${hasTaxes ? `
-                                <span class="badge bg-danger text-white position-absolute top-0 start-0 m-2 px-3 py-2 shadow-sm">
-                                    <i class="ki-duotone ki-dollar fs-6 me-1"></i>
-                                    {{ __('passwords._tax') }}
-                                </span>
-                            ` : ''}
-                            
-                            ${hasPromos ? `
-                                <span class="badge bg-success text-white position-absolute top-0 end-0 m-2 px-3 py-2 shadow-sm">
-                                    <i class="ki-duotone ki-tag fs-6 me-1"></i>
-                                    {{ __('passwords._promo') }}
-                                </span>
-                            ` : ''}
-
-                            <div class="card-body text-center">
-                                <img src="${imageUrl}" 
-                                    class="rounded-3 mb-4 w-150px h-150px w-xxl-200px h-xxl-200px" 
-                                    alt="${fullName}"
-                                    onerror="this.src='{{ asset('assets/media/stock/ecommerce/2.png') }}'" />
-
-                                <div class="mb-2">
-                                    <div class="text-center">
-                                        <div class="variant-name-wrap">
-                                            <span class="variant-name"
-                                                data-bs-toggle="tooltip"
-                                                title="${fullName}">
-                                                ${fullName}
-                                            </span>
-                                        </div>
-                                        <span class="text-gray-500 fw-semibold d-block fs-6 mt-n1 variant-qty">
-                                            ${variant.quantity_available || 0} {{__('pagination._available')}}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <span class="text-success text-end fw-bold fs-1">
-                                    ${variant.effective_price ?? variant.selling_price} {{ currency_symbol() }}
-                                    ${variant.has_custom_pricing
-                                        ? `<span class="badge badge-light-warning fs-8 ms-1"
-                                                title="${variant.pricing_source === 'item'   ? 'Item-level price'   :
-                                                        variant.pricing_source === 'batch'  ? 'Batch-level price'  :
-                                                        variant.pricing_source === 'serial' ? 'Serial-level price' :
-                                                                                              'Custom price'}">
-                                               <i class="bi bi-pencil-square"></i>
-                                           </span>`
-                                        : ''}
-                                </span>
-                            </div>
-                        `;
-
-                        if (typeof fitVariantName === 'function') {
-                            fitVariantName(card.querySelector('.variant-name'));
-                        }
-
-                        return card;
-                    }
-
-                    // ============================================================
-                    // CUSTOMER SELECTION
-                    // ============================================================
+                    // ──────────────────────────────────────────────────────
+                    // CUSTOMER SELECTION — unchanged
+                    // ──────────────────────────────────────────────────────
                     document.addEventListener('click', function (e) {
                         const btnExisting = document.getElementById('btn-pick-existing');
                         const btnNew      = document.getElementById('btn-pick-new');
@@ -1186,7 +380,6 @@
                         const selectExisting = document.getElementById('cust-existing-select');
                         const inputNew       = document.getElementById('cust-new-input');
 
-                        // Reset BOTH buttons to unselected state
                         [btnExisting, btnNew].forEach(btn => {
                             btn.classList.remove('btn-light-primary', 'border-primary');
                             btn.classList.add('btn-outline-default');
@@ -1196,11 +389,9 @@
                             btn.querySelector('span').classList.add('text-gray-800');
                         });
 
-                        // Hide both panels
                         panelExisting.classList.add('d-none');
                         panelNew.classList.add('d-none');
 
-                        // Activate selected button
                         const activeBtn = mode === 'existing' ? btnExisting : btnNew;
                         activeBtn.classList.remove('btn-outline-default');
                         activeBtn.classList.add('btn-light-primary', 'border-primary');
@@ -1221,6 +412,7 @@
                     });
 
                     document.addEventListener('DOMContentLoaded', function () {
+                        if (typeof $ === 'undefined' || !$.fn?.select2) return;
                         $('#cust-existing-select').select2({
                             placeholder: '— {{ __("pagination.choose_customer") }} —',
                             allowClear: true,
@@ -1228,13 +420,13 @@
                         });
                     });
                 </script>
-                
+
                 <div class="m-0">
                     @can('create order')
                     <div class="mt-8">
-                        <button 
-                            id="processBill" 
-                            type="button" 
+                        <button
+                            id="processBill"
+                            type="button"
                             class="btn btn-primary w-100 py-4 d-flex align-items-center justify-content-center gap-3"
                             style="font-size: 1.15rem; font-weight: 600;"
                             onclick="processPayment()">
@@ -1252,9 +444,9 @@
                         </button>
                     </div>
                     <div class="mt-3">
-                        <button 
-                            id="generateInvoiceBtn" 
-                            type="button" 
+                        <button
+                            id="generateInvoiceBtn"
+                            type="button"
                             class="btn btn-light-primary w-100 py-4 d-flex align-items-center justify-content-center gap-3"
                             style="font-size: 1.15rem; font-weight: 600;"
                             onclick="generateInvoice()">
@@ -1277,22 +469,17 @@
 </div>
 
 <style>
-    /* ✅ Ensure variants are always clickable */
     .variant-item {
         cursor: pointer !important;
         opacity: 1 !important;
         pointer-events: auto !important;
     }
 
-    /* ✅ Only show disabled state for truly out of stock items */
     .variant-item.out-of-stock {
         cursor: not-allowed !important;
         opacity: 0.5 !important;
     }
 </style>
-
-
-
 
 @include('orders.pos.pause-buy')
 @include('orders.pos.payment-mode')

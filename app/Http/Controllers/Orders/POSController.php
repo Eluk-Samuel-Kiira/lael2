@@ -16,326 +16,348 @@ use App\Models\{ OrderItem, OrderPayment, InventoryLog, Customer, Inventory, Ord
 
 class POSController extends Controller
 {
+    // public function index(Request $request)
+    // {
+    //     $user = Auth::user();
+    //     $tenantId = $user->tenant_id;
+
+    //     if (!$user->hasPermissionTo('view order')) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => __('payments.not_authorized'),
+    //         ]);
+    //     }
+
+    //     $isSingleShop         = tenant_is_single_shop($tenantId);
+    //     $now                  = now();
+    //     $selectedDepartmentId = $request->input('department', '');
+    //     $products             = collect();
+
+    //     if ($isSingleShop) {
+    //         // ─── SINGLE SHOP ────────────────────────────────────────────────
+    //         $products = Product::with([
+    //             'taxes' => fn($q) => $q->where('is_active', 1),
+    //             'promotions' => fn($q) => $q->where('is_active', 1)
+    //                 ->where('start_date', '<=', $now)
+    //                 ->where('end_date', '>=', $now),
+    //             'variants' => function ($query) {
+    //                 $query->where('is_active', 1)->orderBy('name');
+    //             },
+    //             'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+    //             'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+    //                 ->where('start_date', '<=', $now)
+    //                 ->where('end_date', '>=', $now),
+    //             'variants.batches' => function ($q) {
+    //                 $q->where('quantity_remaining', '>', 0)
+    //                     ->orWhereNull('quantity_remaining')
+    //                     ->orderBy('expiry_date', 'asc');
+    //             },
+    //             'variants.serialNumbers' => function ($q) {
+    //                 $q->where(function ($sub) {
+    //                     $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+    //                         ->orWhere('status', SerialNumber::STATUS_RESERVED);
+    //                 });
+    //             },
+    //         ])
+    //             ->where('tenant_id', $tenantId)
+    //             ->where('is_active', 1)
+    //             ->whereHas('variants')
+    //             ->limit(10)
+    //             ->latest()
+    //             ->get();
+
+    //         foreach ($products as $product) {
+    //             foreach ($product->variants as $variant) {
+    //                 // Default quantity
+    //                 $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
+    //                 $variant->quantity_source    = 'overall';
+    //                 $variant->inventory_by_dept  = [];
+
+    //                 // Strategy-specific quantity enrichment
+    //                 if ($product->inventory_strategy === 'batch') {
+    //                     $batches = $variant->batches;
+    //                     $totalAvailable = $batches->sum(function ($batch) {
+    //                         return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+    //                     });
+    //                     $variant->available_batches = $batches->map(function ($batch) {
+    //                         return [
+    //                             'id'                 => $batch->id,
+    //                             'batch_number'       => $batch->batch_number,
+    //                             'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+    //                             'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+    //                             'location_id'        => $batch->location_id,
+    //                             'department_id'      => $batch->department_id,
+    //                         ];
+    //                     });
+    //                     $variant->quantity_available = $totalAvailable;
+    //                 } elseif ($product->inventory_strategy === 'serial') {
+    //                     $serialNumbers = $variant->serialNumbers;
+    //                     $variant->available_serials = $serialNumbers->map(function ($serial) {
+    //                         return [
+    //                             'id'              => $serial->id,
+    //                             'serial_number'   => $serial->serial_number,
+    //                             'status'          => $serial->status,
+    //                             'location_id'     => $serial->location_id,
+    //                             'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+    //                             'department_id'   => $serial->department_id,
+    //                             'department_name' => $serial->department ? $serial->department->name : 'N/A',
+    //                         ];
+    //                     });
+    //                     $variant->quantity_available = $variant->available_serials->count();
+    //                 } else {
+    //                     $variant->available_batches  = [];
+    //                     $variant->available_serials = [];
+    //                 }
+
+    //                 // ★ Attach resolved pricing snapshot
+    //                 $this->attachPosPricing(
+    //                     $variant,
+    //                     null,
+    //                     $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+    //                     $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+    //                 );
+    //             }
+    //         }
+
+    //     } else {
+    //         // ─── MULTI-SHOP ──────────────────────────────────────────────────
+    //         if (empty($selectedDepartmentId)) {
+    //             $products = collect();
+    //             $user_departments = $user->departments()->get();
+
+    //             return view('orders.pos-index', compact(
+    //                 'products',
+    //                 'user_departments',
+    //                 'isSingleShop',
+    //                 'selectedDepartmentId'
+    //             ));
+    //         }
+
+    //         $userLocationId = $this->resolveUserLocationId($request, $user);
+
+    //         if (!$userLocationId) {
+    //             return redirect()
+    //                 ->back()
+    //                 ->with('toast', [
+    //                     'type'    => 'error',
+    //                     'message' => __('pagination.no_location_assigned'),
+    //                 ]);
+    //         }
+
+    //         $products = Product::with([
+    //             'departments',
+    //             'taxes' => fn($q) => $q->where('is_active', 1),
+    //             'promotions' => fn($q) => $q->where('is_active', 1)
+    //                 ->where('start_date', '<=', $now)
+    //                 ->where('end_date', '>=', $now),
+    //             'variants' => function ($query) use ($selectedDepartmentId, $userLocationId) {
+    //                 $query->where('is_active', 1)
+    //                     ->whereHas('inventory', function ($q) use ($selectedDepartmentId, $userLocationId) {
+    //                         $q->where('department_id', $selectedDepartmentId)
+    //                           ->where('location_id', $userLocationId);
+    //                     })
+    //                     ->with(['inventory' => function ($q) use ($selectedDepartmentId, $userLocationId) {
+    //                         $q->where('department_id', $selectedDepartmentId)
+    //                           ->where('location_id', $userLocationId);
+    //                     }])
+    //                     ->with(['batches' => function ($q) use ($selectedDepartmentId, $userLocationId) {
+    //                         $q->where(function ($sub) {
+    //                             $sub->where('quantity_remaining', '>', 0)
+    //                                 ->orWhereNull('quantity_remaining');
+    //                         })
+    //                         ->where('location_id', $userLocationId)
+    //                         ->where('department_id', $selectedDepartmentId)
+    //                         ->orderBy('expiry_date', 'asc');
+    //                     }])
+    //                     ->with(['serialNumbers' => function ($q) use ($selectedDepartmentId, $userLocationId) {
+    //                         $q->where(function ($sub) {
+    //                             $sub->where('status', SerialNumber::STATUS_AVAILABLE)
+    //                                 ->orWhere('status', SerialNumber::STATUS_RESERVED);
+    //                         })
+    //                         ->where('location_id', $userLocationId)
+    //                         ->where('department_id', $selectedDepartmentId);
+    //                     }]);
+    //             },
+    //             'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
+    //             'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
+    //                 ->where('start_date', '<=', $now)
+    //                 ->where('end_date', '>=', $now),
+    //         ])
+    //             ->where('tenant_id', $tenantId)
+    //             ->where('is_active', 1)
+    //             ->whereHas('departments', function ($q) use ($selectedDepartmentId) {
+    //                 $q->where('department_id', $selectedDepartmentId);
+    //             })
+    //             ->whereHas('variants', function ($q) use ($selectedDepartmentId, $userLocationId) {
+    //                 $q->where('is_active', 1)
+    //                   ->whereHas('inventory', function ($query) use ($selectedDepartmentId, $userLocationId) {
+    //                       $query->where('department_id', $selectedDepartmentId)
+    //                             ->where('location_id', $userLocationId);
+    //                   });
+    //             })
+    //             ->limit(10)
+    //             ->latest()
+    //             ->get();
+
+    //         foreach ($products as $product) {
+    //             foreach ($product->variants as $variant) {
+    //                 $inventoryByDept = [];
+    //                 $totalQty        = 0;
+
+    //                 foreach ($variant->inventory as $inv) {
+    //                     $inventoryByDept[$inv->department_id] = [
+    //                         'inventory_id'  => $inv->id,
+    //                         'quantity'      => $inv->quantity_allocated,
+    //                         'location_id'   => $inv->location_id,
+    //                         'department_id' => $inv->department_id,
+    //                     ];
+    //                     $totalQty += $inv->quantity_allocated;
+    //                 }
+
+    //                 $variant->inventory_by_dept = $inventoryByDept;
+    //                 $variant->quantity_source   = 'inventory_allocated';
+
+    //                 if ($product->inventory_strategy === 'batch') {
+    //                     $batches = $variant->batches;
+    //                     $totalAvailable = $batches->sum(function ($batch) {
+    //                         return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
+    //                     });
+    //                     $variant->available_batches = $batches->map(function ($batch) {
+    //                         return [
+    //                             'id'                 => $batch->id,
+    //                             'batch_number'       => $batch->batch_number,
+    //                             'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
+    //                             'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
+    //                             'location_id'        => $batch->location_id,
+    //                             'department_id'      => $batch->department_id,
+    //                         ];
+    //                     });
+    //                     $variant->quantity_available = $totalAvailable;
+    //                     $inventoryByDept[$selectedDepartmentId]['quantity'] = $totalAvailable;
+    //                     $variant->inventory_by_dept = $inventoryByDept;
+    //                 } elseif ($product->inventory_strategy === 'serial') {
+    //                     $serialNumbers = $variant->serialNumbers;
+    //                     $variant->available_serials = $serialNumbers->map(function ($serial) {
+    //                         return [
+    //                             'id'              => $serial->id,
+    //                             'serial_number'   => $serial->serial_number,
+    //                             'status'          => $serial->status,
+    //                             'location_id'     => $serial->location_id,
+    //                             'location_name'   => $serial->location ? $serial->location->name : 'N/A',
+    //                             'department_id'   => $serial->department_id,
+    //                             'department_name' => $serial->department ? $serial->department->name : 'N/A',
+    //                         ];
+    //                     });
+    //                     $variant->quantity_available = $variant->available_serials->count();
+    //                     $inventoryByDept[$selectedDepartmentId]['quantity'] = $variant->quantity_available;
+    //                     $variant->inventory_by_dept = $inventoryByDept;
+    //                 } else {
+    //                     $variant->available_batches  = [];
+    //                     $variant->available_serials = [];
+    //                     $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
+    //                 }
+
+    //                 // ★ Attach resolved pricing snapshot (item override first)
+    //                 $inventoryForPricing = $variant->inventory->firstWhere('department_id', $selectedDepartmentId)
+    //                     ?? $variant->inventory->first();
+
+    //                 $this->attachPosPricing(
+    //                     $variant,
+    //                     $inventoryForPricing,
+    //                     $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
+    //                     $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
+    //                 );
+    //             }
+    //         }
+    //     }
+
+    //     // ─── Taxes and promotions (unchanged logic) ─────────────────────
+    //     foreach ($products as $product) {
+    //         foreach ($product->variants as $variant) {
+    //             // Taxes
+    //             if ((int) $variant->is_taxable === 0) {
+    //                 $variant->applicable_taxes = collect();
+    //             } else {
+    //                 $applicableTaxes = collect();
+
+    //                 if ($variant->variantTaxes->isNotEmpty()) {
+    //                     $applicableTaxes = $variant->variantTaxes->keyBy('id');
+    //                 } elseif ((int) $product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
+    //                     $applicableTaxes = $product->taxes->keyBy('id');
+    //                 }
+
+    //                 $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
+    //                     $rate = (float) $t->rate;
+    //                     return [
+    //                         'id'   => (int) $t->id,
+    //                         'name' => $t->name,
+    //                         'rate' => $rate,
+    //                         'type' => $t->type,
+    //                     ];
+    //                 })->values();
+    //             }
+
+    //             // Promotions
+    //             $applicablePromos = collect();
+
+    //             if ($variant->variantPromotions->isNotEmpty()) {
+    //                 $applicablePromos = $variant->variantPromotions->keyBy('id');
+    //             } elseif ($product->promotions->isNotEmpty()) {
+    //                 $applicablePromos = $product->promotions->keyBy('id');
+    //             }
+
+    //             $variant->applicable_promotions = $applicablePromos->map(function ($p) {
+    //                 $value = (float) $p->discount_value;
+    //                 return [
+    //                     'id'         => (int) $p->id,
+    //                     'name'       => $p->name,
+    //                     'type'       => $p->discount_type,
+    //                     'value'      => $value,
+    //                     'start_date' => $p->start_date,
+    //                     'end_date'   => $p->end_date,
+    //                 ];
+    //             })->values();
+
+    //             // ★ Display price comes from the resolved snapshot
+    //             $variant->price = $variant->effective_price
+    //                 ?? $variant->selling_price;
+
+    //             // Backwards-compatible alias some views still read
+    //             $variant->grant_total_cost_price = $variant->effective_cost_price
+    //                 ?? $variant->grand_total_cost_price;
+    //         }
+    //     }
+
+    //     $user_departments = $user->departments()->get();
+
+    //     return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
+    // }
+
     public function index(Request $request)
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view order')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
 
         $isSingleShop         = tenant_is_single_shop($tenantId);
-        $now                  = now();
         $selectedDepartmentId = $request->input('department', '');
-        $products             = collect();
+        $user_departments     = $user->departments()->get();
 
-        if ($isSingleShop) {
-            // ─── SINGLE SHOP ────────────────────────────────────────────────
-            $products = Product::with([
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function ($query) {
-                    $query->where('is_active', 1)->orderBy('name');
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants.batches' => function ($q) {
-                    $q->where('quantity_remaining', '>', 0)
-                        ->orWhereNull('quantity_remaining')
-                        ->orderBy('expiry_date', 'asc');
-                },
-                'variants.serialNumbers' => function ($q) {
-                    $q->where(function ($sub) {
-                        $sub->where('status', SerialNumber::STATUS_AVAILABLE)
-                            ->orWhere('status', SerialNumber::STATUS_RESERVED);
-                    });
-                },
-            ])
-                ->where('tenant_id', $tenantId)
-                ->where('is_active', 1)
-                ->whereHas('variants')
-                ->limit(10)
-                ->latest()
-                ->get();
-
-            foreach ($products as $product) {
-                foreach ($product->variants as $variant) {
-                    // Default quantity
-                    $variant->quantity_available = $variant->overal_quantity_at_hand ?? 0;
-                    $variant->quantity_source    = 'overall';
-                    $variant->inventory_by_dept  = [];
-
-                    // Strategy-specific quantity enrichment
-                    if ($product->inventory_strategy === 'batch') {
-                        $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function ($batch) {
-                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-                        });
-                        $variant->available_batches = $batches->map(function ($batch) {
-                            return [
-                                'id'                 => $batch->id,
-                                'batch_number'       => $batch->batch_number,
-                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id'        => $batch->location_id,
-                                'department_id'      => $batch->department_id,
-                            ];
-                        });
-                        $variant->quantity_available = $totalAvailable;
-                    } elseif ($product->inventory_strategy === 'serial') {
-                        $serialNumbers = $variant->serialNumbers;
-                        $variant->available_serials = $serialNumbers->map(function ($serial) {
-                            return [
-                                'id'              => $serial->id,
-                                'serial_number'   => $serial->serial_number,
-                                'status'          => $serial->status,
-                                'location_id'     => $serial->location_id,
-                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id'   => $serial->department_id,
-                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
-                            ];
-                        });
-                        $variant->quantity_available = $variant->available_serials->count();
-                    } else {
-                        $variant->available_batches  = [];
-                        $variant->available_serials = [];
-                    }
-
-                    // ★ Attach resolved pricing snapshot
-                    $this->attachPosPricing(
-                        $variant,
-                        null,
-                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
-                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
-                    );
-                }
-            }
-
-        } else {
-            // ─── MULTI-SHOP ──────────────────────────────────────────────────
-            if (empty($selectedDepartmentId)) {
-                $products = collect();
-                $user_departments = $user->departments()->get();
-
-                return view('orders.pos-index', compact(
-                    'products',
-                    'user_departments',
-                    'isSingleShop',
-                    'selectedDepartmentId'
-                ));
-            }
-
-            $userLocationId = $this->resolveUserLocationId($request, $user);
-
-            if (!$userLocationId) {
-                return redirect()
-                    ->back()
-                    ->with('toast', [
-                        'type'    => 'error',
-                        'message' => __('pagination.no_location_assigned'),
-                    ]);
-            }
-
-            $products = Product::with([
-                'departments',
-                'taxes' => fn($q) => $q->where('is_active', 1),
-                'promotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-                'variants' => function ($query) use ($selectedDepartmentId, $userLocationId) {
-                    $query->where('is_active', 1)
-                        ->whereHas('inventory', function ($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where('department_id', $selectedDepartmentId)
-                              ->where('location_id', $userLocationId);
-                        })
-                        ->with(['inventory' => function ($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where('department_id', $selectedDepartmentId)
-                              ->where('location_id', $userLocationId);
-                        }])
-                        ->with(['batches' => function ($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where(function ($sub) {
-                                $sub->where('quantity_remaining', '>', 0)
-                                    ->orWhereNull('quantity_remaining');
-                            })
-                            ->where('location_id', $userLocationId)
-                            ->where('department_id', $selectedDepartmentId)
-                            ->orderBy('expiry_date', 'asc');
-                        }])
-                        ->with(['serialNumbers' => function ($q) use ($selectedDepartmentId, $userLocationId) {
-                            $q->where(function ($sub) {
-                                $sub->where('status', SerialNumber::STATUS_AVAILABLE)
-                                    ->orWhere('status', SerialNumber::STATUS_RESERVED);
-                            })
-                            ->where('location_id', $userLocationId)
-                            ->where('department_id', $selectedDepartmentId);
-                        }]);
-                },
-                'variants.variantTaxes' => fn($q) => $q->where('is_active', 1),
-                'variants.variantPromotions' => fn($q) => $q->where('is_active', 1)
-                    ->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now),
-            ])
-                ->where('tenant_id', $tenantId)
-                ->where('is_active', 1)
-                ->whereHas('departments', function ($q) use ($selectedDepartmentId) {
-                    $q->where('department_id', $selectedDepartmentId);
-                })
-                ->whereHas('variants', function ($q) use ($selectedDepartmentId, $userLocationId) {
-                    $q->where('is_active', 1)
-                      ->whereHas('inventory', function ($query) use ($selectedDepartmentId, $userLocationId) {
-                          $query->where('department_id', $selectedDepartmentId)
-                                ->where('location_id', $userLocationId);
-                      });
-                })
-                ->limit(10)
-                ->latest()
-                ->get();
-
-            foreach ($products as $product) {
-                foreach ($product->variants as $variant) {
-                    $inventoryByDept = [];
-                    $totalQty        = 0;
-
-                    foreach ($variant->inventory as $inv) {
-                        $inventoryByDept[$inv->department_id] = [
-                            'inventory_id'  => $inv->id,
-                            'quantity'      => $inv->quantity_allocated,
-                            'location_id'   => $inv->location_id,
-                            'department_id' => $inv->department_id,
-                        ];
-                        $totalQty += $inv->quantity_allocated;
-                    }
-
-                    $variant->inventory_by_dept = $inventoryByDept;
-                    $variant->quantity_source   = 'inventory_allocated';
-
-                    if ($product->inventory_strategy === 'batch') {
-                        $batches = $variant->batches;
-                        $totalAvailable = $batches->sum(function ($batch) {
-                            return $batch->quantity_remaining ?? $batch->quantity_received ?? 0;
-                        });
-                        $variant->available_batches = $batches->map(function ($batch) {
-                            return [
-                                'id'                 => $batch->id,
-                                'batch_number'       => $batch->batch_number,
-                                'quantity_remaining' => $batch->quantity_remaining ?? $batch->quantity_received,
-                                'expiry_date'        => $batch->expiry_date ? $batch->expiry_date->format('Y-m-d') : null,
-                                'location_id'        => $batch->location_id,
-                                'department_id'      => $batch->department_id,
-                            ];
-                        });
-                        $variant->quantity_available = $totalAvailable;
-                        $inventoryByDept[$selectedDepartmentId]['quantity'] = $totalAvailable;
-                        $variant->inventory_by_dept = $inventoryByDept;
-                    } elseif ($product->inventory_strategy === 'serial') {
-                        $serialNumbers = $variant->serialNumbers;
-                        $variant->available_serials = $serialNumbers->map(function ($serial) {
-                            return [
-                                'id'              => $serial->id,
-                                'serial_number'   => $serial->serial_number,
-                                'status'          => $serial->status,
-                                'location_id'     => $serial->location_id,
-                                'location_name'   => $serial->location ? $serial->location->name : 'N/A',
-                                'department_id'   => $serial->department_id,
-                                'department_name' => $serial->department ? $serial->department->name : 'N/A',
-                            ];
-                        });
-                        $variant->quantity_available = $variant->available_serials->count();
-                        $inventoryByDept[$selectedDepartmentId]['quantity'] = $variant->quantity_available;
-                        $variant->inventory_by_dept = $inventoryByDept;
-                    } else {
-                        $variant->available_batches  = [];
-                        $variant->available_serials = [];
-                        $variant->quantity_available = $inventoryByDept[$selectedDepartmentId]['quantity'] ?? 0;
-                    }
-
-                    // ★ Attach resolved pricing snapshot (item override first)
-                    $inventoryForPricing = $variant->inventory->firstWhere('department_id', $selectedDepartmentId)
-                        ?? $variant->inventory->first();
-
-                    $this->attachPosPricing(
-                        $variant,
-                        $inventoryForPricing,
-                        $product->inventory_strategy === 'batch'  ? $variant->batches->first()       : null,
-                        $product->inventory_strategy === 'serial' ? $variant->serialNumbers->first() : null
-                    );
-                }
-            }
-        }
-
-        // ─── Taxes and promotions (unchanged logic) ─────────────────────
-        foreach ($products as $product) {
-            foreach ($product->variants as $variant) {
-                // Taxes
-                if ((int) $variant->is_taxable === 0) {
-                    $variant->applicable_taxes = collect();
-                } else {
-                    $applicableTaxes = collect();
-
-                    if ($variant->variantTaxes->isNotEmpty()) {
-                        $applicableTaxes = $variant->variantTaxes->keyBy('id');
-                    } elseif ((int) $product->is_taxable === 1 && $product->taxes->isNotEmpty()) {
-                        $applicableTaxes = $product->taxes->keyBy('id');
-                    }
-
-                    $variant->applicable_taxes = $applicableTaxes->map(function ($t) {
-                        $rate = (float) $t->rate;
-                        return [
-                            'id'   => (int) $t->id,
-                            'name' => $t->name,
-                            'rate' => $rate,
-                            'type' => $t->type,
-                        ];
-                    })->values();
-                }
-
-                // Promotions
-                $applicablePromos = collect();
-
-                if ($variant->variantPromotions->isNotEmpty()) {
-                    $applicablePromos = $variant->variantPromotions->keyBy('id');
-                } elseif ($product->promotions->isNotEmpty()) {
-                    $applicablePromos = $product->promotions->keyBy('id');
-                }
-
-                $variant->applicable_promotions = $applicablePromos->map(function ($p) {
-                    $value = (float) $p->discount_value;
-                    return [
-                        'id'         => (int) $p->id,
-                        'name'       => $p->name,
-                        'type'       => $p->discount_type,
-                        'value'      => $value,
-                        'start_date' => $p->start_date,
-                        'end_date'   => $p->end_date,
-                    ];
-                })->values();
-
-                // ★ Display price comes from the resolved snapshot
-                $variant->price = $variant->effective_price
-                    ?? $variant->selling_price;
-
-                // Backwards-compatible alias some views still read
-                $variant->grant_total_cost_price = $variant->effective_cost_price
-                    ?? $variant->grand_total_cost_price;
-            }
-        }
-
-        $user_departments = $user->departments()->get();
-
-        return view('orders.pos-index', compact('products', 'user_departments', 'isSingleShop', 'selectedDepartmentId'));
+        return view('orders.pos-index', compact(
+            'user_departments',
+            'isSingleShop',
+            'selectedDepartmentId',
+        ));
     }
 
 
     public function search(Request $request)
     {
+        // \Log::info("Yes we have it");
+        // \Log::info($request->all());
         $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
@@ -348,16 +370,16 @@ class POSController extends Controller
 
         $isSingleShop = tenant_is_single_shop($tenantId);
         $now          = now();
-        $searchTerm   = $request->input('search', '');
-        $departmentId = $request->input('department', '');
+        $searchTerm   = (string) $request->input('search', '');
+        $departmentId = (string) $request->input('department', '');
 
-        if (empty($searchTerm)) {
-            return response()->json([
-                'success'  => true,
-                'products' => [],
-                'has_more' => false,
-            ]);
-        }
+        // if (empty($searchTerm)) {
+        //     return response()->json([
+        //         'success'  => true,
+        //         'products' => [],
+        //         'has_more' => false,
+        //     ]);
+        // }
 
         if ($isSingleShop) {
             // ─── SINGLE SHOP SEARCH ──────────────────────────────────────────
@@ -660,6 +682,7 @@ class POSController extends Controller
             'has_more'       => $products->count() >= 20,
             'is_single_shop' => $isSingleShop,
         ]);
+
     }
 
     /**

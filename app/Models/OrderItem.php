@@ -40,6 +40,7 @@ class OrderItem extends Model
         'inventory_data',
         'tax_data',
         'promotion_data',
+        'refunded_quantity',
 
         'tenant_id',
     ];
@@ -63,7 +64,10 @@ class OrderItem extends Model
 
         'batch_id' => 'integer',
         'serial_id' => 'integer',
+        'refunded_quantity' => 'float',
     ];
+
+
 
     // ─── Selling-side accessors (base → display) ──────────────
 
@@ -163,6 +167,56 @@ class OrderItem extends Model
         $cost = (float) ($this->total_cost_price ?? 0);
 
         return (($net - $cost) / $net) * 100;
+    }
+
+    // ─── Refund tracking helpers ──────────────────────────────
+
+    /**
+     * How much of this line item can still be refunded.
+     * Always clamped to [0, quantity] even if the DB has drifted.
+     */
+    public function getRefundableQuantityAttribute(): float
+    {
+        $qty       = (float) ($this->quantity ?? 0);
+        $refunded  = (float) ($this->refunded_quantity ?? 0);
+
+        return max(0, $qty - $refunded);
+    }
+
+    /**
+     * True if every unit of this line item has already been refunded.
+     */
+    public function isFullyRefunded(): bool
+    {
+        return (float) ($this->refunded_quantity ?? 0) >= (float) ($this->quantity ?? 0) - 0.0001;
+    }
+
+    /**
+     * True if at least one unit has been refunded, but not all.
+     */
+    public function isPartiallyRefunded(): bool
+    {
+        $refunded = (float) ($this->refunded_quantity ?? 0);
+        return $refunded > 0.0001 && !$this->isFullyRefunded();
+    }
+
+    /**
+     * Mutator — clamps refunded_quantity to [0, quantity] on write.
+     * Because this bypasses `$fillable`, it will fire on both
+     * `$item->refunded_quantity = X` and `$item->update(['refunded_quantity' => X])`.
+     *
+     * Defensive: even a controller bug can't write refunded_quantity > quantity.
+     */
+    public function setRefundedQuantityAttribute($value): void
+    {
+        $q = (float) $value;
+        if ($q < 0) $q = 0;
+
+        // Read the raw quantity from attributes (avoids accessor round-trip)
+        $max = (float) ($this->attributes['quantity'] ?? 0);
+        if ($q > $max) $q = $max;
+
+        $this->attributes['refunded_quantity'] = $q;
     }
 
     /**

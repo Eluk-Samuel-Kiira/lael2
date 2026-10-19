@@ -364,6 +364,11 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::get('orders/paused', [OrderController::class, 'getPausedOrders'])
             ->name('orders.paused');
             
+        Route::get('/orders/data', [OrderController::class, 'data'])->name('orders.data');
+        Route::get('/orders/{id}/details', [OrderController::class, 'details'])->name('orders.details');
+        Route::post('/orders/{id}/refund', [OrderController::class, 'refund'])->name('orders.refund');
+
+        Route::resource('orders', OrderController::class);
         Route::resource('orders', OrderController::class);
 
 

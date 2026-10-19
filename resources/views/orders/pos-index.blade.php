@@ -1,10 +1,10 @@
 <x-app-layout>
     @section('title', __('pagination.pos_index'))
     @section('content')
-        
+
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
         <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-            <!-- Left side - Title and Breadcrumb -->
+            {{-- Left side - Title and Breadcrumb --}}
             <div class="page-title d-flex flex-column">
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
                     {{__('pagination._pos')}}
@@ -14,8 +14,8 @@
                         @php
                             $previousUrl = url()->previous();
                             $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
+                            $formattedRouteName = $previousRouteName
+                                ? Str::of($previousRouteName)->replace('.', ' ')->title()
                                 : __('auth._back');
                         @endphp
                         <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
@@ -42,7 +42,7 @@
                     </button>
                     <span id="pause-buy-badge" class="position-absolute top-0 start-100 translate-middle badge badge-circle badge-danger">0</span>
                 </div>
-                
+
                 {{-- Currency --}}
                 <div class="d-flex align-items-center px-4 bg-light rounded-3 flex-shrink-0 w-100 w-md-auto" style="height: 42px;">
                     <h3 class="fw-bold text-gray-800 fs-6 mb-0">{{ currency_code() }} ({{ currency_symbol() }})</h3>
@@ -63,6 +63,7 @@
                 @endif
 
                 {{-- Search Input --}}
+                {{-- Note: no `onkeyup` here — PosList binds the input itself. --}}
                 <div class="input-group input-group-solid flex-grow-1 w-100 w-md-auto" style="min-width: 0;">
                     <span class="input-group-text bg-body border-0">
                         <i class="ki-duotone ki-magnifier fs-3 text-gray-500"></i>
@@ -71,29 +72,31 @@
                         id="variantSearchInput"
                         class="form-control form-control-solid border-0 ps-0"
                         placeholder="{{ __('auth._search') }} {{ __('pagination._variants') }}"
-                        onkeyup="filterProductsAndVariants(this.value)"
                         style="height: 42px;">
                 </div>
 
             </div>
         </div>
     </div>
-    
+
     @if (tenant_can('pos'))
     <div class="d-flex flex-column flex-column-fluid">
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
                 <div id="status"></div>
-                
+
                 <!--begin::Content-->
                 @include('orders.pos.component')
                 <!--end::Content-->
-                
+
             </div>
         </div>
     </div>
     @endif
 
-    
     @endsection
+
+    @push('scripts')
+        @include('orders.pos.list-scripts')
+    @endpush
 </x-app-layout>

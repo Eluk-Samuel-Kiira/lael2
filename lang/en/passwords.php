@@ -1791,9 +1791,29 @@ return [
     // ─── Edit modal submit guard ──────────────────────────────────
     'can_only_edit_draft_or_in_progress'        => 'Only draft or in-progress orders can be edited.',
 
+    // ── Refund (order context) ────────────────────────────────
+    'items_to_return'               => 'Items being returned',
+    'order_total'                   => 'Order total',
+    'no_items'                      => 'No items',
+    'cancel_failed'=> 'Cancel failed.',
+    'items_to_return' => 'Items being returned',
+    'order_total'  => 'Order total',
+    'no_items'     => 'No items',
+    // ── Refund / order items ─────────────────────────────────
+    'items_to_return'          => 'Items to return',
+    'ordered_qty'              => 'Ordered',
+    'no_items'                 => 'No items',
+    'order_total'              => 'Order total',
+    'cancel_order'             => 'Cancel order',
+    'keep_order'               => 'Keep order',
+    'cancel_confirmation'      => 'This will cancel the order. Stock that was reserved will be released. This cannot be undone.',
+    'cancel_failed'            => 'Cancel failed.',
+    'success'                  => 'Success.',
+
 
     'recipes'                          => 'Recipes',
     'items'                          => 'Items',
+    'all_sources'                          => 'All Sources',
     'no_recipes_found'                 => 'No recipes found',
     'recipes_are_created_on_variant_pages' => 'Recipes are created and edited from a product\'s variant page.',
     'no_ingredients_defined'           => 'No ingredients have been added to this recipe yet.',

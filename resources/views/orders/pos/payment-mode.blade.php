@@ -824,7 +824,7 @@
                         </i>
                         {{ __('pagination.print') }}
                     </button>
-                    <button type="button" class="btn btn-sm btn-icon btn-light" onclick="window.location.reload();">
+                    <button type="button" class="btn btn-sm btn-icon btn-light" data-receipt-close>
                         <i class="fas fa-times fs-4"></i>
                     </button>
                 </div>
@@ -1289,4 +1289,36 @@
         });
     }
 
+</script>
+
+<script>
+document.addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-receipt-close]');
+    if (!btn) return;
+    e.preventDefault();
+
+    // 1. Close the receipt modal
+    const receiptEl = document.getElementById('receiptModal');
+    if (receiptEl) {
+        bootstrap.Modal.getInstance(receiptEl)?.hide();
+    }
+
+    // Let the modal fade out before touching other UI
+    setTimeout(function () {
+        // 2. Close the order drawer if it's open
+        const orderDrawerEl = document.getElementById('orderDrawer');
+        if (orderDrawerEl) {
+            const bs = bootstrap.Offcanvas.getInstance(orderDrawerEl);
+            if (bs) bs.hide();
+        }
+
+        // 3. Reload whichever list is on this page — no page reload
+        if (window.OrderList && typeof window.OrderList.reload === 'function') {
+            window.OrderList.reload();
+        }
+        if (window.PosList && typeof window.PosList.refresh === 'function') {
+            window.PosList.refresh();
+        }
+    }, 150);
+});
 </script>
