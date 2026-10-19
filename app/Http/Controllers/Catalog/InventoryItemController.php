@@ -17,117 +17,437 @@ class InventoryItemController extends Controller
     /**
      * Display a listing of the resource.
      */
+    // public function index(Request $request)
+    // {
+    //     $user = Auth::user();
+    //     $tenantId = $user->tenant_id;
+                
+    //     if (!$user->hasPermissionTo('view inventory')) {
+    //         if ($request->ajax() || $request->wantsJson()) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => __('payments.not_authorized'),
+    //             ]);
+    //         }
+    //         abort(403);
+    //     }
+        
+    //     // Get per_page from request, default to 15
+    //     $perPage = $request->input('per_page', 15);
+        
+    //     // Validate per_page is in allowed values
+    //     $allowedPerPage = [15, 25, 50, 100];
+    //     if (!in_array($perPage, $allowedPerPage)) {
+    //         $perPage = 15;
+    //     }
+        
+    //     // Build the query
+    //     $query = InventoryItems::with(['variant', 'itemCreater', 'itemLocation', 'departmentItem']);
+        
+    //     // If user is NOT super_admin, filter by tenant
+    //     if (!$user->hasRole('super_admin')) {
+    //         $query->where('tenant_id', $tenantId)
+    //             ->whereHas('variant', function ($query) use ($tenantId) {
+    //                 $query->where('is_active', 1)
+    //                     ->where('tenant_id', $tenantId);
+    //             });
+    //     } else {
+    //         // Super_admin sees all active variants across all tenants
+    //         $query->whereHas('variant', function ($query) {
+    //             $query->where('is_active', 1);
+    //         });
+    //     }
+        
+    //     // Apply search if provided
+    //     if ($request->filled('search')) {
+    //         $search = $request->search;
+    //         $query->where(function($q) use ($search) {
+    //             $q->where('batch_number', 'like', "%{$search}%")
+    //             ->orWhereHas('variant', fn($v) => $v->where('name', 'like', "%{$search}%")
+    //                                                 ->orWhere('sku', 'like', "%{$search}%"))
+    //             ->orWhereHas('itemLocation', fn($l) => $l->where('name', 'like', "%{$search}%"))
+    //             ->orWhereHas('departmentItem', fn($d) => $d->where('name', 'like', "%{$search}%"));
+    //         });
+    //     }
+        
+    //     // Apply location filter if provided
+    //     if ($request->filled('location_id')) {
+    //         $query->where('location_id', $request->location_id);
+    //     }
+        
+    //     // Apply department filter if provided
+    //     if ($request->filled('department_id')) {
+    //         $query->where('department_id', $request->department_id);
+    //     }
+        
+    //     // Paginate with dynamic per_page
+    //     $items = $query->orderBy('department_id', 'asc')
+    //                 ->latest()
+    //                 ->paginate($perPage);
+        
+    //     // Preserve filters in pagination links
+    //     $items->appends([
+    //         'per_page' => $perPage, 
+    //         'search' => $request->search,
+    //         'location_id' => $request->location_id,
+    //         'department_id' => $request->department_id
+    //     ]);
+        
+    //     $bladeToReload = $request->query('bladeFileToReload');
+        
+    //     // For AJAX requests - return just the component HTML
+    //     if ($request->ajax() && $bladeToReload === 'reloadItemComponent') {
+    //         return view('store.inventory-items.component', [
+    //             'items' => $items,
+    //         ])->render();
+    //     }
+        
+    //     // For filter requests - return full view with filters applied
+    //     if ($request->ajax() && ($request->filled('location_id') || $request->filled('department_id'))) {
+    //         return view('store.inventory-items.component', [
+    //             'items' => $items,
+    //         ])->render();
+    //     }
+        
+    //     // Regular page load with locations and departments for filters
+    //     $locations = Location::where('tenant_id', $tenantId)->get();
+    //     $departments = Department::where('tenant_id', $tenantId)->get();
+
+    //     // Active variants for this tenant — used by both the single-item
+    //     // "Create" modal and the new "Bulk Add" modal. (Kept explicit here
+    //     // rather than relying on it being available some other way, so the
+    //     // bulk modal doesn't silently break if that assumption ever changes.)
+    //     $variantsQuery = ProductVariant::query()->where('is_active', 1);
+    //     if (!$user->hasRole('super_admin')) {
+    //         $variantsQuery->where('tenant_id', $tenantId);
+    //     }
+    //     $variants = $variantsQuery->orderBy('name')->get(['id', 'sku', 'name', 'overal_quantity_at_hand']);
+        
+    //     return view('store.items-index', [
+    //         'items' => $items,
+    //         'locations' => $locations,
+    //         'departments' => $departments,
+    //         'variants' => $variants,
+    //     ]);
+    // }
+
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
-        if (!$user->hasPermissionTo('view inventory')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
-        }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
-        }
-        
-        // Build the query
-        $query = InventoryItems::with(['variant', 'itemCreater', 'itemLocation', 'departmentItem']);
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $tenantId)
-                ->whereHas('variant', function ($query) use ($tenantId) {
-                    $query->where('is_active', 1)
-                        ->where('tenant_id', $tenantId);
-                });
-        } else {
-            // Super_admin sees all active variants across all tenants
-            $query->whereHas('variant', function ($query) {
-                $query->where('is_active', 1);
-            });
-        }
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('batch_number', 'like', "%{$search}%")
-                ->orWhereHas('variant', fn($v) => $v->where('name', 'like', "%{$search}%")
-                                                    ->orWhere('sku', 'like', "%{$search}%"))
-                ->orWhereHas('itemLocation', fn($l) => $l->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('departmentItem', fn($d) => $d->where('name', 'like', "%{$search}%"));
-            });
-        }
-        
-        // Apply location filter if provided
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->location_id);
-        }
-        
-        // Apply department filter if provided
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
-        }
-        
-        // Paginate with dynamic per_page
-        $items = $query->orderBy('department_id', 'asc')
-                    ->latest()
-                    ->paginate($perPage);
-        
-        // Preserve filters in pagination links
-        $items->appends([
-            'per_page' => $perPage, 
-            'search' => $request->search,
-            'location_id' => $request->location_id,
-            'department_id' => $request->department_id
-        ]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadItemComponent') {
-            return view('store.inventory-items.component', [
-                'items' => $items,
-            ])->render();
-        }
-        
-        // For filter requests - return full view with filters applied
-        if ($request->ajax() && ($request->filled('location_id') || $request->filled('department_id'))) {
-            return view('store.inventory-items.component', [
-                'items' => $items,
-            ])->render();
-        }
-        
-        // Regular page load with locations and departments for filters
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        $departments = Department::where('tenant_id', $tenantId)->get();
 
-        // Active variants for this tenant — used by both the single-item
-        // "Create" modal and the new "Bulk Add" modal. (Kept explicit here
-        // rather than relying on it being available some other way, so the
-        // bulk modal doesn't silently break if that assumption ever changes.)
+        if (!$user->hasPermissionTo('view inventory')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        // Dropdown data for filters + bulk-add modal
+        $locationsQuery = Location::where('tenant_id', $tenantId)->orderBy('name');
+        if (!$isAdmin) {
+            $locationsQuery->whereIn('id', $userLocationIds);
+        }
+        $locations = $locationsQuery->get();
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id']);
+
         $variantsQuery = ProductVariant::query()->where('is_active', 1);
         if (!$user->hasRole('super_admin')) {
             $variantsQuery->where('tenant_id', $tenantId);
         }
         $variants = $variantsQuery->orderBy('name')->get(['id', 'sku', 'name', 'overal_quantity_at_hand']);
-        
-        return view('store.items-index', [
-            'items' => $items,
-            'locations' => $locations,
-            'departments' => $departments,
-            'variants' => $variants,
+
+        $initialFilters = [
+            'search'        => (string) $request->get('search', ''),
+            'location_id'   => (string) $request->get('location_id', ''),
+            'department_id' => (string) $request->get('department_id', ''),
+            'per_page'      => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                ? (int) $request->get('per_page', 15)
+                                : 15,
+        ];
+
+        return view('store.items-index', compact(
+            'locations',
+            'departments',
+            'variants',
+            'initialFilters',
+        ));
+    }
+
+    /**
+     * JSON list endpoint for the inventory items table.
+     *
+     * Mirrors index()'s filters and visibility rules, returns JS-shaped
+     * rows + summary + pagination. Replaces the LiveBlade `component` render.
+     *
+     * GET /items/data
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $isAdmin         = $user->hasAnyRole(['super_admin', 'admin']);
+        $userLocationIds = $user->locations()->pluck('locations.id')->toArray();
+
+        $search       = trim((string) $request->get('search', ''));
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
+
+        $query = InventoryItems::query()
+            ->with([
+                'variant:id,sku,name,image_url,overal_quantity_at_hand,tenant_id',
+                'itemLocation:id,name',
+                'departmentItem:id,name,location_id',
+                'itemCreater:id,name',
+            ]);
+
+        if (!$user->hasRole('super_admin')) {
+            $query->where('tenant_id', $tenantId)
+                ->whereHas('variant', function ($q) use ($tenantId) {
+                    $q->where('is_active', 1)->where('tenant_id', $tenantId);
+                });
+        } else {
+            $query->whereHas('variant', fn($q) => $q->where('is_active', 1));
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('batch_number', 'like', "%{$search}%")
+                ->orWhereHas('variant', fn($v) =>
+                    $v->where('name', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%"))
+                ->orWhereHas('itemLocation', fn($l) => $l->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('departmentItem', fn($d) => $d->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($locationId) {
+            if ($isAdmin || in_array((int) $locationId, $userLocationIds, true)) {
+                $query->where('location_id', $locationId);
+            }
+        }
+
+        if ($departmentId) {
+            $query->where('department_id', $departmentId);
+        }
+
+        // Summary from the full filtered set (before pagination)
+        $allFiltered = (clone $query)->get(['id', 'quantity_allocated', 'preferred_stock_level']);
+
+        $summary = [
+            'total'                    => $allFiltered->count(),
+            'total_allocated'          => (float) $allFiltered->sum('quantity_allocated'),
+            'total_preferred'          => (float) $allFiltered->sum('preferred_stock_level'),
+            'below_preferred'          => $allFiltered
+                ->filter(fn($i) => (int) $i->preferred_stock_level > 0
+                                && (int) $i->quantity_allocated < (int) $i->preferred_stock_level)
+                ->count(),
+        ];
+
+        $paginator = $query->orderBy('department_id', 'asc')->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(function (InventoryItems $item) {
+            return [
+                'id'                    => $item->id,
+                'variant_id'            => $item->variant_id,
+                'variant_sku'           => $item->variant?->sku ?? '—',
+                'variant_name'          => $item->variant?->name ?? '—',
+                'variant_image'         => $item->variant?->image_url,
+
+                'overall_quantity'      => (float) ($item->variant?->overal_quantity_at_hand ?? 0),
+                'quantity_allocated'    => (float) ($item->quantity_allocated ?? 0),
+                'preferred_stock_level' => (int) ($item->preferred_stock_level ?? 0),
+                'below_preferred'       => (int) ($item->preferred_stock_level ?? 0) > 0
+                                        && (int) ($item->quantity_allocated ?? 0) < (int) ($item->preferred_stock_level ?? 0),
+
+                'location_id'           => $item->location_id,
+                'location_name'         => $item->itemLocation?->name ?? '—',
+                'department_id'         => $item->department_id,
+                'department_name'       => ucwords(str_replace('_', ' ', $item->departmentItem?->name ?? '—')),
+
+                'expiry_date'           => optional($item->expiry_date)->format('Y-m-d'),
+                'expiry_date_human'     => optional($item->expiry_date)->format('d M Y'),
+
+                'created_by_name'       => $item->itemCreater?->name ?? '—',
+                'created_at'            => optional($item->created_at)->format('d M Y, h:i a'),
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+            'filters' => [
+                'search'        => $search,
+                'location_id'   => $locationId,
+                'department_id' => $departmentId,
+            ],
+        ]);
+    }
+
+    /**
+     * Drawer payload for one inventory row.
+     *
+     * Returns the row, its variant state, the audit trail (last 100
+     * adjustments + transactions), and the resolved pricing so the
+     * drawer's panels can render without follow-up fetches.
+     *
+     * GET /items/{id}/details
+     */
+    public function details(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view inventory')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $item = InventoryItems::with([
+                'variant',
+                'itemLocation:id,name',
+                'departmentItem:id,name,location_id',
+                'itemCreater:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        $variant = $item->variant;
+
+        // Pricing resolution — same cascade as getPricing()
+        $variantCost = (float) ($variant->grand_total_cost_price ?? 0);
+        if ($variantCost <= 0) {
+            $variantCost = (float) ($variant->supplier_cost_price ?? 0)
+                        + (float) ($variant->total_shipping_cost ?? 0)
+                        + (float) ($variant->ura_taxes_applied   ?? 0)
+                        + (float) ($variant->additional_expenses ?? 0);
+        }
+        $variantSelling = (float) ($variant->selling_price ?? 0);
+        $variantDisc    = (float) ($variant->discount_selling_price ?? 0);
+        $hasCustom      = ((int) ($item->has_custom_pricing ?? 0) === 1);
+
+        // Audit trail — last 100 rows each
+        $adjustments = InventoryAdjustments::where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn($a) => [
+                'id'              => $a->id,
+                'reason'          => $a->reason,
+                'quantity_before' => (float) $a->quantity_before,
+                'quantity_after'  => (float) $a->quantity_after,
+                'notes'           => $a->notes,
+                'created_at'      => optional($a->created_at)->format('d M Y H:i'),
+            ]);
+
+        $transactions = InventoryTransactions::where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn($t) => [
+                'id'         => $t->id,
+                'type'       => $t->type,
+                'quantity'   => (float) $t->quantity,
+                'notes'      => $t->notes,
+                'created_at' => optional($t->created_at)->format('d M Y H:i'),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'item' => [
+                'id'                    => $item->id,
+                'variant_id'            => $item->variant_id,
+                'variant_sku'           => $variant?->sku,
+                'variant_name'          => $variant?->name,
+                'variant_image'         => $variant?->image_url,
+
+                'overall_quantity'      => (float) ($variant?->overal_quantity_at_hand ?? 0),
+                'quantity_allocated'    => (float) ($item->quantity_allocated ?? 0),
+                'preferred_stock_level' => (int) ($item->preferred_stock_level ?? 0),
+                'below_preferred'       => (int) ($item->preferred_stock_level ?? 0) > 0
+                                        && (int) ($item->quantity_allocated ?? 0) < (int) ($item->preferred_stock_level ?? 0),
+
+                'location_id'           => $item->location_id,
+                'location_name'         => $item->itemLocation?->name,
+                'department_id'         => $item->department_id,
+                'department_name'       => ucwords(str_replace('_', ' ', $item->departmentItem?->name ?? '')),
+
+                'expiry_date'           => optional($item->expiry_date)->format('Y-m-d'),
+                'expiry_date_human'     => optional($item->expiry_date)->format('d M Y'),
+
+                'created_by_name'       => $item->itemCreater?->name,
+                'created_at'            => optional($item->created_at)->format('d M Y, h:i a'),
+
+                'pricing' => [
+                    'has_custom_pricing'     => $hasCustom,
+                    'raw' => [
+                        'supplier_cost_price'    => $item->supplier_cost_price,
+                        'total_shipping_cost'    => $item->total_shipping_cost,
+                        'ura_taxes_applied'      => $item->ura_taxes_applied,
+                        'additional_expenses'    => $item->additional_expenses,
+                        'grand_total_cost_price' => $item->grand_total_cost_price,
+                        'selling_price'          => $item->selling_price,
+                        'discount_selling_price' => $item->discount_selling_price,
+                        'discount_percentage'    => $item->discount_percentage,
+                    ],
+                    'variant_fallback' => [
+                        'grand_total_cost_price' => $variantCost,
+                        'selling_price'          => $variantSelling,
+                        'discount_selling_price' => $variantDisc,
+                    ],
+                    'effective' => [
+                        'cost_price'     => $hasCustom ? (float) ($item->grand_total_cost_price ?? 0) : $variantCost,
+                        'selling_price'  => $hasCustom ? (float) ($item->selling_price ?? 0)          : $variantSelling,
+                        'discount_price' => $hasCustom ? (float) ($item->discount_selling_price ?? 0) : $variantDisc,
+                        'pricing_source' => $hasCustom ? 'item' : 'variant',
+                    ],
+                ],
+            ],
+            'adjustments'  => $adjustments,
+            'transactions' => $transactions,
+            'permissions' => [
+                'can_edit'          => $user->can('update stock levels'),
+                'can_delete'        => $user->can('delete inventory') && (int) $item->quantity_allocated === 0,
+                'can_change_pricing'=> $user->can('edit inventory'),
+            ],
         ]);
     }
 

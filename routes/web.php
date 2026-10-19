@@ -294,6 +294,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('products.bulk-allocate');
         
         // Stores and Inventory
+        Route::get('/items/data', [InventoryItemController::class, 'data'])->name('items.data');
+        Route::get('/items/{id}/details', [InventoryItemController::class, 'details'])->name('items.details');
+
         Route::resource('items', InventoryItemController::class);
         Route::post('items/batch', [InventoryItemController::class, 'storeBatch'])
             ->name('items.batchStore');
@@ -306,10 +309,13 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::put ('items/{id}/pricing', [InventoryItemController::class, 'updatePricing'])
             ->name('items.pricing.update');
 
+        
+        Route::get('stocks/data',    [InventoryAdjustmentsController::class, 'data'])->name('stocks.data');
+        Route::get('stocks/{id}/details', [InventoryAdjustmentsController::class, 'details'])->name('stocks.details');
         Route::get('/get-departments', [InventoryItemController::class, 'getDepartmentsByLocation'])->name('get.departments');
         Route::resource('stocks', InventoryAdjustmentsController::class);
         Route::put('/transfer-stock/{id}', [InventoryAdjustmentsController::class, 'transferStock'])
-            ->name('transfer.stock');
+            ->name('stocks.transfer');
 
         Route::get('/get-departments-by-location/{locationId}', [DepartmentController::class, 'getByLocation'])->name('get.departments.by.location');
 
@@ -317,7 +323,7 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Batch routes
         Route::prefix('batches')->name('batches.')->group(function () {
             Route::get('/', [BatchController::class, 'index'])->name('index');
-            Route::get('/data', [BatchController::class, 'data'])->name('data');   // ← NEW
+            Route::get('/data', [BatchController::class, 'data'])->name('data');
             Route::post('/assign', [BatchController::class, 'assign'])->name('assign');
             Route::post('/unassign', [BatchController::class, 'unassign'])->name('unassign');
             Route::post('/details', [BatchController::class, 'details'])->name('details');

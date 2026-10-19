@@ -158,13 +158,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const submitBtn         = modal.querySelector('#batchSubmitButton');
     const form              = modal.querySelector('#kt_modal_batch_add_inventory_form');
 
+    /* ── Summary + button enable state ─────────────────────── */
     function updateSummary() {
         const vCount = modal.querySelectorAll('.variant-checkbox:checked').length;
         const dCount = modal.querySelectorAll('.dept-checkbox:checked').length;
-        summary.textContent = `${vCount} {{ __('pagination.product_variants') }} × ${dCount} {{ __('auth._department') }} = ${vCount * dCount} {{ __('pagination.records') }}`;
+        summary.textContent =
+            `${vCount} {{ __('pagination.product_variants') }} × ${dCount} {{ __('auth._department') }} = ${vCount * dCount} {{ __('pagination.records') }}`;
         submitBtn.disabled = (vCount === 0 || dCount === 0);
     }
 
+    /* ── Change handler: checkboxes + per-location select-all ─ */
     modal.addEventListener('change', function (e) {
         if (e.target.classList.contains('variant-checkbox') || e.target.classList.contains('dept-checkbox')) {
             updateSummary();
@@ -181,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    /* ── Select-all variants ────────────────────────────────── */
     selectAllVariants.addEventListener('change', function () {
         modal.querySelectorAll('.variant-row').forEach(row => {
             if (row.style.display !== 'none') {
@@ -190,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateSummary();
     });
 
+    /* ── Search filters ─────────────────────────────────────── */
     variantSearch.addEventListener('input', function () {
         const term = this.value.toLowerCase();
         modal.querySelectorAll('.variant-row').forEach(row => {
@@ -204,71 +209,131 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // ✅ FIX: Proper spinner handling
-    submitBtn.addEventListener('click', function () {
+    /* ── Submit ─────────────────────────────────────────────── */
+    submitBtn.addEventListener('click', async function () {
         const variantIds    = Array.from(modal.querySelectorAll('.variant-checkbox:checked')).map(cb => cb.value);
         const departmentIds = Array.from(modal.querySelectorAll('.dept-checkbox:checked')).map(cb => cb.value);
 
         if (!variantIds.length || !departmentIds.length) return;
 
-        const label    = submitBtn.querySelector('.indicator-label');
-        const progress = submitBtn.querySelector('.indicator-progress');
+        setBatchBtnLoading(submitBtn, true);
 
-        // ✅ Show spinner, hide label
-        submitBtn.disabled = true;
-        if (label) label.style.display = 'none';
-        if (progress) progress.style.display = 'inline-flex';
+        try {
+            const res = await fetch(form.dataset.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type':  'application/json',
+                    'Accept':        'application/json',
+                    'X-CSRF-TOKEN':  document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ variant_ids: variantIds, department_ids: departmentIds }),
+            });
 
-        fetch(form.dataset.action, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            },
-            body: JSON.stringify({ variant_ids: variantIds, department_ids: departmentIds }),
-        })
-        .then(res => res.json())
-        .then(data => {
-            // ✅ Hide spinner, show label
-            submitBtn.disabled = false;
-            if (label) label.style.display = 'inline-flex';
-            if (progress) progress.style.display = 'none';
+            const data = await res.json().catch(() => ({}));
 
-            if (data.success) {
-                const modalInstance = bootstrap.Modal.getInstance(modal);
-                if (modalInstance) modalInstance.hide();
-
-                if (typeof toastr !== 'undefined') {
-                    toastr.success(data.message);
-                } else {
-                    alert(data.message);
-                }
-
-                // Refresh the inventory table in place
-                fetch(`{{ route('items.index') }}?bladeFileToReload=reloadItemComponent`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                })
-                .then(r => r.text())
-                .then(html => {
-                    const target = document.getElementById('reloadItemComponent');
-                    if (target) target.outerHTML = html;
-                });
-            } else {
-                if (typeof toastr !== 'undefined') {
-                    toastr.error(data.message);
-                } else {
-                    alert(data.message);
-                }
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || ('HTTP ' + res.status));
             }
-        })
-        .catch(() => {
-            // ✅ Hide spinner, show label on error
-            submitBtn.disabled = false;
-            if (label) label.style.display = 'inline-flex';
-            if (progress) progress.style.display = 'none';
-            alert('{{ __('auth.create_failed') }}');
-        });
+
+            /* Success */
+            bootstrap.Modal.getInstance(modal)?.hide();
+            window.toastr?.success?.(data.message) ?? alert(data.message);
+
+            // Reset checks so re-opening is clean
+            modal.querySelectorAll('.variant-checkbox, .dept-checkbox, .select-location, #select_all_variants')
+                 .forEach(cb => { cb.checked = false; });
+            updateSummary();
+
+            // Refresh the list in place
+            window.InventoryList?.reload?.();
+
+        } catch (err) {
+            console.error('[batch-create] failed:', err);
+            if (typeof toastr !== 'undefined') toastr.error(err.message);
+            else alert(err.message);
+        } finally {
+            setBatchBtnLoading(submitBtn, false);
+            // Re-evaluate disabled state — if user unchecked everything
+            // while the request was in flight, keep the button locked.
+            updateSummary();
+        }
     });
+
+    /* ── Button loading (matches create modal pattern) ─────── */
+    function setBatchBtnLoading(btn, busy) {
+        if (!btn) return;
+        if (getComputedStyle(btn).position === 'static') btn.style.position = 'relative';
+
+        const label    = btn.querySelector('.indicator-label');
+        const progress = btn.querySelector('.indicator-progress');
+
+        if (progress && !progress.dataset.overlayInit) {
+            Object.assign(progress.style, {
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+                alignItems: 'center', gap: '0.5rem',
+                whiteSpace: 'nowrap', pointerEvents: 'none',
+            });
+            progress.dataset.overlayInit = '1';
+        }
+
+        if (busy) {
+            if (label)    label.style.visibility = 'hidden';
+            if (progress) {
+                progress.classList.remove('d-none');
+                progress.style.display = 'inline-flex';
+            }
+            // Lock min-width so the button doesn't shrink when the label hides
+            btn.style.minWidth = btn.offsetWidth + 'px';
+            btn.disabled = true;
+        } else {
+            btn.disabled = false;
+            btn.style.minWidth = '';
+            if (label)    label.style.visibility = '';
+            if (progress) {
+                progress.classList.add('d-none');
+                progress.style.display = 'none';
+            }
+        }
+    }
 });
 </script>
+
+<style>
+    /* Batch submit button — expand + centre the spinner */
+#batchSubmitButton {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 140px;                 /* floor so it never shrinks to icon-width */
+    transition: min-width 0.25s ease, padding 0.25s ease;
+    white-space: nowrap;
+    overflow: hidden;                 /* clip anything that tries to escape */
+}
+
+#batchSubmitButton .indicator-progress {
+    position: absolute;
+    inset: 0;                         /* fill the button — no translate tricks */
+    display: none;                    /* toggled by JS */
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+#batchSubmitButton.is-loading .indicator-label {
+    visibility: hidden;
+}
+
+#batchSubmitButton.is-loading .indicator-progress {
+    display: inline-flex;
+}
+
+#batchSubmitButton:disabled {
+    opacity: 0.85;
+    cursor: progress;
+}
+</style>
