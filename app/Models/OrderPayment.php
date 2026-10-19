@@ -21,6 +21,7 @@ class OrderPayment extends Model
         'transaction_id',
         'status',
         'recorded_via',
+        'refunded_amount',
         'webhook_id',
         'confirmed_by',
         'card_last_four',
@@ -32,9 +33,9 @@ class OrderPayment extends Model
     ];
 
     protected $casts = [
-        'processed_at' => 'datetime',
-        // Money field - stored as integer in DB
-        'amount' => 'integer',
+        'processed_at'    => 'datetime',
+        'amount'          => 'integer',
+        'refunded_amount' => 'integer',   // ← add
     ];
 
     // Status constants
@@ -63,6 +64,42 @@ class OrderPayment extends Model
     {
         $this->attributes['amount'] = to_base_currency($value);
     }
+
+    /**
+     * Accessor — convert the stored base-currency integer into a display float.
+     * Matches the accessor on `amount` and `InvoicePayment::amount`.
+     */
+    public function getRefundedAmountAttribute(?int $value): ?float
+    {
+        return from_base_currency($value);
+    }
+
+    /**
+     * Mutator — convert a display float back into a stored base-currency integer.
+     */
+    public function setRefundedAmountAttribute($value): void
+    {
+        $this->attributes['refunded_amount'] = to_base_currency($value);
+    }
+
+    /**
+     * Convenience accessor — how much of this payment is still refundable.
+     * Returns a display float.
+     */
+    public function getRefundableAmountAttribute(): float
+    {
+        return max(0, (float) $this->amount - (float) ($this->refunded_amount ?? 0));
+    }
+
+    /**
+     * Convenience flag — true if this payment has been fully refunded.
+     */
+    public function isFullyRefunded(): bool
+    {
+        return (float) ($this->refunded_amount ?? 0) >= (float) $this->amount - 0.01;
+    }
+
+
 
     // Relationships
     public function order(): BelongsTo
