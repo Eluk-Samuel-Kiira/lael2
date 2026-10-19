@@ -16,97 +16,336 @@ class InventoryAdjustmentsController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('update stock levels')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id']);
+
+        $initialFilters = [
+            'search'        => (string) $request->get('search', ''),
+            'location_id'   => (string) $request->get('location_id', ''),
+            'department_id' => (string) $request->get('department_id', ''),
+            'per_page'      => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                ? (int) $request->get('per_page', 15)
+                                : 15,
+        ];
+
+        return view('store.adjustment-index', compact('locations', 'departments', 'initialFilters'));
+    }
+
+    /**
+     * JSON list for the adjustments table.
+     * Mirrors index()'s filters exactly.
+     *
+     * GET /stocks/data
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update stock levels')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $search       = trim((string) $request->get('search', ''));
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
             $perPage = 15;
         }
-        
-        // Retrieve only those items that have its variants active
-        $query = InventoryItems::with(['variant', 'itemCreater', 'itemLocation', 'departmentItem']);
-        
-        $query->whereHas('variant', function ($query) use ($tenantId) {
-            $query->where('is_active', 1)
-                ->where('tenant_id', $tenantId);
-        })
-        ->where('tenant_id', $tenantId);
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->whereHas('variant', function($v) use ($search) {
+
+        $query = InventoryItems::query()
+            ->with([
+                'variant:id,sku,name,image_url,overal_quantity_at_hand,tenant_id',
+                'itemLocation:id,name',
+                'departmentItem:id,name,location_id',
+                'itemCreater:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->whereHas('variant', fn($q) => $q->where('is_active', 1)->where('tenant_id', $tenantId));
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('variant', fn($v) =>
                     $v->where('name', 'like', "%{$search}%")
-                    ->orWhere('sku', 'like', "%{$search}%");
-                })
+                    ->orWhere('sku', 'like', "%{$search}%"))
                 ->orWhereHas('itemLocation', fn($l) => $l->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('departmentItem', fn($d) => $d->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Apply location filter if provided
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->location_id);
-        }
-        
-        // Apply department filter if provided
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
-        }
-        
-        // Paginate with dynamic per_page
-        $items = $query->latest()->paginate($perPage);
-        
-        // Preserve filters in pagination links
-        $items->appends([
-            'per_page' => $perPage, 
-            'search' => $request->search,
-            'location_id' => $request->location_id,
-            'department_id' => $request->department_id
+
+        if ($locationId)   $query->where('location_id', $locationId);
+        if ($departmentId) $query->where('department_id', $departmentId);
+
+        // Summary over the full filtered set
+        $allFiltered = (clone $query)->get(['id', 'quantity_allocated']);
+
+        $summary = [
+            'total'           => $allFiltered->count(),
+            'total_allocated' => (float) $allFiltered->sum('quantity_allocated'),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(function (InventoryItems $item) {
+            return [
+                'id'                 => $item->id,
+                'variant_id'         => $item->variant_id,
+                'variant_sku'        => $item->variant?->sku ?? '—',
+                'variant_name'       => $item->variant?->name ?? '—',
+                'variant_image'      => $item->variant?->image_url,
+
+                'overall_quantity'   => (float) ($item->variant?->overal_quantity_at_hand ?? 0),
+                'quantity_allocated' => (float) ($item->quantity_allocated ?? 0),
+
+                'location_id'        => $item->location_id,
+                'location_name'      => $item->itemLocation?->name ?? '—',
+                'department_id'      => $item->department_id,
+                'department_name'    => ucwords(str_replace('_', ' ', $item->departmentItem?->name ?? '—')),
+            ];
+        });
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+            'filters' => [
+                'search'        => $search,
+                'location_id'   => $locationId,
+                'department_id' => $departmentId,
+            ],
         ]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadStockComponent') {
-            return view('store.inventory-adjustment.component', [
-                'items' => $items,
-            ])->render();
+    }
+
+    public function details(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update stock levels')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
         }
-        
-        // For filter requests
-        if ($request->ajax() && ($request->filled('location_id') || $request->filled('department_id'))) {
-            return view('store.inventory-adjustment.component', [
-                'items' => $items,
-            ])->render();
+
+        $item = InventoryItems::with([
+                'variant',
+                'itemLocation:id,name',
+                'departmentItem:id,name,location_id',
+                'itemCreater:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
         }
-        
-        // Get locations and departments for filters
-        $locations = \App\Models\Location::where('tenant_id', $tenantId)->get();
-        $departments = \App\Models\Department::where('tenant_id', $tenantId)->get();
-        
-        // Regular page load
-        return view('store.adjustment-index', [
-            'items' => $items,
-            'locations' => $locations,
-            'departments' => $departments,
+
+        $variant = $item->variant;
+
+        // ── Pricing cascade (unchanged) ─────────────────────────────
+        $variantCost = (float) ($variant->grand_total_cost_price ?? 0);
+        if ($variantCost <= 0) {
+            $variantCost = (float) ($variant->supplier_cost_price ?? 0)
+                        + (float) ($variant->total_shipping_cost ?? 0)
+                        + (float) ($variant->ura_taxes_applied   ?? 0)
+                        + (float) ($variant->additional_expenses ?? 0);
+        }
+        $variantSelling = (float) ($variant->selling_price ?? 0);
+        $variantDisc    = (float) ($variant->discount_selling_price ?? 0);
+        $hasCustom      = ((int) ($item->has_custom_pricing ?? 0) === 1);
+
+        // ── Audit trail ─────────────────────────────────────────────
+        // Enrich each adjustment with the resolved actor name and a
+        // human-readable *short* reason (in addition to the raw reason key).
+        $adjustments = InventoryAdjustments::with('createdBy:id,name')
+            ->where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn($a) => [
+                'id'              => $a->id,
+                'reason'          => $a->reason,
+                'reason_label'    => $this->reasonLabel($a->reason),
+                'quantity_before' => (float) $a->quantity_before,
+                'quantity_after'  => (float) $a->quantity_after,
+                'delta'           => (float) $a->quantity_after - (float) $a->quantity_before,
+                'notes'           => $a->notes,
+                'created_by_name' => $a->createdBy?->name,
+                'created_at'      => optional($a->created_at)->format('d M Y H:i'),
+                'created_at_iso'  => optional($a->created_at)->toIso8601String(),
+            ]);
+
+        $transactions = InventoryTransactions::with('createdBy:id,name')
+            ->where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn($t) => [
+                'id'              => $t->id,
+                'type'            => $t->type,
+                'type_label'      => $this->transactionLabel($t->type),
+                'quantity'        => (float) $t->quantity,
+                'reference_id'    => $t->reference_id,
+                'reference_type'  => $t->reference_type,
+                'notes'           => $t->notes,
+                'created_by_name' => $t->creator?->name,
+                'created_at'      => optional($t->created_at)->format('d M Y H:i'),
+                'created_at_iso'  => optional($t->created_at)->toIso8601String(),
+            ]);
+
+        // ── Recent movement summary (last 30 days) ─────────────────
+        $recentIn  = (float) InventoryTransactions::where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->whereIn('type', ['transfer_in', 'adjustment', 'inventory_creation'])
+            ->where('quantity', '>', 0)
+            ->sum('quantity');
+
+        $recentOut = (float) InventoryTransactions::where('inventory_id', $item->id)
+            ->where('tenant_id', $tenantId)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->where('quantity', '<', 0)
+            ->sum('quantity');
+
+        return response()->json([
+            'success' => true,
+            'item' => [
+                'id'                    => $item->id,
+                'variant_id'            => $item->variant_id,
+                'variant_sku'           => $variant?->sku,
+                'variant_name'          => $variant?->name,
+                'variant_image'         => $variant?->image_url,
+
+                'overall_quantity'      => (float) ($variant?->overal_quantity_at_hand ?? 0),
+                'quantity_allocated'    => (float) ($item->quantity_allocated ?? 0),
+                'preferred_stock_level' => (int) ($item->preferred_stock_level ?? 0),
+                'below_preferred'       => (int) ($item->preferred_stock_level ?? 0) > 0
+                                        && (int) ($item->quantity_allocated ?? 0) < (int) ($item->preferred_stock_level ?? 0),
+
+                // ── NEW: record metadata ────────────────────────────
+                'batch_number'          => $item->batch_number,
+                'quantity_on_hand'      => (float) ($item->quantity_on_hand ?? 0),
+                'quantity_on_order'     => (float) ($item->quantity_on_order ?? 0),
+
+                'location_id'           => $item->location_id,
+                'location_name'         => $item->itemLocation?->name,
+                'department_id'         => $item->department_id,
+                'department_name'       => ucwords(str_replace('_', ' ', $item->departmentItem?->name ?? '')),
+
+                'expiry_date'           => optional($item->expiry_date)->format('Y-m-d'),
+                'expiry_date_human'     => optional($item->expiry_date)->format('d M Y'),
+                'expiry_days_remaining' => $item->expiry_date
+                    ? (int) now()->startOfDay()->diffInDays($item->expiry_date, false)
+                    : null,
+
+                'created_by_name'       => $item->itemCreater?->name,
+                'created_at'            => optional($item->created_at)->format('d M Y, h:i a'),
+                'updated_at'            => optional($item->updated_at)->format('d M Y, h:i a'),
+
+                'pricing' => [
+                    'has_custom_pricing'     => $hasCustom,
+                    'raw' => [
+                        'supplier_cost_price'    => $item->supplier_cost_price,
+                        'total_shipping_cost'    => $item->total_shipping_cost,
+                        'ura_taxes_applied'      => $item->ura_taxes_applied,
+                        'additional_expenses'    => $item->additional_expenses,
+                        'grand_total_cost_price' => $item->grand_total_cost_price,
+                        'selling_price'          => $item->selling_price,
+                        'discount_selling_price' => $item->discount_selling_price,
+                        'discount_percentage'    => $item->discount_percentage,
+                    ],
+                    'variant_fallback' => [
+                        'grand_total_cost_price' => $variantCost,
+                        'selling_price'          => $variantSelling,
+                        'discount_selling_price' => $variantDisc,
+                    ],
+                    'effective' => [
+                        'cost_price'     => $hasCustom ? (float) ($item->grand_total_cost_price ?? 0) : $variantCost,
+                        'selling_price'  => $hasCustom ? (float) ($item->selling_price ?? 0)          : $variantSelling,
+                        'discount_price' => $hasCustom ? (float) ($item->discount_selling_price ?? 0) : $variantDisc,
+                        'pricing_source' => $hasCustom ? 'item' : 'variant',
+                    ],
+                ],
+            ],
+            'adjustments'  => $adjustments,
+            'transactions' => $transactions,
+            'movement_summary' => [
+                'window_days'      => 30,
+                'recent_in'        => $recentIn,
+                'recent_out'       => abs($recentOut),
+                'net'              => $recentIn + $recentOut,
+            ],
+            'permissions' => [
+                'can_edit'           => $user->can('update stock levels'),
+                'can_adjust'         => $user->can('update stock levels'),
+                'can_transfer'       => $user->can('transfer stock'),
+                'can_delete'         => $user->can('delete inventory') && (int) $item->quantity_allocated === 0,
+                'can_change_pricing' => $user->can('edit inventory'),
+            ],
         ]);
+    }
+
+    /**
+     * Human-readable label for an adjustment reason key.
+     */
+    private function reasonLabel(?string $reason): string
+    {
+        return match ($reason) {
+            'inventory_created'         => 'Record created',
+            'inventory_allocation_update'=> 'Allocation updated',
+            'inventory_metadata_update' => 'Metadata updated',
+            'inventory_record_deleted'  => 'Record deleted',
+            'stock_adjustment'          => 'Stock adjusted',
+            'stock_transfer'            => 'Stock transferred',
+            default                     => $reason ? ucwords(str_replace('_', ' ', $reason)) : '—',
+        };
+    }
+
+    /**
+     * Human-readable label for a transaction type.
+     */
+    private function transactionLabel(?string $type): string
+    {
+        return match ($type) {
+            'transfer_in'         => 'Stock in',
+            'transfer_out'        => 'Stock out',
+            'adjustment'          => 'Adjustment',
+            'inventory_creation'  => 'Created',
+            default               => $type ? ucwords(str_replace('_', ' ', $type)) : '—',
+        };
     }
 
     /**

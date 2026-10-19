@@ -70,6 +70,11 @@ class InventoryTransactions extends Model
         $this->attributes['total_selling_value'] = $value === null ? null : to_base_currency($value);
     }
 
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by', 'id');
+    }
+
     /**
      * Convenience accessor — gross profit frozen on this transaction.
      */

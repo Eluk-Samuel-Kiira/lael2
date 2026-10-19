@@ -1803,6 +1803,7 @@ return [
     'items_to_return'          => 'Items to return',
     'ordered_qty'              => 'Ordered',
     'no_items'                 => 'No items',
+    'movement_summary' => 'Movement summary',
     'order_total'              => 'Order total',
     'cancel_order'             => 'Cancel order',
     'keep_order'               => 'Keep order',
