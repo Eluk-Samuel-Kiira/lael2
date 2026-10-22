@@ -81,6 +81,150 @@ class PurchaseOrderController extends Controller
         ]);
     }
 
+    public function data(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view purchase_orders')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $search = trim((string) $request->get('search', ''));
+        $status = $request->get('status');
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = PurchaseOrder::with(['items', 'supplier:id,name', 'location:id,name', 'creator:id,name'])
+            ->where('tenant_id', $tenantId); // Simplified tenant check; adjust if super_admin logic needed
+
+        if ($search !== '') {
+            $query->where(function($q) use ($search) {
+                $q->where('po_number', 'like', "%{$search}%")
+                ->orWhere('status', 'like', "%{$search}%")
+                ->orWhereHas('supplier', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('creator', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+        
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        // Summary stats
+        $summary = [
+            'total' => (clone $query)->count(),
+            'total_value' => (float) (clone $query)->sum('total'),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(function (PurchaseOrder $order) {
+            return [
+                'id' => $order->id,
+                'po_number' => $order->po_number,
+                'supplier_name' => $order->supplier?->name ?? '—',
+                'location_name' => $order->location?->name ?? '—',
+                'status' => $order->status,
+                'status_badge' => $order->status_badge ?? 'secondary', // Assuming you have an accessor
+                'status_label' => ucfirst(str_replace('_', ' ', $order->status)),
+                'total' => (float) $order->total,
+                'total_formatted' => currency_symbol() . number_format((float) $order->total, 2),
+                'expected_delivery' => optional($order->expected_delivery_date)->format('M d, Y'),
+                'created_by_name' => $order->creator?->name ?? '—',
+                'created_at' => optional($order->created_at)->format('d M Y, h:i a'),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows,
+            'summary' => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ]
+        ]);
+    }
+
+    public function details($id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view purchase_orders')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $order = PurchaseOrder::with(['items.productVariant', 'supplier', 'location', 'creator', 'receipts'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$order) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'order' => [
+                'id' => $order->id,
+                'po_number' => $order->po_number,
+                'status' => $order->status,
+                'status_badge' => $order->status_badge ?? 'secondary',
+                'status_label' => ucfirst(str_replace('_', ' ', $order->status)),
+                'supplier_name' => $order->supplier?->name,
+                'location_name' => $order->location?->name,
+                'creator_name' => $order->creator?->name,
+                'created_at' => optional($order->created_at)->format('d M Y, h:i a'),
+                'expected_delivery_date' => optional($order->expected_delivery_date)->format('M d, Y'),
+                'total' => (float) $order->total,
+                'total_formatted' => currency_symbol() . number_format((float) $order->total, 2),
+                'subtotal' => (float) $order->subtotal,
+                'tax_total' => (float) $order->tax_total,
+                'notes' => $order->notes,
+                'items' => $order->items->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'product_name' => $item->product_name,
+                        'sku' => $item->sku,
+                        'quantity' => (float) $item->quantity,
+                        'unit_cost' => (float) $item->unit_cost,
+                        'total_cost' => (float) $item->total_cost,
+                        'received_quantity' => (float) $item->received_quantity,
+                    ];
+                }),
+            ],
+            'permissions' => [
+                'can_submit' => $user->can('submit purchase_orders') && $order->status === 'draft',
+                'can_approve' => $user->can('approve purchase_orders') && $order->status === 'pending_approval',
+                'can_send' => $user->can('send purchase_orders') && $order->status === 'approved',
+                'can_receive' => $user->can('receive purchase_orders') && in_array($order->status, ['sent', 'partially_received']),
+                'can_cancel' => $user->can('cancel purchase_orders') && in_array($order->status, ['draft', 'approved', 'pending_approval', 'sent']),
+                'can_delete' => $user->can('delete purchase_orders') && in_array($order->status, ['draft', 'cancelled']),
+            ]
+        ]);
+    }
+
+    public function getModals($id)
+    {
+        $tenantId = Auth::user()->tenant_id;
+        
+        $order = PurchaseOrder::with(['items', 'supplier', 'location', 'creator'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$order) {
+            return response('', 404);
+        }
+
+        return view('procurement.purchase-order.modals-container', [
+            'order' => $order,
+        ]);
+    }
+
     
     /**
      * Store a newly created resource in storage.
@@ -1869,11 +2013,7 @@ class PurchaseOrderController extends Controller
 
             return response()->json([
                 'success' => true,
-                'reload' => true,
-                'componentId' => 'reloadPurchasesComponent',
-                'refresh' => false,
                 'message' => __('auth._deleted'),
-                'redirect' => route('purchase-orders.index'),
             ]);
 
         } catch (\Exception $e) {

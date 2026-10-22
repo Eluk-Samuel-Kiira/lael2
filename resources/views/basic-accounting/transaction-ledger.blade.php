@@ -10,65 +10,11 @@
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        <a href="{{ route('accounting.transaction-ledger') }}" class="text-muted text-hover-primary">
-                            {{ __('accounting.basic_accounting') }}
-                        </a>
+                        <a href="{{ route('accounting.transaction-ledger') }}" class="text-muted text-hover-primary">{{ __('accounting.basic_accounting') }}</a>
                     </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
+                    <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                     <li class="breadcrumb-item text-muted">{{ __('accounting.transaction_ledger') }}</li>
                 </ul>
-            </div>
-            
-            <div class="d-flex align-items-center gap-2 gap-lg-3 flex-wrap">
-                <!-- Location Filter -->
-                <div class="d-flex align-items-center bg-light-primary rounded-3 px-3 py-2">
-                    <i class="ki-duotone ki-geolocation fs-2 text-primary me-2">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
-                    </i>
-                    <select class="form-select form-select-sm form-select-solid border-0 bg-transparent ps-0 w-150px w-md-200px" 
-                            name="location_id" 
-                            data-control="select2" 
-                            id="locationFilter" 
-                            onchange="applyFilter()"
-                            data-placeholder="{{ __('pagination.all_locations') }}">
-                        <option value="">{{ __('pagination.all_locations') }}</option>
-                        @foreach($locations ?? [] as $location)
-                            <option value="{{ $location->id }}" {{ ($filters['location_id'] ?? '') == $location->id ? 'selected' : '' }}>
-                                {{ $location->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                
-                <!-- Export Dropdown -->
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-primary dropdown-toggle d-flex align-items-center gap-2" 
-                            type="button" 
-                            data-bs-toggle="dropdown" 
-                            aria-expanded="false">
-                        <i class="ki-duotone ki-file-down fs-2"></i>
-                        <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'transactionsTable', filename: 'transaction_ledger', sheetName: 'Transactions', excludeColumns: [9]})">
-                                <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                {{ __('accounting.export_to_excel') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'transactionsTable', filename: 'transaction_ledger', format: 'csv', excludeColumns: [9]})">
-                                <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                {{ __('accounting.export_to_csv') }}
-                            </a>
-                        </li>
-                    </ul>
-                </div>
             </div>
         </div>
     </div>
@@ -77,314 +23,129 @@
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
                 
-                <!-- Filters Card -->
+                <!-- Filters Card (Single Card) -->
                 <div class="card card-flush mb-8">
                     <div class="card-header border-0 pt-6">
                         <h3 class="card-title fw-bold text-gray-800">
-                            <i class="ki-duotone ki-filter fs-2 me-2 text-primary">
-                                <span class="path1"></span>
-                                <span class="path2"></span>
-                            </i>
+                            <i class="ki-duotone ki-filter fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                             {{ __('accounting.filter_transactions') }}
                         </h3>
-                        <div class="card-toolbar">
-                            <a href="{{ route('accounting.transaction-ledger') }}" class="btn btn-sm btn-light">
-                                <i class="ki-duotone ki-arrow-rotate-right fs-2 me-1"></i>
-                                {{ __('accounting.reset') }}
-                            </a>
-                        </div>
                     </div>
                     <div class="card-body pt-0">
-                        <form id="filterForm" method="GET" class="row g-5">
-                            <!-- Date Range -->
+                        <form id="filterForm" class="row g-5" onsubmit="event.preventDefault(); window.TransactionLedgerList.applyFilters();">
                             <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-calendar-8 fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.start_date') }}
-                                </label>
-                                <input type="date" name="start_date" class="form-control form-control-solid" value="{{ $filters['start_date'] }}">
+                                <label class="form-label fw-semibold">{{ __('accounting.start_date') }}</label>
+                                <input type="date" name="start_date" id="filterStartDate" class="form-control form-control-solid" value="{{ $filters['start_date'] }}">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-calendar-8 fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.end_date') }}
-                                </label>
-                                <input type="date" name="end_date" class="form-control form-control-solid" value="{{ $filters['end_date'] }}">
+                                <label class="form-label fw-semibold">{{ __('accounting.end_date') }}</label>
+                                <input type="date" name="end_date" id="filterEndDate" class="form-control form-control-solid" value="{{ $filters['end_date'] }}">
                             </div>
-                            
-                            <!-- Payment Method -->
-                            <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-wallet fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.payment_method') }}
-                                </label>
-                                <select name="payment_method_id" class="form-select form-select-solid" data-control="select2" data-placeholder="{{ __('accounting.all_methods') }}">
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">{{ __('accounting.payment_method') }}</label>
+                                <select name="payment_method_id" id="filterPaymentMethod" class="form-select form-select-solid">
                                     <option value="">{{ __('accounting.all_methods') }}</option>
                                     @foreach($paymentMethods as $method)
-                                        <option value="{{ $method->id }}" {{ ($filters['payment_method_id'] ?? '') == $method->id ? 'selected' : '' }}>
-                                            {{ $method->name }}
-                                        </option>
+                                        <option value="{{ $method->id }}" {{ ($filters['payment_method_id'] ?? '') == $method->id ? 'selected' : '' }}>{{ $method->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
-                            
-                            <!-- Transaction Type -->
-                            <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-tag fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.transaction_type') }}
-                                </label>
-                                <select name="transaction_type" class="form-select form-select-solid" data-control="select2" data-placeholder="{{ __('accounting.all_types') }}">
-                                    <option value="">{{ __('accounting.all_types') }}</option>
-                                    @foreach($transactionTypes as $type)
-                                        <option value="{{ $type }}" {{ ($filters['transaction_type'] ?? '') == $type ? 'selected' : '' }}>
-                                            {{ $type }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            
-                            <!-- Status -->
-                            <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-status fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.status') }}
-                                </label>
-                                <select name="status" class="form-select form-select-solid" data-control="select2" data-placeholder="{{ __('accounting.all_statuses') }}">
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">{{ __('accounting.status') }}</label>
+                                <select name="status" id="filterStatus" class="form-select form-select-solid">
                                     <option value="">{{ __('accounting.all_statuses') }}</option>
                                     <option value="COMPLETED" {{ ($filters['status'] ?? '') == 'COMPLETED' ? 'selected' : '' }}>COMPLETED</option>
                                     <option value="PENDING" {{ ($filters['status'] ?? '') == 'PENDING' ? 'selected' : '' }}>PENDING</option>
                                     <option value="FAILED" {{ ($filters['status'] ?? '') == 'FAILED' ? 'selected' : '' }}>FAILED</option>
-                                    <option value="CANCELLED" {{ ($filters['status'] ?? '') == 'CANCELLED' ? 'selected' : '' }}>CANCELLED</option>
-                                    <option value="REVERSED" {{ ($filters['status'] ?? '') == 'REVERSED' ? 'selected' : '' }}>REVERSED</option>
                                 </select>
                             </div>
-                            
-                            <!-- NEW: User Filter -->
+                            <div class="col-md-2 d-flex align-items-end gap-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="ki-duotone ki-filter fs-2 me-1"></i> {{ __('accounting.apply_filters') }}
+                                </button>
+                            </div>
+                            <!-- Hidden dropdowns for type, location, user to keep the card clean but functional -->
                             <div class="col-md-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="ki-duotone ki-user fs-2 me-1 text-gray-500"></i>
-                                    {{ __('accounting.processed_by') }}
-                                </label>
-                                <select name="user_id" class="form-select form-select-solid" data-control="select2" data-placeholder="{{ __('accounting.all_users') }}">
-                                    <option value="">{{ __('accounting.all_users') }}</option>
-                                    @foreach($users ?? [] as $user)
-                                        <option value="{{ $user->id }}" {{ ($filters['user_id'] ?? '') == $user->id ? 'selected' : '' }}>
-                                            {{ $user->name }}
-                                        </option>
+                                <label class="form-label fw-semibold">{{ __('accounting.transaction_type') }}</label>
+                                <select name="transaction_type" id="filterTransactionType" class="form-select form-select-solid">
+                                    <option value="">{{ __('accounting.all_types') }}</option>
+                                    @foreach($transactionTypes as $type)
+                                        <option value="{{ $type }}" {{ ($filters['transaction_type'] ?? '') == $type ? 'selected' : '' }}>{{ $type }}</option>
                                     @endforeach
                                 </select>
                             </div>
-                            
-                            <!-- Buttons -->
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button type="submit" class="btn btn-primary me-2">
-                                    <i class="ki-duotone ki-filter fs-2 me-1"></i>
-                                    {{ __('accounting.apply_filters') }}
-                                </button>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">{{ __('pagination.all_locations') }}</label>
+                                <select name="location_id" id="filterLocation" class="form-select form-select-solid">
+                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                    @foreach($locations as $loc)
+                                        <option value="{{ $loc->id }}" {{ ($filters['location_id'] ?? '') == $loc->id ? 'selected' : '' }}>{{ $loc->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">{{ __('accounting.processed_by') }}</label>
+                                <select name="user_id" id="filterUser" class="form-select form-select-solid">
+                                    <option value="">{{ __('accounting.all_users') }}</option>
+                                    @foreach($users as $u)
+                                        <option value="{{ $u->id }}" {{ ($filters['user_id'] ?? '') == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-semibold">{{ __('auth._search') }}</label>
+                                <input type="text" id="filterSearch" name="search" class="form-control form-control-solid" placeholder="Search ref, receipt, desc...">
                             </div>
                         </form>
                     </div>
                 </div>
                 
-                <div class="row g-3 g-md-4 g-xl-5 mb-5 mb-xl-8">
-
-                    {{-- Total Transactions --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-3">
+                <!-- Summary Cards -->
+                <div class="row g-3 mb-8" id="summaryCards">
+                    <!-- Total Tx -->
+                    <div class="col-xl-3 col-sm-6">
                         <div class="card card-flush h-100">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold text-gray-800 text-break">
-                                        {{ $transactions->total() }}
-                                    </span>
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        {{ __('accounting.total_transactions') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        <span class="text-success fw-bold">{{ $inflowCount }}</span>
-                                        {{ __('accounting.in') }} /
-                                        <span class="text-danger fw-bold">{{ $outflowCount }}</span>
-                                        {{ __('accounting.out') }}
-                                    </span>
-                                </div>
-                            </div>
+                            <div class="card-header pt-5"><div class="card-title d-flex flex-column"><span class="fs-2 fw-bold text-gray-800 text-break" id="sumTotalTx">—</span><span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.total_transactions') }}</span></div></div>
+                            <div class="card-body pt-0"><span class="text-gray-500 fs-7"><span class="text-success fw-bold" id="sumInCount">—</span> In / <span class="text-danger fw-bold" id="sumOutCount">—</span> Out</span></div>
                         </div>
                     </div>
-
-                    {{-- Total Inflow --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-3">
+                    <!-- Inflow -->
+                    <div class="col-xl-3 col-sm-6">
                         <div class="card card-flush h-100 bg-light-success">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold text-success text-break">
-                                        +{{ number_format($inflowTotal, 2) }} {{ currency_symbol() }}
-                                    </span>
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.total_inflow') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.deposits_transfers_in_refunds') }}
-                                    </span>
-                                </div>
-                            </div>
+                            <div class="card-header pt-5"><div class="card-title d-flex flex-column"><span class="fs-2 fw-bold text-success text-break" id="sumInflow">—</span><span class="text-gray-600 fw-semibold fs-7">{{ __('accounting.total_inflow') }}</span></div></div>
                         </div>
                     </div>
-
-                    {{-- Total Outflow --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-3">
+                    <!-- Outflow -->
+                    <div class="col-xl-3 col-sm-6">
                         <div class="card card-flush h-100 bg-light-danger">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold text-danger text-break">
-                                        -{{ number_format($outflowTotal, 2) }} {{ currency_symbol() }}
-                                    </span>
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.total_outflow') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.withdrawals_transfers_out_fees') }}
-                                    </span>
-                                </div>
-                            </div>
+                            <div class="card-header pt-5"><div class="card-title d-flex flex-column"><span class="fs-2 fw-bold text-danger text-break" id="sumOutflow">—</span><span class="text-gray-600 fw-semibold fs-7">{{ __('accounting.total_outflow') }}</span></div></div>
                         </div>
                     </div>
-
-                    {{-- Net Change --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-3">
-                        <div class="card card-flush h-100 {{ $netChange >= 0 ? 'bg-light-primary' : 'bg-light-warning' }}">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold {{ $netChange >= 0 ? 'text-primary' : 'text-warning' }} text-break">
-                                        {{ $netChange >= 0 ? '+' : '-' }}{{ number_format(abs($netChange), 2) }} {{ currency_symbol() }}
-                                    </span>
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.net_change') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.inflow_minus_outflow') }}
-                                    </span>
-                                </div>
-                            </div>
+                    <!-- Net Change -->
+                    <div class="col-xl-3 col-sm-6">
+                        <div class="card card-flush h-100 bg-light-primary" id="sumNetCard">
+                            <div class="card-header pt-5"><div class="card-title d-flex flex-column"><span class="fs-2 fw-bold text-primary text-break" id="sumNetChange">—</span><span class="text-gray-600 fw-semibold fs-7">{{ __('accounting.net_change') }}</span></div></div>
                         </div>
                     </div>
-
                 </div>
 
-                <div class="row g-3 g-md-4 g-xl-5 mb-5 mb-xl-8">
-
-                    {{-- Current Total Balance --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-4">
-                        <div class="card card-flush h-100 bg-light-info">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold text-info text-break">
-                                        {{ number_format($currentTotalBalance, 2) }} {{ currency_symbol() }}
-                                    </span>
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.current_total_balance') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-600 fw-semibold fs-7">
-                                        {{ __('accounting.across_active_payment_methods') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Average per Transaction --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-4">
-                        <div class="card card-flush h-100">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2 fs-md-2hx fw-bold text-gray-800 text-break">
-                                        {{ number_format($averageAmount, 2) }} {{ currency_symbol() }}
-                                    </span>
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        {{ __('accounting.average_transaction') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        {{ __('accounting.based_on_absolute_movement') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Date Range --}}
-                    <div class="col-12 col-sm-6 col-lg-6 col-xl-4">
-                        <div class="card card-flush h-100">
-                            <div class="card-header pt-5 pt-lg-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-3 fw-bold text-gray-800 text-break">
-                                        {{ \Carbon\Carbon::parse($filters['start_date'])->format('M d') }} —
-                                        {{ \Carbon\Carbon::parse($filters['end_date'])->format('M d, Y') }}
-                                    </span>
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        {{ __('accounting.date_range') }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div class="d-flex flex-stack flex-wrap">
-                                    <span class="text-gray-500 fw-semibold fs-7">
-                                        {{ $transactions->count() }} {{ __('accounting.transactions') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-                
-                <!-- Transactions Table -->
+                <!-- Table Card -->
                 <div class="card card-flush">
-                    <div class="card-header border-0 pt-6">
-                        <h3 class="card-title fw-bold text-gray-800">
-                            <i class="ki-duotone ki-table fs-2 me-2 text-primary">
-                                <span class="path1"></span>
-                                <span class="path2"></span>
-                            </i>
-                            {{ __('accounting.transaction_details') }}
-                        </h3>
-                        <div class="card-toolbar">
-                            <div class="d-flex align-items-center position-relative">
-                                <i class="ki-duotone ki-magnifier fs-3 position-absolute ms-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                                <input type="text" id="searchTransactions" 
-                                       class="form-control form-control-solid w-250px ps-10" 
-                                       placeholder="{{ __('accounting.search_transactions') }}">
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="card-body pt-0">
-                        <div class="table-responsive">
+                        <!-- Skeleton -->
+                        <div id="txLoading" class="d-none pt-5">
+                            @for ($i = 0; $i < 5; $i++)
+                                <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                                    <div class="skeleton skeleton-text" style="width:80px;"></div>
+                                    <div class="skeleton skeleton-text" style="width:150px;"></div>
+                                    <div class="flex-grow-1"><div class="skeleton skeleton-text" style="width:200px;"></div></div>
+                                    <div class="skeleton skeleton-text" style="width:80px;"></div>
+                                </div>
+                            @endfor
+                        </div>
+
+                        <!-- Table -->
+                        <div id="txContainer" class="d-none table-responsive pt-5">
                             <table class="table align-middle table-row-dashed fs-6 gy-5" id="transactionsTable">
                                 <thead>
                                     <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
@@ -392,7 +153,6 @@
                                         <th class="min-w-150px">{{ __('accounting.transaction_ref') }}</th>
                                         <th class="min-w-150px">{{ __('accounting.payment_method') }}</th>
                                         <th class="min-w-100px">{{ __('accounting.type') }}</th>
-                                        <th class="min-w-100px">{{ __('accounting.category') }}</th>
                                         <th class="min-w-150px">{{ __('accounting.description') }}</th>
                                         <th class="min-w-100px text-end">{{ __('accounting.amount') }}</th>
                                         <th class="min-w-100px text-end">{{ __('accounting.balance_after') }}</th>
@@ -400,610 +160,254 @@
                                         <th class="min-w-100px text-center">{{ __('accounting.actions') }}</th>
                                     </tr>
                                 </thead>
-                                <tbody class="text-gray-600 fw-semibold">
-                                    @forelse($transactions as $transaction)
-                                    <tr>
-                                        <td>
-                                            <span class="fs-7 fw-bold text-gray-800">{{ $transaction->transaction_date->format('M d, Y') }}</span>
-                                            <span class="fs-8 text-gray-500 d-block">{{ $transaction->transaction_date->format('H:i:s') }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="fs-7 text-gray-600 fw-bold">{{ $transaction->transaction_ref }}</span>
-                                            @if($transaction->receipt_number)
-                                                <span class="fs-8 text-gray-500 d-block">
-                                                    <i class="ki-duotone ki-receipt fs-1 me-1"></i>
-                                                    {{ $transaction->receipt_number }}
-                                                </span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <div class="d-flex flex-column">
-                                                <span class="fs-7 text-gray-800 fw-bold">{{ $transaction->paymentMethod->name ?? 'N/A' }}</span>
-                                                @if($transaction->user)
-                                                    <span class="fs-8 text-gray-500">
-                                                        <i class="ki-duotone ki-user fs-1 me-1"></i>
-                                                        {{ $transaction->user->name }}
-                                                    </span>
-                                                @endif
-                                            </div>
-                                        </td>
-                                        <td>
-                                            @php
-                                                $typeColors = [
-                                                    'DEPOSIT' => 'success',
-                                                    'WITHDRAWAL' => 'danger',
-                                                    'TRANSFER_IN' => 'info',
-                                                    'TRANSFER_OUT' => 'warning',
-                                                    'FEE' => 'secondary',
-                                                    'REFUND' => 'primary',
-                                                    'ADJUSTMENT' => 'info',
-                                                    'RECONCILIATION' => 'dark',
-                                                ];
-                                                $typeColor = $typeColors[$transaction->transaction_type] ?? 'secondary';
-                                            @endphp
-                                            <span class="badge badge-light-{{ $typeColor }} py-2 px-3">
-                                                {{ $transaction->transaction_type }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-light-secondary py-2 px-3">
-                                                {{ $transaction->transaction_category }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="fs-7 text-gray-800">{{ Str::limit($transaction->description, 40) }}</span>
-                                            @if($transaction->notes)
-                                                <span class="fs-8 text-gray-500 d-block">
-                                                    <i class="ki-duotone ki-information fs-1 me-1"></i>
-                                                    {{ Str::limit($transaction->notes, 30) }}
-                                                </span>
-                                            @endif
-                                        </td>
-                                        <td class="text-end">
-                                            @php
-                                                $amountClasses = [
-                                                    'DEPOSIT' => 'text-success',
-                                                    'TRANSFER_IN' => 'text-success',
-                                                    'REFUND' => 'text-success',
-                                                    'WITHDRAWAL' => 'text-danger',
-                                                    'TRANSFER_OUT' => 'text-danger',
-                                                    'FEE' => 'text-danger',
-                                                    'ADJUSTMENT' => 'text-info',
-                                                    'RECONCILIATION' => 'text-dark',
-                                                ];
-                                                $amountClass = $amountClasses[$transaction->transaction_type] ?? 'text-dark';
-                                            @endphp
-                                            <span class="fs-6 fw-bold {{ $amountClass }}">
-                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-7 text-gray-800 fw-bold">
-                                                {{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            @php
-                                                $statusColors = [
-                                                    'COMPLETED' => 'success',
-                                                    'PENDING' => 'warning',
-                                                    'FAILED' => 'danger',
-                                                    'CANCELLED' => 'secondary',
-                                                    'REVERSED' => 'dark',
-                                                ];
-                                                $statusColor = $statusColors[$transaction->status] ?? 'secondary';
-                                            @endphp
-                                            <span class="badge badge-light-{{ $statusColor }} py-2 px-3">
-                                                {{ $transaction->status }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-light btn-active-light-primary view-transaction-btn" 
-                                                    data-transaction-id="{{ $transaction->id }}">
-                                                <i class="ki-duotone ki-eye fs-2 me-1"></i>
-                                                {{ __('accounting.view') }}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    @empty
-                                    <tr>
-                                        <td colspan="10" class="text-center py-10">
-                                            <div class="text-muted fs-6">{{ __('accounting.no_transactions_found') }}</div>
-                                            <div class="text-gray-500 fs-7 mt-2">{{ __('accounting.try_adjusting_filters') }}</div>
-                                        </td>
-                                    </tr>
-                                    @endforelse
-                                </tbody>
+                                <tbody id="txBody" class="text-gray-600 fw-semibold"></tbody>
                             </table>
+                            <div id="txPagination" class="d-flex justify-content-between align-items-center mt-5"></div>
                         </div>
-                        
-                        @if($transactions instanceof \Illuminate\Pagination\AbstractPaginator && $transactions->hasPages())
-                            <div class="mt-6 d-flex justify-content-center">
-                                {{ $transactions->appends(request()->query())->links('pagination::bootstrap-5') }}
-                            </div>
-                        @endif
+
+                        <!-- Empty -->
+                        <div id="txEmpty" class="d-none text-center py-10">
+                            <div class="text-muted fs-6">{{ __('accounting.no_transactions_found') }}</div>
+                        </div>
                     </div>
                 </div>
-                
             </div>
         </div>
     </div>
-
     
-    <!-- Transaction Details Modal -->
-    <div class="modal fade" id="transactionModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title fw-bold">
-                        <i class="ki-duotone ki-information fs-2 me-2 text-primary">
-                            <span class="path1"></span>
-                            <span class="path2"></span>
-                            <span class="path3"></span>
-                        </i>
-                        {{ __('accounting.transaction_details') }}
-                    </h2>
-                    <div class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal">
-                        <i class="ki-duotone ki-cross fs-1">
-                            <span class="path1"></span>
-                            <span class="path2"></span>
-                        </i>
-                    </div>
-                </div>
-                <div class="modal-body">
-                    <!-- Transaction Reference -->
-                    <div class="d-flex align-items-center bg-light rounded-3 p-5 mb-8">
-                        <div class="d-flex flex-column">
-                            <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.transaction_ref') }}</span>
-                            <span class="fs-4 fw-bold text-gray-800" id="modalTransactionRef">-</span>
-                        </div>
-                        <div class="d-flex flex-column ms-8">
-                            <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.receipt_number') }}</span>
-                            <span class="fs-4 fw-bold text-gray-800" id="modalReceiptNumber">-</span>
-                        </div>
-                        <div class="d-flex flex-column ms-8">
-                            <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.date') }}</span>
-                            <span class="fs-4 fw-bold text-gray-800" id="modalDate">-</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Amount Details -->
-                    <div class="row g-5 mb-8">
-                        <div class="col-md-4">
-                            <div class="card card-flush bg-light-primary h-100" id="modalAmountCard">
-                                <div class="card-body text-center py-5">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.amount') }}</span>
-                                    <div class="fs-2hx fw-bold" id="modalAmount">-</div>
-                                </div>
-                            </div>
-                        </div>
+    @include('basic-accounting.partials.transaction-modal')
 
-                        <div class="col-md-4">
-                            <div class="card card-flush bg-light-info h-100">
-                                <div class="card-body text-center py-5">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.balance_before') }}</span>
-                                    <div class="fs-2hx fw-bold text-gray-800" id="modalBalanceBefore">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="card card-flush bg-light-primary h-100">
-                                <div class="card-body text-center py-5">
-                                    <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.balance_after') }}</span>
-                                    <div class="fs-2hx fw-bold text-gray-800" id="modalBalanceAfter">-</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Transaction Info -->
-                    <div class="row g-5 mb-8">
-                        <div class="col-md-3">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.payment_method') }}</span>
-                                <span class="fs-6 fw-bold text-gray-800" id="modalPaymentMethod">-</span>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.type') }}</span>
-                                <span id="modalTransactionType">-</span>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.category') }}</span>
-                                <span class="fs-6 fw-bold text-gray-800" id="modalCategory">-</span>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.status') }}</span>
-                                <span id="modalStatus">-</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Description -->
-                    <div class="mb-8">
-                        <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.description') }}</span>
-                        <div class="bg-light rounded-3 p-4 mt-2">
-                            <span class="fs-6 text-gray-800" id="modalDescription">-</span>
-                        </div>
-                    </div>
-                    
-                    <!-- User Information -->
-                    <div class="row g-5 mb-8">
-                        <div class="col-md-6">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.processed_by') }}</span>
-                                <span class="fs-6 fw-bold text-gray-800" id="modalProcessedBy">-</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="d-flex flex-column">
-                                <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.customer') }}</span>
-                                <span class="fs-6 fw-bold text-gray-800" id="modalCustomer">-</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Reference Information -->
-                    <div class="mb-8">
-                        <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.reference_information') }}</span>
-                        <div class="table-responsive mt-2">
-                            <table class="table table-bordered">
-                                <tbody>
-                                    <tr>
-                                        <th class="w-50">{{ __('accounting.reference_table') }}</th>
-                                        <td class="w-50" id="modalReferenceTable">-</td>
-                                    </tr>
-                                    <tr>
-                                        <th>{{ __('accounting.reference_id') }}</th>
-                                        <td id="modalReferenceId">-</td>
-                                    </tr>
-                                    <tr id="externalReferenceRow" style="display: none;">
-                                        <th>{{ __('accounting.external_reference') }}</th>
-                                        <td id="modalExternalReference">-</td>
-                                    </tr>
-                                    <tr id="bankReferenceRow" style="display: none;">
-                                        <th>{{ __('accounting.bank_reference') }}</th>
-                                        <td id="modalBankReference">-</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    
-                    <!-- Metadata -->
-                    <div class="mb-0">
-                        <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.metadata') }}</span>
-                        <div class="mt-2">
-                            <ul class="nav nav-tabs nav-line-tabs nav-line-tabs-2x mb-5 fs-6" id="metadataTabs">
-                                <li class="nav-item">
-                                    <a class="nav-link active" data-bs-toggle="tab" href="#metadataTab1">{{ __('accounting.formatted_view') }}</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" data-bs-toggle="tab" href="#metadataTab2">{{ __('accounting.raw_json') }}</a>
-                                </li>
-                            </ul>
-                            
-                            <div class="tab-content" id="metadataContent">
-                                <div class="tab-pane fade show active" id="metadataTab1" role="tabpanel">
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered" id="formattedMetadataTable">
-                                            <thead>
-                                                <tr>
-                                                    <th class="w-50">{{ __('accounting.field') }}</th>
-                                                    <th class="w-50">{{ __('accounting.value') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <div class="tab-pane fade" id="metadataTab2" role="tabpanel">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <pre class="m-0" id="rawMetadata" style="max-height: 300px; overflow: auto;"></pre>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('accounting.close') }}</button>
-                    <button type="button" class="btn btn-primary" onclick="printTransactionDetails()">
-                        <i class="ki-duotone ki-printer fs-2 me-2"></i>
-                        {{ __('accounting.print') }}
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+    @push('styles')
     <style>
-        .text-purple {
-            color: #7239ea !important;
-        }
-
-        .bg-light-purple {
-            background-color: rgba(114, 57, 234, 0.10) !important;
-        }
-
-        .badge-light-purple {
-            background-color: rgba(114, 57, 234, 0.10) !important;
-            color: #7239ea !important;
-        }
+        .skeleton { display: inline-block; background: linear-gradient(90deg, #f1f1f4 0%, #e9e9ed 50%, #f1f1f4 100%); background-size: 200% 100%; animation: skeleton-shimmer 1.4s ease-in-out infinite; border-radius: 6px; }
+        .skeleton-text { height: 12px; margin: 4px 0; display: block; }
+        @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .text-purple { color: #7239ea !important; }
+        .bg-light-purple { background-color: rgba(114, 57, 234, 0.10) !important; }
+        .badge-light-purple { background-color: rgba(114, 57, 234, 0.10) !important; color: #7239ea !important; }
     </style>
-    
+    @endpush
+
     @push('scripts')
     <script>
-        // Apply filter with location and user
-        function applyFilter() {
-            const locationId = document.getElementById('locationFilter').value;
-            const currentUrl = new URL(window.location.href);
-            
-            if (locationId) {
-                currentUrl.searchParams.set('location_id', locationId);
-            } else {
-                currentUrl.searchParams.delete('location_id');
-            }
-            
-            window.location.href = currentUrl.toString();
-        }
-        
-        // Search functionality
-        document.getElementById('searchTransactions').addEventListener('keyup', function() {
-            const searchTerm = this.value.toLowerCase();
-            const rows = document.querySelectorAll('#transactionsTable tbody tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
+        window.TransactionLedgerList = (function () {
+            'use strict';
+
+            const URL_DATA = '{{ route("accounting.transaction-ledger.data") }}';
+            const CURRENCY = '{{ currency_symbol() }}';
+            let inFlight = false;
+            let currentPage = 1;
+
+            document.addEventListener('DOMContentLoaded', () => {
+                load(1);
             });
-        });
-        
-        // Handle view transaction button clicks
-        document.addEventListener('DOMContentLoaded', function() {
-            const viewButtons = document.querySelectorAll('.view-transaction-btn');
-            
-            viewButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const transactionId = this.getAttribute('data-transaction-id');
-                    loadTransactionDetails(transactionId);
-                });
-            });
-            
-            // Initialize Select2
-            if (typeof $ !== 'undefined' && $.fn.select2) {
-                $('#locationFilter').select2({
-                    placeholder: "{{ __('pagination.all_locations') }}",
-                    allowClear: true,
-                    width: '200px'
-                });
+
+            function applyFilters() {
+                load(1);
             }
-        });
-        
-        // Load transaction details via AJAX
-        function loadTransactionDetails(transactionId) {
-            clearModalData();
-            document.getElementById('modalTransactionRef').textContent = 'Loading...';
-            
-            fetch(`/accounting/transaction-ledger/details/${transactionId}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.json();
+
+            function load(page = 1) {
+                if (inFlight) return;
+                inFlight = true;
+                currentPage = page;
+                showState('loading');
+
+                const form = document.getElementById('filterForm');
+                const formData = new FormData(form);
+                const params = new URLSearchParams(formData);
+                params.set('page', page);
+
+                fetch(`${URL_DATA}?${params.toString()}`, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 })
-                .then(data => {
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(json => {
+                    if (!json.success) { showState('empty'); return; }
+                    renderSummary(json.summary);
+                    
+                    if (!json.data || json.data.length === 0) { showState('empty'); return; }
+                    
+                    renderTable(json.data);
+                    renderPagination(json.pagination);
+                    showState('table');
+                })
+                .catch(err => {
+                    console.error('[ledger] load failed:', err);
+                    showState('empty');
+                    window.toastr?.error('Failed to load records.');
+                })
+                .finally(() => { inFlight = false; });
+            }
+
+            function renderSummary(s) {
+                document.getElementById('sumTotalTx').textContent = s.total_count;
+                document.getElementById('sumInflow').textContent = '+' + fmt(s.inflow_total);
+                document.getElementById('sumOutflow').textContent = '-' + fmt(s.outflow_total);
+                
+                const netEl = document.getElementById('sumNetChange');
+                const netCard = document.getElementById('sumNetCard');
+                const isPositive = s.net_change >= 0;
+                
+                netEl.textContent = (isPositive ? '+' : '-') + fmt(Math.abs(s.net_change));
+                netEl.className = `fs-2 fw-bold text-break ${isPositive ? 'text-primary' : 'text-warning'}`;
+                netCard.className = `card card-flush h-100 ${isPositive ? 'bg-light-primary' : 'bg-light-warning'}`;
+                
+                document.getElementById('sumInCount').textContent = s.inflow_count;
+                document.getElementById('sumOutCount').textContent = s.outflow_count;
+            }
+
+            function renderTable(rows) {
+                const tbody = document.getElementById('txBody');
+                
+                const typeColors = { 'DEPOSIT': 'success', 'WITHDRAWAL': 'danger', 'TRANSFER_IN': 'info', 'TRANSFER_OUT': 'warning', 'FEE': 'secondary', 'REFUND': 'primary', 'ADJUSTMENT': 'purple', 'RECONCILIATION': 'dark' };
+                const amountClasses = { 'DEPOSIT': 'text-success', 'TRANSFER_IN': 'text-success', 'REFUND': 'text-success', 'WITHDRAWAL': 'text-danger', 'TRANSFER_OUT': 'text-danger', 'FEE': 'text-danger', 'ADJUSTMENT': 'text-purple', 'RECONCILIATION': 'text-dark' };
+                const statusColors = { 'COMPLETED': 'success', 'PENDING': 'warning', 'FAILED': 'danger', 'CANCELLED': 'secondary', 'REVERSED': 'dark' };
+
+                tbody.innerHTML = rows.map(row => {
+                    const tColor = typeColors[row.type] || 'secondary';
+                    const aClass = amountClasses[row.type] || 'text-dark';
+                    const sColor = statusColors[row.status] || 'secondary';
+
+                    return `
+                        <tr>
+                            <td>
+                                <span class="fs-7 fw-bold text-gray-800">${esc(row.date)}</span>
+                                <span class="fs-8 text-gray-500 d-block">${esc(row.time)}</span>
+                            </td>
+                            <td>
+                                <span class="fs-7 text-gray-600 fw-bold">${esc(row.transaction_ref)}</span>
+                                ${row.receipt_number ? `<span class="fs-8 text-gray-500 d-block"><i class="ki-duotone ki-receipt fs-1 me-1"><span class="path1"></span><span class="path2"></span></i>${esc(row.receipt_number)}</span>` : ''}
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span class="fs-7 text-gray-800 fw-bold">${esc(row.payment_method_name)}</span>
+                                    ${row.user_name ? `<span class="fs-8 text-gray-500"><i class="ki-duotone ki-user fs-1 me-1"><span class="path1"></span><span class="path2"></span></i>${esc(row.user_name)}</span>` : ''}
+                                </div>
+                            </td>
+                            <td><span class="badge badge-light-${tColor} py-2 px-3">${esc(row.type)}</span></td>
+                            <td>
+                                <span class="fs-7 text-gray-800">${esc(row.description)}</span>
+                                ${row.notes ? `<span class="fs-8 text-gray-500 d-block"><i class="ki-duotone ki-information fs-1 me-1"><span class="path1"></span><span class="path2"></span></i>${esc(row.notes)}</span>` : ''}
+                            </td>
+                            <td class="text-end"><span class="fs-6 fw-bold ${aClass}">${fmt(row.amount)}</span></td>
+                            <td class="text-end"><span class="fs-7 text-gray-800 fw-bold">${fmt(row.balance_after)}</span></td>
+                            <td class="text-center"><span class="badge badge-light-${sColor} py-2 px-3">${esc(row.status)}</span></td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-light btn-active-light-primary" onclick="window.TransactionLedgerList.openDetails(${row.id})">
+                                    <i class="ki-duotone ki-eye fs-2 me-1"><span class="path1"></span><span class="path2"></span></i> View
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function renderPagination(p) {
+                const container = document.getElementById('txPagination');
+                if (p.last_page <= 1) { container.innerHTML = ''; return; }
+
+                let html = `<div class="text-muted fs-7">Showing ${p.from} to ${p.to} of ${p.total} entries</div><ul class="pagination m-0">`;
+                
+                // Prev
+                html += `<li class="page-item ${p.current_page === 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${p.current_page - 1}">Prev</a></li>`;
+                
+                // Pages (simplified)
+                const start = Math.max(1, p.current_page - 2);
+                const end = Math.min(p.last_page, p.current_page + 2);
+                for (let i = start; i <= end; i++) {
+                    html += `<li class="page-item ${i === p.current_page ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+                }
+                
+                // Next
+                html += `<li class="page-item ${p.current_page === p.last_page ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${p.current_page + 1}">Next</a></li>`;
+                html += `</ul>`;
+
+                container.innerHTML = html;
+                container.querySelectorAll('a[data-page]').forEach(a => {
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const pg = parseInt(e.target.dataset.page, 10);
+                        if (pg && pg !== currentPage) load(pg);
+                    });
+                });
+            }
+
+            function showState(which) {
+                document.getElementById('txLoading')?.classList.toggle('d-none', which !== 'loading');
+                document.getElementById('txContainer')?.classList.toggle('d-none', which !== 'table');
+                document.getElementById('txEmpty')?.classList.toggle('d-none', which !== 'empty');
+            }
+
+            // Details Modal
+            async function openDetails(id) {
+                const modalEl = document.getElementById('transactionModal');
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                document.getElementById('modalTransactionRef').textContent = 'Loading...';
+                
+                try {
+                    const res = await fetch(`/accounting/transaction-ledger/details/${id}`);
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
                     populateModal(data);
-                    const modal = new bootstrap.Modal(document.getElementById('transactionModal'));
-                    modal.show();
-                })
-                .catch(error => {
-                    console.error('Error loading transaction details:', error);
-                    document.getElementById('modalTransactionRef').textContent = 'Error loading details';
-                    alert('Failed to load transaction details. Please try again.');
-                });
-        }
-        
-        function clearModalData() {
-            // Clear all modal fields
-            ['modalTransactionRef', 'modalReceiptNumber', 'modalDate', 'modalAmount', 
-             'modalBalanceBefore', 'modalBalanceAfter', 'modalPaymentMethod', 
-             'modalCategory', 'modalDescription', 'modalProcessedBy', 'modalCustomer',
-             'modalReferenceTable', 'modalReferenceId', 'modalExternalReference', 
-             'modalBankReference', 'rawMetadata'].forEach(id => {
-                document.getElementById(id).textContent = '-';
-            });
-            
-            document.getElementById('modalTransactionType').innerHTML = '-';
-            document.getElementById('modalStatus').innerHTML = '-';
-            
-            document.getElementById('externalReferenceRow').style.display = 'none';
-            document.getElementById('bankReferenceRow').style.display = 'none';
-            
-            const formattedTable = document.getElementById('formattedMetadataTable').getElementsByTagName('tbody')[0];
-            formattedTable.innerHTML = '';
-        }
-        
-        function populateModal(data) {
-            const transaction = data.transaction;
-            const customer = data.customer;
-            const paymentMethod = data.payment_method;
-            const currency = data.currency;
-
-            // ── Helper: amount style map ─────────────────────────────────
-            // ADJUSTMENT & RECONCILIATION are informational:
-            //   - no +/- sign
-            //   - purple color
-            //   - purple card background
-            //   - because they do NOT change the account balance
-            function getAmountStyle(type) {
-                const styles = {
-                    // Money IN — green with +
-                    'DEPOSIT':        { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
-                    'TRANSFER_IN':    { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
-                    'REFUND':         { text: 'text-success',  bg: 'bg-light-success',  sign: '+' },
-
-                    // Money OUT — red with -
-                    'WITHDRAWAL':     { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
-                    'TRANSFER_OUT':   { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
-                    'FEE':            { text: 'text-danger',   bg: 'bg-light-danger',   sign: '-' },
-
-                    // Informational / neutral — purple, NO sign
-                    'ADJUSTMENT':     { text: 'text-purple',   bg: 'bg-light-purple',   sign: ''  },
-                    'RECONCILIATION': { text: 'text-purple',   bg: 'bg-light-purple',   sign: ''  },
-                };
-
-                return styles[type] ?? { text: 'text-gray-800', bg: 'bg-light-secondary', sign: '' };
-            }
-
-            // ── Header fields ─────────────────────────────────────────────
-            document.getElementById('modalTransactionRef').textContent  = transaction.transaction_ref  || '-';
-            document.getElementById('modalReceiptNumber').textContent   = transaction.receipt_number   || '-';
-            document.getElementById('modalDate').textContent =
-                transaction.transaction_date ? new Date(transaction.transaction_date).toLocaleString() : '-';
-
-            // ── Amount ────────────────────────────────────────────────────
-            const currencySymbol = '{{ currency_symbol() }}';
-            const style          = getAmountStyle(transaction.transaction_type);
-
-            // Amount text
-            document.getElementById('modalAmount').innerHTML = `
-                <span class="${style.text}">
-                    ${style.sign}${parseFloat(transaction.amount).toFixed(2)} ${currencySymbol}
-                </span>
-            `;
-
-            // Amount card background
-            const amountCard = document.getElementById('modalAmountCard');
-            if (amountCard) {
-                amountCard.classList.remove(
-                    'bg-light-success', 'bg-light-danger', 'bg-light-primary',
-                    'bg-light-info', 'bg-light-warning', 'bg-light-secondary', 'bg-light-purple'
-                );
-                amountCard.classList.add(style.bg);
-            }
-
-            // ── Balance before / after ────────────────────────────────────
-            document.getElementById('modalBalanceBefore').textContent =
-                `${parseFloat(transaction.balance_before).toFixed(2)} ${currencySymbol}`;
-            document.getElementById('modalBalanceAfter').textContent =
-                `${parseFloat(transaction.balance_after).toFixed(2)} ${currencySymbol}`;
-
-            // ── Payment method ────────────────────────────────────────────
-            document.getElementById('modalPaymentMethod').textContent = paymentMethod?.name || '-';
-
-            // ── Transaction type badge ────────────────────────────────────
-            const typeColors = {
-                'DEPOSIT':        'success',
-                'WITHDRAWAL':     'danger',
-                'TRANSFER_IN':    'info',
-                'TRANSFER_OUT':   'warning',
-                'FEE':            'secondary',
-                'REFUND':         'primary',
-                'ADJUSTMENT':     'purple',   // ← was 'info'
-                'RECONCILIATION': 'dark'
-            };
-            const typeColor = typeColors[transaction.transaction_type] || 'secondary';
-            document.getElementById('modalTransactionType').innerHTML = `
-                <span class="badge badge-light-${typeColor} py-2 px-3">${transaction.transaction_type}</span>
-            `;
-
-            // ── Category ──────────────────────────────────────────────────
-            document.getElementById('modalCategory').textContent = transaction.transaction_category || '-';
-
-            // ── Status badge ──────────────────────────────────────────────
-            const statusColors = {
-                'COMPLETED': 'success',
-                'PENDING':   'warning',
-                'FAILED':    'danger',
-                'CANCELLED': 'secondary',
-                'REVERSED':  'dark'
-            };
-            const statusColor = statusColors[transaction.status] || 'secondary';
-            document.getElementById('modalStatus').innerHTML = `
-                <span class="badge badge-light-${statusColor} py-2 px-3">${transaction.status}</span>
-            `;
-
-            // ── Description / user / customer ─────────────────────────────
-            document.getElementById('modalDescription').textContent = transaction.description || '-';
-            document.getElementById('modalProcessedBy').textContent = transaction.user?.name || 'System';
-            document.getElementById('modalCustomer').textContent =
-                customer ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim() : '-';
-
-            // ── Reference information ─────────────────────────────────────
-            document.getElementById('modalReferenceTable').textContent = transaction.reference_table || '-';
-            document.getElementById('modalReferenceId').textContent    = transaction.reference_id    || '-';
-
-            const externalRefRow = document.getElementById('externalReferenceRow');
-            if (transaction.external_reference) {
-                externalRefRow.style.display = '';
-                document.getElementById('modalExternalReference').textContent = transaction.external_reference;
-            } else {
-                externalRefRow.style.display = 'none';
-            }
-
-            const bankRefRow = document.getElementById('bankReferenceRow');
-            if (transaction.bank_reference) {
-                bankRefRow.style.display = '';
-                document.getElementById('modalBankReference').textContent = transaction.bank_reference;
-            } else {
-                bankRefRow.style.display = 'none';
-            }
-
-            // ── Metadata ──────────────────────────────────────────────────
-            let metadata = {};
-            try {
-                metadata = transaction.metadata
-                    ? (typeof transaction.metadata === 'string' ? JSON.parse(transaction.metadata) : transaction.metadata)
-                    : {};
-            } catch (e) {
-                metadata = { error: 'Failed to parse metadata' };
-            }
-
-            document.getElementById('rawMetadata').textContent = JSON.stringify(metadata, null, 2);
-
-            // Formatted metadata table
-            const formattedTable = document.getElementById('formattedMetadataTable').getElementsByTagName('tbody')[0];
-            formattedTable.innerHTML = '';
-
-            for (const key in metadata) {
-                if (metadata[key] !== null && metadata[key] !== undefined) {
-                    const row        = formattedTable.insertRow();
-                    const fieldCell  = row.insertCell();
-                    const valueCell  = row.insertCell();
-
-                    fieldCell.innerHTML = `<strong>${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>`;
-
-                    let value = metadata[key];
-                    if (typeof value === 'object' && value !== null) {
-                        value = JSON.stringify(value, null, 2);
-                    }
-                    valueCell.textContent = value;
+                } catch (err) {
+                    document.getElementById('modalTransactionRef').textContent = 'Error';
+                    console.error('[ledger] details failed:', err);
                 }
             }
-        }
+
+            function populateModal(data) {
+                const tx = data.transaction;
+                const cust = data.customer;
+                const pm = data.payment_method;
+
+                document.getElementById('modalTransactionRef').textContent = tx.transaction_ref || '-';
+                document.getElementById('modalReceiptNumber').textContent = tx.receipt_number || '-';
+                document.getElementById('modalDate').textContent = tx.transaction_date ? new Date(tx.transaction_date).toLocaleString() : '-';
                 
-        function printTransactionDetails() {
-            const printContent = `
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>Transaction Details</h2>
-                    <p><strong>Transaction Ref:</strong> ${document.getElementById('modalTransactionRef').textContent}</p>
-                    <p><strong>Amount:</strong> ${document.getElementById('modalAmount').textContent}</p>
-                    <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                </div>
-            `;
-            
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            printWindow.print();
-        }
+                const isCredit = ['DEPOSIT', 'TRANSFER_IN', 'REFUND'].includes(tx.transaction_type);
+                const isPurple = ['ADJUSTMENT', 'RECONCILIATION'].includes(tx.transaction_type);
+                
+                let amtClass = isCredit ? 'text-success' : (isPurple ? 'text-purple' : 'text-danger');
+                let bgClass = isCredit ? 'bg-light-success' : (isPurple ? 'bg-light-purple' : 'bg-light-danger');
+                let sign = isCredit ? '+' : (isPurple ? '' : '-');
+
+                document.getElementById('modalAmount').innerHTML = `<span class="${amtClass}">${sign}${fmt(tx.amount)}</span>`;
+                document.getElementById('modalAmountCard').className = `card card-flush h-100 ${bgClass}`;
+                
+                document.getElementById('modalBalanceBefore').textContent = fmt(tx.balance_before);
+                document.getElementById('modalBalanceAfter').textContent = fmt(tx.balance_after);
+                document.getElementById('modalPaymentMethod').textContent = pm?.name || '-';
+                document.getElementById('modalCategory').textContent = tx.transaction_category || '-';
+                document.getElementById('modalDescription').textContent = tx.description || '-';
+                document.getElementById('modalProcessedBy').textContent = tx.user?.name || 'System';
+                document.getElementById('modalCustomer').textContent = cust ? `${cust.first_name} ${cust.last_name}`.trim() : '-';
+
+                document.getElementById('modalReferenceTable').textContent = tx.reference_table || '-';
+                document.getElementById('modalReferenceId').textContent = tx.reference_id || '-';
+                
+                document.getElementById('rawMetadata').textContent = JSON.stringify(tx.metadata || {}, null, 2);
+                
+                // Format metadata table
+                const tbody = document.getElementById('formattedMetadataTable').getElementsByTagName('tbody')[0];
+                tbody.innerHTML = '';
+                if (tx.metadata && typeof tx.metadata === 'object') {
+                    for (const [k, v] of Object.entries(tx.metadata)) {
+                        const tr = tbody.insertRow();
+                        tr.insertCell().innerHTML = `<strong>${k}</strong>`;
+                        tr.insertCell().textContent = typeof v === 'object' ? JSON.stringify(v) : v;
+                    }
+                }
+            }
+
+            function esc(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+            function fmt(n) { return CURRENCY + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+            return { applyFilters, openDetails };
+        })();
     </script>
     @endpush
-    
     @endsection
 </x-app-layout>

@@ -14,78 +14,12 @@
             <div class="modal-body px-5 my-7">
                 <form id="sendToSupplierForm{{ $order->id }}">
                     @csrf
-
-                    @php
-                        // Sending is purely a notification/status step now.
-                        // Money only moves later, at receiving, against the
-                        // actual quantities and actual costs invoiced.
-                        $isSent = $order->status === 'sent';
-                        $isReceived = in_array($order->status, ['received', 'partially_received']);
-                        $canSend = $order->status === 'approved';
-                    @endphp
-
                     <div class="alert alert-info d-flex align-items-center mb-5">
                         <i class="bi bi-info-circle fs-2 me-3"></i>
                         <div>
-                            @if($isReceived)
-                                {{ __('passwords.po_already_received') }}
-                            @elseif($isSent)
-                                {{ __('passwords.send_supplier_instruction_sent') }}
-                            @else
-                                {{ __('passwords.send_supplier_instruction') }}
-                            @endif
+                            {{ __('passwords.send_supplier_instruction') }}
                         </div>
                     </div>
-
-                    {{-- ═══════════════════════════════════════════════════════════
-                        🟢 ORDER SUMMARY
-                        ═══════════════════════════════════════════════════════════ --}}
-                    <div class="card card-flush bg-light-primary mb-6">
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">{{ __('passwords.po_number') }}:</span>
-                                        <span class="fw-bold">{{ $order->po_number }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <span class="text-muted">{{ __('passwords.supplier') }}:</span>
-                                        <span class="fw-bold">{{ $order->supplier->name ?? '—' }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-2">
-                                        <span class="text-muted">{{ __('passwords.status') }}:</span>
-                                        <span class="fw-bold">
-                                            <span class="badge badge-{{ $order->status_badge }}">
-                                                {{ ucfirst(str_replace('_', ' ', $order->status)) }}
-                                            </span>
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between">
-                                        <span class="text-muted">{{ __('passwords.total_amount') }}:</span>
-                                        <span class="fw-bold text-primary fs-5">{{ number_format($order->total ?? 0, 2) }} {{ currency_symbol() }}</span>
-                                    </div>
-                                    <div class="form-text text-muted mt-2">
-                                        {{ __('passwords.estimated_total_note') }}
-                                    </div>
-                                </div>
-                            </div>
-                            @if($isSent)
-                                <div class="mt-3 alert alert-success">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    {{ __('passwords.po_already_sent_message') }}
-                                </div>
-                            @endif
-                            @if($isReceived)
-                                <div class="mt-3 alert alert-info">
-                                    <i class="bi bi-box-seam me-2"></i>
-                                    {{ __('passwords.po_already_received_message') }}
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                    {{-- ════════════════ END OF ORDER SUMMARY ════════════════ --}}
 
                     <!-- Channel Selection -->
                     <div class="mb-4">
@@ -93,18 +27,14 @@
                         <div class="d-flex gap-6">
                             <div class="form-check form-check-custom form-check-solid">
                                 <input class="form-check-input" type="radio" name="channel"
-                                       id="sendChannelEmail{{ $order->id }}" value="email" checked
-                                       onchange="toggleSendToSupplierChannel({{ $order->id }})"
-                                       {{ $canSend ? '' : 'disabled' }}>
+                                       id="sendChannelEmail{{ $order->id }}" value="email" checked>
                                 <label class="form-check-label" for="sendChannelEmail{{ $order->id }}">
                                     <i class="bi bi-envelope me-1"></i>{{ __('passwords.email') }}
                                 </label>
                             </div>
                             <div class="form-check form-check-custom form-check-solid">
                                 <input class="form-check-input" type="radio" name="channel"
-                                       id="sendChannelWhatsapp{{ $order->id }}" value="whatsapp"
-                                       onchange="toggleSendToSupplierChannel({{ $order->id }})"
-                                       {{ $canSend ? '' : 'disabled' }}>
+                                       id="sendChannelWhatsapp{{ $order->id }}" value="whatsapp">
                                 <label class="form-check-label" for="sendChannelWhatsapp{{ $order->id }}">
                                     <i class="bi bi-whatsapp me-1"></i>{{ __('passwords.whatsapp') }}
                                 </label>
@@ -115,25 +45,18 @@
                     <!-- Supplier Email -->
                     <div class="mb-4" id="send-email-field-wrap{{ $order->id }}">
                         <label class="form-label required">{{ __('passwords.supplier_email') }}</label>
-                        <input type="email"
-                               name="supplier_email"
-                               class="form-control"
+                        <input type="email" name="supplier_email" class="form-control"
                                value="{{ $order->supplier->email ?? '' }}"
-                               placeholder="{{ __('passwords.enter_supplier_email') }}"
-                               {{ $canSend ? '' : 'disabled' }}
-                               required>
+                               placeholder="{{ __('passwords.enter_supplier_email') }}" required>
                         <div class="form-text text-muted">{{ __('passwords.supplier_email_hint') }}</div>
                     </div>
 
                     <!-- Supplier Phone (WhatsApp) -->
                     <div class="mb-4 d-none" id="send-phone-field-wrap{{ $order->id }}">
                         <label class="form-label required">{{ __('passwords.supplier_phone') }}</label>
-                        <input type="text"
-                               name="supplier_phone"
-                               class="form-control"
+                        <input type="text" name="supplier_phone" class="form-control"
                                value="{{ $order->supplier->phone ?? '' }}"
-                               placeholder="+256700000000"
-                               {{ $canSend ? '' : 'disabled' }}>
+                               placeholder="+256700000000">
                         <div class="form-text text-muted">{{ __('passwords.supplier_phone_hint') }}</div>
                         <div class="invalid-feedback d-block d-none" id="send-phone-error{{ $order->id }}"></div>
                     </div>
@@ -141,7 +64,7 @@
                     <!-- Notes -->
                     <div class="mb-4">
                         <label class="form-label">{{ __('passwords.notes') }}</label>
-                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.optional_notes') }}" {{ $canSend ? '' : 'disabled' }}></textarea>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="{{ __('passwords.optional_notes') }}"></textarea>
                     </div>
 
                     <!-- Action Buttons -->
@@ -149,25 +72,55 @@
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
                         </button>
-                        <button type="button" class="btn btn-primary" id="sendToSupplierButton{{ $order->id }}"
-                                onclick="sendToSupplier({{ $order->id }})"
-                                {{ $canSend ? '' : 'disabled' }}>
+                        <button type="button" class="btn btn-primary" id="sendToSupplierButton{{ $order->id }}" data-send-action="{{ $order->id }}">
                             <i class="bi bi-send me-2"></i>
-                            <span class="indicator-label">
-                                @if($isSent)
-                                    {{ __('passwords.already_sent') }}
-                                @elseif($isReceived)
-                                    {{ __('passwords.po_already_received') }}
-                                @else
-                                    {{ __('passwords.send_to_supplier') }}
-                                @endif
-                            </span>
-                            <span class="indicator-progress">{{ __('passwords.please_wait') }}
+                            <span class="indicator-label">{{ __('passwords.send_to_supplier') }}</span>
+                            <span class="indicator-progress d-none">{{ __('passwords.please_wait') }}
                                 <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                             </span>
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deletePurchaseModal{{$order->id}}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ __('auth.confirm_deletion') }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger d-flex align-items-center mb-4">
+                    <i class="bi bi-exclamation-triangle fs-2 me-3"></i>
+                    <div>
+                        <p class="mb-1 fw-bold">{{ __('auth.are_you_sure') }}</p>
+                        <p class="mb-0 fs-7">{{ __('auth.action_cannot') }}</p>
+                    </div>
+                </div>
+                <p class="text-muted fs-7">
+                    You are about to delete Purchase Order <strong>{{ $order->po_number }}</strong>.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">
+                    {{ __('auth._discard') }}
+                </button>
+                <button type="button" 
+                        class="btn btn-danger" 
+                        data-delete-action="{{ $order->id }}"
+                        data-url="{{ route('purchase-orders.destroy', $order->id) }}">
+                    <span class="indicator-label"><i class="bi bi-trash me-1"></i>{{ __('auth._confirm') }}</span>
+                    <span class="indicator-progress d-none">
+                        {{__('auth.please_wait') }}
+                        <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                    </span>
+                </button>
             </div>
         </div>
     </div>

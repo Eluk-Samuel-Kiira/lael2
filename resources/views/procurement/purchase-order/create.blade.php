@@ -68,7 +68,7 @@
                         <div class="border rounded p-4 mb-8">
                             <div class="d-flex justify-content-between align-items-center mb-4">
                                 <h4 class="fw-bold">{{ __('passwords.order_items') }}</h4>
-                                <button type="button" class="btn btn-sm btn-light-primary" onclick="addPurchaseOrderItem()">
+                                <button type="button" class="btn btn-sm btn-light-primary" id="addPoItemBtn">
                                     <i class="ki-duotone ki-plus fs-3"></i>
                                     {{ __('passwords._add_item') }}
                                 </button>
@@ -117,7 +117,7 @@
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">&nbsp;</label>
-                                        <button type="button" class="btn btn-sm btn-danger w-100" onclick="removePurchaseOrderItem(this)" disabled>
+                                        <button type="button" class="btn btn-sm btn-danger w-100 remove-item-btn" disabled>
                                             <i class="bi bi-trash fs-5"></i>
                                         </button>
                                     </div>
@@ -153,16 +153,10 @@
                             id="submitPurchaseOrderButton" 
                             type="button" 
                             class="btn btn-primary"
-                            onclick="submitPurchaseOrderForm(
-                                'kt_modal_add_purchase_order_form', 
-                                'submitPurchaseOrderButton',
-                                '{{ route('purchase-order.store') }}',
-                                'POST',
-                                'discardPurchaseOrderButton'
-                            )">
-                            
+                            data-po-submit
+                            data-url="{{ route('purchase-order.store') }}">
                             <span class="indicator-label">{{ __('passwords.create_purchase_order') }}</span>
-                            <span class="indicator-progress">{{ __('passwords.please_wait') }}
+                            <span class="indicator-progress d-none">{{ __('passwords.please_wait') }}
                                 <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                             </span>
                         </button>
@@ -172,5 +166,3 @@
         </div>
     </div>
 </div>
-
-
