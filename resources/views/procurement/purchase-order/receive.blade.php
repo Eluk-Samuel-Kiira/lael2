@@ -34,7 +34,7 @@
                                 {{ __('passwords.tax_information') }}
                             </h3>
                             <div class="card-toolbar">
-                                <button type="button" class="btn btn-sm btn-primary" onclick="calculateTaxPreview({{ $order->id }})">
+                                <button type="button" class="btn btn-sm btn-primary" data-tax-preview="{{ $order->id }}">
                                     <i class="bi bi-calculator me-2"></i>
                                     {{ __('passwords.preview_calculation') }}
                                 </button>
@@ -65,17 +65,6 @@
                                                     <span class="badge badge-light-info">{{ $tax->formatted_rate }}</span>
                                                     <small class="text-muted ms-2">{{ $tax->code }}</small>
                                                 </div>
-                                                @if($tax->is_withholding_tax)
-                                                    <small class="text-danger d-block mt-1">
-                                                        <i class="bi bi-arrow-down-short me-1"></i>
-                                                        {{ __('passwords.withholding_tax_note') }}
-                                                    </small>
-                                                @else
-                                                    <small class="text-primary d-block mt-1">
-                                                        <i class="bi bi-arrow-up-short me-1"></i>
-                                                        {{ __('passwords.additive_tax_note') }}
-                                                    </small>
-                                                @endif
                                             </label>
                                         </div>
                                     </div>
@@ -126,8 +115,7 @@
                                                 <th class="text-center">{{ __('passwords.effect') }}</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="tax_breakdown_body_{{ $order->id }}">
-                                        </tbody>
+                                        <tbody id="tax_breakdown_body_{{ $order->id }}"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -201,8 +189,7 @@
                                                     min="0"
                                                     value="0"
                                                     data-pending="{{ $pending }}"
-                                                    data-unit-cost="{{ $item->unit_cost }}"
-                                                    oninput="updateItemsTotal({{ $order->id }})">
+                                                    data-unit-cost="{{ $item->unit_cost }}">
                                                 <small class="text-muted fs-7">{{ __('passwords.max') }}: {{ $pending }}</small>
                                             </td>
                                             <td>
@@ -214,7 +201,7 @@
                                                         min="0"
                                                         step="0.01"
                                                         value="{{ number_format($item->unit_cost, 2, '.', '') }}"
-                                                        oninput="updateItemsTotal({{ $order->id }})">
+                                                        disabled>
                                                 </div>
                                                 <small class="text-muted fs-7">{{ __('passwords.defaults_to_po_price') }}</small>
                                             </td>
@@ -282,9 +269,7 @@
                                                 step="0.01"
                                                 min="0"
                                                 max="0"
-                                                value="0"
-                                                onblur="if (this.value === '') this.value = '0';"
-                                                oninput="updateItemsTotal({{ $order->id }})">
+                                                value="0">
                                         </div>
                                         <div class="form-text text-muted">
                                             {{ __('passwords.max_payment') }}: <span id="payment_max_display_{{ $order->id }}">0.00</span> {{ currency_symbol() }}
@@ -355,10 +340,10 @@
                             <i class="bi bi-x-lg me-2"></i>{{ __('auth._cancel') }}
                         </button>
                         <div class="d-flex gap-3">
-                            <button type="button" class="btn btn-warning" onclick="submitReceiving({{ $order->id }}, 'partially_received')">
+                            <button type="button" class="btn btn-warning" data-receive-submit="{{ $order->id }}" data-status="partially_received">
                                 <i class="bi bi-arrow-repeat me-2"></i>{{ __('passwords.mark_partially_received') }}
                             </button>
-                            <button type="button" class="btn btn-success" onclick="submitReceiving({{ $order->id }}, 'received')">
+                            <button type="button" class="btn btn-success" data-receive-submit="{{ $order->id }}" data-status="received">
                                 <i class="bi bi-check-circle me-2"></i>{{ __('passwords.mark_fully_received') }}
                             </button>
                         </div>
@@ -368,368 +353,3 @@
         </div>
     </div>
 </div>
-
-
-<script>
-    // ── Debounce function for performance ──
-    function debounce(func, wait = 300) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    // ── Update items total (debounced) ──
-    // Uses each row's ACTUAL unit cost (editable) rather than the fixed PO price,
-    // since that's what will really leave the account.
-    const updateItemsTotal = debounce(function(orderId) {
-        let itemsTotal = 0;
-        let totalQuantity = 0;
-        const inputs = document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`);
-
-        inputs.forEach(input => {
-            const quantity = parseFloat(input.value) || 0;
-            const row = input.closest('.receive-item-row');
-            const actualCostInput = row ? row.querySelector('.receiving-actual-cost') : null;
-            const fallbackCost = parseFloat(input.dataset.unitCost) || 0;
-            const actualCost = actualCostInput && actualCostInput.value !== ''
-                ? (parseFloat(actualCostInput.value) || 0)
-                : fallbackCost;
-
-            itemsTotal += quantity * actualCost;
-            totalQuantity += quantity;
-
-            // Highlight rows with quantity being received
-            if (row) {
-                row.style.backgroundColor = quantity > 0 ? '#e8f5e9' : '';
-                row.style.borderLeft = quantity > 0 ? '3px solid #4caf50' : '';
-            }
-
-            // Actual cost only matters once something is being received
-            if (actualCostInput) {
-                actualCostInput.disabled = quantity <= 0;
-            }
-        });
-
-        // Update displays
-        const displays = {
-            gross: document.getElementById(`gross_amount_display_${orderId}`),
-            taxable: document.getElementById(`taxable_amount_display_${orderId}`),
-            taxableHidden: document.getElementById(`taxable_amount_hidden_${orderId}`),
-            totalTax: document.getElementById(`total_tax_display_${orderId}`),
-            totalPayable: document.getElementById(`total_payable_display_${orderId}`)
-        };
-
-        if (displays.gross) displays.gross.textContent = itemsTotal.toFixed(2);
-        if (displays.taxable) displays.taxable.textContent = itemsTotal.toFixed(2);
-        if (displays.taxableHidden) displays.taxableHidden.value = itemsTotal;
-
-        // Reset tax preview when items change
-        const taxPreview = document.getElementById(`tax_preview_${orderId}`);
-        if (taxPreview) taxPreview.classList.add('d-none');
-
-        if (displays.totalTax) displays.totalTax.textContent = '0.00';
-        if (displays.totalPayable) displays.totalPayable.textContent = itemsTotal.toFixed(2);
-
-        document.getElementById(`total_tax_amount_${orderId}`).value = '0';
-        document.getElementById(`net_amount_${orderId}`).value = itemsTotal;
-
-        // Keep the payment amount in sync with the current receipt total
-        updatePaymentMax(orderId, itemsTotal);
-    }, 300);
-
-    // ── Keep payment amount bounded to (and defaulted at) the current receipt payable ──
-    function updatePaymentMax(orderId, payableAmount) {
-        const maxDisplay = document.getElementById(`payment_max_display_${orderId}`);
-        const paymentInput = document.getElementById(`payment_amount_${orderId}`);
-        if (!paymentInput) return;
-
-        const rounded = Math.max(0, payableAmount || 0);
-        paymentInput.setAttribute('max', rounded.toFixed(2));
-        if (maxDisplay) maxDisplay.textContent = rounded.toFixed(2);
-
-        // If the current payment amount exceeds the new max, clamp it down
-        const current = parseFloat(paymentInput.value) || 0;
-        if (current > rounded) {
-            paymentInput.value = rounded.toFixed(2);
-        }
-    }
-
-    // ── Calculate tax preview ──
-    function calculateTaxPreview(orderId) {
-        const taxableAmount = parseFloat(document.getElementById(`taxable_amount_hidden_${orderId}`).value) || 0;
-        const selectedTaxes = Array.from(
-            document.querySelectorAll(`#receiveItemsForm${orderId} .tax-checkbox:checked`)
-        ).map(cb => cb.value);
-
-        if (selectedTaxes.length === 0 || taxableAmount === 0) {
-            Swal.fire('Info', 'Please select taxes and enter quantities first', 'info');
-            return;
-        }
-
-        Swal.fire({
-            title: 'Calculating...',
-            text: 'Please wait',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
-
-        fetch('/purchase-orders/calculate-tax-preview', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                taxable_amount: taxableAmount,
-                selected_taxes: selectedTaxes
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            Swal.close();
-
-            if (data.success) {
-                const preview = document.getElementById(`tax_preview_${orderId}`);
-                if (preview) preview.classList.remove('d-none');
-
-                // Update preview values
-                document.getElementById(`preview_taxable_${orderId}`).textContent = data.data.taxable_amount.toFixed(2);
-                document.getElementById(`preview_total_tax_${orderId}`).textContent = data.data.total_tax.toFixed(2);
-                document.getElementById(`preview_net_payable_${orderId}`).textContent = data.data.net_payable.toFixed(2);
-
-                document.getElementById(`total_tax_display_${orderId}`).textContent = data.data.total_tax.toFixed(2);
-                document.getElementById(`total_payable_display_${orderId}`).textContent = data.data.net_payable.toFixed(2);
-
-                document.getElementById(`total_tax_amount_${orderId}`).value = data.data.total_tax;
-                document.getElementById(`net_amount_${orderId}`).value = data.data.net_payable;
-
-                // Net payable (incl. tax) becomes the real cap for payment against this receipt
-                updatePaymentMax(orderId, data.data.net_payable);
-
-                // Build breakdown
-                const tbody = document.getElementById(`tax_breakdown_body_${orderId}`);
-                if (tbody) {
-                    tbody.innerHTML = data.data.tax_breakdown.map(tax => `
-                        <tr>
-                            <td><strong>${tax.name}</strong><br><small>${tax.code || ''}</small></td>
-                            <td>${tax.formatted_rate}</td>
-                            <td class="text-end">${tax.amount.toFixed(2)}</td>
-                            <td class="text-center">
-                                <span class="badge ${tax.is_withholding_tax ? 'badge-light-danger' : 'badge-light-primary'}">
-                                    ${tax.is_withholding_tax ? 'Deducted (-)' : 'Added (+)'}
-                                </span>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
-
-                Swal.fire('Success', 'Tax calculation completed', 'success');
-            } else {
-                Swal.fire('Error', data.message || 'Calculation failed', 'error');
-            }
-        })
-        .catch(error => {
-            Swal.close();
-            console.error('Error:', error);
-            Swal.fire('Error', 'Failed to calculate taxes', 'error');
-        });
-    }
-
-    // ── Submit receiving ──
-    // Note: receiving no longer requires the PO balance to be settled first —
-    // payment here (if any) is recorded against the ACTUAL receipt total,
-    // computed from real quantities and real unit costs.
-    function submitReceiving(orderId, status) {
-        const form = document.getElementById(`receiveItemsForm${orderId}`);
-        if (!form) return;
-
-        // Check if any items are being received
-        const hasQuantity = Array.from(form.querySelectorAll('.receiving-quantity'))
-            .some(input => parseFloat(input.value) > 0);
-
-        if (!hasQuantity) {
-            Swal.fire({
-                title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("passwords.enter_quantity_for_at_least_one_item") }}',
-                icon: 'warning',
-                confirmButtonColor: '#0d6efd'
-            });
-            return;
-        }
-
-        // If a payment amount was entered, a payment method is required
-        const paymentAmount = parseFloat(document.getElementById(`payment_amount_${orderId}`)?.value) || 0;
-        const paymentMethodSelect = document.getElementById(`payment_method_${orderId}`);
-        if (paymentAmount > 0 && paymentMethodSelect && !paymentMethodSelect.value) {
-            Swal.fire({
-                title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("payments.select_payment_method") }}',
-                icon: 'warning',
-                confirmButtonColor: '#0d6efd'
-            });
-            return;
-        }
-
-        const formData = new FormData(form);
-        formData.append('status', status);
-
-        // Always send payment_amount — even when 0 — so the backend can record intent.
-        formData.set('payment_amount', String(Math.max(0, paymentAmount)));
-
-        // Only send method/date if there's actually a payment.
-        if (paymentAmount <= 0) {
-            formData.delete('payment_method_id');
-            formData.delete('payment_date');
-        }
-
-        Swal.fire({
-            title: status === 'received'
-                ? '{{ __("passwords.mark_fully_received_title") }}'
-                : '{{ __("passwords.mark_partially_received_title") }}',
-            text: status === 'received'
-                ? '{{ __("passwords.mark_fully_received_confirmation") }}'
-                : '{{ __("passwords.mark_partially_received_confirmation") }}',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonColor: status === 'received' ? '#198754' : '#ffc107',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: status === 'received'
-                ? '{{ __("passwords.mark_received") }}'
-                : '{{ __("passwords.mark_partial") }}',
-            cancelButtonText: '{{ __("passwords.cancel") }}',
-            showLoaderOnConfirm: true,
-            preConfirm: () => {
-                return fetch(`/purchase-orders/${orderId}/receive-items`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Accept': 'application/json',
-                    },
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success && data.requires_confirm) {
-                        // Show the confirmation dialog with the over-receipt details
-                        return Swal.fire({
-                            title: '{{ __("passwords.over_receipt_title") }}',
-                            html: buildOverReceiptHtml(data.over_receipts),
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonText: '{{ __("passwords.yes_receive_more") }}',
-                            cancelButtonText: '{{ __("passwords.cancel") }}',
-                            confirmButtonColor: '#dc3545',
-                        }).then(result => {
-                            if (!result.isConfirmed) return null;
-
-                            // Resubmit with the confirmation flag
-                            formData.append('allow_over_receipt', '1');
-                            return fetch(`/purchase-orders/${orderId}/receive-items`, {
-                                method: 'POST',
-                                headers: {
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                                    'Accept': 'application/json',
-                                },
-                                body: formData
-                            }).then(r => r.json());
-                        });
-                    }
-                    if (!data.success) throw new Error(data.message);
-                    return data;
-                });
-            }
-        })
-        .then((result) => {
-            if (result.isConfirmed && result.value) {
-                Swal.fire({
-                    title: '{{ __("passwords.success") }}',
-                    text: result.value.message,
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    location.reload();
-                });
-            }
-        })
-        .catch(error => {
-            Swal.fire({
-                title: '{{ __("passwords.error") }}',
-                text: error.message,
-                icon: 'error',
-                confirmButtonColor: '#0d6efd'
-            });
-        });
-    }
-
-    function buildOverReceiptHtml(overReceipts) {
-        if (!Array.isArray(overReceipts) || overReceipts.length === 0) {
-            return '<p>No over-receipt details available.</p>';
-        }
-
-        const fmt = (n) => Number(n || 0).toLocaleString(undefined, {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        });
-
-        const rows = overReceipts.map(r => `
-            <tr>
-                <td class="text-start">${r.product_name ?? '—'}</td>
-                <td class="text-end">${fmt(r.ordered)}</td>
-                <td class="text-end">${fmt(r.previously_received)}</td>
-                <td class="text-end">${fmt(r.receiving_now)}</td>
-                <td class="text-end text-danger fw-bold">+${fmt(r.over_by)}</td>
-            </tr>
-        `).join('');
-
-        return `
-            <div class="text-start mb-3">
-                <p class="mb-2">The following items exceed the ordered quantity:</p>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Product</th>
-                                <th class="text-end">Ordered</th>
-                                <th class="text-end">Received</th>
-                                <th class="text-end">Now</th>
-                                <th class="text-end">Over By</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>
-                <p class="text-danger mt-3 mb-0">
-                    <i class="bi bi-exclamation-triangle me-1"></i>
-                    Are you sure you want to proceed?
-                </p>
-            </div>
-        `;
-    }
-
-    // ── Initialize on modal show ──
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('[id^="receiveItemsModal"]').forEach(modal => {
-            modal.addEventListener('shown.bs.modal', function() {
-                const orderId = this.id.replace('receiveItemsModal', '');
-                // Reset all quantities to 0 and restore actual cost to PO price
-                document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-quantity`).forEach(input => {
-                    input.value = 0;
-                });
-                document.querySelectorAll(`#receiveItemsForm${orderId} .receiving-actual-cost`).forEach(input => {
-                    input.disabled = true;
-                });
-                const paymentAmount = document.getElementById(`payment_amount_${orderId}`);
-                if (paymentAmount) paymentAmount.value = 0;
-                updateItemsTotal(orderId);
-            });
-        });
-    });
-</script>

@@ -401,6 +401,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         
         Route::get('/purchase-order', [PurchaseOrderController::class, 'index'])->name('purchase_order.index');
         Route::post('/purchase-order', [PurchaseOrderController::class, 'store'])->name('purchase-order.store');
+        Route::get('purchase-orders/{id}/modals', [PurchaseOrderController::class, 'getModals'])->name('purchase_orders.modals');
+        Route::get('purchase-orders/data', [PurchaseOrderController::class, 'data'])->name('purchase_orders.data');
+        Route::get('purchase-orders/{id}/details', [PurchaseOrderController::class, 'details'])->name('purchase_orders.details');
         Route::post('/purchase-status/{id}', [PurchaseOrderController::class, 'submitApproval'])->name('po.submit-approval');
         Route::post('/purchase-approve/{id}', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
         Route::post('/purchase-send/{id}', [PurchaseOrderController::class, 'sendToSupplier'])->name('purchase-orders.send');
@@ -457,19 +460,32 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Basic Accounting Routes
         Route::prefix('accounting')->name('accounting.')->group(function () {
             Route::get('/payment-methods', [AccountingController::class, 'paymentMethods'])->name('payment-methods.index');
+            Route::get('/payment-methods/data', [AccountingController::class, 'paymentMethodsData'])->name('payment-methods.data');
             Route::get('/account-balances', [AccountingController::class, 'accountBalances'])->name('account-balances');
+            Route::get('/account-balances/data', [AccountingController::class, 'accountBalancesData'])->name('account-balances.data');
             Route::get('/transaction-ledger', [AccountingController::class, 'transactionLedger'])->name('transaction-ledger');
-            Route::get('/income-statement', [AccountingController::class, 'incomeStatement'])->name('income-statement');
-            Route::get('/cash-flow', [AccountingController::class, 'cashFlow'])->name('cash-flow');
-            Route::get('/transaction-analysis', [AccountingController::class, 'transactionAnalysis'])->name('transaction-analysis');
-            Route::get('/expense-analysis', [AccountingController::class, 'expenseAnalysis'])->name('expense-analysis');
-            Route::get('/payment-method-analysis', [AccountingController::class, 'paymentMethodAnalysis'])->name('payment-method-analysis');
-            Route::get('/daily-summary', [AccountingController::class, 'dailySummary'])->name('daily-summary');
-            Route::get('/monthly-report', [AccountingController::class, 'monthlyReport'])->name('monthly-report');
-            Route::get('/reconciliation', [AccountingController::class, 'reconciliation'])->name('reconciliation');
+            Route::get('/transaction-ledger/data', [AccountingController::class, 'transactionLedgerData'])->name('transaction-ledger.data');
             Route::get('/transaction-ledger/details/{id}', [AccountingController::class, 'getTransactionDetails'])->name('transaction-details');
+            Route::get('/income-statement', [AccountingController::class, 'incomeStatement'])->name('income-statement');
+            Route::get('/income-statement/data', [AccountingController::class, 'incomeStatementData'])->name('income-statement.data');
+            Route::get('/cash-flow', [AccountingController::class, 'cashFlow'])->name('cash-flow');
+            Route::get('/cash-flow/data', [AccountingController::class, 'cashFlowData'])->name('cash-flow.data');
+            Route::get('/transaction-analysis', [AccountingController::class, 'transactionAnalysis'])->name('transaction-analysis');
+            Route::get('/transaction-analysis/data', [AccountingController::class, 'transactionAnalysisData'])->name('transaction-analysis.data');
+            Route::get('/expense-analysis', [AccountingController::class, 'expenseAnalysis'])->name('expense-analysis');
+            Route::get('/expense-analysis/data', [AccountingController::class, 'expenseAnalysisData'])->name('expense-analysis.data');
+            Route::get('/payment-method-analysis', [AccountingController::class, 'paymentMethodAnalysis'])->name('payment-method-analysis');
+            Route::get('/payment-method-analysis/data', [AccountingController::class, 'paymentMethodAnalysisData'])->name('payment-method-analysis.data');
+            Route::get('/daily-summary', [AccountingController::class, 'dailySummary'])->name('daily-summary');
+            Route::get('/daily-summary/data', [AccountingController::class, 'dailySummaryData'])->name('daily-summary.data');
+            Route::get('/monthly-report', [AccountingController::class, 'monthlyReport'])->name('monthly-report');
+            Route::get('/monthly-report/data', [AccountingController::class, 'monthlyReportData'])->name('monthly-report.data');
+            Route::get('/reconciliation', [AccountingController::class, 'reconciliation'])->name('reconciliation');
+            Route::get('/reconciliation/data', [AccountingController::class, 'reconciliationData'])->name('reconciliation.data');
             Route::get('/weekly-report', [AccountingController::class, 'weeklyReport'])->name('weekly-report');
+            Route::get('/weekly-report/data', [AccountingController::class, 'weeklyReportData'])->name('weekly-report.data');
             Route::get('/user-performance-report', [AccountingController::class, 'userPerformanceReport'])->name('user-performance-report');
+            Route::get('/user-performance-report/data', [AccountingController::class, 'userPerformanceReportData'])->name('user-performance-report.data');
         });
 
 

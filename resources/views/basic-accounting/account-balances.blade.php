@@ -10,20 +10,9 @@
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        @php
-                            $previousUrl = url()->previous();
-                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
-                                : __('auth._back');
-                        @endphp
-                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
-                            {{ $formattedRouteName }}
-                        </a>
+                        <a href="{{ url()->previous() }}" class="text-muted text-hover-primary">{{ __('auth._back') }}</a>
                     </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
+                    <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                     <li class="breadcrumb-item text-muted">{{ __('accounting.account_balances') }}</li>
                 </ul>
             </div>
@@ -32,15 +21,9 @@
                 <!-- Location Filter -->
                 <div class="d-flex align-items-center bg-light-primary rounded-3 px-3 py-2">
                     <i class="ki-duotone ki-geolocation fs-2 text-primary me-2">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
+                        <span class="path1"></span><span class="path2"></span>
                     </i>
-                    <select class="form-select form-select-sm form-select-solid border-0 bg-transparent ps-0 w-150px w-md-200px" 
-                            name="location_id" 
-                            data-control="select2" 
-                            id="locationFilter" 
-                            onchange="applyLocationFilter()"
-                            data-placeholder="{{ __('pagination.all_locations') }}">
+                    <select class="form-select form-select-sm form-select-solid border-0 bg-transparent ps-0 w-150px w-md-200px" id="locationFilter">
                         <option value="">{{ __('pagination.all_locations') }}</option>
                         @foreach($locations as $location)
                             <option value="{{ $location->id }}" {{ ($locationId ?? '') == $location->id ? 'selected' : '' }}>
@@ -52,28 +35,12 @@
                 
                 <!-- Export Dropdown -->
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-primary dropdown-toggle d-flex align-items-center gap-2" 
-                            type="button" 
-                            data-bs-toggle="dropdown" 
-                            aria-expanded="false">
+                    <button class="btn btn-sm btn-primary dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="ki-duotone ki-file-down fs-2"></i>
                         <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
                     </button>
                     <ul class="dropdown-menu">
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'accountsTable', filename: 'account_balances', sheetName: 'Account Balances', excludeColumns: [7]})">
-                                <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                {{ __('accounting.export_to_excel') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="javascript:void(0)" 
-                            onclick="exportCurrentPage({tableId: 'accountsTable', filename: 'account_balances', format: 'csv', excludeColumns: [7]})">
-                                <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                {{ __('accounting.export_to_csv') }}
-                            </a>
-                        </li>
+                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="exportCurrentPage({tableId: 'accountsTable', filename: 'account_balances', sheetName: 'Account Balances', excludeColumns: [7]})"><i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>{{ __('accounting.export_to_excel') }}</a></li>
                     </ul>
                 </div>
             </div>
@@ -83,7 +50,6 @@
     <div class="d-flex flex-column flex-column-fluid">
         <div id="kt_app_content" class="app-content flex-column-fluid">
             <div id="kt_app_content_container" class="app-container container-xxl">
-                <div id="status"></div>
                 
                 <!-- Summary Cards -->
                 <div class="row g-5 g-xl-8 mb-8">
@@ -91,19 +57,19 @@
                     <div class="col-sm-6 col-xl-3">
                         <div class="card card-flush h-md-100">
                             <div class="card-header pt-7">
-                                <div class="card-title d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-gray-800">{{ number_format($summary['total_current'], 2) }} {{ currency_symbol() }}</span>
+                                <div class="card-title d-flex flex-column w-100">
+                                    <span class="fs-2 fw-bold text-gray-800 text-break lh-1 mb-1" id="sumTotalBalance">—</span>
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.total_balance') }}</span>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
                                 <div class="d-flex flex-stack">
                                     <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.available_balance') }}</span>
-                                    <span class="fs-6 fw-bold text-gray-700">{{ number_format($summary['total_available'], 2) }} {{ currency_symbol() }}</span>
+                                    <span class="fs-6 fw-bold text-gray-700" id="sumAvailableBalance">—</span>
                                 </div>
                                 <div class="d-flex flex-stack mt-2">
                                     <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.pending_balance') }}</span>
-                                    <span class="fs-6 fw-bold text-gray-700">{{ number_format($summary['total_pending'], 2) }} {{ currency_symbol() }}</span>
+                                    <span class="fs-6 fw-bold text-gray-700" id="sumPendingBalance">—</span>
                                 </div>
                             </div>
                         </div>
@@ -114,7 +80,7 @@
                         <div class="card card-flush h-md-100">
                             <div class="card-header pt-7">
                                 <div class="card-title d-flex flex-column">
-                                    <span class="fs-2hx fw-bold text-gray-800">{{ $summary['accounts_count'] }}</span>
+                                    <span class="fs-2hx fw-bold text-gray-800" id="sumTotalAccounts">—</span>
                                     <span class="text-gray-500 fw-semibold fs-6">{{ __('accounting.total_accounts') }}</span>
                                 </div>
                             </div>
@@ -124,14 +90,14 @@
                                         <span class="bullet bullet-dot bg-success h-10px w-10px me-2"></span>
                                         <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.active_accounts') }}</span>
                                     </div>
-                                    <span class="fs-6 fw-bold text-success">{{ $accounts->where('is_active', true)->count() }}</span>
+                                    <span class="fs-6 fw-bold text-success" id="sumActiveAccounts">—</span>
                                 </div>
                                 <div class="d-flex flex-stack mt-2">
                                     <div class="d-flex align-items-center">
                                         <span class="bullet bullet-dot bg-danger h-10px w-10px me-2"></span>
                                         <span class="text-gray-500 fw-semibold fs-7">{{ __('accounting.inactive_accounts') }}</span>
                                     </div>
-                                    <span class="fs-6 fw-bold text-danger">{{ $accounts->where('is_active', false)->count() }}</span>
+                                    <span class="fs-6 fw-bold text-danger" id="sumInactiveAccounts">—</span>
                                 </div>
                             </div>
                         </div>
@@ -143,29 +109,12 @@
                             <div class="card-header pt-7">
                                 <h3 class="card-title fw-bold text-gray-800">{{ __('accounting.balance_distribution') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                @if($summary['total_current'] > 0)
-                                    <div class="d-flex flex-wrap gap-4">
-                                        @foreach($accounts->sortByDesc('current_balance')->take(5) as $account)
-                                        <div class="d-flex flex-column flex-grow-1 min-w-120px">
-                                            <div class="d-flex align-items-center">
-                                                <span class="fw-bold text-gray-800 fs-6">{{ Str::limit($account->name, 20) }}</span>
-                                            </div>
-                                            <span class="fs-7 fw-semibold text-gray-500">{{ number_format($account->current_balance, 2) }} {{ currency_symbol() }}</span>
-                                            <div class="progress h-6px mt-2">
-                                                <div class="progress-bar bg-primary" role="progressbar" 
-                                                     style="width: {{ ($account->current_balance / $summary['total_current']) * 100 }}%">
-                                                </div>
-                                            </div>
-                                            <span class="fs-7 fw-bold text-gray-600 mt-1">{{ number_format(($account->current_balance / $summary['total_current']) * 100, 1) }}%</span>
-                                        </div>
-                                        @endforeach
-                                    </div>
-                                @else
-                                    <div class="text-center py-5">
-                                        <span class="text-gray-500">{{ __('accounting.no_balances') }}</span>
-                                    </div>
-                                @endif
+                            <div class="card-body pt-0" id="distributionContainer">
+                                <!-- Skeleton -->
+                                <div class="d-flex flex-wrap gap-4">
+                                    <div class="skeleton skeleton-text" style="width:120px;height:40px;"></div>
+                                    <div class="skeleton skeleton-text" style="width:120px;height:40px;"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -178,18 +127,29 @@
                         <div class="card-toolbar">
                             <div class="d-flex align-items-center position-relative">
                                 <i class="ki-duotone ki-magnifier fs-3 position-absolute ms-3">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
+                                    <span class="path1"></span><span class="path2"></span>
                                 </i>
-                                <input type="text" id="searchAccounts" 
-                                       class="form-control form-control-solid w-250px ps-10" 
-                                       placeholder="{{ __('accounting.search_accounts') }}">
+                                <input type="text" id="searchAccounts" class="form-control form-control-solid w-250px ps-10" placeholder="{{ __('accounting.search_accounts') }}">
                             </div>
                         </div>
                     </div>
                     
                     <div class="card-body pt-0">
-                        <div class="table-responsive">
+                        <!-- Skeleton -->
+                        <div id="tableLoading" class="d-none">
+                            @for ($i = 0; $i < 5; $i++)
+                                <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                                    <div class="skeleton skeleton-text" style="width:30px;height:30px;border-radius:50%;"></div>
+                                    <div class="flex-grow-1">
+                                        <div class="skeleton skeleton-text" style="width:200px;"></div>
+                                        <div class="skeleton skeleton-text" style="width:120px;"></div>
+                                    </div>
+                                    <div class="skeleton skeleton-text" style="width:100px;"></div>
+                                </div>
+                            @endfor
+                        </div>
+
+                        <div id="tableContainer" class="d-none table-responsive">
                             <table class="table align-middle table-row-dashed fs-6 gy-5" id="accountsTable">
                                 <thead>
                                     <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
@@ -203,101 +163,21 @@
                                         <th class="min-w-100px text-end">{{ __('accounting.actions') }}</th>
                                     </tr>
                                 </thead>
-                                <tbody class="text-gray-600 fw-semibold">
-                                    @forelse($accounts as $account)
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="symbol symbol-45px me-3">
-                                                    <span class="symbol-label bg-light-{{ $account->is_active ? 'success' : 'danger' }}">
-                                                        <i class="ki-duotone ki-wallet fs-2x text-{{ $account->is_active ? 'success' : 'danger' }}">
-                                                            <span class="path1"></span>
-                                                            <span class="path2"></span>
-                                                        </i>
-                                                    </span>
-                                                </div>
-                                                <div class="d-flex flex-column">
-                                                    <span class="fs-6 fw-bold text-gray-800">{{ $account->name }}</span>
-                                                    <span class="fs-7 text-gray-500">{{ $account->account_number ? '****' . substr($account->account_number, -4) : 'N/A' }}</span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            @php
-                                                $typeColors = [
-                                                    'cash' => 'warning',
-                                                    'bank_account' => 'info',
-                                                    'card' => 'primary',
-                                                    'digital_wallet' => 'success',
-                                                    'mobile_money' => 'danger',
-                                                    'check' => 'secondary',
-                                                    'other' => 'dark'
-                                                ];
-                                            @endphp
-                                            <span class="badge badge-light-{{ $typeColors[$account->type] ?? 'secondary' }} py-2 px-3">
-                                                {{ ucfirst(str_replace('_', ' ', $account->type)) }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-6 fw-bold {{ $account->current_balance >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($account->current_balance, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-700">
-                                                {{ number_format($account->available_balance, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-6 fw-bold text-gray-500">
-                                                {{ number_format($account->pending_balance, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            <span class="badge badge-light-{{ $account->is_active ? 'success' : 'danger' }} py-2 px-3">
-                                                {{ $account->is_active ? __('accounting.active') : __('accounting.inactive') }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            @if($account->last_transaction_at)
-                                                <span class="fs-7 text-gray-500">
-                                                    <i class="ki-duotone ki-calendar-8 fs-1 me-1"></i>
-                                                    {{ $account->last_transaction_at->format('M d, Y') }}
-                                                </span>
-                                            @else
-                                                <span class="fs-7 text-gray-400">{{ __('accounting.no_transactions') }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="text-end">
-                                            <a href="{{ route('accounting.transaction-ledger', ['payment_method_id' => $account->id]) }}" 
-                                               class="btn btn-sm btn-light btn-active-light-primary">
-                                                <i class="ki-duotone ki-eye fs-2 me-1"></i>
-                                                {{ __('accounting.view_transactions') }}
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    @empty
-                                    <tr>
-                                        <td colspan="8" class="text-center py-10">
-                                            <div class="text-muted fs-6">{{ __('accounting.no_accounts_found') }}</div>
-                                        </td>
-                                    </tr>
-                                    @endforelse
-                                </tbody>
+                                <tbody id="tableBody" class="text-gray-600 fw-semibold"></tbody>
                             </table>
+                        </div>
+
+                        <div id="emptyState" class="d-none text-center py-10">
+                            <div class="text-muted fs-6">{{ __('accounting.no_accounts_found') }}</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Recent Transactions -->
-                @if($recentTransactions->count() > 0)
-                <div class="card mt-8">
+                <div id="recentTxCard" class="card mt-8 d-none">
                     <div class="card-header border-0 pt-6">
                         <h3 class="card-title fw-bold text-gray-800">
-                            <i class="ki-duotone ki-clock fs-2 me-2 text-primary">
-                                <span class="path1"></span>
-                                <span class="path2"></span>
-                            </i>
+                            <i class="ki-duotone ki-clock fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                             {{ __('accounting.recent_transactions') }}
                         </h3>
                     </div>
@@ -315,113 +195,224 @@
                                         <th class="min-w-100px text-center">{{ __('accounting.status') }}</th>
                                     </tr>
                                 </thead>
-                                <tbody class="text-gray-600 fw-semibold">
-                                    @foreach($recentTransactions as $transaction)
-                                    <tr>
-                                        <td>
-                                            <span class="fs-7 text-gray-600">
-                                                <i class="ki-duotone ki-calendar-8 fs-1 me-1"></i>
-                                                {{ $transaction->transaction_date->format('M d, Y H:i') }}
-                                            </span>
-                                        </td>
-                                        <td>{{ $transaction->paymentMethod->name ?? 'N/A' }}</td>
-                                        <td>
-                                            @php
-                                                $typeBadgeColors = [
-                                                    'DEPOSIT' => 'success',
-                                                    'WITHDRAWAL' => 'danger',
-                                                    'TRANSFER_IN' => 'info',
-                                                    'TRANSFER_OUT' => 'warning',
-                                                    'FEE' => 'secondary',
-                                                    'REFUND' => 'primary',
-                                                    'ADJUSTMENT' => 'dark'
-                                                ];
-                                            @endphp
-                                            <span class="badge badge-light-{{ $typeBadgeColors[$transaction->transaction_type] ?? 'secondary' }} py-2 px-3">
-                                                {{ $transaction->transaction_type }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-light-secondary py-2 px-3">
-                                                {{ $transaction->transaction_category }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-6 fw-bold {{ in_array($transaction->transaction_type, ['DEPOSIT', 'TRANSFER_IN', 'REFUND']) ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($transaction->amount, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            <span class="fs-7 text-gray-500">
-                                                {{ number_format($transaction->balance_after, 2) }} {{ currency_symbol() }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            @php
-                                                $statusColors = [
-                                                    'COMPLETED' => 'success',
-                                                    'PENDING' => 'warning',
-                                                    'FAILED' => 'danger',
-                                                    'CANCELLED' => 'secondary',
-                                                    'REVERSED' => 'info'
-                                                ];
-                                            @endphp
-                                            <span class="badge badge-light-{{ $statusColors[$transaction->status] ?? 'secondary' }} py-2 px-3">
-                                                {{ $transaction->status }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
+                                <tbody id="recentTxBody" class="text-gray-600 fw-semibold"></tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-                @endif
                 
             </div>
         </div>
     </div>
     
+    @push('styles')
+    <style>
+        .skeleton { display: inline-block; background: linear-gradient(90deg, #f1f1f4 0%, #e9e9ed 50%, #f1f1f4 100%); background-size: 200% 100%; animation: skeleton-shimmer 1.4s ease-in-out infinite; border-radius: 6px; }
+        .skeleton-text { height: 12px; margin: 4px 0; display: block; }
+        @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+    @endpush
+
     @push('scripts')
     <script>
-        // Location filter functionality
-        function applyLocationFilter() {
-            const locationId = document.getElementById('locationFilter').value;
-            const currentUrl = new URL(window.location.href);
-            
-            if (locationId) {
-                currentUrl.searchParams.set('location_id', locationId);
-            } else {
-                currentUrl.searchParams.delete('location_id');
-            }
-            
-            window.location.href = currentUrl.toString();
-        }
-        
-        // Search functionality
-        document.getElementById('searchAccounts').addEventListener('keyup', function() {
-            const searchTerm = this.value.toLowerCase();
-            const rows = document.querySelectorAll('#accountsTable tbody tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
+        window.AccountBalancesList = (function () {
+            'use strict';
+
+            const URL_DATA = '{{ route("accounting.account-balances.data") }}';
+            const CURRENCY = '{{ currency_symbol() }}';
+
+            const state = { search: '', locationId: @json($locationId ?? '') };
+            let searchDebounce;
+            let inFlight = false;
+
+            document.addEventListener('DOMContentLoaded', () => {
+                bindFilters();
+                load();
             });
-        });
-        
-        // Initialize Select2 for location filter
-        document.addEventListener('DOMContentLoaded', function() {
-            if (typeof $ !== 'undefined' && $.fn.select2) {
-                $('#locationFilter').select2({
-                    placeholder: "{{ __('pagination.all_locations') }}",
-                    allowClear: true,
-                    width: '200px'
+
+            function bindFilters() {
+                document.getElementById('searchAccounts')?.addEventListener('input', function () {
+                    clearTimeout(searchDebounce);
+                    searchDebounce = setTimeout(() => { state.search = this.value.trim(); load(); }, 400);
+                });
+
+                document.getElementById('locationFilter')?.addEventListener('change', function () {
+                    state.locationId = this.value;
+                    load();
                 });
             }
-        });
+
+            async function load() {
+                if (inFlight) return;
+                inFlight = true;
+                showState('loading');
+
+                const params = new URLSearchParams();
+                if (state.search) params.set('search', state.search);
+                if (state.locationId) params.set('location_id', state.locationId);
+
+                try {
+                    const res = await fetch(`${URL_DATA}?${params.toString()}`, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const json = await res.json();
+                    
+                    if (!json.success) { showState('empty'); return; }
+
+                    renderSummary(json.summary);
+                    renderDistribution(json.distribution);
+                    renderRecentTransactions(json.recent_transactions);
+                    
+                    if (!json.accounts || json.accounts.length === 0) { showState('empty'); return; }
+                    
+                    renderTable(json.accounts);
+                    showState('table');
+                } catch (err) {
+                    console.error('[account-balances] load failed:', err);
+                    showState('empty');
+                    window.toastr?.error('Failed to load records.');
+                } finally {
+                    inFlight = false;
+                }
+            }
+
+            function renderSummary(s) {
+                const fmt = (n) => CURRENCY + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                
+                document.getElementById('sumTotalBalance').textContent = fmt(s.total_current);
+                document.getElementById('sumAvailableBalance').textContent = fmt(s.total_available);
+                document.getElementById('sumPendingBalance').textContent = fmt(s.total_pending);
+                
+                document.getElementById('sumTotalAccounts').textContent = s.accounts_count;
+                document.getElementById('sumActiveAccounts').textContent = s.active_count;
+                document.getElementById('sumInactiveAccounts').textContent = s.inactive_count;
+            }
+
+            function renderDistribution(data) {
+                const container = document.getElementById('distributionContainer');
+                if (!data || data.length === 0) {
+                    container.innerHTML = `<div class="text-center py-5"><span class="text-gray-500">{{ __('accounting.no_balances') }}</span></div>`;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="d-flex flex-wrap gap-4">
+                        ${data.map(item => `
+                            <div class="d-flex flex-column flex-grow-1 min-w-120px">
+                                <div class="d-flex align-items-center">
+                                    <span class="fw-bold text-gray-800 fs-6">${esc(item.name)}</span>
+                                </div>
+                                <span class="fs-7 fw-semibold text-gray-500">${fmt(item.balance)}</span>
+                                <div class="progress h-6px mt-2">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: ${item.percent}%"></div>
+                                </div>
+                                <span class="fs-7 fw-bold text-gray-600 mt-1">${item.percent}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            function renderTable(rows) {
+                const tbody = document.getElementById('tableBody');
+                
+                const getTypeIcon = (type) => {
+                    switch (type) {
+                        case 'bank_account': return { class: 'ki-bank', paths: '<span class="path1"></span><span class="path2"></span>' };
+                        case 'card': return { class: 'ki-credit-cart', paths: '<span class="path1"></span><span class="path2"></span>' };
+                        case 'digital_wallet': return { class: 'ki-wallet', paths: '<span class="path1"></span><span class="path2"></span>' };
+                        case 'cash': return { class: 'ki-bill', paths: '<span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span><span class="path5"></span><span class="path6"></span>' };
+                        case 'mobile_money': return { class: 'ki-phone', paths: '<span class="path1"></span><span class="path2"></span><span class="path3"></span>' };
+                        case 'check': return { class: 'ki-note-2', paths: '<span class="path1"></span><span class="path2"></span>' };
+                        default: return { class: 'ki-wallet', paths: '<span class="path1"></span><span class="path2"></span>' };
+                    }
+                };
+
+                tbody.innerHTML = rows.map(row => {
+                    const activeClass = row.is_active ? 'success' : 'danger';
+                    const activeText = row.is_active ? '{{ __("accounting.active") }}' : '{{ __("accounting.inactive") }}';
+                    const balanceClass = row.current_balance >= 0 ? 'text-success' : 'text-danger';
+                    const lastTxn = row.last_transaction_at ? `<i class="ki-duotone ki-calendar-8 fs-1 me-1"><span class="path1"></span><span class="path2"></span></i>${row.last_transaction_at}` : `<span class="text-gray-400">{{ __("accounting.no_transactions") }}</span>`;
+                    const icon = getTypeIcon(row.type);
+
+                    return `
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="symbol symbol-45px me-3">
+                                        <span class="symbol-label bg-light-${activeClass}">
+                                            <i class="ki-duotone ${icon.class} fs-2x text-${activeClass}">${icon.paths}</i>
+                                        </span>
+                                    </div>
+                                    <div class="d-flex flex-column">
+                                        <span class="fs-6 fw-bold text-gray-800">${esc(row.name)}</span>
+                                        <span class="fs-7 text-gray-500">${esc(row.account_number)}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="badge badge-light-${row.type_color || 'secondary'} py-2 px-3">${esc(row.type_label)}</span></td>
+                            <td class="text-end"><span class="fs-6 fw-bold ${balanceClass}">${fmt(row.current_balance)}</span></td>
+                            <td class="text-end"><span class="fs-6 fw-bold text-gray-700">${fmt(row.available_balance)}</span></td>
+                            <td class="text-end"><span class="fs-6 fw-bold text-gray-500">${fmt(row.pending_balance)}</span></td>
+                            <td class="text-center"><span class="badge badge-light-${activeClass} py-2 px-3">${activeText}</span></td>
+                            <td class="text-end"><span class="fs-7 text-gray-500">${lastTxn}</span></td>
+                            <td class="text-end">
+                                <a href="${row.transactions_url}" class="btn btn-sm btn-light btn-active-light-primary">
+                                    <i class="ki-duotone ki-eye fs-2 me-1"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                    {{ __('accounting.view_transactions') }}
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function renderRecentTransactions(txs) {
+                const card = document.getElementById('recentTxCard');
+                const tbody = document.getElementById('recentTxBody');
+                
+                if (!txs || txs.length === 0) {
+                    card.classList.add('d-none');
+                    return;
+                }
+                
+                card.classList.remove('d-none');
+                tbody.innerHTML = txs.map(tx => {
+                    const isCredit = ['DEPOSIT', 'TRANSFER_IN', 'REFUND'].includes(tx.type);
+                    const amountClass = isCredit ? 'text-success' : 'text-danger';
+
+                    return `
+                        <tr>
+                            <td><span class="fs-7 text-gray-600"><i class="ki-duotone ki-calendar-8 fs-1 me-1"><span class="path1"></span><span class="path2"></span></i>${esc(tx.date)}</span></td>
+                            <td>${esc(tx.account_name)}</td>
+                            <td><span class="badge badge-light-${tx.type_color} py-2 px-3">${esc(tx.type_label)}</span></td>
+                            <td><span class="badge badge-light-secondary py-2 px-3">${esc(tx.category)}</span></td>
+                            <td class="text-end"><span class="fs-6 fw-bold ${amountClass}">${fmt(tx.amount)}</span></td>
+                            <td class="text-end"><span class="fs-7 text-gray-500">${fmt(tx.balance_after)}</span></td>
+                            <td class="text-center"><span class="badge badge-light-${tx.status_color} py-2 px-3">${esc(tx.status)}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function showState(which) {
+                document.getElementById('tableLoading')?.classList.toggle('d-none', which !== 'loading');
+                document.getElementById('tableContainer')?.classList.toggle('d-none', which !== 'table');
+                document.getElementById('emptyState')?.classList.toggle('d-none', which !== 'empty');
+            }
+
+            function esc(t) {
+                if (t === null || t === undefined) return '';
+                const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML;
+            }
+            function fmt(n) {
+                return CURRENCY + Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            return { load };
+        })();
     </script>
     @endpush
-    
     @endsection
 </x-app-layout>
