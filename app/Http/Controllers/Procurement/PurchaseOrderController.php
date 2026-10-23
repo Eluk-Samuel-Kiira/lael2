@@ -92,11 +92,13 @@ class PurchaseOrderController extends Controller
 
         $search = trim((string) $request->get('search', ''));
         $status = $request->get('status');
+        $locationId = $request->get('location_id');
+        $supplierId = $request->get('supplier_id'); // NEW
         $perPage = (int) $request->get('per_page', 15);
         if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
 
         $query = PurchaseOrder::with(['items', 'supplier:id,name', 'location:id,name', 'creator:id,name'])
-            ->where('tenant_id', $tenantId); // Simplified tenant check; adjust if super_admin logic needed
+            ->where('tenant_id', $tenantId);
 
         if ($search !== '') {
             $query->where(function($q) use ($search) {
@@ -107,9 +109,9 @@ class PurchaseOrderController extends Controller
             });
         }
         
-        if ($status) {
-            $query->where('status', $status);
-        }
+        if ($status)     $query->where('status', $status);
+        if ($locationId) $query->where('location_id', $locationId);
+        if ($supplierId) $query->where('supplier_id', $supplierId); // NEW
 
         // Summary stats
         $summary = [
@@ -126,7 +128,7 @@ class PurchaseOrderController extends Controller
                 'supplier_name' => $order->supplier?->name ?? '—',
                 'location_name' => $order->location?->name ?? '—',
                 'status' => $order->status,
-                'status_badge' => $order->status_badge ?? 'secondary', // Assuming you have an accessor
+                'status_badge' => $order->status_badge ?? 'secondary',
                 'status_label' => ucfirst(str_replace('_', ' ', $order->status)),
                 'total' => (float) $order->total,
                 'total_formatted' => currency_symbol() . number_format((float) $order->total, 2),

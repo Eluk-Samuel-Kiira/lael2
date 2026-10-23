@@ -8,7 +8,8 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -16,144 +17,80 @@
                                 {{ __('pagination.inventory_turnover') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('pagination.dashboard') }}
-                                    </a>
-                                </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item text-muted"><a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('pagination.dashboard') }}</a></li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.inventory_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.inventory_turnover') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($turnoverData->count() > 0)
-                            <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'turnoverTable', filename: 'inventory_turnover_{{ date('Y_m_d') }}', sheetName: 'Inventory Turnover'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'turnoverTable', filename: 'inventory_turnover_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-primary" id="tovExportBtn">
+                                <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filters --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                                                <form method="GET" action="{{ route('reports.inventory.turnover') }}" id="filterForm">
-                                    {{-- Row 1: Date Range --}}
-                                    <div class="row g-3 mb-3">
-                                        <div class="col-md-6">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date"
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('pagination.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date"
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('pagination.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {{-- Product Variant --}}
-                                        <div class="col-md-6">
-                                            <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
-                                            <div class="input-group w-100">
-                                                <select class="form-select" name="variant_id" data-control="select2"
-                                                        data-placeholder="{{ __('pagination.all_variants') }}">
-                                                    <option value="">{{ __('pagination.all_variants') }}</option>
-                                                    @foreach($variants as $variant)
-                                                        <option value="{{ $variant->id }}"
-                                                                {{ $variantId == $variant->id ? 'selected' : '' }}>
-                                                            {{ $variant->name }} ({{ $variant->sku }})
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                <form id="tovFilterForm" class="row g-3" onsubmit="return false;">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('accounting.date_range') }}</label>
+                                        <div class="input-group">
+                                            <input type="date" class="form-control" id="tovStartDate" value="{{ $startDate }}">
+                                            <span class="input-group-text">→</span>
+                                            <input type="date" class="form-control" id="tovEndDate" value="{{ $endDate }}">
                                         </div>
                                     </div>
-
-                                    {{-- Row 2: Location + Department (dependent) --}}
-                                    <div class="row g-3 mb-3">
-                                        <div class="col-12">
-                                            <x-liveblade-dependent-dropdown
-                                                id="filter_location_department"
-                                                parentName="location_id"
-                                                childName="department_id"
-                                                parentLabel="auth.location"
-                                                childLabel="accounting.department"
-                                                :parentOptions="$locations"
-                                                :childOptions="$departments"
-                                                route="{{ route('get.departments') }}"
-                                                selectedParent="{{ $locationId ?? null }}"
-                                                selectedChild="{{ $departmentId ?? null }}"
-                                                skipAjax="false"
-                                            />
-                                        </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
+                                        <select class="form-select" id="tovLocation" data-control="select2" data-placeholder="{{ __('pagination.all_locations') }}">
+                                            <option value=""></option>
+                                            @foreach($locations as $loc)
+                                                <option value="{{ $loc->id }}" @selected((int)$locationId === $loc->id)>{{ $loc->name }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
-
-                                    {{-- Row 3: Actions --}}
-                                    <div class="row g-3">
-                                        <div class="col-12 d-flex justify-content-end gap-2">
-                                            <button type="submit" class="btn btn-primary" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                            </button>
-                                            <a href="{{ route('reports.inventory.turnover') }}"
-                                               class="btn btn-light btn-active-light-primary">
-                                                <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                            </a>
-                                        </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('accounting.department') }}</label>
+                                        <select class="form-select" id="tovDepartment" data-control="select2" data-placeholder="{{ __('pagination.all_departments') }}">
+                                            <option value=""></option>
+                                            @foreach($departments as $dept)
+                                                <option value="{{ $dept->id }}" @selected((int)$departmentId === $dept->id)>{{ $dept->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
+                                        <select class="form-select" id="tovVariant" data-control="select2" data-placeholder="{{ __('pagination.all_variants') }}">
+                                            <option value=""></option>
+                                            @foreach($variants as $v)
+                                                <option value="{{ $v->id }}" @selected((int)$variantId === $v->id)>
+                                                    {{ $v->name }}{{ $v->sku ? ' (' . $v->sku . ')' : '' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12 d-flex justify-content-end gap-2">
+                                        <button type="button" class="btn btn-primary" id="tovApplyBtn">
+                                            <i class="ki-duotone ki-filter fs-2 me-1"><span class="path1"></span><span class="path2"></span></i>
+                                            {{ __('accounting.apply_filters') }}
+                                        </button>
+                                        <button type="button" class="btn btn-light" id="tovClearBtn">
+                                            <i class="ki-duotone ki-cross fs-2 me-1"><span class="path1"></span><span class="path2"></span></i>
+                                            {{ __('accounting.clear') }}
+                                        </button>
                                     </div>
                                 </form>
                             </div>
@@ -161,346 +98,176 @@
                     </div>
                 </div>
 
-                {{-- Summary Statistics --}}
-                @if($turnoverData->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.turnover_summary') }}</h3>
-                                </div>
+                {{-- ═════════ SKELETON ═════════ --}}
+                <div id="tovSkeleton">
+                    <div class="row g-6 mb-6">
+                        @for($i = 0; $i < 7; $i++)
+                        <div class="col-md-6 col-lg-3"><div class="card card-flush h-100"><div class="card-body d-flex flex-column justify-content-center text-center">
+                            <div class="d-flex justify-content-center mb-3"><div class="tov-sk tov-sk-circle"></div></div>
+                            <div class="d-flex justify-content-center mb-2"><div class="tov-sk tov-sk-text" style="width:55%;height:28px;"></div></div>
+                            <div class="d-flex justify-content-center"><div class="tov-sk tov-sk-text" style="width:70%;"></div></div>
+                        </div></div></div>
+                        @endfor
+                    </div>
+                    <div class="row g-6 mb-6">
+                        <div class="col-lg-8"><div class="card"><div class="card-body"><div class="tov-sk tov-sk-chart"></div></div></div></div>
+                        <div class="col-lg-4"><div class="card"><div class="card-body"><div class="tov-sk tov-sk-chart"></div></div></div></div>
+                    </div>
+                    <div class="row"><div class="col-12"><div class="card"><div class="card-body">
+                        @for($i = 0; $i < 10; $i++)
+                        <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                            <div class="tov-sk tov-sk-text" style="width:60px;"></div>
+                            <div class="flex-grow-1">
+                                <div class="tov-sk tov-sk-text mb-2" style="width:35%;"></div>
+                                <div class="tov-sk tov-sk-text" style="width:55%;height:8px;"></div>
                             </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    @foreach([
-                                        ['key' => 'avg_turnover_rate', 'color' => 'primary', 'icon' => 'ki-repeat', 'label' => 'avg_turnover_rate', 'value' => number_format($summary['avg_turnover_rate'] ?? 0, 2)],
-                                        ['key' => 'avg_days_held', 'color' => 'success', 'icon' => 'ki-clock', 'label' => 'avg_days_held', 'value' => number_format($summary['avg_days_held'] ?? 0, 1)],
-                                        ['key' => 'total_movement', 'color' => 'info', 'icon' => 'ki-switch', 'label' => 'total_movement', 'value' => number_format($summary['total_movement'] ?? 0)],
-                                        ['key' => 'total_transactions', 'color' => 'warning', 'icon' => 'ki-exchange', 'label' => 'total_transactions', 'value' => number_format($summary['total_transactions'] ?? 0)],
-                                        ['key' => 'fast_moving', 'color' => 'danger', 'icon' => 'ki-rocket', 'label' => 'fast_moving_items', 'value' => $summary['fast_moving'] ?? 0],
-                                        ['key' => 'slow_moving', 'color' => 'secondary', 'icon' => 'ki-speedometer', 'label' => 'slow_moving_items', 'value' => $summary['slow_moving'] ?? 0],
-                                        ['key' => 'non_moving', 'color' => 'dark', 'icon' => 'ki-pause', 'label' => 'non_moving_items', 'value' => $summary['non_moving'] ?? 0],
-                                    ] as $stat)
-                                    <div class="col-md-6 col-lg-3">
-                                        <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-3">
-                                                    <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                        @for($i = 1; $i <= 2; $i++)
-                                                        <span class="path{{ $i }}"></span>
-                                                        @endfor
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-2 fw-bold text-gray-800">
-                                                        {{ $stat['value'] }}
-                                                    </span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold fs-7">
-                                                    {{ __('pagination.' . $stat['label']) }}
-                                                </div>
-                                            </div>
-                                        </div>
+                            <div class="tov-sk tov-sk-badge"></div>
+                            <div class="tov-sk tov-sk-badge"></div>
+                            <div class="tov-sk tov-sk-text" style="width:80px;"></div>
+                        </div>
+                        @endfor
+                    </div></div></div></div>
+                </div>
+
+                {{-- ═════════ CONTENT ═════════ --}}
+                <div id="tovContent" class="d-none">
+
+                   {{-- Summary cards --}}
+                    <div class="row g-6 mb-6">
+                        @php
+                            $statDefs = [
+                                ['id' => 'sumAvgRate',   'icon' => 'bi-arrow-repeat',      'color' => 'primary',   'label' => 'avg_turnover_rate'],
+                                ['id' => 'sumAvgDays',   'icon' => 'bi-clock-history',     'color' => 'success',   'label' => 'avg_days_held'],
+                                ['id' => 'sumTotalMove', 'icon' => 'bi-arrow-left-right',  'color' => 'info',      'label' => 'total_movement'],
+                                ['id' => 'sumTotalTx',   'icon' => 'bi-arrow-repeat',      'color' => 'warning',   'label' => 'total_transactions'],
+                                ['id' => 'sumFast',      'icon' => 'bi-rocket-takeoff',    'color' => 'danger',    'label' => 'fast_moving_items'],
+                                ['id' => 'sumSlow',      'icon' => 'bi-speedometer2',      'color' => 'secondary', 'label' => 'slow_moving_items'],
+                                ['id' => 'sumNon',       'icon' => 'bi-pause-circle',      'color' => 'dark',      'label' => 'non_moving_items'],
+                            ];
+                        @endphp
+                        @foreach($statDefs as $stat)
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-3">
+                                        <i class="bi {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}"></i>
                                     </div>
-                                    @endforeach
+                                    <div class="mb-1">
+                                        <span class="fs-2 fw-bold text-gray-800" id="{{ $stat['id'] }}">—</span>
+                                    </div>
+                                    <div class="text-gray-600 fw-semibold fs-7">
+                                        {{ __('pagination.' . $stat['label']) }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        @endforeach
                     </div>
-                </div>
-                @endif
-
-                {{-- Charts Section --}}
-                @if($turnoverData->count() > 0)
-                <div class="row mb-6">
-                    {{-- Turnover Rate Distribution --}}
-                    <div class="col-lg-8">
-                        <div class="card">
+                    
+                    {{-- Charts --}}
+                    <div class="row g-6 mb-6">
+                        <div class="col-lg-8"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('pagination.turnover_rate_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="turnoverChart" style="height: 350px;"></div>
+                                <div id="tovRateChart" style="height: 350px;"></div>
+                                <div id="tovRateEmpty" class="text-center text-muted py-10 d-none">{{ __('pagination.no_data_available') }}</div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    {{-- Movement Category Distribution --}}
-                    <div class="col-lg-4">
-                        <div class="card">
+                        </div></div>
+                        <div class="col-lg-4"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('pagination.movement_category_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="movementCategoryChart" style="height: 350px;"></div>
+                                <div id="tovCategoryChart" style="height: 350px;"></div>
+                                <div id="tovCategoryEmpty" class="text-center text-muted py-10 d-none">{{ __('pagination.no_data_available') }}</div>
                             </div>
-                        </div>
+                        </div></div>
                     </div>
-                </div>
-                @endif
 
-                {{-- Turnover Data Table --}}
-                @if($turnoverData->count() > 0)
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('pagination.inventory_turnover_analysis') }}</h3>
-                                    </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $turnoverData->count() }} {{ __('pagination.of') }} {{ $turnoverData->total() }} {{ __('pagination.items') }}
-                                    </span>
+                    {{-- Table --}}
+                    <div class="row"><div class="col-12"><div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="d-flex align-items-center">
+                                    <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                                    <h3 class="fw-bold m-0">{{ __('pagination.inventory_turnover_analysis') }}</h3>
                                 </div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="turnoverTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('pagination.sku') }}</th>
-                                                <th>{{ __('pagination.product') }}</th>
-                                                <th>{{ __('pagination.total_movement') }}</th>
-                                                <th>{{ __('pagination.transaction_count') }}</th>
-                                                <th>{{ __('pagination.avg_stock_level') }}</th>
-                                                <th>{{ __('pagination.turnover_rate') }}</th>
-                                                <th>{{ __('pagination.days_inventory_held') }}</th>
-                                                <th>{{ __('pagination.movement_category') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($turnoverData as $item)
-                                            @php
-                                                // Turnover rate color logic
-                                                $turnoverColor = 'success';
-                                                if ($item->turnover_rate < 1) {
-                                                    $turnoverColor = 'danger';
-                                                } elseif ($item->turnover_rate < 5) {
-                                                    $turnoverColor = 'warning';
-                                                }
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
-                                                    <small class="text-muted">{{ $item->variant->barcode ?? '-' }}</small>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        @if($item->variant->image_url)
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ productVariantImage($item->variant->image_url ?? null) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
-                                                        </div>
-                                                        @endif
-                                                        <div>
-                                                            <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                            <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-primary">
-                                                        {{ number_format($item->total_movement) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ number_format($item->transaction_count) }}</span>
-                                                </td>
-                                                <td>
-                                                    {{ number_format($item->avg_stock_level, 1) }}
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $turnoverColor }}">
-                                                        {{ number_format($item->turnover_rate, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold {{ $item->days_inventory_held > 90 ? 'text-danger' : 'text-success' }}">
-                                                        {{ number_format($item->days_inventory_held, 1) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $item->movement_color }}">
-                                                        {{ $item->movement_label }}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {{-- Pagination --}}
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator' => $turnoverData,
-                                        'pageName' => 'page',
-                                        'perPageName' => 'per_page',
-                                        'showPerPage' => true
-                                    ])
-                                </div>
+                                <span class="badge badge-light-primary fs-7" id="tovBadge"></span>
                             </div>
                         </div>
-                    </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="tovTable">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('pagination.sku') }}</th>
+                                    <th>{{ __('pagination.product') }}</th>
+                                    <th class="text-center">{{ __('pagination.total_movement') }}</th>
+                                    <th class="text-center">{{ __('pagination.transaction_count') }}</th>
+                                    <th class="text-center">{{ __('pagination.avg_stock_level') }}</th>
+                                    <th class="text-center">{{ __('pagination.turnover_rate') }}</th>
+                                    <th class="text-center">{{ __('pagination.days_inventory_held') }}</th>
+                                    <th class="text-center">{{ __('pagination.movement_category') }}</th>
+                                </tr></thead>
+                                <tbody id="tovTableBody"></tbody>
+                            </table></div>
+                            <div id="tovEmpty" class="text-center py-10 d-none">
+                                <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"><span class="path1"></span><span class="path2"></span></i>
+                                <h4 class="text-gray-600 fw-semibold mb-2">{{ __('pagination.no_data_available') }}</h4>
+                                <p class="text-muted fs-6">{{ __('pagination.no_turnover_data_found') }}</p>
+                            </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center d-none" id="tovPaginationWrap">
+                                <span class="text-muted fs-7" id="tovPaginationInfo"></span>
+                                <nav><ul class="pagination m-0" id="tovPagination"></ul></nav>
+                            </div>
+                        </div>
+                    </div></div></div>
+
                 </div>
-                @else
-                    {{-- No Data Message --}}
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('pagination.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('pagination.no_turnover_data_found') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date', 'variant_id']))
-                                        <a href="{{ route('reports.inventory.turnover') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('pagination.clear_filters') }}
-                                        </a>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                @endif
             </div>
         </div>
     </div>
 </div>
+@endsection
 
-@push('scripts')
-@if($turnoverData->count() > 0)
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Turnover Rate Chart - using top 20 items from full dataset
-        @if(isset($sortedTurnover) && $sortedTurnover->count() > 0)
-        const topTurnoverItems = @json($sortedTurnover->take(20));
-        const turnoverRates = topTurnoverItems.map(item => item.turnover_rate);
-        const productNames = topTurnoverItems.map(item => {
-            const name = item.variant.name;
-            return name.length > 20 ? name.substring(0, 17) + '...' : name;
-        });
-        
-        const turnoverChart = new ApexCharts(document.querySelector("#turnoverChart"), {
-            series: [{
-                name: 'Turnover Rate',
-                data: turnoverRates
-            }],
-            chart: {
-                type: 'bar',
-                height: 350,
-                toolbar: {
-                    show: true
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: '60%'
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            xaxis: {
-                categories: productNames,
-                labels: {
-                    rotate: -45,
-                    trim: true,
-                    style: {
-                        fontSize: '11px'
-                    }
-                }
-            },
-            yaxis: {
-                title: {
-                    text: 'Turnover Rate'
-                }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val.toFixed(2)
-                    }
-                }
-            }
-        });
-        turnoverChart.render();
-        @endif
-        
-        // Movement Category Chart
-        const fastMoving = {{ $summary['fast_moving'] ?? 0 }};
-        const slowMoving = {{ $summary['slow_moving'] ?? 0 }};
-        const nonMoving = {{ $summary['non_moving'] ?? 0 }};
-        
-        const movementCategoryChart = new ApexCharts(document.querySelector("#movementCategoryChart"), {
-            series: [fastMoving, slowMoving, nonMoving],
-            chart: {
-                type: 'donut',
-                height: 350
-            },
-            labels: [
-                '{{ __("pagination.fast_moving") }}',
-                '{{ __("pagination.slow_moving") }}',
-                '{{ __("pagination.non_moving") }}'
-            ],
-            colors: ['#F1416C', '#FFC700', '#7E8299'],
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val + ' items'
-                    }
-                }
-            }
-        });
-        movementCategoryChart.render();
-    });
-</script>
-@endif
-
-<script>
-    // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("pagination.start_date_cannot_be_after_end_date") }}');
-            return false;
-        }
-    });
-</script>
+@push('styles')
+<style>
+    .tov-sk {
+        background: linear-gradient(90deg, #e4e6eb 0%, #f0f2f5 50%, #e4e6eb 100%);
+        background-size: 200% 100%;
+        animation: tov-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .tov-sk-text   { height: 12px; border-radius: 4px; }
+    .tov-sk-circle { width: 44px; height: 44px; border-radius: 50%; }
+    .tov-sk-badge  { width: 56px; height: 24px; border-radius: 12px; }
+    .tov-sk-chart  { width: 100%; height: 350px; border-radius: 8px; }
+    @keyframes tov-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #tovSkeleton .card { border: none; box-shadow: 0 0 0 1px #f0f2f5; }
+</style>
 @endpush
 
-@endsection
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+    window.TOV_ROUTES = {
+        data: '{{ route("reports.inventory.turnover-data") }}',
+    };
+    window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    window.TOV_BOOTSTRAP = {
+        startDate:    @json($startDate),
+        endDate:      @json($endDate),
+        locationId:   @json($locationId),
+        departmentId: @json($departmentId),
+        variantId:    @json($variantId),
+        perPage:      @json($perPage),
+    };
+</script>
+@include('reports.inventory.turnover-scripts')
+@endpush

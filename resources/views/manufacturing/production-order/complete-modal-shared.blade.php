@@ -8,8 +8,7 @@
      data-order-id=""
      data-is-single-shop="{{ $isSingleShop ? '1' : '0' }}">
 
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-         style="max-width: 1100px;">
+    <div class="modal-dialog modal-fullscreen">
 
         <div class="modal-content">
 
@@ -150,6 +149,8 @@
                                             <th class="min-w-100px text-center">{{ __('passwords.produced_so_far') }}</th>
                                             <th class="min-w-150px text-center text-primary">{{ __('passwords.actual_quantity') }}</th>
                                             <th class="min-w-120px text-center">{{ __('passwords.defective_quantity') }}</th>
+                                            {{-- ★ NEW COLUMN --}}
+                                            <th class="min-w-140px text-center">{{ __('passwords.production_cost') }}</th>
                                             <th class="min-w-100px text-center">{{ __('passwords.unit') }}</th>
                                             <th class="min-w-100px text-center">{{ __('passwords.strategy') }}</th>
                                             <th class="min-w-50px text-end"></th>
@@ -195,6 +196,65 @@
                         </div>
                     </div>
 
+                    {{-- ─── PAYMENT (moved from start modal) ───────────── --}}
+                    <div class="card card-flush bg-light-success mb-6 po-complete-payment-card">
+                        <div class="card-header">
+                            <h3 class="card-title">
+                                <i class="bi bi-credit-card me-2 text-success"></i>
+                                {{ __('payments.payment_information') }}
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-light-success d-flex align-items-center mb-4">
+                                <i class="bi bi-info-circle fs-2 text-success me-3"></i>
+                                <div class="fs-7 text-gray-700">
+                                    {{ __('passwords.complete_production_payment_info') }}
+                                    {{-- "The actual production cost is withdrawn from the selected
+                                        account once the outputs are recorded. This is the final
+                                        cost — not the initial estimate." --}}
+                                </div>
+                            </div>
+
+                            <div class="row g-4">
+                                <div class="col-md-7">
+                                    <label class="form-label required fw-semibold">
+                                        {{ __('payments.payment_method') }}
+                                    </label>
+                                    <select name="payment_method_id" class="form-select po-complete-payment-method">
+                                        <option value="">{{ __('payments.select_payment_method') }}</option>
+                                        @foreach($paymentMethods ?? [] as $method)
+                                            <option value="{{ $method->id }}">
+                                                {{ $method->name }}
+                                                @if($method->account_number)
+                                                    — {{ $method->account_number }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label required fw-semibold">
+                                        {{ __('passwords.withdrawal_amount') }}
+                                    </label>
+                                    <div class="input-group input-group-solid">
+                                        <span class="input-group-text">{{ currency_symbol() }}</span>
+                                        <input type="number"
+                                            name="withdrawal_amount"
+                                            class="form-control po-complete-withdrawal"
+                                            min="0"
+                                            step="0.01"
+                                            value="0">
+                                    </div>
+                                    <div class="form-text text-muted">
+                                        {{ __('passwords.actual_production_cost') }}:
+                                        <strong class="po-complete-actual-cost">0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
                     <div class="mb-2">
                         <label class="form-label">{{ __('passwords.production_notes') }}</label>
                         <textarea name="notes"
@@ -227,7 +287,7 @@
 
 {{-- Row template cloned by JS when "Add Output" is clicked --}}
 <template id="poCompleteOutputRowTemplate">
-    <tr class="output-row" data-key="__KEY__">
+    <tr class="output-row" data-key="__KEY__" data-production-cost="1">
         <td class="ps-4">
             <input type="text"
                    class="form-control output-variant-search"
@@ -260,6 +320,21 @@
                    value=""
                    placeholder="0.00">
         </td>
+
+        {{-- ★ NEW: Production Cost cell for new rows --}}
+        <td>
+            <div class="input-group input-group-sm">
+                <span class="input-group-text">{{ currency_symbol() }}</span>
+                <input type="number"
+                       name="outputs[__KEY__][production_cost]"
+                       class="form-control production-cost-input text-center"
+                       min="0" step="0.01"
+                       value=""
+                       placeholder="0.00">
+            </div>
+            <small class="text-muted fs-7">{{ __('passwords.per_unit') }}</small>
+        </td>
+
         <td class="text-center">
             <select name="outputs[__KEY__][unit]" class="form-select form-select-sm output-unit-select">
                 @foreach($uoms ?? [] as $uom)
@@ -290,6 +365,8 @@
         <option value="{{ $variant->name }}"
                 data-id="{{ $variant->id }}"
                 data-uom-id="{{ $variant->weight_unit }}"
+                data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
+                data-weight="{{ $variant->weight ?? 1 }}"
                 data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
         </option>
     @endforeach

@@ -7,305 +7,200 @@
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
-            <div class="container-fluid">
-                {{-- Toolbar Section --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-                        <div class="page-title d-flex flex-column">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
-                                {{ __('pagination.production_order_report') }}
-                            </h1>
-                            <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('pagination.dashboard') }}
-                                    </a>
-                                </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
-                                <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
-                                <li class="breadcrumb-item text-muted">{{ __('pagination.production_orders') }}</li>
-                            </ul>
-                        </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto gap-2">
-                            @if($paginatedOrders->count() > 0)
-                            <button class="btn btn-sm btn-success" onclick="exportReport()">
-                                <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                <span class="d-none d-sm-inline">{{ __('pagination.export') }}</span>
-                            </button>
-                            @endif
-                            <a href="{{ route('production-orders.index') }}" class="btn btn-sm btn-primary">
-                                <i class="ki-duotone ki-plus fs-2 me-1 me-sm-2"></i>
-                                <span class="d-none d-sm-inline">{{ __('pagination.new_order') }}</span>
-                            </a>
-                        </div>
+
+            {{-- ─── TOOLBAR ──────────────────────────────────────────────── --}}
+            <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
+                <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
+                    <div class="page-title d-flex flex-column">
+                        <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                            {{ __('pagination.production_order_report') }}
+                        </h1>
+                        <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                            <li class="breadcrumb-item text-muted">
+                                <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
+                                    {{ __('pagination.dashboard') }}
+                                </a>
+                            </li>
+                            <li class="breadcrumb-item">
+                                <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                            </li>
+                            <li class="breadcrumb-item text-muted">{{ __('pagination.manufacturing') }}</li>
+                            <li class="breadcrumb-item">
+                                <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                            </li>
+                            <li class="breadcrumb-item text-muted">{{ __('pagination.production_orders') }}</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-success" id="exportReportBtn">
+                            <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                            <span class="d-none d-sm-inline">{{ __('pagination.export') }}</span>
+                        </button>
+                        <a href="{{ route('production-orders.index') }}" class="btn btn-sm btn-primary">
+                            <i class="ki-duotone ki-plus fs-2 me-1 me-sm-2"></i>
+                            <span class="d-none d-sm-inline">{{ __('pagination.new_order') }}</span>
+                        </a>
                     </div>
                 </div>
+            </div>
 
-                {{-- Filter Section --}}
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
-                                </div>
-                                <div class="card-toolbar">
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $paginatedOrders->count() }} {{ __('pagination.of') }} {{ $paginatedOrders->total() }}
-                                    </span>
-                                </div>
+            {{-- ─── FILTERS CARD ─────────────────────────────────────────── --}}
+            <div class="row mb-6">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
+                                    <span class="path1"></span><span class="path2"></span>
+                                </i>
+                                <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.production.index') }}" id="filterForm">
-                                    {{-- Row 1: Date Range --}}
-                                    <div class="row g-3 mb-3">
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.date_from') }}</label>
-                                            <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.date_to') }}</label>
-                                            <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.status') }}</label>
-                                            <select class="form-select" name="status" data-control="select2">
-                                                @foreach($statuses as $s)
-                                                    <option value="{{ $s['value'] }}" {{ $status == $s['value'] ? 'selected' : '' }}>
-                                                        {{ $s['label'] }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
-                                            <select class="form-select" name="location_id" data-control="select2">
-                                                <option value="">{{ __('pagination.all_locations') }}</option>
-                                                @foreach($locations as $location)
-                                                    <option value="{{ $location->id }}" {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                        {{ $location->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
+                        </div>
+                        <div class="card-body pt-0">
+                            <div id="filterForm">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.date_from') }}</label>
+                                        <input type="date" class="form-control" id="filterStartDate" value="{{ $startDate }}">
                                     </div>
-                                    
-                                    {{-- Row 2: Variant, Category, Payment --}}
-                                    <div class="row g-3 mb-3">
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
-                                            <select class="form-select" name="variant_id" data-control="select2">
-                                                <option value="">{{ __('pagination.all_variants') }}</option>
-                                                @foreach($variants as $variant)
-                                                    <option value="{{ $variant->id }}" {{ $variantId == $variant->id ? 'selected' : '' }}>
-                                                        {{ $variant->name }} ({{ $variant->sku }})
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.category') }}</label>
-                                            <select class="form-select" name="category_id" data-control="select2">
-                                                <option value="">{{ __('pagination.all_categories') }}</option>
-                                                @foreach($categories as $category)
-                                                    <option value="{{ $category->id }}" {{ $categoryId == $category->id ? 'selected' : '' }}>
-                                                        {{ $category->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.payment_status') }}</label>
-                                            <select class="form-select" name="has_payment">
-                                                <option value="all" {{ $hasPayment == 'all' ? 'selected' : '' }}>{{ __('pagination.all') }}</option>
-                                                <option value="with_payment" {{ $hasPayment == 'with_payment' ? 'selected' : '' }}>{{ __('pagination.with_payment') }}</option>
-                                                <option value="without_payment" {{ $hasPayment == 'without_payment' ? 'selected' : '' }}>{{ __('pagination.without_payment') }}</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.search') }}</label>
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-magnifier fs-2"></i>
-                                                </span>
-                                                <input type="text" class="form-control" name="search" 
-                                                    value="{{ $search }}" placeholder="{{ __('pagination.search_orders') }}">
-                                            </div>
-                                        </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.date_to') }}</label>
+                                        <input type="date" class="form-control" id="filterEndDate" value="{{ $endDate }}">
                                     </div>
-                                    
-                                    {{-- Row 3: Cost Range & Actions --}}
-                                    <div class="row g-3">
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.min_cost') }}</label>
-                                            <input type="number" class="form-control" name="min_cost" 
-                                                value="{{ $minCost }}" step="0.01" placeholder="0.00">
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label fw-semibold">{{ __('pagination.max_cost') }}</label>
-                                            <input type="number" class="form-control" name="max_cost" 
-                                                value="{{ $maxCost }}" step="0.01" placeholder="10000.00">
-                                        </div>
-                                        <div class="col-md-6 d-flex align-items-end">
-                                            <div class="d-flex gap-2 w-100">
-                                                <button type="submit" class="btn btn-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1"></i>
-                                                    {{ __('pagination.apply_filters') }}
-                                                </button>
-                                                <a href="{{ route('reports.production.index') }}" class="btn btn-light">
-                                                    <i class="ki-duotone ki-cross fs-2"></i>
-                                                    {{ __('pagination.clear') }}
-                                                </a>
-                                            </div>
-                                        </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.status') }}</label>
+                                        <select class="form-select" id="filterStatus">
+                                            @foreach($statuses as $s)
+                                                <option value="{{ $s['value'] }}" {{ $status == $s['value'] ? 'selected' : '' }}>
+                                                    {{ $s['label'] }}
+                                                </option>
+                                            @endforeach
+                                        </select>
                                     </div>
-                                </form>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.location') }}</label>
+                                        <select class="form-select" id="filterLocation">
+                                            <option value="">{{ __('pagination.all_locations') }}</option>
+                                            @foreach($locations as $location)
+                                                <option value="{{ $location->id }}" {{ (int) $locationId === $location->id ? 'selected' : '' }}>
+                                                    {{ $location->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
+                                        <select class="form-select" id="filterVariant">
+                                            <option value="">{{ __('pagination.all_variants') }}</option>
+                                            @foreach($variants as $variant)
+                                                <option value="{{ $variant->id }}" {{ (int) $variantId === $variant->id ? 'selected' : '' }}>
+                                                    {{ $variant->name }} ({{ $variant->sku }})
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.category') }}</label>
+                                        <select class="form-select" id="filterCategory">
+                                            <option value="">{{ __('pagination.all_categories') }}</option>
+                                            @foreach($categories as $category)
+                                                <option value="{{ $category->id }}" {{ (int) $categoryId === $category->id ? 'selected' : '' }}>
+                                                    {{ $category->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.payment_status') }}</label>
+                                        <select class="form-select" id="filterPayment">
+                                            <option value="all" {{ $hasPayment === 'all' ? 'selected' : '' }}>{{ __('pagination.all') }}</option>
+                                            <option value="with_payment" {{ $hasPayment === 'with_payment' ? 'selected' : '' }}>{{ __('pagination.with_payment') }}</option>
+                                            <option value="without_payment" {{ $hasPayment === 'without_payment' ? 'selected' : '' }}>{{ __('pagination.without_payment') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.search') }}</label>
+                                        <input type="text" class="form-control" id="filterSearch" value="{{ $search }}" placeholder="{{ __('pagination.search_orders') }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.min_cost') }}</label>
+                                        <input type="number" step="0.01" class="form-control" id="filterMinCost" value="{{ $minCost }}" placeholder="0.00">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('pagination.max_cost') }}</label>
+                                        <input type="number" step="0.01" class="form-control" id="filterMaxCost" value="{{ $maxCost }}" placeholder="10000.00">
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-end gap-2">
+                                        <button type="button" class="btn btn-primary flex-grow-1" id="applyFiltersBtn">
+                                            <i class="ki-duotone ki-filter fs-2 me-1"></i>
+                                            {{ __('pagination.apply_filters') }}
+                                        </button>
+                                        <button type="button" class="btn btn-light" id="clearFiltersBtn">
+                                            <i class="ki-duotone ki-cross fs-2"></i>
+                                            {{ __('pagination.clear') }}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {{-- Summary Statistics --}}
-                @if($paginatedOrders->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.summary_statistics') }}</h3>
-                                </div>
+            {{-- ─── SUMMARY CARDS ────────────────────────────────────────── --}}
+            <div class="row mb-6">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
+                                    <span class="path1"></span><span class="path2"></span>
+                                </i>
+                                <h3 class="fw-bold m-0">{{ __('pagination.summary_statistics') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    {{-- Total Orders --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-2">
-                                                    <i class="ki-duotone ki-box fs-2tx text-primary">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <span class="fs-1 fw-bold text-gray-800">{{ number_format($summary['total_orders']) }}</span>
-                                                <span class="text-gray-600 fw-semibold">{{ __('pagination.total_orders') }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Status Breakdown --}}
-                                    <div class="col-md-6 col-lg-4">
-                                        <div class="card card-flush h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center">
-                                                <div class="text-gray-600 fw-semibold mb-2">{{ __('pagination.by_status') }}</div>
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    @foreach($statusBreakdown as $s)
-                                                        <span class="badge badge-light-{{ $s->color }} fs-6 py-2 px-3">
-                                                            {{ $s->label }}: {{ $s->count }}
-                                                        </span>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Cost Summary --}}
-                                    <div class="col-md-6 col-lg-3">
-                                        <div class="card card-flush h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center">
-                                                <div class="text-gray-600 fw-semibold mb-2">{{ __('pagination.cost_summary') }}</div>
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    <span class="badge badge-light-info fs-6 py-2 px-3">
-                                                        {{ __('pagination.input') }}: {{ currency_symbol() }} {{ number_format($summary['total_input_cost'], 2) }}
-                                                    </span>
-                                                    <span class="badge badge-light-success fs-6 py-2 px-3">
-                                                        {{ __('pagination.output') }}: {{ currency_symbol() }} {{ number_format($summary['total_output_cost'], 2) }}
-                                                    </span>
-                                                    <span class="badge badge-light-danger fs-6 py-2 px-3">
-                                                        {{ __('pagination.total') }}: {{ currency_symbol() }} {{ number_format($summary['total_cost'], 2) }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Profit & Payment --}}
-                                    <div class="col-md-6 col-lg-3">
-                                        <div class="card card-flush bg-light-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border border-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }} border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-2">
-                                                    <i class="ki-duotone ki-dollar fs-2tx text-{{ $summary['total_profit'] >= 0 ? 'success' : 'danger' }}">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <span class="fs-1 fw-bold text-gray-800">
-                                                    {{ currency_symbol() }} {{ number_format($summary['total_profit'], 2) }}
-                                                </span>
-                                                <span class="text-gray-600 fw-semibold">
-                                                    {{ __('pagination.total_profit') }} 
-                                                    ({{ $summary['with_payment'] }} {{ __('pagination.with_payment') }})
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {{-- Additional Stats --}}
-                                <div class="row mt-6">
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-secondary border border-secondary border-dashed">
-                                            <div class="card-body d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="text-muted">{{ __('pagination.total_input_quantity') }}</span>
-                                                    <div class="fs-3 fw-bold">{{ number_format($summary['total_input_quantity'], 2) }}</div>
-                                                </div>
-                                                <i class="ki-duotone ki-enter fs-2tx text-secondary">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
+                        </div>
+                        <div class="card-body pt-0">
+                            <div class="row g-6">
+                                <div class="col-md-6 col-lg-2">
+                                    <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
+                                        <div class="card-body d-flex flex-column justify-content-center text-center">
+                                            <div class="mb-2">
+                                                <i class="ki-duotone ki-box fs-2tx text-primary">
+                                                    <span class="path1"></span><span class="path2"></span>
                                                 </i>
                                             </div>
+                                            <span class="fs-1 fw-bold text-gray-800" id="summaryTotalOrders">—</span>
+                                            <span class="text-gray-600 fw-semibold">{{ __('pagination.total_orders') }}</span>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-success border border-success border-dashed">
-                                            <div class="card-body d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="text-muted">{{ __('pagination.total_output_quantity') }}</span>
-                                                    <div class="fs-3 fw-bold text-success">{{ number_format($summary['total_output_quantity'], 2) }}</div>
-                                                </div>
-                                                <i class="ki-duotone ki-exit fs-2tx text-success">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
-                                                </i>
-                                            </div>
+                                </div>
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="card card-flush h-100">
+                                        <div class="card-body d-flex flex-column justify-content-center">
+                                            <div class="text-gray-600 fw-semibold mb-2">{{ __('pagination.by_status') }}</div>
+                                            <div class="d-flex flex-wrap gap-2" id="summaryStatusBreakdown"></div>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <div class="card card-flush bg-light-warning border border-warning border-dashed">
-                                            <div class="card-body d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <span class="text-muted">{{ __('pagination.average_order_cost') }}</span>
-                                                    <div class="fs-3 fw-bold text-warning">{{ currency_symbol() }} {{ number_format($summary['avg_cost'], 2) }}</div>
-                                                </div>
-                                                <i class="ki-duotone ki-calculator fs-2tx text-warning">
-                                                    <span class="path1"></span>
-                                                    <span class="path2"></span>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card card-flush h-100">
+                                        <div class="card-body d-flex flex-column justify-content-center">
+                                            <div class="text-gray-600 fw-semibold mb-2">{{ __('pagination.cost_summary') }}</div>
+                                            <div class="d-flex flex-wrap gap-2" id="summaryCosts"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card card-flush h-100" id="summaryProfitCard">
+                                        <div class="card-body d-flex flex-column justify-content-center text-center">
+                                            <div class="mb-2">
+                                                <i class="ki-duotone ki-dollar fs-2tx">
+                                                    <span class="path1"></span><span class="path2"></span>
                                                 </i>
                                             </div>
+                                            <span class="fs-1 fw-bold text-gray-800" id="summaryTotalProfit">—</span>
+                                            <span class="text-gray-600 fw-semibold">{{ __('pagination.total_profit') }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -313,71 +208,48 @@
                         </div>
                     </div>
                 </div>
-                @endif
+            </div>
 
-                {{-- Charts Section --}}
-                @if($paginatedOrders->count() > 0)
-                <div class="row mb-6">
-                    {{-- Daily Trend Chart --}}
-                    <div class="col-lg-8">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.daily_trend') }}</h3>
-                                </div>
+            {{-- ─── TABLE CARD ──────────────────────────────────────────── --}}
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
+                                    <span class="path1"></span><span class="path2"></span>
+                                </i>
+                                <h3 class="fw-bold m-0">{{ __('pagination.production_orders') }}</h3>
                             </div>
-                            <div class="card-body pt-0">
-                                <div id="dailyTrendChart" style="height: 300px;"></div>
+                            <div class="card-toolbar">
+                                <select id="reportsPerPage" class="form-select form-select-solid form-select-sm w-75px">
+                                    @foreach([15, 25, 50, 100] as $pp)
+                                        <option value="{{ $pp }}" @selected($perPage === $pp)>{{ $pp }}</option>
+                                    @endforeach
+                                </select>
                             </div>
                         </div>
-                    </div>
-                    
-                    {{-- Status Distribution --}}
-                    <div class="col-lg-4">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.status_distribution') }}</h3>
-                                </div>
-                            </div>
-                            <div class="card-body pt-0">
-                                <div id="statusChart" style="height: 300px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
 
-                {{-- Production Orders Table --}}
-                @if($paginatedOrders->count() > 0)
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('pagination.production_orders') }}</h3>
+                        <div class="card-body pt-0">
+                            {{-- Skeleton --}}
+                            <div id="reportLoadingSpinner" class="d-none py-5">
+                                @for($i = 0; $i < 6; $i++)
+                                    <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                                        <div class="skeleton skeleton-text" style="width:120px;"></div>
+                                        <div class="flex-grow-1">
+                                            <div class="skeleton skeleton-text" style="width:180px;"></div>
+                                            <div class="skeleton skeleton-text" style="width:120px;"></div>
+                                        </div>
+                                        <div class="skeleton skeleton-text" style="width:100px;"></div>
+                                        <div class="skeleton skeleton-text" style="width:80px;"></div>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.showing') }} {{ $paginatedOrders->count() }} {{ __('pagination.of') }} {{ $paginatedOrders->total() }}
-                                    </span>
-                                </div>
+                                @endfor
                             </div>
-                            <div class="card-body p-0">
+
+                            {{-- Table --}}
+                            <div id="reportTableContainer" class="d-none">
                                 <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="productionTable">
+                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
                                                 <th class="ps-4 min-w-140px">{{ __('pagination.order_number') }}</th>
@@ -392,961 +264,64 @@
                                                 <th class="min-w-100px text-center">{{ __('pagination.actions') }}</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            @foreach($paginatedOrders as $index => $order)
-                                            @php
-                                                $profit = $order->total_output_cost - $order->total_input_cost;
-                                                $profitColor = $profit >= 0 ? 'success' : 'danger';
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="fw-bold">{{ $order->production_number }}</div>
-                                                    <div class="text-muted fs-7">{{ $order->created_at->format('Y-m-d H:i') }}</div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $order->status_badge }} fs-7 py-2 px-3">
-                                                        {{ $order->status_label }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $order->location->name ?? '-' }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="fw-bold">{{ number_format($order->total_input_quantity, 2) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="fw-bold text-success">{{ number_format($order->total_output_quantity, 2) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="text-muted">{{ currency_symbol() }} {{ number_format($order->total_input_cost, 2) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="text-primary">{{ currency_symbol() }} {{ number_format($order->total_output_cost, 2) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="fw-bold text-{{ $profitColor }}">
-                                                        {{ currency_symbol() }} {{ number_format($profit, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div>{{ $order->createdBy->name ?? '-' }}</div>
-                                                    @if($order->payment_method_id)
-                                                        <span class="badge badge-light-success fs-8">
-                                                            <i class="ki-duotone ki-wallet fs-2 me-1"></i>
-                                                            {{ __('pagination.paid') }}
-                                                        </span>
-                                                    @endif
-                                                </td>
-                                                <td class="d-flex justify-content-start flex-column">
-                                                    <button class="btn btn-sm btn-light-primary" 
-                                                        onclick="viewDetails({{ $order->id }})">
-                                                        <i class="ki-duotone ki-eye fs-2">
-                                                            <span class="path1"></span>
-                                                            <span class="path2"></span>
-                                                        </i>
-                                                    </button>
-                                                    @if($order->status === \App\Models\ProductionOrder::STATUS_COMPLETED)
-                                                        <button class="btn btn-sm btn-light-success" 
-                                                            onclick="viewLogs({{ $order->id }})">
-                                                            <i class="ki-duotone ki-calendar-8 fs-2">
-                                                                <span class="path1"></span>
-                                                                <span class="path2"></span>
-                                                            </i>
-                                                        </button>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                        <tfoot class="bg-light">
-                                            <tr>
-                                                <td colspan="3" class="text-end fw-bold">{{ __('pagination.totals') }}:</td>
-                                                <td class="text-center fw-bold">{{ number_format($paginatedOrders->sum('total_input_quantity'), 2) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($paginatedOrders->sum('total_output_quantity'), 2) }}</td>
-                                                <td class="text-center fw-bold">{{ currency_symbol() }} {{ number_format($paginatedOrders->sum('total_input_cost'), 2) }}</td>
-                                                <td class="text-center fw-bold">{{ currency_symbol() }} {{ number_format($paginatedOrders->sum('total_output_cost'), 2) }}</td>
-                                                <td class="text-center fw-bold text-{{ $paginatedOrders->sum(function($o) { return $o->total_output_cost - $o->total_input_cost; }) >= 0 ? 'success' : 'danger' }}">
-                                                    {{ currency_symbol() }} {{ number_format($paginatedOrders->sum(function($o) { return $o->total_output_cost - $o->total_input_cost; }), 2) }}
-                                                </td>
-                                                <td colspan="2"></td>
-                                            </tr>
-                                        </tfoot>
+                                        <tbody id="reportTableBody"></tbody>
                                     </table>
                                 </div>
-                                
-                                {{-- Pagination --}}
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator' => $paginatedOrders,
-                                        'pageName' => 'page',
-                                        'perPageName' => 'per_page',
-                                        'showPerPage' => true
-                                    ])
+                                <div id="reportPaginationContainer" class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-5 d-none">
+                                    <div id="reportPaginationInfo" class="text-muted fs-7"></div>
+                                    <nav><ul class="pagination pagination-outline m-0" id="reportPagination"></ul></nav>
                                 </div>
+                            </div>
+
+                            {{-- Empty --}}
+                            <div id="reportNoDataMessage" class="text-center py-15 d-none">
+                                <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
+                                    <span class="path1"></span><span class="path2"></span>
+                                </i>
+                                <h4 class="text-gray-600 fw-semibold mb-2">{{ __('pagination.no_data_available') }}</h4>
+                                <p class="text-muted fs-6">{{ __('pagination.no_production_orders_found') }}</p>
                             </div>
                         </div>
                     </div>
                 </div>
-                @else
-                    {{-- No Data Message --}}
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('pagination.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('pagination.no_production_orders_found') }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                @endif
             </div>
         </div>
     </div>
 </div>
 
-{{-- View Details Modal --}}
-<div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable mw-950px">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" id="detailsModalLabel">
-                    <i class="ki-duotone ki-information-5 fs-2 me-2 text-primary">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
-                    </i>
-                    {{ __('pagination.production_order_details') }}
-                </h3>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="detailsModalBody">
-                <div class="text-center py-10">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('pagination.close') }}</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- View Logs Modal --}}
-<div class="modal fade" id="logsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable mw-950px">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">
-                    <i class="ki-duotone ki-history fs-2 me-2 text-info">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
-                    </i>
-                    {{ __('pagination.inventory_logs') }}
-                </h3>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="logsModalBody">
-                <div class="text-center py-10">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
-                    {{ __('pagination.close') }}
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-    // ─── Output Breakdown — recompute on toggle ─────────────────────
-window.__outputRows = [];
-window.__outputInputKg = 0;
-window.__outputCurrency = '';
-
-window.toggleOutputRow = function (rowId) {
-    const row = window.__outputRows.find(r => r.id === rowId);
-    if (!row) return;
-
-    row.included = !row.included;
-
-    const el = document.getElementById(rowId);
-    if (el) {
-        el.classList.toggle('table-secondary', !row.included);
-        el.style.opacity = row.included ? '1' : '0.5';
-        const cb = el.querySelector('.output-row-check');
-        if (cb) cb.checked = row.included;
-    }
-
-    window.__recomputeOutputTotals();
-};
-
-window.toggleAllOutputRows = function (include) {
-    window.__outputRows.forEach(r => {
-        r.included = include;
-        const el = document.getElementById(r.id);
-        if (el) {
-            el.classList.toggle('table-secondary', !include);
-            el.style.opacity = include ? '1' : '0.5';
-            const cb = el.querySelector('.output-row-check');
-            if (cb) cb.checked = include;
-        }
-    });
-    window.__recomputeOutputTotals();
-};
-
-window.__recomputeOutputTotals = function () {
-    const rows      = window.__outputRows;
-    const currency  = window.__outputCurrency;
-    const declaredInputKg = Number(window.__outputInputKg);
-
-    const included = rows.filter(r => r.included);
-    const totalKg  = included.reduce((s, r) => s + r.total_kg, 0);
-    const totalRev = included.reduce((s, r) => s + r.revenue,  0);
-
-    // ────────────────────────────────────────────────────────────
-    // ★ DYNAMIC: resolve the best-available input kg
-    // ────────────────────────────────────────────────────────────
-    // Rules (in order of preference):
-    //   1. If controller sent a plausible input_kg, use it.
-    //      Plausible = finite, > 0, and >= sum of ALL output kg
-    //      (physical reality: you can't output more than you input).
-    //   2. Otherwise, fall back to sum of ALL output rows' total_kg.
-    //      This makes loss = 0, but at least percentages are truthful
-    //      relative to "what we produced". Better than garbage %.
-    //   3. If no rows at all, mark input as unavailable.
-    // ────────────────────────────────────────────────────────────
-    const sumAllOutputKg = rows.reduce((s, r) => s + r.total_kg, 0);
-
-    let inputKg;
-    let inputSource;
-
-    if (Number.isFinite(declaredInputKg)
-        && declaredInputKg > 0
-        && declaredInputKg >= sumAllOutputKg) {
-        inputKg = declaredInputKg;
-        inputSource = 'declared';
-    } else if (sumAllOutputKg > 0) {
-        inputKg = sumAllOutputKg;
-        inputSource = 'derived';
-        console.warn('[Output Breakdown] declared input_kg was invalid, deriving from output sum', {
-            declared: declaredInputKg,
-            derived:  sumAllOutputKg,
-        });
-    } else {
-        inputKg = null;
-        inputSource = 'unavailable';
-    }
-
-    const inputIsSane = inputKg !== null && inputKg > 0;
-
-    // ─── Per-row % of input ───────────────────────────────────────
-    rows.forEach(r => {
-        const shareEl = document.querySelector(`#${r.id} .output-row-share`);
-        if (shareEl) {
-            if (inputIsSane) {
-                const share = (r.total_kg / inputKg) * 100;
-                shareEl.textContent = share.toFixed(2) + '%';
-                shareEl.title = '';
-            } else {
-                shareEl.textContent = '—';
-                shareEl.title = 'Input KG unavailable — cannot compute %';
-            }
-            shareEl.style.opacity = r.included ? '1' : '0.4';
-        }
-        const revEl = document.querySelector(`#${r.id} .output-row-revenue`);
-        if (revEl) revEl.style.opacity = r.included ? '1' : '0.4';
-    });
-
-    // ─── Loss ─────────────────────────────────────────────────────
-    const lossKg  = inputIsSane ? Math.max(0, inputKg - totalKg) : null;
-    const lossPct = inputIsSane ? (lossKg / inputKg) * 100 : null;
-    const totalShare = inputIsSane ? (totalKg / inputKg) * 100 : null;
-
-    const setText = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val;
-    };
-
-    setText('outputTotalKg',      totalKg.toFixed(2) + ' kg');
-    setText('outputTotalShare',   inputIsSane ? totalShare.toFixed(2) + '%' : '—');
-    setText('outputTotalRevenue', `${currency} ${totalRev.toFixed(2)}`);
-    setText('outputLossKg',       inputIsSane ? lossKg.toFixed(2) + ' kg' : '—');
-    setText('outputLossPct',      inputIsSane ? lossPct.toFixed(2) + '%' : '—');
-
-    // ─── Optional: sync summary card ──────────────────────────────
-    if (typeof window.__outputOnChange === 'function' && inputIsSane) {
-        window.__outputOnChange(totalKg, totalRev, lossKg, lossPct, inputSource);
-    }
-};
-
-// ─── View Details ──────────────────────────────────────────────
-function viewDetails(orderId) {
-    const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
-    const body = document.getElementById('detailsModalBody');
-
-    body.innerHTML = `
-        <div class="text-center py-10">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    `;
-
-    modal.show();
-
-    const url = `/reports/production/detail/${orderId}`;
-    const currency = '{{ currency_symbol() }}';
-
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            let html = '';
-
-            // ─── Order Header ──────────────────────────────────────────
-            html += `
-                <div class="d-flex align-items-center justify-content-between mb-4">
-                    <div>
-                        <h4 class="fw-bold mb-1">${data.order.production_number}</h4>
-                        <div class="text-muted">${data.order.created_at}</div>
-                    </div>
-                    <div>
-                        <span class="badge badge-light-${data.order.status_badge} fs-6 py-2 px-4">
-                            ${data.order.status_label}
-                        </span>
-                        ${data.order.payment_method_id ? `
-                            <span class="badge badge-light-success fs-6 py-2 px-4 ms-2">
-                                <i class="ki-duotone ki-wallet fs-2 me-1"></i>
-                                Paid
-                            </span>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-
-            // ─── Metrics Cards ─────────────────────────────────────────
-            html += `
-                <div class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <div class="card card-flush bg-light-primary border border-primary border-dashed">
-                            <div class="card-body text-center">
-                                <span class="text-muted">Duration</span>
-                                <div class="fs-2 fw-bold">${data.metrics.duration_hours}h</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card card-flush bg-light-success border border-success border-dashed">
-                            <div class="card-body text-center">
-                                <span class="text-muted">True Yield (kg/kg)</span>
-                                <div class="fs-2 fw-bold text-success">${Number(data.metrics.input_yield).toFixed(1)}%</div>
-                                <div class="text-muted fs-8">
-                                    ${data.metrics.total_output_kg} / ${data.metrics.total_input_kg} kg
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card card-flush bg-light-info border border-info border-dashed">
-                            <div class="card-body text-center">
-                                <span class="text-muted">Cost Efficiency</span>
-                                <div class="fs-2 fw-bold text-info">${Number(data.metrics.cost_efficiency).toFixed(1)}%</div>
-                                <div class="text-muted fs-8">revenue / batch cost</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card card-flush bg-light-${data.metrics.profit >= 0 ? 'success' : 'danger'} border border-${data.metrics.profit >= 0 ? 'success' : 'danger'} border-dashed">
-                            <div class="card-body text-center">
-                                <span class="text-muted">Net Profit</span>
-                                <div class="fs-2 fw-bold text-${data.metrics.profit >= 0 ? 'success' : 'danger'}">
-                                    ${currency} ${Number(data.metrics.profit).toFixed(2)}
-                                </div>
-                                <div class="text-muted fs-8">
-                                    revenue ${currency} ${Number(data.metrics.total_revenue).toFixed(2)}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // ─── Inputs Table ──────────────────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3">Inputs (${data.input_stats.total_planned} planned, ${data.input_stats.total_actual} actual)</h6>
-                <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Variant</th>
-                                <th>Planned</th>
-                                <th>Actual</th>
-                                <th>Waste</th>
-                                <th>Yield</th>
-                                <th>Cost</th>
-                                <th>Quality</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            data.order.inputs.forEach(input => {
-                const yieldPct = input.planned_quantity > 0 ? (input.actual_quantity / input.planned_quantity * 100) : 0;
-                const qualityColors = {
-                    'pending': 'secondary',
-                    'accepted': 'success',
-                    'rejected': 'danger'
-                };
-                html += `
-                    <tr>
-                        <td>${input.product_variant?.name || 'N/A'}</td>
-                        <td>${input.planned_quantity}</td>
-                        <td>${input.actual_quantity}</td>
-                        <td>${input.waste_quantity}</td>
-                        <td>${yieldPct.toFixed(1)}%</td>
-                        <td>${currency} ${Number(input.actual_cost).toFixed(2)}</td>
-                        <td><span class="badge badge-light-${qualityColors[input.quality_status] || 'secondary'}">${input.quality_status}</span></td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
-            // ─── Outputs Table ─────────────────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3">Outputs (${data.output_stats.total_planned} planned, ${data.output_stats.total_actual} actual)</h6>
-                <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Variant</th>
-                                <th>Strategy</th>
-                                <th>Planned</th>
-                                <th>Actual</th>
-                                <th>Defective</th>
-                                <th>Yield</th>
-                                <th>Cost</th>
-                                <th>Batch</th>
-                                <th>Quality</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            data.order.outputs.forEach(output => {
-                const yieldPct = output.planned_quantity > 0 ? (output.actual_quantity / output.planned_quantity * 100) : 0;
-                const qualityColors = {
-                    'pending': 'secondary',
-                    'approved': 'success',
-                    'rejected': 'danger'
-                };
-                html += `
-                    <tr>
-                        <td>${output.product_variant?.name || 'N/A'}</td>
-                        <td><span class="badge badge-light-${output.inventory_strategy === 'batch' ? 'info' : output.inventory_strategy === 'serial' ? 'warning' : 'primary'}">${output.inventory_strategy}</span></td>
-                        <td>${output.planned_quantity}</td>
-                        <td class="text-success fw-bold">${output.actual_quantity}</td>
-                        <td class="text-danger">${output.defective_quantity}</td>
-                        <td>${yieldPct.toFixed(1)}%</td>
-                        <td>${currency} ${Number(output.production_cost).toFixed(2)}</td>
-                        <td>${output.batch_number || '-'}</td>
-                        <td><span class="badge badge-light-${qualityColors[output.quality_status] || 'secondary'}">${output.quality_status}</span></td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
-            // ─── Output Breakdown (Weight-Based, with per-row toggle) ─────
-            if (data.metrics.output_breakdown && data.metrics.output_breakdown.length > 0) {
-
-                const inputKg   = Number(data.metrics.total_input_kg) || 0;
-                const currency  = '{{ currency_symbol() }}';
-
-                // Assign stable ids so we can toggle rows individually
-                const rows = data.metrics.output_breakdown.map((r, i) => ({
-                    id:          `out-row-${i}`,
-                    variant_name: r.variant_name,
-                    sku:          r.sku,
-                    bags:         Number(r.bags)      || 0,
-                    weight:       Number(r.weight)    || 0,
-                    total_kg:     Number(r.total_kg)  || 0,
-                    revenue:      Number(r.revenue)   || 0,
-                    included:     true,                       // default: all in
-                }));
-
-                html += `
-                    <h6 class="fw-bold mb-3 mt-4">
-                        <i class="ki-duotone ki-chart-pie fs-3 me-2 text-success"></i>
-                        Output Breakdown (Weight-Based)
-                        <span class="text-muted fs-7 ms-2">
-                            — click any row to include / exclude it from the totals
-                        </span>
-                    </h6>
-
-                    <div class="d-flex gap-2 mb-2">
-                        <button type="button" class="btn btn-xs btn-light-primary" onclick="toggleAllOutputRows(true)">
-                            Include All
-                        </button>
-                        <button type="button" class="btn btn-xs btn-light" onclick="toggleAllOutputRows(false)">
-                            Exclude All
-                        </button>
-                    </div>
-
-                    <div class="table-responsive mb-4">
-                        <table class="table table-bordered table-striped align-middle" id="outputBreakdownTable">
-                            <thead>
-                                <tr class="bg-light">
-                                    <th style="width:40px;"></th>
-                                    <th>Variant</th>
-                                    <th class="text-end">Bags / Units</th>
-                                    <th class="text-end">Weight per Unit</th>
-                                    <th class="text-end">Total KG</th>
-                                    <th class="text-end">% of Input</th>
-                                    <th class="text-end">Revenue</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${rows.map(r => `
-                                    <tr id="${r.id}" class="output-row" style="cursor:pointer;" onclick="toggleOutputRow('${r.id}')">
-                                        <td class="text-center">
-                                            <input type="checkbox" class="form-check-input output-row-check" checked
-                                                onclick="event.stopPropagation(); toggleOutputRow('${r.id}')">
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold">${r.variant_name}</div>
-                                            ${r.sku ? `<small class="text-muted">${r.sku}</small>` : ''}
-                                        </td>
-                                        <td class="text-end">${r.bags}</td>
-                                        <td class="text-end">${r.weight} kg</td>
-                                        <td class="text-end fw-bold">${r.total_kg} kg</td>
-                                        <td class="text-end output-row-share">—</td>
-                                        <td class="text-end output-row-revenue">${currency} ${r.revenue.toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
-
-                                <tr class="bg-light fw-bold">
-                                    <td colspan="4" class="text-end">Total Output (included)</td>
-                                    <td class="text-end" id="outputTotalKg">0 kg</td>
-                                    <td class="text-end" id="outputTotalShare">0%</td>
-                                    <td class="text-end" id="outputTotalRevenue">${currency} 0.00</td>
-                                </tr>
-
-                                <tr class="bg-light-danger">
-                                    <td colspan="4" class="text-end text-danger fw-bold">
-                                        Loss (dust / spillage / shrinkage)
-                                    </td>
-                                    <td class="text-end text-danger fw-bold" id="outputLossKg">0 kg</td>
-                                    <td class="text-end text-danger fw-bold" id="outputLossPct">0%</td>
-                                    <td class="text-end text-muted">—</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-
-                // ─── Attach state to window so toggles can reach it ─────────────
-                window.__outputRows     = rows;
-                window.__outputInputKg  = inputKg;
-                window.__outputCurrency = currency;
-
-                // First render
-                setTimeout(() => window.__recomputeOutputTotals(), 0);
-            }
-
-            body.innerHTML = html;
-        })
-        .catch(error => {
-            body.innerHTML = `
-                <div class="text-center py-10 text-danger">
-                    <i class="ki-duotone ki-cross-circle fs-4tx mb-4"></i>
-                    <h4>Error Loading Details</h4>
-                    <p class="text-muted">${error.message}</p>
-                </div>
-            `;
-        });
-}
-
-
-// ─── View Logs ──────────────────────────────────────────────────
-function viewLogs(orderId) {
-    const modal = new bootstrap.Modal(document.getElementById('logsModal'));
-    const body  = document.getElementById('logsModalBody');
-
-    body.innerHTML = `
-        <div class="text-center py-10">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    `;
-
-    modal.show();
-
-    const url = `/reports/production/detail/${orderId}`;
-    const currency = '{{ currency_symbol() }}';
-
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            let html = '';
-
-            // ─── Purchase Order Items ───────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3">
-                    <i class="ki-duotone ki-shop fs-3 me-2 text-success"></i>
-                    Purchase Order Items
-                </h6>
-            `;
-
-            if (data.purchase_order_items && data.purchase_order_items.length > 0) {
-                const poTotal = data.purchase_order_items.reduce(
-                    (sum, r) => sum + (r.subtotal || 0), 0
-                );
-
-                html += `
-                    <div class="table-responsive mb-3">
-                        <table class="table table-bordered table-striped align-middle">
-                            <thead>
-                                <tr>
-                                    <th>PO Number</th>
-                                    <th>Supplier</th>
-                                    <th>Product</th>
-                                    <th class="text-end">Ordered</th>
-                                    <th class="text-end">Received</th>
-                                    <th class="text-end">Consumed</th>
-                                    <th class="text-end">Unit Cost</th>
-                                    <th class="text-end">Subtotal</th>
-                                    <th>Batches</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-
-                data.purchase_order_items.forEach(row => {
-                    const batchChips = (row.batches || []).map(b => `
-                        <span class="badge badge-light-dark me-1 mb-1" title="${b.quantity_consumed} consumed @ ${currency}${Number(b.unit_cost).toFixed(2)}">
-                            ${b.batch_number} &times; ${b.quantity_consumed}
-                        </span>
-                    `).join('');
-
-                    html += `
-                        <tr>
-                            <td><span class="badge badge-light-success">${row.po_number || '-'}</span></td>
-                            <td>${row.supplier_name || '-'}</td>
-                            <td>
-                                <div class="fw-bold text-gray-800">${row.product_name || '-'}</div>
-                                ${row.sku ? `<small class="text-muted">SKU: ${row.sku}</small>` : ''}
-                            </td>
-                            <td class="text-end">${row.ordered_quantity}</td>
-                            <td class="text-end">${row.received_quantity}</td>
-                            <td class="text-end fw-bold text-danger">${row.consumed_quantity}</td>
-                            <td class="text-end">${currency}${Number(row.unit_cost).toFixed(2)}</td>
-                            <td class="text-end fw-bold">${currency}${Number(row.subtotal).toFixed(2)}</td>
-                            <td>${batchChips || '<span class="text-muted">-</span>'}</td>
-                        </tr>
-                    `;
-                });
-
-                html += `
-                            </tbody>
-                            <tfoot class="bg-light fw-bold">
-                                <tr>
-                                    <td colspan="7" class="text-end">Total Cost of PO Items</td>
-                                    <td class="text-end text-success">${currency}${poTotal.toFixed(2)}</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                `;
-            } else {
-                html += `
-                    <div class="alert alert-light-info d-flex align-items-center mb-4">
-                        <i class="ki-duotone ki-information fs-2 me-3"></i>
-                        <div class="fs-7">No purchase order data linked to this production run.</div>
-                    </div>
-                `;
-            }
-
-            // ─── Batch Logs ─────────────────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3 mt-4">
-                    <i class="ki-duotone ki-archive fs-3 me-2 text-primary"></i>
-                    Batch Logs
-                </h6>
-                <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-striped align-middle">
-                        <thead>
-                            <tr>
-                                <th>Batch Number</th>
-                                <th>Variant</th>
-                                <th>Type</th>
-                                <th class="text-end">Change</th>
-                                <th class="text-end">Before</th>
-                                <th class="text-end">After</th>
-                                <th class="text-end">Unit Cost</th>
-                                <th class="text-end">Total Cost</th>
-                                <th>Source</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            if (data.batch_logs && data.batch_logs.length > 0) {
-                const typeColors = {
-                    'received':    'success',
-                    'depleted':    'danger',
-                    'produced':    'info',
-                    'expired':     'warning',
-                    'adjusted':    'secondary',
-                    'transferred': 'primary',
-                    'assigned':    'primary',
-                    'unassigned':  'secondary',
-                };
-
-                data.batch_logs.forEach(log => {
-                    let sourceHtml = '-';
-
-                    if (log.type === 'produced' && log.production_order_id) {
-                        sourceHtml = `
-                            <span class="badge badge-light-info">
-                                <i class="ki-duotone ki-industry fs-5 me-1"></i>
-                                Production
-                            </span>
-                        `;
-                    } else if (log.purchase_order_number) {
-                        sourceHtml = `
-                            <span class="badge badge-light-success">
-                                <i class="ki-duotone ki-shop fs-5 me-1"></i>
-                                ${log.purchase_order_number}
-                            </span>
-                            ${log.supplier_name ? `<div class="text-muted fs-8">${log.supplier_name}</div>` : ''}
-                        `;
-                    } else if (log.production_order_id) {
-                        sourceHtml = `<span class="badge badge-light-secondary">Production #${log.production_order_id}</span>`;
-                    }
-
-                    const change = Number(log.quantity_change || 0);
-                    const unitCost = Number(log.unit_cost || 0);
-                    const totalCost = Number(log.total_cost || 0);
-
-                    html += `
-                        <tr>
-                            <td><span class="badge badge-light-dark">${log.batch_number}</span></td>
-                            <td>${log.variant?.name || log.variant_name || 'N/A'}</td>
-                            <td>
-                                <span class="badge badge-light-${typeColors[log.type] || 'secondary'}">
-                                    ${log.type}
-                                </span>
-                            </td>
-                            <td class="text-end ${change >= 0 ? 'text-success' : 'text-danger'} fw-bold">
-                                ${change >= 0 ? '+' : ''}${change}
-                            </td>
-                            <td class="text-end">${log.quantity_before}</td>
-                            <td class="text-end">${log.quantity_after}</td>
-                            <td class="text-end">${currency}${unitCost.toFixed(2)}</td>
-                            <td class="text-end fw-bold">${currency}${totalCost.toFixed(2)}</td>
-                            <td>${sourceHtml}</td>
-                            <td class="text-muted fs-7">${log.event_date || '-'}</td>
-                        </tr>
-                    `;
-                });
-            } else {
-                html += `
-                    <tr>
-                        <td colspan="10" class="text-center text-muted">No batch logs found</td>
-                    </tr>
-                `;
-            }
-
-            html += `</tbody></table></div>`;
-
-            // ─── Inventory Logs ─────────────────────────────────────
-            html += `
-                <h6 class="fw-bold mb-3 mt-4">
-                    <i class="ki-duotone ki-chart-simple fs-3 me-2 text-warning"></i>
-                    Inventory Logs
-                </h6>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped align-middle">
-                        <thead>
-                            <tr>
-                                <th>Variant</th>
-                                <th class="text-end">Change</th>
-                                <th class="text-end">Before</th>
-                                <th class="text-end">After</th>
-                                <th>Reason</th>
-                                <th>Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            if (data.inventory_logs && data.inventory_logs.length > 0) {
-                data.inventory_logs.forEach(log => {
-                    const change = Number(log.quantity_change || 0);
-                    html += `
-                        <tr>
-                            <td>${log.variant?.name || 'N/A'}</td>
-                            <td class="text-end ${change >= 0 ? 'text-success' : 'text-danger'} fw-bold">
-                                ${change >= 0 ? '+' : ''}${change}
-                            </td>
-                            <td class="text-end">${log.quantity_before}</td>
-                            <td class="text-end">${log.quantity_after}</td>
-                            <td><span class="badge badge-light-info">${log.reason}</span></td>
-                            <td class="text-muted fs-7">${log.created_at || '-'}</td>
-                        </tr>
-                    `;
-                });
-            } else {
-                html += `
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">No inventory logs found</td>
-                    </tr>
-                `;
-            }
-
-            html += `</tbody></table></div>`;
-
-            body.innerHTML = html;
-        })
-        .catch(error => {
-            body.innerHTML = `
-                <div class="text-center py-10 text-danger">
-                    <i class="ki-duotone ki-cross-circle fs-4tx mb-4"></i>
-                    <h4>Error Loading Logs</h4>
-                    <p class="text-muted">${error.message}</p>
-                </div>
-            `;
-        });
-}
-
-// ─── Export Report ──────────────────────────────────────────────
-function exportReport() {
-    const form = document.getElementById('filterForm');
-    const formData = new FormData(form);
-    const params = new URLSearchParams(formData);
-    
-    window.location.href = `/reports/production/export?${params.toString()}`;
-}
-
-// ─── Charts ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-    @if($paginatedOrders->count() > 0)
-        // ─── Daily Trend Chart ──────────────────────────────────────
-        const dailyData = @json($dailyTrend);
-        if (dailyData.length > 0) {
-            const trendChart = new ApexCharts(document.querySelector("#dailyTrendChart"), {
-                series: [
-                    {
-                        name: 'Orders',
-                        data: dailyData.map(d => d.count),
-                        type: 'bar'
-                    },
-                    {
-                        name: 'Total Cost',
-                        data: dailyData.map(d => d.total_cost),
-                        type: 'line'
-                    }
-                ],
-                chart: {
-                    type: 'bar',
-                    height: 300,
-                    toolbar: { show: true }
-                },
-                plotOptions: {
-                    bar: { horizontal: false, columnWidth: '55%' }
-                },
-                stroke: { width: [0, 3], curve: 'smooth' },
-                dataLabels: { enabled: false },
-                xaxis: {
-                    categories: dailyData.map(d => d.date),
-                    labels: { rotate: -45, trim: true, style: { fontSize: '11px' } }
-                },
-                yaxis: [
-                    { title: { text: 'Orders' } },
-                    { opposite: true, title: { text: 'Total Cost' } }
-                ],
-                colors: ['#3E97FF', '#50CD89'],
-                tooltip: {
-                    shared: true,
-                    intersect: false,
-                    y: {
-                        formatter: function(val, { seriesIndex }) {
-                            return seriesIndex === 0 ? val + ' orders' : '{{ currency_symbol() }}' + val.toFixed(2);
-                        }
-                    }
-                }
-            });
-            trendChart.render();
-        }
-        
-        // ─── Status Distribution Chart ──────────────────────────────
-        const statusData = @json($statusBreakdown);
-        if (statusData.length > 0) {
-            const statusChart = new ApexCharts(document.querySelector("#statusChart"), {
-                series: statusData.map(s => s.count),
-                chart: { type: 'donut', height: 300 },
-                labels: statusData.map(s => s.label),
-                colors: statusData.map(s => {
-                    const colors = {
-                        'secondary': '#A1A5B7',
-                        'warning': '#FFC700',
-                        'success': '#50CD89',
-                        'danger': '#F1416C',
-                        'primary': '#3E97FF',
-                        'info': '#7239EA'
-                    };
-                    return colors[s.color] || '#A1A5B7';
-                }),
-                legend: { position: 'bottom', fontSize: '12px' },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            size: '65%',
-                            labels: {
-                                show: true,
-                                total: {
-                                    show: true,
-                                    label: 'Total',
-                                    formatter: function(w) {
-                                        return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                tooltip: { y: { formatter: function(val) { return val + ' orders'; } } }
-            });
-            statusChart.render();
-        }
-    @endif
-});
-</script>
-@endpush
+{{-- Drawer shell --}}
+@include('reports.production.drawer')
 
 @endsection
+
+@push('styles')
+<style>
+    .skeleton {
+        display: inline-block;
+        background: linear-gradient(90deg, #f1f1f4 0%, #e9e9ed 50%, #f1f1f4 100%);
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .skeleton-text { height: 12px; margin: 4px 0; display: block; }
+    @keyframes skeleton-shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    .report-row { cursor: pointer; }
+    .report-row:hover { background-color: #f9f9f9; }
+    .report-row td:not(:last-child) > * { pointer-events: none; }
+</style>
+@endpush
+
+@push('scripts')
+    <script>
+        window.REPORT_ROUTES = {
+            data:   '{{ route("reports.production.data") }}',
+            detail: '{{ route("reports.production.detail", ["orderId" => "__ID__"]) }}',
+        };
+        window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    </script>
+    @include('reports.production.list-scripts')
+    @include('reports.production.drawer-scripts')
+@endpush

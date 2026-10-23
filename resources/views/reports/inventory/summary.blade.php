@@ -8,7 +8,8 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+
+                {{-- Toolbar --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
                         <div class="page-title d-flex flex-column">
@@ -16,161 +17,92 @@
                                 {{ __('pagination.inventory_summary') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('accounting.dashboard') }}
-                                    </a>
-                                </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item text-muted"><a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('accounting.dashboard') }}</a></li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.inventory_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.inventory_summary') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($summary['total_items'] > 0)
-                            <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'inventorySummaryTable', filename: 'inventory_summary_{{ date('Y_m_d') }}', sheetName: 'Inventory Summary'})">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('accounting.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'inventorySummaryTable', filename: 'inventory_summary_{{ date('Y_m_d') }}', format: 'csv'})">
-                                            <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                            {{ __('accounting.export_to_csv') }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            @endif
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-primary" id="invExportBtn">
+                                <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filters --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.inventory.summary') }}" id="filterForm">
-                                    {{-- First Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Date Range --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('accounting.date_range') }}</label>
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="start_date" 
-                                                        value="{{ $startDate }}" required
-                                                        title="{{ __('accounting.start_date') }}">
-                                                </div>
-                                                <span class="d-none d-sm-flex align-items-center text-gray-500 px-2">{{ __('accounting.to') }}</span>
-                                                <span class="d-flex d-sm-none text-gray-500 text-center">{{ __('accounting.to') }}</span>
-                                                <div class="input-group w-100">
-                                                    <span class="input-group-text bg-light">
-                                                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                    </span>
-                                                    <input type="date" class="form-control" name="end_date" 
-                                                        value="{{ $endDate }}" required
-                                                        title="{{ __('accounting.end_date') }}">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Location & Department - Dependent Dropdowns --}}
-                                        <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                            <div class="flex-grow-1">
-                                                <x-liveblade-dependent-dropdown 
-                                                    id="filter_location_department"
-                                                    parentName="location_id"
-                                                    childName="department_id"
-                                                    parentLabel="auth.location"
-                                                    childLabel="accounting.department"
-                                                    :parentOptions="$locations"
-                                                    :childOptions="$departments"
-                                                    route="{{ route('get.departments') }}"
-                                                    selectedParent="{{ $locationId ?? null }}"
-                                                    selectedChild="{{ $departmentId ?? null }}"
-                                                    skipAjax="false"
-                                                />
-                                            </div>
+                                <form id="invFilterForm" class="row g-3" onsubmit="return false;">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">{{ __('accounting.date_range') }}</label>
+                                        <div class="input-group">
+                                            <input type="date" class="form-control" id="invStartDate" value="{{ $startDate }}">
+                                            <span class="input-group-text">→</span>
+                                            <input type="date" class="form-control" id="invEndDate" value="{{ $endDate }}">
                                         </div>
                                     </div>
-                                    
-                                    {{-- Second Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Product Variant --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
-                                            <div class="input-group w-100">
-                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
-                                                    <option value="">{{ __('pagination.all_variants') }}</option>
-                                                    @foreach($variants as $variant)
-                                                        <option value="{{ $variant->id }}" 
-                                                                {{ $variantId == $variant->id ? 'selected' : '' }}>
-                                                            {{ $variant->name }} ({{ $variant->sku }})
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Active Status --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('accounting.status') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-status fs-2"></i>
-                                                </span>
-                                                <select class="form-select" name="is_active">
-                                                    <option value="all">{{ __('pagination.all_status') }}</option>
-                                                    <option value="1" {{ $isActive === '1' ? 'selected' : '' }}>{{ __('accounting.active') }}</option>
-                                                    <option value="0" {{ $isActive === '0' ? 'selected' : '' }}>{{ __('accounting.inactive') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex flex-column justify-content-end">
-                                            <div class="d-flex flex-column flex-sm-row gap-2">
-                                                <button type="submit" class="btn btn-primary flex-grow-1" id="applyFilters">
-                                                    <i class="ki-duotone ki-filter fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
-                                                </button>
-                                                <a href="{{ route('reports.inventory.summary') }}" class="btn btn-light btn-active-light-primary flex-grow-1">
-                                                    <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
-                                                    <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
-                                                    <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
-                                            </div>
-                                        </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
+                                        <select class="form-select" id="invLocation" data-control="select2" data-placeholder="{{ __('pagination.all_locations') }}">
+                                            <option value=""></option>
+                                            @foreach($locations as $loc)
+                                                <option value="{{ $loc->id }}" @selected((int)$locationId === $loc->id)>{{ $loc->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold">{{ __('accounting.department') }}</label>
+                                        <select class="form-select" id="invDepartment" data-control="select2" data-placeholder="{{ __('pagination.all_departments') }}">
+                                            <option value=""></option>
+                                            @foreach($departments as $dept)
+                                                <option value="{{ $dept->id }}" @selected((int)$departmentId === $dept->id)>{{ $dept->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold">{{ __('pagination.product_variant') }}</label>
+                                        <select class="form-select" id="invVariant" data-control="select2" data-placeholder="{{ __('pagination.all_variants') }}">
+                                            <option value=""></option>
+                                            @foreach($variants as $v)
+                                                <option value="{{ $v->id }}" @selected((int)$variantId === $v->id)>
+                                                    {{ $v->name }}{{ $v->sku ? ' (' . $v->sku . ')' : '' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label fw-semibold">{{ __('accounting.status') }}</label>
+                                        <select class="form-select" id="invStatus">
+                                            <option value="all" @selected($isActive === 'all')>{{ __('pagination.all_status') }}</option>
+                                            <option value="1"   @selected($isActive === '1')>{{ __('accounting.active') }}</option>
+                                            <option value="0"   @selected($isActive === '0')>{{ __('accounting.inactive') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end gap-2">
+                                        <button type="button" class="btn btn-primary flex-grow-1" id="invApplyBtn">
+                                            <i class="ki-duotone ki-filter fs-2 me-1">
+                                                <span class="path1"></span><span class="path2"></span>
+                                            </i>
+                                            <span class="d-none d-sm-inline">{{ __('accounting.apply') }}</span>
+                                            <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
+                                        </button>
+                                        <button type="button" class="btn btn-light" id="invClearBtn" title="{{ __('accounting.clear') }}">
+                                            <i class="ki-duotone ki-cross fs-2">
+                                                <span class="path1"></span><span class="path2"></span>
+                                            </i>
+                                        </button>
                                     </div>
                                 </form>
                             </div>
@@ -178,448 +110,215 @@
                     </div>
                 </div>
 
-                {{-- Summary Statistics --}}
-                @if($summary['total_items'] > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.summary_statistics') }}</h3>
+                {{-- ═════════ SKELETON ═════════ --}}
+                <div id="invSkeleton">
+                    <div class="row g-6 mb-6">
+                        @for($i = 0; $i < 6; $i++)
+                        <div class="col-md-6 col-lg-2"><div class="card card-flush h-100"><div class="card-body d-flex flex-column justify-content-center text-center">
+                            <div class="d-flex justify-content-center mb-3"><div class="inv-sk inv-sk-circle"></div></div>
+                            <div class="d-flex justify-content-center mb-2"><div class="inv-sk inv-sk-text" style="width:55%;height:24px;"></div></div>
+                            <div class="d-flex justify-content-center"><div class="inv-sk inv-sk-text" style="width:70%;"></div></div>
+                        </div></div></div>
+                        @endfor
+                    </div>
+                    <div class="row g-6 mb-6">
+                        <div class="col-lg-8"><div class="card"><div class="card-body"><div class="inv-sk inv-sk-chart"></div></div></div></div>
+                        <div class="col-lg-4"><div class="card"><div class="card-body"><div class="inv-sk inv-sk-chart"></div></div></div></div>
+                    </div>
+                    <div class="row"><div class="col-12"><div class="card"><div class="card-body">
+                        @for($i = 0; $i < 10; $i++)
+                        <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                            <div class="inv-sk inv-sk-text" style="width:60px;"></div>
+                            <div class="flex-grow-1">
+                                <div class="inv-sk inv-sk-text mb-2" style="width:35%;"></div>
+                                <div class="inv-sk inv-sk-text" style="width:55%;height:8px;"></div>
+                            </div>
+                            <div class="inv-sk inv-sk-badge"></div>
+                            <div class="inv-sk inv-sk-badge"></div>
+                            <div class="inv-sk inv-sk-text" style="width:80px;"></div>
+                        </div>
+                        @endfor
+                    </div></div></div></div>
+                </div>
+
+                {{-- ═════════ CONTENT ═════════ --}}
+                <div id="invContent" class="d-none">
+
+                    {{-- Summary cards --}}
+                    <div class="row g-6 mb-6">
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-box fs-2tx text-primary"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumTotalItems">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.total_items') }}</span>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
-                                <div class="row g-6">
-                                    {{-- Total Items --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-box fs-2tx text-primary">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['total_items'] }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.total_items') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Total Quantity On Hand --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-barcode fs-2tx text-success">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ number_format($summary['total_quantity_allocated']) }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.quantity_allocated') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Total Value --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-dollar fs-2tx text-info">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ currency_symbol() }}{{ number_format($summary['total_value'], 2) }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.total_value') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Average Stock Level --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-calculator fs-2tx text-warning">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ number_format($summary['average_stock_level'], 1) }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.average_stock_level') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Items Below Reorder --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-warning-2 fs-2tx text-danger">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['items_below_reorder'] }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.items_below_reorder') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Out of Stock --}}
-                                    <div class="col-md-6 col-lg-2">
-                                        <div class="card card-flush bg-light-secondary border border-secondary border-dashed h-100">
-                                            <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                <div class="mb-4">
-                                                    <i class="ki-duotone ki-cross fs-2tx text-secondary">
-                                                        <span class="path1"></span>
-                                                        <span class="path2"></span>
-                                                    </i>
-                                                </div>
-                                                <div class="mb-1">
-                                                    <span class="fs-1 fw-bold text-gray-800">{{ $summary['out_of_stock'] }}</span>
-                                                </div>
-                                                <div class="text-gray-600 fw-semibold">{{ __('pagination.out_of_stock') }}</div>
-                                            </div>
-                                        </div>
-                                    </div>
+                        </div>
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-success border border-success border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-barcode fs-2tx text-success"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumTotalQty">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.quantity_allocated') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-info border border-info border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-dollar fs-2tx text-info"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumTotalValue">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.total_value') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-warning border border-warning border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-calculator fs-2tx text-warning"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumAvgStock">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.average_stock_level') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-warning-2 fs-2tx text-danger"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumBelowReorder">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.items_below_reorder') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-2">
+                            <div class="card card-flush bg-light-secondary border border-secondary border-dashed h-100">
+                                <div class="card-body d-flex flex-column justify-content-center text-center">
+                                    <div class="mb-2"><i class="ki-duotone ki-cross fs-2tx text-secondary"><span class="path1"></span><span class="path2"></span></i></div>
+                                    <span class="fs-1 fw-bold text-gray-800" id="sumOutOfStock">—</span>
+                                    <span class="text-gray-600 fw-semibold">{{ __('pagination.out_of_stock') }}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                @endif
 
-                {{-- Charts Section --}}
-                @if($inventoryItems->count() > 0)
-                <div class="row mb-6">
-                    {{-- Stock Level Distribution --}}
-                    <div class="col-lg-8">
-                        <div class="card">
+                    {{-- Charts --}}
+                    <div class="row g-6 mb-6">
+                        <div class="col-lg-8"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('pagination.stock_level_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="stockDistributionChart" style="height: 350px;"></div>
+                                <div id="stockChart" style="height: 350px;"></div>
+                                <div id="stockChartEmpty" class="text-center text-muted py-10 d-none">{{ __('accounting.no_data_available') }}</div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    {{-- Department Distribution --}}
-                    <div class="col-lg-4">
-                        <div class="card">
+                        </div></div>
+                        <div class="col-lg-4"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
+                                    <i class="ki-duotone ki-chart-pie fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.department_distribution') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="departmentDistributionChart" style="height: 350px;"></div>
+                                <div id="deptChart" style="height: 350px;"></div>
+                                <div id="deptChartEmpty" class="text-center text-muted py-10 d-none">{{ __('accounting.no_data_available') }}</div>
                             </div>
-                        </div>
+                        </div></div>
                     </div>
-                </div>
-                @endif
 
-                {{-- Inventory Items Table --}}
-                @if($inventoryItems->count() > 0)
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
-                                    <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h3 class="fw-bold m-0">{{ __('pagination.inventory_items') }}</h3>
-                                    </div>
+                    {{-- Table --}}
+                    <div class="row"><div class="col-12"><div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="d-flex align-items-center">
+                                    <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"><span class="path1"></span><span class="path2"></span></i>
+                                    <h3 class="fw-bold m-0">{{ __('pagination.inventory_items') }}</h3>
                                 </div>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="inventorySummaryTable">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4 min-w-120px">{{ __('pagination.sku') }}</th>
-                                                <th class="min-w-200px">{{ __('pagination.product') }}</th>
-                                                <th class="min-w-150px">{{ __('accounting.department') }}</th>
-                                                <th class="min-w-150px">{{ __('auth.location') }}</th>
-                                                <th class="min-w-100px text-center">{{ __('pagination.quantity_on_hand') }}</th>
-                                                <th class="min-w-100px text-center">{{ __('pagination.quantity_allocated') }}</th>
-                                                <th class="min-w-100px text-center">{{ __('pagination.preferred_stock_level') }}</th>
-                                                <th class="min-w-100px text-center">{{ __('pagination.reorder_point') }}</th>
-                                                <th class="min-w-120px text-center">{{ __('auth.stock_status') }}</th>
-                                                <th class="min-w-150px">{{ __('auth.last_updated') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($inventoryItems as $item)
-                                            @php
-                                                $reorderPoint = $item->reorder_point ?? 0;
-                                                $preferredStock = $item->preferred_stock_level ?? 0;
-                                                $stockRatio = $reorderPoint > 0 ? ($item->quantity_on_hand / $reorderPoint) : 0;
-                                                $statusColor = 'success';
-                                                $statusText = __('pagination.in_stock');
-                                                
-                                                if ($item->quantity_on_hand == 0) {
-                                                    $statusColor = 'danger';
-                                                    $statusText = __('pagination.out_of_stock');
-                                                } elseif ($reorderPoint > 0 && $item->quantity_on_hand <= $reorderPoint) {
-                                                    $statusColor = 'warning';
-                                                    $statusText = __('pagination.low_stock');
-                                                } elseif ($preferredStock > 0 && $item->quantity_on_hand > $preferredStock) {
-                                                    $statusColor = 'info';
-                                                    $statusText = __('pagination.over_stock');
-                                                }
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="fw-semibold">{{ $item->variant->sku ?? '-' }}</div>
-                                                    @if($item->variant && $item->variant->barcode)
-                                                    <small class="text-muted">{{ $item->variant->barcode }}</small>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        @if($item->variant && $item->variant->image_url)
-                                                        <div class="symbol symbol-50px me-3">
-                                                            <img src="{{ productVariantImage($item->variant->image_url) }}" class="img-fluid rounded" alt="{{ $item->variant->name }}">
-                                                        </div>
-                                                        @endif
-                                                        <div>
-                                                            <div class="fw-bold">{{ $item->variant->name ?? '-' }}</div>
-                                                            @if($item->variant && $item->variant->product)
-                                                            <div class="text-muted fs-7">{{ $item->variant->product->name ?? '' }}</div>
-                                                            @endif
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-primary">{{ $item->departmentItem->name ?? '-' }}</span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">{{ $item->itemLocation->name ?? '-' }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="fw-bold {{ $item->quantity_on_hand == 0 ? 'text-danger' : 'text-success' }}">
-                                                        {{ number_format($item->quantity_on_hand) }}
-                                                    </span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="text-muted">{{ number_format($item->quantity_allocated ?? 0) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="badge badge-light-secondary">{{ number_format($preferredStock) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="badge badge-light-warning">{{ number_format($reorderPoint) }}</span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <span class="badge badge-light-{{ $statusColor }}">{{ $statusText }}</span>
-                                                    @if($stockRatio > 0 && $stockRatio < 2 && $item->quantity_on_hand > 0)
-                                                    <div class="progress mt-1" style="height: 5px; width: 80px; margin: 0 auto;">
-                                                        <div class="progress-bar bg-{{ $statusColor }}" 
-                                                            style="width: {{ min(100, $stockRatio * 100) }}%"></div>
-                                                    </div>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    {{ $item->updated_at ? $item->updated_at->format('Y-m-d H:i') : '-' }}
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                        <tfoot class="bg-light">
-                                            <tr>
-                                                <td colspan="4" class="text-end fw-bold">{{ __('accounting.current_page') }}: </td>
-                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('quantity_on_hand')) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('quantity_allocated')) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('preferred_stock_level')) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($inventoryItems->sum('reorder_point')) }}</td>
-                                                <td colspan="2"></td>
-                                            </tr>
-                                            @if($inventoryItems->total() > $inventoryItems->count())
-                                            <tr>
-                                                <td colspan="4" class="text-end fw-bold text-muted">{{ __('auth.grand_total') }}: </td>
-                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity_on_hand']) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($summary['total_quantity_allocated']) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($summary['total_preferred_stock']) }}</td>
-                                                <td class="text-center fw-bold">{{ number_format($summary['total_reorder_point']) }}</td>
-                                                <td colspan="2"></td>
-                                            </tr>
-                                            @endif
-                                        </tfoot>
-                                    </table>
-                                </div>
-                                
-                                {{-- ✅ Clean Pagination Component --}}
-                                <div class="card-footer">
-                                    @include('partials.pagination', [
-                                        'paginator' => $inventoryItems,
-                                        'pageName' => 'page',
-                                        'perPageName' => 'per_page',
-                                        'showPerPage' => true
-                                    ])
-                                </div>
+                                <span class="badge badge-light-primary fs-7" id="invBadge"></span>
                             </div>
                         </div>
-                    </div>
-                </div>
-                @else
-                    {{-- No Data Message --}}
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('pagination.no_inventory_items_found') }}</p>
-                                        @if(request()->hasAny(['start_date', 'end_date', 'location_id', 'department_id', 'variant_id']))
-                                        <a href="{{ route('reports.inventory.summary') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters_view_all') }}
-                                        </a>
-                                        @endif
-                                    </div>
-                                </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="invTable">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4 min-w-120px">{{ __('pagination.sku') }}</th>
+                                    <th class="min-w-200px">{{ __('pagination.product') }}</th>
+                                    <th class="min-w-150px">{{ __('accounting.department') }}</th>
+                                    <th class="min-w-150px">{{ __('auth.location') }}</th>
+                                    <th class="min-w-100px text-center">{{ __('pagination.quantity_on_hand') }}</th>
+                                    <th class="min-w-100px text-center">{{ __('pagination.quantity_allocated') }}</th>
+                                    <th class="min-w-100px text-center">{{ __('pagination.preferred_stock_level') }}</th>
+                                    <th class="min-w-100px text-center">{{ __('pagination.reorder_point') }}</th>
+                                    <th class="min-w-120px text-center">{{ __('auth.stock_status') }}</th>
+                                    <th class="min-w-150px">{{ __('auth.last_updated') }}</th>
+                                </tr></thead>
+                                <tbody id="invTableBody"></tbody>
+                                <tfoot class="bg-light d-none" id="invTableFooter">
+                                    <tr>
+                                        <td colspan="4" class="text-end fw-bold">{{ __('accounting.current_page') }}:</td>
+                                        <td class="text-center fw-bold" id="ftQty">—</td>
+                                        <td class="text-center fw-bold" id="ftAllocated">—</td>
+                                        <td class="text-center fw-bold" id="ftPreferred">—</td>
+                                        <td class="text-center fw-bold" id="ftReorder">—</td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tfoot>
+                            </table></div>
+                            <div id="invEmpty" class="text-center py-10 d-none">
+                                <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"><span class="path1"></span><span class="path2"></span></i>
+                                <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                                <p class="text-muted fs-6">{{ __('pagination.no_inventory_items_found') }}</p>
+                            </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center d-none" id="invPaginationWrap">
+                                <span class="text-muted fs-7" id="invPaginationInfo"></span>
+                                <nav><ul class="pagination m-0" id="invPagination"></ul></nav>
                             </div>
                         </div>
-                    </div>
-                @endif
+                    </div></div></div>
 
+                </div>
             </div>
         </div>
     </div>
 </div>
+@endsection
 
-@push('scripts')
-@if($inventoryItems->count() > 0)
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Stock Level Distribution Chart
-        const stockData = @json($inventoryItems->pluck('quantity_on_hand'));
-        const labels = @json($inventoryItems->pluck('variant.name'));
-        
-        const stockChart = new ApexCharts(document.querySelector("#stockDistributionChart"), {
-            series: [{
-                name: 'Stock Level',
-                data: stockData
-            }],
-            chart: {
-                type: 'bar',
-                height: 350,
-                toolbar: {
-                    show: true
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: '60%'
-                }
-            },
-            dataLabels: {
-                enabled: false
-            },
-            xaxis: {
-                categories: labels,
-                labels: {
-                    rotate: -45,
-                    trim: true
-                }
-            },
-            yaxis: {
-                title: {
-                    text: 'Quantity'
-                }
-            },
-            colors: ['#3E97FF'],
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val.toLocaleString()
-                    }
-                }
-            }
-        });
-        stockChart.render();
-        
-        // Department Distribution Chart
-        const departmentData = @json($inventoryItems->groupBy('department.name')->map->count());
-        
-        const departmentChart = new ApexCharts(document.querySelector("#departmentDistributionChart"), {
-            series: Object.values(departmentData),
-            chart: {
-                type: 'donut',
-                height: 350
-            },
-            labels: Object.keys(departmentData),
-            colors: ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C'],
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                y: {
-                    formatter: function(val) {
-                        return val + ' items'
-                    }
-                }
-            }
-        });
-        departmentChart.render();
-    });
-    
-</script>
-@endif
-
-<script>
-    // Form validation
-    document.getElementById('filterForm').addEventListener('submit', function(e) {
-        const startDate = new Date(document.querySelector('[name="start_date"]').value);
-        const endDate = new Date(document.querySelector('[name="end_date"]').value);
-        
-        if (startDate > endDate) {
-            e.preventDefault();
-            alert('{{ __("accounting.start_date_cannot_be_after_end_date") }}');
-            return false;
-        }
-    });
-</script>
+@push('styles')
+<style>
+    .inv-sk {
+        background: linear-gradient(90deg, #e4e6eb 0%, #f0f2f5 50%, #e4e6eb 100%);
+        background-size: 200% 100%;
+        animation: inv-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .inv-sk-text   { height: 12px; border-radius: 4px; }
+    .inv-sk-circle { width: 44px; height: 44px; border-radius: 50%; }
+    .inv-sk-badge  { width: 56px; height: 24px; border-radius: 12px; }
+    .inv-sk-chart  { width: 100%; height: 350px; border-radius: 8px; }
+    @keyframes inv-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #invSkeleton .card { border: none; box-shadow: 0 0 0 1px #f0f2f5; }
+</style>
 @endpush
 
-@endsection
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+    window.INV_ROUTES = {
+        data:   '{{ route("reports.inventory.summary-data") }}',
+    };
+    window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    window.INV_BOOTSTRAP = {
+        startDate:    @json($startDate),
+        endDate:      @json($endDate),
+        locationId:   @json($locationId),
+        departmentId: @json($departmentId),
+        variantId:    @json($variantId),
+        isActive:     @json($isActive),
+        perPage:      @json($perPage),
+    };
+</script>
+@include('reports.inventory.summary-scripts')
+@endpush

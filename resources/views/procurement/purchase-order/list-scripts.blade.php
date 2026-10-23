@@ -9,30 +9,81 @@ window.POList = (function () {
         perPage: {{ (int) ($initialFilters['per_page'] ?? 15) }},
         search: @json($initialFilters['search'] ?? ''),
         status: @json($initialFilters['status'] ?? ''),
+        supplierId: @json($initialFilters['supplier_id'] ?? ''),
+        locationId: @json($initialFilters['location_id'] ?? ''),
     };
 
     let searchDebounce;
     let inFlight = false;
 
+    // ── Initialize on DOM Load ─────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
+        initSelect2();
         bindFilters();
         bindRowClick();
         load();
     });
 
+    function initSelect2() {
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $('#poStatusFilter').select2({ width: '100%', minimumResultsForSearch: Infinity });
+            $('#poSupplierFilter').select2({ width: '100%' });
+            $('#poLocationFilter').select2({ width: '100%' });
+        }
+    }
+
     function bindFilters() {
+        // Search Input — vanilla (works)
         document.getElementById('poSearchInput')?.addEventListener('input', function () {
             clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(() => { state.search = this.value.trim(); state.page = 1; load(); }, 400);
+            searchDebounce = setTimeout(() => { 
+                state.search = this.value.trim(); 
+                state.page = 1; 
+                load(); 
+            }, 400);
         });
 
-        document.getElementById('poStatusFilter')?.addEventListener('change', function () {
-            state.status = this.value; state.page = 1; load();
-        });
-
+        // Per Page — vanilla (works)
         document.getElementById('poPerPage')?.addEventListener('change', function () {
-            state.perPage = parseInt(this.value, 10) || 15; state.page = 1; load();
+            state.perPage = parseInt(this.value, 10) || 15; 
+            state.page = 1; 
+            load();
         });
+
+        // Clear Filters
+        document.getElementById('poClearFiltersBtn')?.addEventListener('click', resetFilters);
+
+        // Select2 dropdowns — must use jQuery events because Select2 fires them
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $('#poStatusFilter').on('change', function () {
+                state.status = this.value;
+                state.page = 1;
+                load();
+            });
+
+            $('#poSupplierFilter').on('change', function () {
+                state.supplierId = this.value;
+                state.page = 1;
+                load();
+            });
+
+            $('#poLocationFilter').on('change', function () {
+                state.locationId = this.value;
+                state.page = 1;
+                load();
+            });
+        } else {
+            // Fallback: if Select2 isn't loaded, use native change
+            document.getElementById('poStatusFilter')?.addEventListener('change', function () {
+                state.status = this.value; state.page = 1; load();
+            });
+            document.getElementById('poSupplierFilter')?.addEventListener('change', function () {
+                state.supplierId = this.value; state.page = 1; load();
+            });
+            document.getElementById('poLocationFilter')?.addEventListener('change', function () {
+                state.locationId = this.value; state.page = 1; load();
+            });
+        }
     }
 
     function bindRowClick() {
@@ -44,8 +95,6 @@ window.POList = (function () {
 
             if (window.PODrawer?.open) {
                 window.PODrawer.open(id);
-            } else {
-                console.log('[po-list] row clicked:', id, '— drawer not wired');
             }
         });
     }
@@ -55,9 +104,14 @@ window.POList = (function () {
         inFlight = true;
         showState('loading');
 
+        // Disable filters during load to show action is happening
+        setFiltersEnabled(false);
+
         const params = new URLSearchParams({ page: state.page, per_page: state.perPage });
         if (state.search) params.set('search', state.search);
         if (state.status) params.set('status', state.status);
+        if (state.supplierId) params.set('supplier_id', state.supplierId);
+        if (state.locationId) params.set('location_id', state.locationId);
 
         try {
             const res = await fetch(`${URL_DATA}?${params.toString()}`, {
@@ -79,7 +133,23 @@ window.POList = (function () {
             window.toastr?.error?.('{{ __("passwords.failed_to_load_records") ?? "Failed to load records" }}');
         } finally {
             inFlight = false;
+            setFiltersEnabled(true);
         }
+    }
+
+    function setFiltersEnabled(enabled) {
+        const filterIds = ['poSearchInput', 'poStatusFilter', 'poSupplierFilter', 'poLocationFilter'];
+        
+        filterIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.disabled = !enabled;
+            
+            // If Select2 is initialized, we must toggle it as well
+            if (typeof $ !== 'undefined' && $(el).data('select2')) {
+                $(el).prop('disabled', !enabled).trigger('change.select2');
+            }
+        });
     }
 
     function renderSummary(s) {
@@ -155,9 +225,21 @@ window.POList = (function () {
     }
 
     function resetFilters() {
-        state.search = state.status = ''; state.page = 1;
+        state.search = state.status = state.supplierId = state.locationId = ''; 
+        state.page = 1;
+        
         const s = document.getElementById('poSearchInput'); if (s) s.value = '';
         const st = document.getElementById('poStatusFilter'); if (st) st.value = '';
+        const sup = document.getElementById('poSupplierFilter'); if (sup) sup.value = '';
+        const loc = document.getElementById('poLocationFilter'); if (loc) loc.value = '';
+
+        // Trigger select2 UI update
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $('#poStatusFilter').trigger('change.select2');
+            $('#poSupplierFilter').trigger('change.select2');
+            $('#poLocationFilter').trigger('change.select2');
+        }
+        
         load();
     }
 

@@ -395,12 +395,16 @@ window.POView = (function () {
 
             const actual    = Number(output.actual_quantity || 0);
             const listSell  = Number(variant.discount_selling_price ?? variant.selling_price ?? 0);
-            const rowCost   = Number(output.production_cost || 0);
+            
+            // ★ Use the production_cost (which is now correctly allocated from the server)
+            const rowCost = Number(output.production_cost || 0);
 
             const sellingValue = actual * listSell;
             const profit       = sellingValue - rowCost;
             const marginPct    = sellingValue > 0 ? (profit / sellingValue) * 100 : 0;
             const profitColor  = profit >= 0 ? 'success' : 'danger';
+
+            // ...
 
             const yieldPct = Number(output.planned_quantity) > 0
                 ? (actual / Number(output.planned_quantity) * 100)
@@ -511,7 +515,7 @@ window.POView = (function () {
         // Metric cards
         html += `
             <div class="row g-3 mb-4">
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card card-flush bg-light-primary border border-primary border-dashed">
                         <div class="card-body text-center">
                             <span class="text-muted">Duration</span>
@@ -519,34 +523,74 @@ window.POView = (function () {
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card card-flush bg-light-success border border-success border-dashed">
                         <div class="card-body text-center">
                             <span class="text-muted">True Yield (kg/kg)</span>
                             <div class="fs-2 fw-bold text-success">${fmtNum(metrics.input_yield, 1)}%</div>
-                            <div class="text-muted fs-8">
-                                ${fmtNum(metrics.total_output_kg, 2)} / ${fmtNum(metrics.total_input_kg, 2)} kg
-                            </div>
+                            <div class="text-muted fs-8">${fmtNum(metrics.total_output_kg, 2)} / ${fmtNum(metrics.total_input_kg, 2)} kg</div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <div class="card card-flush bg-light-info border border-info border-dashed">
                         <div class="card-body text-center">
                             <span class="text-muted">Cost Efficiency</span>
                             <div class="fs-2 fw-bold text-info">${fmtNum(metrics.cost_efficiency, 1)}%</div>
-                            <div class="text-muted fs-8">revenue / batch cost</div>
+                            <div class="text-muted fs-8">revenue / total cost</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Profit Band
+        html += `
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card card-flush bg-light-warning border border-warning border-dashed">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="text-muted fw-semibold">Raw Materials (PO Cost)</span>
+                                <i class="ki-duotone ki-shop fs-2x text-warning opacity-50"></i>
+                            </div>
+                            <div class="fs-2 fw-bold text-warning">${fmtMoney(metrics.po_cost)}</div>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card card-flush bg-light-${metrics.profit >= 0 ? 'success' : 'danger'} border border-${metrics.profit >= 0 ? 'success' : 'danger'} border-dashed">
-                        <div class="card-body text-center">
-                            <span class="text-muted">Net Profit</span>
-                            <div class="fs-2 fw-bold text-${metrics.profit >= 0 ? 'success' : 'danger'}">
-                                ${fmtMoney(metrics.profit)}
+                    <div class="card card-flush bg-light-danger border border-danger border-dashed">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="text-muted fw-semibold">Production Overhead</span>
+                                <i class="ki-duotone ki-wallet fs-2x text-danger opacity-50"></i>
                             </div>
-                            <div class="text-muted fs-8">revenue ${fmtMoney(metrics.total_revenue)}</div>
+                            <div class="fs-2 fw-bold text-danger">${fmtMoney(metrics.overhead_cost)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="text-muted fw-semibold">Output Selling Value</span>
+                                <i class="ki-duotone ki-dollar fs-2x text-primary opacity-50"></i>
+                            </div>
+                            <div class="fs-2 fw-bold text-primary">${fmtMoney(metrics.total_revenue)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-flush bg-light-${metrics.net_profit >= 0 ? 'success' : 'danger'} border border-${metrics.net_profit >= 0 ? 'success' : 'danger'} border-dashed">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="text-muted fw-semibold" title="Revenue − Raw Materials − Overhead">Net Production Profit</span>
+                                <i class="ki-duotone ki-chart-line-up fs-2x text-${metrics.net_profit >= 0 ? 'success' : 'danger'} opacity-50"></i>
+                            </div>
+                            <div class="fs-2 fw-bold text-${metrics.net_profit >= 0 ? 'success' : 'danger'}">
+                                ${fmtMoney(metrics.net_profit)}
+                            </div>
+                            <div class="text-muted fs-8">revenue − raw materials − overhead</div>
                         </div>
                     </div>
                 </div>
@@ -571,54 +615,6 @@ window.POView = (function () {
         const potentialProfit = outputSellTotal - effectiveCost;
         const potentialMargin = outputSellTotal > 0 ? (potentialProfit / outputSellTotal) * 100 : 0;
 
-        html += `
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <div class="card card-flush bg-light-warning border border-warning border-dashed">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <span class="text-muted fw-semibold">PO Cost (Raw Materials)</span>
-                                <i class="ki-duotone ki-shop fs-2x text-warning opacity-50">
-                                    <span class="path1"></span><span class="path2"></span>
-                                </i>
-                            </div>
-                            <div class="fs-2 fw-bold text-warning">${fmtMoney(effectiveCost)}</div>
-                            ${poCostTotal === 0 ? '<div class="text-muted fs-8">Derived from batch cost (no PO linked)</div>' : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card card-flush bg-light-primary border border-primary border-dashed">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <span class="text-muted fw-semibold">Output Selling Value</span>
-                                <i class="ki-duotone ki-dollar fs-2x text-primary opacity-50">
-                                    <span class="path1"></span><span class="path2"></span>
-                                </i>
-                            </div>
-                            <div class="fs-2 fw-bold text-primary">${fmtMoney(outputSellTotal)}</div>
-                            <div class="text-muted fs-8">at list / discount selling price</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card card-flush bg-light-${potentialProfit >= 0 ? 'success' : 'danger'} border border-${potentialProfit >= 0 ? 'success' : 'danger'} border-dashed">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <span class="text-muted fw-semibold">Potential Profit</span>
-                                <i class="ki-duotone ki-chart-line-up fs-2x text-${potentialProfit >= 0 ? 'success' : 'danger'} opacity-50">
-                                    <span class="path1"></span><span class="path2"></span>
-                                </i>
-                            </div>
-                            <div class="fs-2 fw-bold text-${potentialProfit >= 0 ? 'success' : 'danger'}">
-                                ${fmtMoney(potentialProfit)}
-                            </div>
-                            <div class="text-muted fs-8">margin ${potentialMargin.toFixed(1)}%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
 
         // ── PO ITEMS ───────────────────────────────────────────────
         html += `

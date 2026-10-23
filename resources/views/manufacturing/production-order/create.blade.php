@@ -192,6 +192,7 @@
                                                             data-id="{{ $variant->id }}"
                                                             data-uom-id="{{ $variant->weight_unit }}"
                                                             data-selling-price="{{ $variant->selling_price }}"
+                                                            data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
                                                             data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
                                                     </option>
                                                 @endforeach
