@@ -63,11 +63,15 @@ window.POComplete = (function () {
         const planned   = Number(output.planned_quantity ?? 0);
         const remaining = Math.max(0, planned - actual);
 
+        // ★ Per-unit production cost — used by the summary and by the payment block
+        const perUnitCost = Number(output.production_cost ?? 0);
+
         const stratBadge = output.inventory_strategy === 'batch' ? 'info'
-                         : output.inventory_strategy === 'serial' ? 'warning' : 'primary';
+                        : output.inventory_strategy === 'serial' ? 'warning' : 'primary';
+        const weight = Number(output.weight ?? 1) || 1;
 
         return `
-            <tr class="output-row" data-key="${output.id}">
+            <tr class="output-row" data-key="${output.id}" data-production-cost="${perUnitCost}" data-variant-weight="${weight}">
                 <td class="ps-4">
                     <div class="d-flex flex-column">
                         <span class="fw-bold text-gray-800 output-name-display">
@@ -76,9 +80,9 @@ window.POComplete = (function () {
                         <span class="text-muted fs-7">SKU: ${escapeHtml(output.product_variant_sku || 'N/A')}</span>
                     </div>
                     <input type="hidden"
-                           name="outputs[${output.id}][product_variant_id]"
-                           class="output-variant-id"
-                           value="${output.product_variant_id}">
+                        name="outputs[${output.id}][product_variant_id]"
+                        class="output-variant-id"
+                        value="${output.product_variant_id}">
                 </td>
                 <td class="text-center">
                     <span class="fw-bold">${fmtNum(planned, 2)}</span>
@@ -90,11 +94,11 @@ window.POComplete = (function () {
                 </td>
                 <td>
                     <input type="number"
-                           name="outputs[${output.id}][actual_quantity]"
-                           class="form-control actual-quantity-input text-center"
-                           min="0" step="0.01"
-                           value="${actual > 0 ? actual : ''}"
-                           placeholder="0.00">
+                        name="outputs[${output.id}][actual_quantity]"
+                        class="form-control actual-quantity-input text-center"
+                        min="0" step="0.01"
+                        value="${actual > 0 ? actual : ''}"
+                        placeholder="0.00">
                     <small class="text-muted fs-7">
                         {{ __('passwords.max') }}: ${fmtNum(planned, 2)}
                         ${remaining > 0 ? `<span class="text-warning">({{ __('passwords.remaining') }}: ${fmtNum(remaining, 2)})</span>` : ''}
@@ -102,25 +106,42 @@ window.POComplete = (function () {
                 </td>
                 <td>
                     <input type="number"
-                           name="outputs[${output.id}][defective_quantity]"
-                           class="form-control defective-quantity-input text-center"
-                           min="0" step="0.01"
-                           value="${defective > 0 ? defective : ''}"
-                           placeholder="0.00">
+                        name="outputs[${output.id}][defective_quantity]"
+                        class="form-control defective-quantity-input text-center"
+                        min="0" step="0.01"
+                        value="${defective > 0 ? defective : ''}"
+                        placeholder="0.00">
                 </td>
+
+                {{-- ★ NEW: Production Cost (per unit) --}}
+                <td>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">{{ currency_symbol() }}</span>
+                        <input type="number"
+                            name="outputs[${output.id}][production_cost]"
+                            class="form-control production-cost-input text-center"
+                            min="0" step="0.01"
+                            value="${perUnitCost > 0 ? perUnitCost : ''}"
+                            placeholder="0.00">
+                    </div>
+                    <small class="text-muted fs-7">
+                        {{ __('passwords.per_unit') }}
+                    </small>
+                </td>
+
                 <td class="text-center">
                     <span class="badge badge-light-primary">${escapeHtml(uomLabel || output.unit || '')}</span>
                     <input type="hidden"
-                           name="outputs[${output.id}][unit]"
-                           class="output-unit-select"
-                           value="${output.unit || ''}">
+                        name="outputs[${output.id}][unit]"
+                        class="output-unit-select"
+                        value="${output.unit || ''}">
                 </td>
                 <td class="text-center">
                     <span class="badge badge-light-${stratBadge}">${escapeHtml(strategyLabel || output.inventory_strategy || '')}</span>
                     <input type="hidden"
-                           name="outputs[${output.id}][inventory_strategy]"
-                           class="output-strategy-select"
-                           value="${output.inventory_strategy || 'quantity'}">
+                        name="outputs[${output.id}][inventory_strategy]"
+                        class="output-strategy-select"
+                        value="${output.inventory_strategy || 'quantity'}">
                 </td>
                 <td class="text-end">
                     <button type="button"
@@ -139,12 +160,23 @@ window.POComplete = (function () {
 
         let totalProduced  = 0;
         let totalDefective = 0;
+        let totalCost      = 0;
 
-        modalEl.querySelectorAll('.actual-quantity-input').forEach(input => {
-            totalProduced += parseFloat(input.value) || 0;
-        });
-        modalEl.querySelectorAll('.defective-quantity-input').forEach(input => {
-            totalDefective += parseFloat(input.value) || 0;
+        modalEl.querySelectorAll('.po-complete-rows .output-row').forEach(row => {
+            const actual    = parseFloat(row.querySelector('.actual-quantity-input')?.value)    || 0;
+            const defective = parseFloat(row.querySelector('.defective-quantity-input')?.value) || 0;
+            const perUnit   = parseFloat(row.querySelector('.production-cost-input')?.value)    || 0;
+
+            // ★ Read the weight from the row dataset (defaults to 1 if not found/0)
+            const weight = parseFloat(row.dataset.variantWeight) || 1;
+            
+            // ★ Multiply by weight to get the true produced amount (e.g., 2 bags * 25kg = 50kg)
+            totalProduced  += (actual * weight);
+            totalDefective += (defective * weight);
+            totalCost      += actual * perUnit;
+
+            // Keep the row's data attribute in sync
+            row.dataset.productionCost = perUnit;
         });
 
         const setText = (sel, val) => {
@@ -154,6 +186,20 @@ window.POComplete = (function () {
 
         setText('.po-complete-total-produced',  totalProduced.toFixed(2));
         setText('.po-complete-total-defective', totalDefective.toFixed(2));
+        setText('.po-complete-total-cost',      fmtMoney(totalCost));
+        setText('.po-complete-actual-cost',     fmtMoney(totalCost));
+
+        // Keep the withdrawal input in sync with the live cost
+        const withdrawalInput = modalEl.querySelector('.po-complete-withdrawal');
+        if (withdrawalInput) {
+            withdrawalInput.value = totalCost.toFixed(2);
+        }
+
+        // Hide the payment card when there's nothing to pay
+        const paymentCard = modalEl.querySelector('.po-complete-payment-card');
+        if (paymentCard) {
+            paymentCard.classList.toggle('d-none', totalCost <= 0);
+        }
     }
 
     // ── Populate and show ───────────────────────────────────────
@@ -350,17 +396,31 @@ window.POComplete = (function () {
             if (o.value === e.target.value) matched = o;
         });
 
-        const hidden   = row.querySelector('.output-variant-id');
-        const display  = row.querySelector('.output-name-display');
-        const unitSel  = row.querySelector('.output-unit-select');
-        const stratSel = row.querySelector('.output-strategy-select');
+        const hidden    = row.querySelector('.output-variant-id');
+        const display   = row.querySelector('.output-name-display');
+        const unitSel   = row.querySelector('.output-unit-select');
+        const stratSel  = row.querySelector('.output-strategy-select');
+        const costInput = row.querySelector('.production-cost-input');
 
         if (!matched) {
             if (hidden) hidden.value = '';
+            row.dataset.variantWeight = '1'; // Reset
             return;
         }
 
         if (hidden) hidden.value = matched.dataset.id;
+
+        // ★ Set the weight on the row dataset
+        const weight = parseFloat(matched.dataset.weight) || 1;
+        row.dataset.variantWeight = weight;
+
+        // ★ Auto-fill per-unit production cost
+        const perUnit = parseFloat(matched.dataset.grandTotalCost) || 0;
+        row.dataset.productionCost = perUnit;
+        if (costInput) {
+            costInput.value = perUnit > 0 ? perUnit.toFixed(2) : '';
+            costInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
         const uomId = matched.dataset.uomId;
         if (unitSel && uomId) {
@@ -375,6 +435,8 @@ window.POComplete = (function () {
             display.textContent = matched.value;
             display.classList.remove('d-none');
         }
+
+        updateSummary();
     }
 
     // ── Submit ──────────────────────────────────────────────────
@@ -386,43 +448,36 @@ window.POComplete = (function () {
         if (!orderId) return;
 
         const btn  = modalEl.querySelector('.po-complete-submit');
-        const form = modalEl.querySelector('.po-complete-form');
 
-        // Gather outputs
-        // ✅ Send outputs as an OBJECT keyed by output_id (or "new_N" for new rows).
-        //    The controller iterates by key: integer keys = existing rows,
-        //    "new_*" keys = rows to create.
+        // ── Collect outputs as an object keyed by row id ──
         const outputs = {};
 
         modalEl.querySelectorAll('.po-complete-rows .output-row').forEach(row => {
             const key = row.dataset.key;
             if (!key) return;
 
-            const isNew = typeof key === 'string' && key.startsWith('new_');
             const variantId = row.querySelector('.output-variant-id')?.value;
             if (!variantId) return;
 
-            const actual    = parseFloat(row.querySelector('.actual-quantity-input')?.value) || 0;
+            const actual    = parseFloat(row.querySelector('.actual-quantity-input')?.value)    || 0;
             const defective = parseFloat(row.querySelector('.defective-quantity-input')?.value) || 0;
-            const unit      = row.querySelector('.output-unit-select')?.value
-                        || row.querySelector('.output-unit-select')?.dataset?.selectedUnit
-                        || null;
+            const perUnit   = parseFloat(row.querySelector('.production-cost-input')?.value)    || 0;
+            const unit      = row.querySelector('.output-unit-select')?.value || null;
             const strategy  = row.querySelector('.output-strategy-select')?.value || 'quantity';
 
             if (!unit) return;
 
-            // Key must be the integer id (as a string is fine) for existing rows,
-            // or "new_N" for rows the user just added.
             outputs[key] = {
                 product_variant_id: parseInt(variantId, 10),
                 actual_quantity:    actual,
                 defective_quantity: defective,
-                unit:               unit,
+                production_cost:    perUnit,
+                unit,
                 inventory_strategy: strategy,
             };
         });
 
-        // Must have at least one with qty > 0
+        // ── Validation ──
         const hasQuantity = Object.values(outputs).some(o => o.actual_quantity > 0);
         if (!hasQuantity) {
             Swal.fire({
@@ -434,7 +489,7 @@ window.POComplete = (function () {
             return;
         }
 
-        // Multi-shop requires location + department
+        // ── Multi-shop allocation guard ──
         let locationId = null, departmentId = null;
         if (!isSingleShop()) {
             locationId   = modalEl.querySelector('.po-complete-location-select')?.value || null;
@@ -451,12 +506,33 @@ window.POComplete = (function () {
             }
         }
 
+        // ── Payment validation ──
+        // ★ Calculate the total cost exactly as the UI shows it
+        const totalCost = Object.values(outputs).reduce(
+            (sum, o) => sum + (o.actual_quantity * o.production_cost), 0
+        );
+
+        const paymentMethodId = modalEl.querySelector('.po-complete-payment-method')?.value || null;
+
+        if (totalCost > 0 && !paymentMethodId) {
+            Swal.fire({
+                title: '{{ __("passwords.validation_error") }}',
+                text: '{{ __("payments.payment_method_required") }}',
+                icon: 'warning',
+                confirmButtonColor: '#0d6efd',
+            });
+            return;
+        }
+
+        // ── Build payload ──
         const payload = {
-            outputs,                              // ← now an object, not an array
+            outputs,
             batch_number: modalEl.querySelector('.po-complete-batch')?.value || null,
             expiry_date:  modalEl.querySelector('.po-complete-expiry')?.value || null,
             notes:        modalEl.querySelector('textarea[name="notes"]')?.value || null,
             complete:     true,
+            payment_method_id: paymentMethodId,
+            withdrawal_amount: totalCost, // ★ Send the exact UI total
         };
 
         if (!isSingleShop()) {
@@ -464,8 +540,8 @@ window.POComplete = (function () {
             payload.output_department_id = parseInt(departmentId, 10);
         }
 
+        // ── Submit ──
         toggleBusy(btn, true);
-
         try {
             const res = await fetch(ROUTES.complete(orderId), {
                 method: 'POST',
@@ -481,18 +557,12 @@ window.POComplete = (function () {
             const json = await res.json();
 
             if (json.success) {
-                window.toastr?.success?.(
-                    json.message || '{{ __("passwords.production_completed") }}'
-                );
+                window.toastr?.success?.(json.message || '{{ __("passwords.production_completed") }}');
                 bootstrap.Modal.getInstance(modalEl)?.hide();
                 window.ProductionPage?.reload?.();
             } else {
-                if (json.errors && typeof json.errors === 'object') {
-                    const first = Object.values(json.errors)[0]?.[0];
-                    window.toastr?.error?.(first || json.message || '{{ __("passwords.error") }}');
-                } else {
-                    window.toastr?.error?.(json.message || '{{ __("passwords.error") }}');
-                }
+                const first = json.errors ? Object.values(json.errors)[0]?.[0] : null;
+                window.toastr?.error?.(first || json.message || '{{ __("passwords.error") }}');
             }
         } catch (err) {
             console.error('[POComplete] submit failed:', err);
@@ -505,7 +575,8 @@ window.POComplete = (function () {
     // ── Delegation ──────────────────────────────────────────────
     document.addEventListener('input', function (e) {
         if (e.target.classList.contains('actual-quantity-input') ||
-            e.target.classList.contains('defective-quantity-input')) {
+            e.target.classList.contains('defective-quantity-input') ||
+            e.target.classList.contains('production-cost-input')) {
             const modal = e.target.closest(`#${MODAL_ID}`);
             if (modal) updateSummary();
         }

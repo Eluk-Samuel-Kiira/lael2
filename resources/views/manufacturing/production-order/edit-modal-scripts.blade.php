@@ -185,10 +185,14 @@
 
     function outputRowHtml(orderId, rowKey, output) {
         const strategy = output.inventory_strategy || 'quantity';
+        // ★ Track the original stored cost so auto-fill doesn't clobber it
+        const originalCost = parseFloat(output.production_cost) || 0;
+
         return `
             <div class="row g-4 mb-4 production-output-item"
                  id="edit_output_${orderId}_${rowKey}"
-                 data-output-id="${output.id ?? rowKey}">
+                 data-output-id="${output.id ?? rowKey}"
+                 data-original-cost="${originalCost}">
                 <div class="col-md-3">
                     <label class="form-label required">{{ __('passwords.product') }}</label>
                     <div class="position-relative">
@@ -462,9 +466,29 @@
             const costInput = row.querySelector('.input-cost');
             if (costInput && cost) costInput.value = parseFloat(cost).toFixed(2);
         } else {
+            // ── OUTPUTS ─────────────────────────────────────────
+            // Strategy auto-fill
             const strategy = matched.getAttribute('data-inventory-strategy');
             const sel = row.querySelector('.output-strategy-select');
-            if (sel && strategy) { sel.value = strategy; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+            if (sel && strategy) {
+                sel.value = strategy;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            // ★ Auto-fill production cost from variant's grand_total_cost_price
+            const grandTotalCost = parseFloat(matched.getAttribute('data-grand-total-cost')) || 0;
+            const costInput = row.querySelector('.output-cost');
+            if (costInput) {
+                costInput.value = grandTotalCost.toFixed(2);
+                costInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            // ★ Auto-fill selling price (optional, usually helpful)
+            const sellingPrice = parseFloat(matched.getAttribute('data-selling-price')) || 0;
+            const priceInput = row.querySelector('input[name*="[selling_price]"]');
+            if (priceInput && sellingPrice > 0) {
+                priceInput.value = sellingPrice.toFixed(2);
+            }
         }
 
         if (isInput) {

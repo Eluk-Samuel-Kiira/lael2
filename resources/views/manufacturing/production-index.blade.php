@@ -231,16 +231,29 @@
 
     @push('scripts')
         <script>
-            window.__VARIANT_OPTIONS__ = `{!! $variants->map(fn($v) => sprintf(
-                '<option value="%s" data-id="%s" data-uom-id="%s" data-cost-price="%s"></option>',
-                e($v->name), $v->id, $v->weight_unit, $v->supplier_cost_price
-            ))->implode('') !!}`;
+            window.__VARIANT_OPTIONS__ = `
+                @foreach($variants as $variant)
+                    <option value="{{ $variant->name }}"
+                            data-id="{{ $variant->id }}"
+                            data-uom-id="{{ $variant->weight_unit }}"
+                            data-cost-price="{{ $variant->supplier_cost_price }}"
+                            data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
+                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
+                    </option>
+                @endforeach
+            `;
 
-            window.__VARIANT_OUTPUT_OPTIONS__ = `{!! $variants->map(fn($v) => sprintf(
-                '<option value="%s" data-id="%s" data-uom-id="%s" data-selling-price="%s" data-inventory-strategy="%s"></option>',
-                e($v->name), $v->id, $v->weight_unit, $v->selling_price,
-                e($v->product?->resolvedInventoryStrategy() ?? 'quantity')
-            ))->implode('') !!}`;
+            window.__VARIANT_OUTPUT_OPTIONS__ = `
+                @foreach($variants as $variant)
+                    <option value="{{ $variant->name }}"
+                            data-id="{{ $variant->id }}"
+                            data-uom-id="{{ $variant->weight_unit }}"
+                            data-selling-price="{{ $variant->selling_price }}"
+                            data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
+                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
+                    </option>
+                @endforeach
+            `;
 
             window.__UOM_OPTIONS__ = `{!! $uoms->map(fn($u) => sprintf(
                 '<option value="%s">%s</option>',

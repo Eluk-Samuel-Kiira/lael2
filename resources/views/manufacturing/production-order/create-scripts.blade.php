@@ -389,6 +389,15 @@ window.ProductionCreate = (function () {
                 strategySelect.value = strategy;
                 strategySelect.dispatchEvent(new Event('change', { bubbles: true }));
             }
+
+            // ✅ Auto-fill production cost from variant's grand_total_cost_price
+            const grandTotalCost = parseFloat(matched.getAttribute('data-grand-total-cost')) || 0;
+            const costInput = row.querySelector('.output-cost');
+            if (costInput) {
+                costInput.value = grandTotalCost.toFixed(2);
+                // Trigger input event so totals recalculate
+                costInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         }
 
         // Inside handleVariantSelected(inputEl), after setting strategy
@@ -532,54 +541,75 @@ window.ProductionCreate = (function () {
     }
 
     async function submit() {
-        const form = document.getElementById(FORM_ID);
-        const btn  = document.getElementById(BTN_ID);
-        if (!form || !btn) {
-            console.error('[production-create] form or button not found');
-            return;
-        }
+        const modalEl = document.getElementById(MODAL_ID);
+        const btn     = document.getElementById(BTN_ID);
+        const form    = document.getElementById(FORM_ID);
+        
+        if (!form || !btn) return;
 
-        const formData = new FormData(form);
-        const data = {};
+        // ── Collect Basic Data ──
+        const data = {
+            location_id:    form.querySelector('[name="location_id"]')?.value || '',
+            scheduled_date: form.querySelector('[name="scheduled_date"]')?.value || null,
+            notes:          form.querySelector('[name="notes"]')?.value || null,
+            inputs:  [],
+            outputs: [],
+        };
 
-        for (const [key, value] of formData.entries()) {
-            if (key.startsWith('inputs[')) {
-                const m = key.match(/inputs\[(\d+)\]\[(.+)\]/);
-                if (m) {
-                    const [, idx, field] = m;
-                    if (!data.inputs)      data.inputs = [];
-                    if (!data.inputs[idx]) data.inputs[idx] = {};
-                    data.inputs[idx][field] = value;
-                }
-            } else if (key.startsWith('outputs[')) {
-                const m = key.match(/outputs\[(\d+)\]\[(.+)\]/);
-                if (m) {
-                    const [, idx, field] = m;
-                    if (!data.outputs)      data.outputs = [];
-                    if (!data.outputs[idx]) data.outputs[idx] = {};
-                    data.outputs[idx][field] = value;
-                }
-            } else {
-                data[key] = value;
+        // ── 1. Gather Inputs ──
+        document.querySelectorAll('.production-input-item').forEach(row => {
+            const variantId = row.querySelector('input[name*="[product_variant_id]"]')?.value;
+            const qty = parseFloat(row.querySelector('.input-quantity')?.value) || 0;
+            
+            // Safely get unit, bypassing Select2 issues
+            const unitSelect = row.querySelector('select[name*="[unit]"]');
+            let unit = unitSelect?.value;
+            if (!unit && unitSelect?.selectedIndex >= 0) {
+                unit = unitSelect.options[unitSelect.selectedIndex].value;
             }
-        }
 
-        if (data.inputs) {
-            data.inputs = Object.values(data.inputs).filter(i =>
-                i.product_variant_id &&
-                i.planned_quantity &&
-                parseFloat(i.planned_quantity) > 0
-            );
-        }
-        if (data.outputs) {
-            data.outputs = Object.values(data.outputs).filter(o =>
-                o.product_variant_id &&
-                o.planned_quantity &&
-                parseFloat(o.planned_quantity) > 0
-            );
-        }
+            const cost = parseFloat(row.querySelector('.input-cost')?.value) || 0;
+            const batchId = row.querySelector('.batch-source-select')?.value || null;
 
-        if (!data.inputs || data.inputs.length === 0) {
+            if (variantId && qty > 0 && unit) {
+                data.inputs.push({
+                    product_variant_id: variantId,
+                    planned_quantity: qty,
+                    unit: unit,
+                    estimated_cost: cost,
+                    purchase_receipt_item_id: batchId
+                });
+            }
+        });
+
+        // ── 2. Gather Outputs ──
+        document.querySelectorAll('.production-output-item').forEach(row => {
+            const variantId = row.querySelector('input[name*="[product_variant_id]"]')?.value;
+            const qty = parseFloat(row.querySelector('.output-quantity')?.value) || 0;
+            
+            // Safely get unit, bypassing Select2 issues
+            const unitSelect = row.querySelector('select[name*="[unit]"]');
+            let unit = unitSelect?.value;
+            if (!unit && unitSelect?.selectedIndex >= 0) {
+                unit = unitSelect.options[unitSelect.selectedIndex].value;
+            }
+
+            const cost = parseFloat(row.querySelector('.output-cost')?.value) || 0;
+            const strategy = row.querySelector('select[name*="[inventory_strategy]"]')?.value || 'quantity';
+
+            if (variantId && qty > 0 && unit) {
+                data.outputs.push({
+                    product_variant_id: variantId,
+                    planned_quantity: qty,
+                    unit: unit,
+                    production_cost: cost, // Send PER-UNIT cost
+                    inventory_strategy: strategy
+                });
+            }
+        });
+
+        // ── Validation ──
+        if (data.inputs.length === 0) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
                 text:  '{{ __("passwords.add_at_least_one_input") }}',
@@ -589,7 +619,7 @@ window.ProductionCreate = (function () {
             return;
         }
 
-        if (!data.outputs || data.outputs.length === 0) {
+        if (data.outputs.length === 0) {
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
                 text:  '{{ __("passwords.add_at_least_one_output") }}',
@@ -599,80 +629,46 @@ window.ProductionCreate = (function () {
             return;
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // ★ BATCH STRATEGY CHECK
-        //
-        // Only inputs whose product uses the 'batch' strategy must have
-        // a purchase_receipt_item_id selected. Inputs using 'quantity'
-        // or 'serial' don't need a batch, and 'recipe' isn't valid here.
-        // ═══════════════════════════════════════════════════════════
-        // ── Missing-batch check (unchanged logic) ─────────────────────
+        // ── Missing-batch check ──
         const missingBatches = [];
-
         data.inputs.forEach((input, i) => {
-            const variantId = input.product_variant_id;
-            if (!variantId) return;
-
-            const rowEl = document.getElementById(`input_${i}`);
+            const rowEl = document.querySelectorAll('.production-input-item')[i];
             if (!rowEl) return;
 
-            const typable    = rowEl.querySelector('.material-typable-input');
+            const typable = rowEl.querySelector('.material-typable-input');
             const datalistId = typable?.getAttribute('list');
-            if (!datalistId) return;
-
-            const datalist = document.getElementById(datalistId);
+            const datalist = datalistId ? document.getElementById(datalistId) : null;
             if (!datalist) return;
 
-            let strategy    = null;
+            let strategy = null;
             let variantName = 'Unknown material';
 
             datalist.querySelectorAll('option').forEach(opt => {
-                if (String(opt.dataset.id) === String(variantId)) {
-                    strategy    = opt.dataset.inventoryStrategy || null;
+                if (String(opt.dataset.id) === String(input.product_variant_id)) {
+                    strategy = opt.dataset.inventoryStrategy || null;
                     variantName = opt.value || variantName;
                 }
             });
 
             if (strategy !== 'batch') return;
 
-            const hasBatch = input.purchase_receipt_item_id
-                        && input.purchase_receipt_item_id !== ''
-                        && input.purchase_receipt_item_id !== 'null';
-
-            if (!hasBatch) {
+            if (!input.purchase_receipt_item_id) {
                 missingBatches.push({ index: i + 1, variantName });
             }
         });
 
         if (missingBatches.length > 0) {
-            const list = missingBatches
-                .map(m => `<li>Row ${m.index}: <strong>${m.variantName}</strong></li>`)
-                .join('');
-
+            const list = missingBatches.map(m => `<li>Row ${m.index}: <strong>${m.variantName}</strong></li>`).join('');
             Swal.fire({
                 title: '{{ __("passwords.validation_error") }}',
-                html: `
-                    <p class="mb-3">The following materials use the <strong>batch</strong> tracking strategy
-                    and require a specific batch to be selected:</p>
-                    <ul class="text-start">${list}</ul>
-                    <p class="text-muted fs-7 mt-3 mb-0">
-                        Every batch-tracked input must point to exactly one batch.
-                    </p>
-                `,
+                html: `<p class="mb-3">The following materials use the <strong>batch</strong> tracking strategy and require a specific batch:</p><ul class="text-start">${list}</ul>`,
                 icon: 'warning',
                 confirmButtonColor: '#0d6efd',
             });
             return;
         }
 
-        // ── Consumption preview + confirmation ─────────────────────────
-        //
-        // Server-side strict mode already rejects over-consumption, so this
-        // dialog only needs to surface two things the server cannot:
-        //   1. What the batch balances will look like after the draw
-        //   2. A loud warning when a tiny fraction of a batch is being drawn
-        //      (the "typed 1 against a 35,349 batch" mistake)
-        //
+        // ── Consumption preview ──
         const preview = buildBatchPreview(data);
 
         if (preview.rows.length > 0) {
@@ -749,17 +745,17 @@ window.ProductionCreate = (function () {
             if (!confirm.isConfirmed) return;
         }
 
-        delete data._token;
+        // ── Log what will be sent to the backend ──
+        // console.group('📤 Production Order — Payload Submitted');
+        // console.log('Location:', data.location_id);
+        // console.log('Scheduled Date:', data.scheduled_date);
+        // console.log('Notes:', data.notes);
+        // console.log('INPUTS:', JSON.parse(JSON.stringify(data.inputs)));
+        // console.log('OUTPUTS:', JSON.parse(JSON.stringify(data.outputs)));
+        // console.groupEnd();
 
-        // ★ Read CSRF here, not at module load
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-                        || '{{ csrf_token() }}';
-
-        if (!csrfToken) {
-            window.toastr?.error?.('CSRF token missing — page needs a hard refresh.');
-            return;
-        }
-
+        // ── Submit to Backend ──
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
         toggleBusy(btn, true);
 
         try {
@@ -776,25 +772,30 @@ window.ProductionCreate = (function () {
 
             const json = await res.json();
 
-            if (json.success) {
-                window.toastr?.success?.(
-                    json.message || '{{ __("passwords.production_order_created") }}'
-                );
+                        if (json.success) {
+                window.toastr?.success?.(json.message || '{{ __("passwords.production_order_created") }}');
 
-                bootstrap.Modal
-                    .getInstance(document.getElementById(MODAL_ID))
-                    ?.hide();
+                // 1. Close the modal
+                bootstrap.Modal.getInstance(document.getElementById(MODAL_ID))?.hide();
 
+                // 2. Trigger the discard button to reset the native form fields
+                document.getElementById('discardProductionOrderButton')?.click();
+
+                // 3. Clean up the dynamically added rows (keep only the first one)
+                document.querySelectorAll('#production_inputs_container .production-input-item')
+                    .forEach((row, i) => { if (i > 0) row.remove(); });
+                
+                document.querySelectorAll('#production_outputs_container .production-output-item')
+                    .forEach((row, i) => { if (i > 0) row.remove(); });
+
+                // 4. Reset the totals
+                updateTotals();
+
+                // 5. Refresh the list
                 window.ProductionPage?.reload?.();
             } else {
-                if (json.errors && typeof json.errors === 'object') {
-                    const firstError = Object.values(json.errors)[0]?.[0];
-                    window.toastr?.error?.(
-                        firstError || json.message || '{{ __("passwords.error") }}'
-                    );
-                } else {
-                    window.toastr?.error?.(json.message || '{{ __("passwords.error") }}');
-                }
+                const first = json.errors ? Object.values(json.errors)[0]?.[0] : null;
+                window.toastr?.error?.(first || json.message || '{{ __("passwords.error") }}');
             }
         } catch (err) {
             console.error('[production-create] submit failed:', err);

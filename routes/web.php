@@ -557,38 +557,83 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         });
 
         Route::prefix('reports/production')->name('reports.production.')->group(function () {
-            Route::get('/', [ProductionOrderReportController::class, 'index'])->name('index');
-            Route::get('/data', [ProductionOrderController::class, 'data'])->name('data'); 
-            Route::get('/summary', [ProductionOrderReportController::class, 'summary'])->name('summary');
-            Route::get('/detail/{orderId}', [ProductionOrderReportController::class, 'detail'])->name('detail');
-            Route::get('/cost-analysis', [ProductionOrderReportController::class, 'costAnalysis'])->name('cost-analysis');
-            Route::get('/efficiency', [ProductionOrderReportController::class, 'efficiency'])->name('efficiency');
-            Route::get('/inventory-impact', [ProductionOrderReportController::class, 'inventoryImpact'])->name('inventory-impact');
-            Route::get('/quality-analysis', [ProductionOrderReportController::class, 'qualityAnalysis'])->name('quality-analysis');
-            Route::get('/input-output', [ProductionOrderReportController::class, 'inputOutput'])->name('input-output');
-            Route::get('/waste', [ProductionOrderReportController::class, 'waste'])->name('waste');
-            Route::get('/batch-tracking', [ProductionOrderReportController::class, 'batchTracking'])->name('batch-tracking');
-            Route::get('/export', [ProductionOrderReportController::class, 'export'])->name('export');
+            Route::get('/',        [ProductionOrderReportController::class, 'index'])->name('index');
+            Route::get('/data',    [ProductionOrderReportController::class, 'data'])->name('data');
+
+            Route::get('/summary',      [ProductionOrderReportController::class, 'summary'])->name('summary');
+            Route::get('/summary/data', [ProductionOrderReportController::class, 'summaryData'])->name('summary-data');
+
+            Route::get('/detail/{orderId}',     [ProductionOrderReportController::class, 'detail'])->name('detail');
             
+            Route::get('/cost-analysis',      [ProductionOrderReportController::class, 'costAnalysis'])->name('cost-analysis');
+            Route::get('/cost-analysis/data', [ProductionOrderReportController::class, 'costAnalysisData'])->name('cost-analysis-data');
+
+            Route::get('/efficiency',      [ProductionOrderReportController::class, 'efficiency'])->name('efficiency');
+            Route::get('/efficiency/data', [ProductionOrderReportController::class, 'efficiencyData'])->name('efficiency-data');
+
+            Route::get('/inventory-impact',      [ProductionOrderReportController::class, 'inventoryImpact'])->name('inventory-impact');
+            Route::get('/inventory-impact/data', [ProductionOrderReportController::class, 'inventoryImpactData'])->name('inventory-impact-data');
+
+            Route::get('/quality-analysis',      [ProductionOrderReportController::class, 'qualityAnalysis'])->name('quality-analysis');
+            Route::get('/quality-analysis/data', [ProductionOrderReportController::class, 'qualityAnalysisData'])->name('quality-analysis-data');
+
+            Route::get('/input-output',      [ProductionOrderReportController::class, 'inputOutput'])->name('input-output');
+            Route::get('/input-output/data', [ProductionOrderReportController::class, 'inputOutputData'])->name('input-output-data');
+
+            Route::get('/waste',      [ProductionOrderReportController::class, 'waste'])->name('waste');
+            Route::get('/waste/data', [ProductionOrderReportController::class, 'wasteData'])->name('waste-data');
+
+            Route::get('/batch-tracking',      [ProductionOrderReportController::class, 'batchTracking'])->name('batch-tracking');
+            Route::get('/batch-tracking/data', [ProductionOrderReportController::class, 'batchTrackingData'])->name('batch-tracking-data');
+
+            Route::get('/export',               [ProductionOrderReportController::class, 'export'])->name('export');
         });
 
         // Inventory Reports Routes
         Route::prefix('reports/inventory')->name('reports.inventory.')->group(function () {
-            Route::get('summary', [InventoryReportsController::class, 'summary'])->name('summary');
-            Route::get('turnover', [InventoryReportsController::class, 'turnover'])->name('turnover');
-            Route::get('stock-aging', [InventoryReportsController::class, 'stockAging'])->name('stock-aging');
-            Route::get('low-stock-alerts', [InventoryReportsController::class, 'lowStockAlerts'])->name('low-stock-alerts');
-            Route::get('transactions', [InventoryReportsController::class, 'transactions'])->name('transactions');
-            Route::get('adjustments', [InventoryReportsController::class, 'adjustments'])->name('adjustments');
-            Route::get('abc-analysis', [InventoryReportsController::class, 'abcAnalysis'])->name('abc-analysis');
-            Route::get('movement-analysis', [InventoryReportsController::class, 'movementAnalysis'])->name('movement-analysis');
+            Route::get('summary',      [InventoryReportsController::class, 'summary'])->name('summary');
+            Route::get('summary/data', [InventoryReportsController::class, 'summaryData'])->name('summary-data');
+
+            Route::get('turnover',      [InventoryReportsController::class, 'turnover'])->name('turnover');
+            Route::get('turnover/data', [InventoryReportsController::class, 'turnoverData'])->name('turnover-data');
+
+            Route::get('stock-aging',      [InventoryReportsController::class, 'stockAging'])->name('stock-aging');
+            Route::get('stock-aging/data', [InventoryReportsController::class, 'stockAgingData'])->name('stock-aging-data');
+
+            Route::get('low-stock-alerts',      [InventoryReportsController::class, 'lowStockAlerts'])->name('low-stock-alerts');
+            Route::get('low-stock-alerts/data', [InventoryReportsController::class, 'lowStockAlertsData'])->name('low-stock-alerts-data');
+
+            Route::get('adjustments',              [InventoryReportsController::class, 'adjustments'])->name('adjustments');
+            Route::get('adjustments/data',         [InventoryReportsController::class, 'adjustmentsData'])->name('adjustments-data');
+            Route::get('adjustments/detail/{id}',  [InventoryReportsController::class, 'adjustmentDetail'])->name('adjustments-detail');
+
+            Route::get('transactions',             [InventoryReportsController::class, 'transactions'])->name('transactions');
+            Route::get('transactions/data',        [InventoryReportsController::class, 'transactionsData'])->name('transactions-data');
+            Route::get('transactions/detail/{id}', [InventoryReportsController::class, 'transactionDetail'])->name('transactions-detail');
+
+            Route::get('abc-analysis',      [InventoryReportsController::class, 'abcAnalysis'])->name('abc-analysis');
+            Route::get('abc-analysis/data', [InventoryReportsController::class, 'abcAnalysisData'])->name('abc-analysis-data');
+
+            Route::get('movement-analysis',      [InventoryReportsController::class, 'movementAnalysis'])->name('movement-analysis');
+            Route::get('movement-analysis/data', [InventoryReportsController::class, 'movementAnalysisData'])->name('movement-analysis-data');
+
             
             // Additional possible reports
-            Route::get('valuation', [InventoryReportsController::class, 'valuation'])->name('valuation');
-            Route::get('dead-stock', [InventoryReportsController::class, 'deadStock'])->name('dead-stock');
+            Route::get('valuation',      [InventoryReportsController::class, 'valuation'])->name('valuation');
+            Route::get('valuation/data', [InventoryReportsController::class, 'valuationData'])->name('valuation-data');
+
+            Route::get('dead-stock',      [InventoryReportsController::class, 'deadStock'])->name('dead-stock');
+            Route::get('dead-stock/data', [InventoryReportsController::class, 'deadStockData'])->name('dead-stock-data');
+
+            Route::get('excess-stock',      [InventoryReportsController::class, 'excessStock'])->name('excess-stock');
+            Route::get('excess-stock/data', [InventoryReportsController::class, 'excessStockData'])->name('excess-stock-data');
+
+            Route::get('excess-stock',      [InventoryReportsController::class, 'excessStock'])->name('excess-stock');
+            Route::get('excess-stock/data', [InventoryReportsController::class, 'excessStockData'])->name('excess-stock-data');
+
+
             Route::get('turnover-ratio', [InventoryReportsController::class, 'turnoverRatio'])->name('turnover-ratio');
             Route::get('stock-accuracy', [InventoryReportsController::class, 'stockAccuracy'])->name('stock-accuracy');
-            Route::get('excess-stock', [InventoryReportsController::class, 'excessStock'])->name('excess-stock');
 
             Route::get('/movement-logs', [InventoryReportsController::class, 'getMovementLogs'])
                 ->name('movement-logs');

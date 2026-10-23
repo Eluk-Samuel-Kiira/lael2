@@ -29,8 +29,8 @@
 
                 {{-- Status Filter --}}
                 <div class="flex-grow-1 flex-sm-grow-0" style="min-width: 160px; max-width: 200px;">
-                    <select id="poStatusFilter" class="form-select form-select-solid w-100">
-                        <option value="">{{ __('auth._status') }} — {{ __('pagination.all') ?? 'All' }}</option>
+                    <select id="poStatusFilter" class="form-select form-select-solid w-100" data-control="select2" data-placeholder="{{ __('auth._status') }} — {{ __('pagination.all') ?? 'All' }}" data-hide-search="true">
+                        <option value=""></option>
                         <option value="draft">Draft</option>
                         <option value="pending_approval">Pending Approval</option>
                         <option value="approved">Approved</option>
@@ -41,6 +41,32 @@
                     </select>
                 </div>
 
+                {{-- Supplier Filter --}}
+                <div class="flex-grow-1 flex-sm-grow-0" style="min-width: 180px; max-width: 220px;">
+                    <select id="poSupplierFilter" class="form-select form-select-solid w-100" data-control="select2" data-placeholder="{{ __('passwords.supplier') }} — {{ __('pagination.all') ?? 'All' }}">
+                        <option value=""></option>
+                        @foreach($suppliers as $sup)
+                            <option value="{{ $sup->id }}">{{ $sup->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Location Filter --}}
+                <div class="flex-grow-1 flex-sm-grow-0" style="min-width: 180px; max-width: 220px;">
+                    <select id="poLocationFilter" class="form-select form-select-solid w-100" data-control="select2" data-placeholder="{{ __('passwords.location') }} — {{ __('pagination.all') ?? 'All' }}">
+                        <option value=""></option>
+                        @foreach($locations as $loc)
+                            <option value="{{ $loc->id }}">{{ $loc->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Clear Filters Button --}}
+                <button type="button" class="btn btn-sm btn-light" id="poClearFiltersBtn">
+                    <i class="ki-duotone ki-arrow-rotate-left fs-2 me-1"></i>
+                    <span class="d-none d-sm-inline">{{ __('accounting.reset') ?? 'Clear' }}</span>
+                </button>
+
                 @can('create purchase_orders')
                 <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#kt_modal_add_purchase_order">
                     <i class="ki-duotone ki-plus fs-2 me-1"></i>
@@ -50,6 +76,7 @@
 
                 @include('procurement.purchase-order.create')
             </div>
+            
         </div>
     </div>
 

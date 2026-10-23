@@ -167,6 +167,7 @@ window.POStart = (function () {
     }
 
     // ── Submit ──────────────────────────────────────────────────
+
     async function submit() {
         const modalEl = getModalEl();
         if (!modalEl) return;
@@ -174,41 +175,9 @@ window.POStart = (function () {
         const orderId = currentOrderId();
         if (!orderId) return;
 
-        const btn = modalEl.querySelector('.po-start-submit');
+        const btn  = modalEl.querySelector('.po-start-submit');
         const form = modalEl.querySelector('.po-start-form');
-
-        const estimatedCost = parseFloat(form.querySelector('input[name="estimated_cost"]')?.value || 0);
-        const paymentMethodId = form.querySelector('select[name="payment_method_id"]')?.value;
-        const withdrawalAmount = parseFloat(form.querySelector('input[name="withdrawal_amount"]')?.value || 0);
         const notes = form.querySelector('textarea[name="notes"]')?.value || null;
-
-        // Validation
-        if (estimatedCost > 0 && !paymentMethodId) {
-            Swal.fire({
-                title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("payments.payment_method_required") }}',
-                icon: 'warning',
-                confirmButtonColor: '#0d6efd',
-            });
-            return;
-        }
-
-        if (estimatedCost > 0 && withdrawalAmount <= 0) {
-            Swal.fire({
-                title: '{{ __("passwords.validation_error") }}',
-                text: '{{ __("passwords.transfer_amount_min") }}',
-                icon: 'warning',
-                confirmButtonColor: '#0d6efd',
-            });
-            return;
-        }
-
-        const payload = {
-            payment_method_id: paymentMethodId || null,
-            withdrawal_amount: withdrawalAmount,
-            estimated_cost: estimatedCost,
-            notes: notes,
-        };
 
         toggleBusy(btn, true);
 
@@ -216,31 +185,23 @@ window.POStart = (function () {
             const res = await fetch(ROUTES.start(orderId), {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Content-Type':     'application/json',
+                    'Accept':           'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': csrfToken(),
+                    'X-CSRF-TOKEN':     csrfToken(),
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ notes }),
             });
 
             const json = await res.json();
 
             if (json.success) {
-                window.toastr?.success?.(
-                    json.message || '{{ __("passwords.production_started") }}'
-                );
-
+                window.toastr?.success?.(json.message || '{{ __("passwords.production_started") }}');
                 bootstrap.Modal.getInstance(modalEl)?.hide();
                 window.ProductionPage?.reload?.();
             } else {
-                // Show first validation error if present
-                if (json.errors && typeof json.errors === 'object') {
-                    const first = Object.values(json.errors)[0]?.[0];
-                    window.toastr?.error?.(first || json.message || '{{ __("passwords.error") }}');
-                } else {
-                    window.toastr?.error?.(json.message || '{{ __("passwords.error") }}');
-                }
+                const first = json.errors && Object.values(json.errors)[0]?.[0];
+                window.toastr?.error?.(first || json.message || '{{ __("passwords.error") }}');
             }
         } catch (err) {
             console.error('[POStart] submit failed:', err);

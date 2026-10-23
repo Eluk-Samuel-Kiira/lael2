@@ -249,6 +249,7 @@ class ProductionOrderController extends Controller
 
     public function store(Request $request)
     {
+        // \Log::info($request->all());
         $user = Auth::user();
         $tenantId = $user->tenant_id;
 
@@ -263,12 +264,12 @@ class ProductionOrderController extends Controller
             'location_id' => 'required|exists:locations,id',
             'scheduled_date' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string|max:500',
+            
             'inputs' => 'required|array|min:1',
             'inputs.*.product_variant_id' => [
                 'required',
                 'exists:product_variants,id',
                 function ($attribute, $value, $fail) use ($request) {
-                    // Extract the input index: inputs.3.product_variant_id → 3
                     preg_match('/inputs\.(\d+)\./', $attribute, $m);
                     $index = $m[1] ?? null;
                     if ($index === null) return;
@@ -277,14 +278,10 @@ class ProductionOrderController extends Controller
                     if (!$variant) return;
 
                     $strategy = $variant->product?->resolvedInventoryStrategy();
-
                     if ($strategy === 'batch') {
                         $batchId = $request->input("inputs.{$index}.purchase_receipt_item_id");
                         if (empty($batchId)) {
-                            $fail(
-                                "A specific batch must be selected for batch-tracked material '{$variant->name}'. "
-                                . "FIFO is disabled — every input row must point to exactly one batch."
-                            );
+                            $fail("A specific batch must be selected for batch-tracked material '{$variant->name}'.");
                         }
                     }
                 },
@@ -293,31 +290,24 @@ class ProductionOrderController extends Controller
             'inputs.*.purchase_receipt_item_id' => 'nullable|exists:purchase_receipt_items,id',
             'inputs.*.unit' => 'required|string|max:20',
             'inputs.*.estimated_cost' => 'nullable|numeric|min:0',
+            
             'outputs' => 'required|array|min:1',
             'outputs.*.product_variant_id' => 'required|exists:product_variants,id',
             'outputs.*.planned_quantity' => 'required|numeric|min:0.01',
             'outputs.*.unit' => 'required|string|max:20',
-            'outputs.*.production_cost' => 'nullable|numeric|min:0', // This is PER-UNIT cost
-            'outputs.*.selling_price' => 'nullable|numeric|min:0',
+            'outputs.*.production_cost' => 'nullable|numeric|min:0',
             'outputs.*.inventory_strategy' => 'required|in:quantity,batch,serial',
         ]);
 
-        // 🔒 Prevent duplicate batch usage within a single production order
-        $batchIds = collect($request->inputs)
-            ->pluck('purchase_receipt_item_id')
-            ->filter()                 // drop nulls / "no batch"
-            ->values();
-
+        // 🔒 Prevent duplicate batch usage
+        $batchIds = collect($request->inputs)->pluck('purchase_receipt_item_id')->filter()->values();
         $duplicates = $batchIds->duplicates()->unique()->values();
 
         if ($duplicates->isNotEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => __('passwords.batch_already_used')
-                    ?? 'The same batch was selected more than once.',
-                'errors'  => [
-                    'inputs' => ['Batch IDs used more than once: ' . $duplicates->implode(', ')],
-                ],
+                'message' => __('passwords.batch_already_used') ?? 'The same batch was selected more than once.',
+                'errors'  => ['inputs' => ['Batch IDs used more than once: ' . $duplicates->implode(', ')]],
             ], 422);
         }
 
@@ -326,36 +316,24 @@ class ProductionOrderController extends Controller
         try {
             $productionNumber = ProductionOrder::generateProductionNumber($tenantId);
 
-            // ✅ Calculate estimated costs - INPUTS
+            // Calculate totals
             $estimatedInputCost = 0;
             foreach ($request->inputs as $input) {
                 $variant = ProductVariant::find($input['product_variant_id']);
-                // Use the provided estimated_cost or calculate from unit cost * quantity
-                $cost = $input['estimated_cost'] ?? ($variant->supplier_cost_price ?? 0) * $input['planned_quantity'];
+                $cost = $input['estimated_cost'] ?? (($variant->supplier_cost_price ?? 0) * $input['planned_quantity']);
                 $estimatedInputCost += $cost;
             }
 
-            // ✅ Calculate estimated costs - OUTPUTS
-            // production_cost is PER-UNIT, so multiply by planned_quantity
             $estimatedOutputCost = 0;
             foreach ($request->outputs as $output) {
-                $perUnitCost = $output['production_cost'] ?? 0;
-                $quantity = $output['planned_quantity'] ?? 0;
-                // ✅ Total cost = per-unit cost * quantity
-                $totalOutputCost = $perUnitCost * $quantity;
-                $estimatedOutputCost += $totalOutputCost;
+                $perUnitCost = (float) ($output['production_cost'] ?? 0);
+                $quantity = (float) ($output['planned_quantity'] ?? 0);
+                $estimatedOutputCost += ($perUnitCost * $quantity);
             }
-
-            // ✅ Log for debugging
-            // \Log::info('Production order cost calculation', [
-            //     'estimated_input_cost' => $estimatedInputCost,
-            //     'estimated_output_cost' => $estimatedOutputCost,
-            //     'total_estimated_cost' => $estimatedInputCost + $estimatedOutputCost,
-            //     'outputs' => $request->outputs,
-            // ]);
 
             $totalEstimatedCost = $estimatedInputCost + $estimatedOutputCost;
 
+            // Create Production Order
             $productionOrder = ProductionOrder::create([
                 'tenant_id' => $tenantId,
                 'location_id' => $validated['location_id'],
@@ -367,7 +345,7 @@ class ProductionOrderController extends Controller
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            // Create inputs
+            // Create Inputs
             foreach ($request->inputs as $inputData) {
                 $variant = ProductVariant::find($inputData['product_variant_id']);
                 $unitCost = $inputData['estimated_cost'] ?? ($variant->supplier_cost_price ?? 0);
@@ -386,10 +364,10 @@ class ProductionOrderController extends Controller
                 ]);
             }
 
-            // Create outputs
+            // Create Outputs
             foreach ($request->outputs as $outputData) {
-                // ✅ Store the TOTAL production cost (per-unit * quantity)
-                $totalProductionCost = ($outputData['production_cost'] ?? 0) * ($outputData['planned_quantity'] ?? 0);
+                // Save the PER-UNIT cost exactly as sent
+                $perUnitCost = (float) ($outputData['production_cost'] ?? 0);
                 
                 ProductionOrderOutput::create([
                     'production_order_id' => $productionOrder->id,
@@ -398,8 +376,8 @@ class ProductionOrderController extends Controller
                     'actual_quantity' => 0,
                     'defective_quantity' => 0,
                     'unit' => $outputData['unit'],
-                    'production_cost' => $totalProductionCost, // ✅ Store TOTAL cost
-                    'selling_price' => $outputData['selling_price'] ?? 0,
+                    'production_cost' => $perUnitCost, 
+                    'selling_price' => 0,
                     'inventory_strategy' => $outputData['inventory_strategy'],
                 ]);
             }
@@ -423,12 +401,13 @@ class ProductionOrderController extends Controller
             ]);
         }
     }
+
     /**
      * Start production with payment withdrawal
      */
     public function startWithPayment(Request $request, $id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('start production_orders')) {
@@ -450,16 +429,11 @@ class ProductionOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'payment_method_id' => 'nullable|exists:payment_methods,id',
-            'withdrawal_amount' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
-            'estimated_cost' => 'required|numeric|min:0',
+            'estimated_cost' => 'nullable|numeric|min:0',
         ]);
 
-        $estimatedCost = (float) $validated['estimated_cost'];
-        $withdrawalAmount = (float) $validated['withdrawal_amount'];
-
-        // ✅ STEP 1: VALIDATE - All inputs have sufficient stock in master stock
+        // Validate inputs have stock
         try {
             $this->validateInputStock($productionOrder);
         } catch (\Exception $e) {
@@ -472,102 +446,31 @@ class ProductionOrderController extends Controller
         DB::beginTransaction();
 
         try {
-            $paymentMethod = null;
-            $transactionLog = null;
-
-            // ✅ STEP 2: RECORD PAYMENT WITHDRAWAL (if cost > 0)
-            if ($estimatedCost > 0) {
-                if (empty($validated['payment_method_id'])) {
-                    throw new \Exception(__('payments.payment_method_required'));
-                }
-
-                $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
-                if (!$paymentMethod) {
-                    throw new \Exception(__('pagination.payment_method_not_found'));
-                }
-
-                $actor          = $this->actorLabel($user);
-                $context        = $this->productionContextLabel($productionOrder);
-                $currency       = $paymentMethod->currency->code ?? 'UGX';
-                $amountStr      = number_format($withdrawalAmount, 2) . ' ' . $currency;
-                $methodName     = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
-
-                $narrative = "{$actor} withdrew {$amountStr} from {$methodName} "
-                    . "to fund production {$productionOrder->production_number}{$context}. "
-                    . "Estimated cost: " . number_format($estimatedCost, 2) . " {$currency}. "
-                    . "The withdrawal is logged as a FEE against {$methodName}.";
-
-                $transactionData = [
-                    'user_id'              => $user->id,
-                    'tenant_id'            => $tenantId,
-                    'payment_method_id'    => $paymentMethod->id,
-                    'transaction_type'     => 'WITHDRAWAL',
-                    'transaction_category' => 'FEE',
-                    'amount'               => $withdrawalAmount,
-                    'currency_id'          => $paymentMethod->currency_id ?? Currency::default()->id,
-                    'reference_table'      => 'production_orders',
-                    'reference_id'         => $productionOrder->id,
-
-                    // ★ Full-sentence description
-                    'description' => $narrative,
-
-                    // Short tag for the ledger list
-                    'notes' => "Production cost withdrawal — {$methodName}",
-
-                    'metadata' => [
-                        'production_number'   => $productionOrder->production_number,
-                        'estimated_cost'      => $estimatedCost,
-                        'withdrawal_amount'   => $withdrawalAmount,
-                        'payment_method'      => $methodName,
-                        'transaction_nature'  => 'PRODUCTION_COST_WITHDRAWAL',
-                        'processed_by_id'     => $user->id,
-                        'processed_by_name'   => $actor,
-                        'narrative'           => $narrative,
-                    ],
-                ];
-
-                $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
-
-                $paymentMethod->current_balance -= $withdrawalAmount;
-                $paymentMethod->save();
-
-                // \Log::info('[Production] Cost withdrawal recorded', [
-                //     'production_order_id' => $productionOrder->id,
-                //     'production_number' => $productionOrder->production_number,
-                //     'amount' => $withdrawalAmount,
-                //     'payment_method' => $paymentMethod->name,
-                //     'transaction_ref' => $transactionLog->transaction_ref ?? null,
-                // ]);
-            }
-
-            // ✅ STEP 3: CONSUME - All inputs (deplete master stock)
+            // Consume each input from its batch / overall stock
             foreach ($productionOrder->inputs as $input) {
                 $this->consumeInput($input, $productionOrder);
             }
 
-            // ✅ STEP 4: UPDATE - Production order status
-            $updateData = [
-                'status' => ProductionOrder::STATUS_IN_PROGRESS,
+            // Pure status transition — no money moves here
+            $productionOrder->update([
+                'status'     => ProductionOrder::STATUS_IN_PROGRESS,
                 'started_at' => now(),
                 'started_by' => $user->id,
-            ];
-
-            if ($estimatedCost > 0 && isset($paymentMethod)) {
-                $updateData['payment_method_id'] = $paymentMethod->id;
-                $updateData['payment_transaction_ref'] = $transactionLog->transaction_ref ?? null;
-            }
-
-            $productionOrder->update($updateData);
+                'notes'      => $validated['notes']
+                    ? ($productionOrder->notes
+                        ? $productionOrder->notes . "\n" . $validated['notes']
+                        : $validated['notes'])
+                    : $productionOrder->notes,
+            ]);
 
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'message' => __('passwords.production_started'),
-                'reload' => true,
+                'success'     => true,
+                'message'     => __('passwords.production_started'),
+                'reload'      => true,
                 'componentId' => 'reloadProductionComponent',
-                'redirect' => route('production-orders.index'),
-                'transaction_ref' => $transactionLog->transaction_ref ?? null,
+                'redirect'    => route('production-orders.index'),
             ]);
 
         } catch (\Exception $e) {
@@ -1057,8 +960,6 @@ class ProductionOrderController extends Controller
      */
     public function completeWithOutputs(Request $request, $id)
     {
-        // \Log::info($request->all());
-        // \Log::info($id);
         $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
@@ -1082,29 +983,28 @@ class ProductionOrderController extends Controller
 
         // ── Validate ──────────────────────────────────────────────────
         $validated = $request->validate([
-            'outputs'                          => 'required|array|min:1',
-            'outputs.*.product_variant_id'     => 'required|exists:product_variants,id',
-            'outputs.*.actual_quantity'        => 'required|numeric|min:0',
-            'outputs.*.defective_quantity'     => 'nullable|numeric|min:0',
-            'outputs.*.inventory_strategy'     => 'required|in:quantity,batch,serial',
-            'outputs.*.unit'                   => 'nullable',
-            'batch_number'                     => 'nullable|string|max:100',
-            'expiry_date'                      => 'nullable|date|after_or_equal:today',
-            'notes'                            => 'nullable|string|max:500',
-            'complete'                         => 'boolean',
-            'output_location_id'               => 'nullable|integer|exists:locations,id',
-            'output_department_id'             => 'nullable|integer|exists:departments,id',
+            'outputs'                       => 'required|array|min:1',
+            'outputs.*.product_variant_id'  => 'required|exists:product_variants,id',
+            'outputs.*.actual_quantity'     => 'required|numeric|min:0',
+            'outputs.*.defective_quantity'  => 'nullable|numeric|min:0',
+            'outputs.*.inventory_strategy'  => 'required|in:quantity,batch,serial',
+            'outputs.*.unit'                => 'nullable',
+            'batch_number'                  => 'nullable|string|max:100',
+            'expiry_date'                   => 'nullable|date|after_or_equal:today',
+            'notes'                         => 'nullable|string|max:500',
+            'complete'                      => 'boolean',
+            'output_location_id'            => 'nullable|integer|exists:locations,id',
+            'output_department_id'          => 'nullable|integer|exists:departments,id',
+
+            'payment_method_id'             => 'nullable|exists:payment_methods,id',
+            'withdrawal_amount'             => 'nullable|numeric|min:0',
         ]);
 
         // ── At least one output must have actual_quantity > 0 ─────────
         $hasQuantity = false;
         foreach ($validated['outputs'] as $row) {
-            if (($row['actual_quantity'] ?? 0) > 0) {
-                $hasQuantity = true;
-                break;
-            }
+            if (($row['actual_quantity'] ?? 0) > 0) { $hasQuantity = true; break; }
         }
-
         if (!$hasQuantity) {
             return response()->json([
                 'success' => false,
@@ -1138,14 +1038,26 @@ class ProductionOrderController extends Controller
             }
         }
 
+        // ── Trust the Frontend's Total Cost ──────────────────────────
+        // The frontend calculates the sum of (actual_quantity * production_cost)
+        // and ignores items with 0 cost (e.g., maize bran). We use exactly
+        // what the user confirmed in the UI.
+        $totalProductionCost = (float) ($validated['withdrawal_amount'] ?? 0);
+        $paymentMethodId     = $validated['payment_method_id'] ?? null;
+
+        // ── Validate payment block if cost > 0 ───────────────────────
+        if ($totalProductionCost > 0) {
+            if (!$paymentMethodId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('payments.payment_method_required'),
+                ], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
-            $totalActualQuantity = 0;
-            $batchNumber = $validated['batch_number']
-                ?? $productionOrder->production_number . '-' . date('Ymd');
-            $expiryDate  = $validated['expiry_date'] ?? null;
-
             // ── 1. Block deletion of any output that already has production ──
             $keptIds = collect($validated['outputs'])
                 ->keys()
@@ -1156,7 +1068,7 @@ class ProductionOrderController extends Controller
 
             $blockedDeletes = ProductionOrderOutput::where('production_order_id', $productionOrder->id)
                 ->when(!empty($keptIds), fn($q) => $q->whereNotIn('id', $keptIds))
-                ->when(empty($keptIds),   fn($q) => $q)   // if nothing kept, all existing are candidates
+                ->when(empty($keptIds),   fn($q) => $q)
                 ->where('actual_quantity', '>', 0)
                 ->get();
 
@@ -1164,46 +1076,38 @@ class ProductionOrderController extends Controller
                 throw new \Exception(__('passwords.cannot_delete_produced_output'));
             }
 
+            // ── 2. Process each output row ────────────────────────────
+            $batchNumber       = $validated['batch_number']
+                                ?? $productionOrder->production_number . '-' . date('Ymd');
+            $expiryDate        = $validated['expiry_date'] ?? null;
+            $totalActualQty    = 0.0;
+
             foreach ($validated['outputs'] as $key => $row) {
                 $isNew = is_string($key) && str_starts_with($key, 'new_');
 
                 if ($isNew) {
-                    // Create the output with ZERO actual/defective quantity so that
-                    // the "old actual" is genuinely zero and the subsequent update
-                    // produces a real difference for the allocator to act on.
                     $variantForNew = ProductVariant::find($row['product_variant_id']);
-
                     $output = ProductionOrderOutput::create([
                         'production_order_id' => $productionOrder->id,
                         'product_variant_id'  => $row['product_variant_id'],
                         'planned_quantity'    => $row['actual_quantity'],
                         'actual_quantity'     => 0,
                         'defective_quantity'  => 0,
-                        'unit'                => $row['unit']
-                                                ?? $variantForNew?->weight_unit
-                                                ?? 'unit',
+                        'unit'                => $row['unit'] ?? $variantForNew?->weight_unit ?? 'unit',
                         'production_cost'     => 0,
                         'selling_price'       => 0,
                         'inventory_strategy'  => $row['inventory_strategy'],
                     ]);
-
                     $oldActual = 0.0;
                 } else {
                     $output = ProductionOrderOutput::where('production_order_id', $productionOrder->id)
-                        ->where('id', (int) $key)
-                        ->first();
-
-                    if (!$output) {
-                        throw new \Exception("Output not found: {$key}");
-                    }
-
+                        ->where('id', (int) $key)->first();
+                    if (!$output) throw new \Exception("Output not found: {$key}");
                     $oldActual = (float) $output->actual_quantity;
                 }
 
                 $variant = $output->productVariant;
-                if (!$variant) {
-                    throw new \Exception("Product variant not found for output {$output->id}");
-                }
+                if (!$variant) throw new \Exception("Product variant not found for output {$output->id}");
 
                 $newActual          = (float) $row['actual_quantity'];
                 $quantityDifference = $newActual - $oldActual;
@@ -1216,6 +1120,9 @@ class ProductionOrderController extends Controller
                     );
                 }
 
+                // Persist production_cost (the per-unit cost the user confirmed)
+                $perUnitCost = (float) ($row['production_cost'] ?? 0);
+
                 $output->update([
                     'actual_quantity'    => $newActual,
                     'defective_quantity' => $defectiveQuantity,
@@ -1223,11 +1130,41 @@ class ProductionOrderController extends Controller
                     'expiry_date'        => $expiryDate,
                     'inventory_strategy' => $row['inventory_strategy'],
                     'unit'               => $unit,
+                    'production_cost'    => $perUnitCost,
                 ]);
 
-                if ($quantityDifference <= 0) {
-                    continue;
+                // Sync the cost back to the variant record (only if > 0)
+                if ($perUnitCost > 0) {
+                    $variant->grand_total_cost_price = $perUnitCost;
+                    $variant->supplier_cost_price    = $perUnitCost;
+
+                    if ((float) $variant->selling_price > 0) {
+                        $variant->markup_percentage =
+                            (($variant->selling_price - $perUnitCost) / max($perUnitCost, 0.0001)) * 100;
+                    }
+
+                    $variant->save();
+
+                    try {
+                        $recorder  = app('inventory-pricing-history');
+                        $oldValues = $recorder->snapshot($variant);
+                        $recorder->record(
+                            $variant,
+                            $oldValues,
+                            \App\Models\InventoryPricingHistory::CHANGE_UPDATED,
+                            sprintf(
+                                'Cost updated from production %s (output #%s). New cost: %s.',
+                                $productionOrder->production_number,
+                                $output->id,
+                                number_format($perUnitCost, 2)
+                            )
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::warning('[Production] Pricing history record failed: ' . $e->getMessage());
+                    }
                 }
+
+                if ($quantityDifference <= 0) continue;
 
                 $this->allocateProductionOutput(
                     $variant,
@@ -1241,10 +1178,10 @@ class ProductionOrderController extends Controller
                     $allocDepartmentId
                 );
 
-                $totalActualQuantity += $quantityDifference;
+                $totalActualQty += $quantityDifference;
             }
 
-            // ── 3. Delete outputs removed from the modal (safe ones only) ──
+            // ── 3. Delete outputs removed from the modal ──
             $stillKeptIds = array_map('intval', array_filter(
                 array_keys($validated['outputs']),
                 fn($k) => !is_string($k) || !str_starts_with((string)$k, 'new_')
@@ -1256,16 +1193,58 @@ class ProductionOrderController extends Controller
             }
             $orphanQuery->where('actual_quantity', 0)->delete();
 
-            // ── 4. Update order notes ─────────────────────────────────────
+            // ── 4. Record the payment withdrawal (Trusting frontend total) ──
+            if ($totalProductionCost > 0 && $paymentMethodId) {
+                $paymentMethod = PaymentMethod::findForTenant($paymentMethodId, $tenantId);
+                if (!$paymentMethod) throw new \Exception(__('pagination.payment_method_not_found'));
+
+                $actor         = $this->actorLabel($user);
+                $currency      = $paymentMethod->currency->code ?? 'UGX';
+                $amountStr     = number_format($totalProductionCost, 2) . ' ' . $currency;
+                $methodName    = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
+
+                $narrative = "{$actor} paid {$amountStr} from {$methodName} to complete production "
+                    . "{$productionOrder->production_number}"
+                    . $this->productionContextLabel($productionOrder) . ". "
+                    . "This withdrawal settles the cost of goods produced.";
+
+                app('payment-transaction')->recordTransaction([
+                    'user_id'              => $user->id,
+                    'tenant_id'            => $tenantId,
+                    'payment_method_id'    => $paymentMethod->id,
+                    'transaction_type'     => 'WITHDRAWAL',
+                    'transaction_category' => 'EXPENSE',
+                    'amount'               => $totalProductionCost,
+                    'currency_id'          => $paymentMethod->currency_id ?? Currency::default()->id,
+                    'reference_table'      => 'production_orders',
+                    'reference_id'         => $productionOrder->id,
+                    'description'          => $narrative,
+                    'notes'                => "Production completion payment — {$methodName}",
+                    'metadata' => [
+                        'production_number'  => $productionOrder->production_number,
+                        'actual_cost'        => $totalProductionCost,
+                        'payment_method'     => $methodName,
+                        'transaction_nature' => 'PRODUCTION_COMPLETION_PAYMENT',
+                        'narrative'          => $narrative,
+                    ],
+                ]);
+
+                $paymentMethod->current_balance -= $totalProductionCost;
+                $paymentMethod->save();
+
+                // Track payment on the order
+                $productionOrder->payment_method_id = $paymentMethod->id;
+                $productionOrder->save();
+            }
+
+            // ── 5. Update order notes + mark complete ─────────────────
             if (!empty($validated['notes'])) {
                 $productionOrder->notes = ($productionOrder->notes
                     ? $productionOrder->notes . "\n"
                     : '') . $validated['notes'];
-                $productionOrder->save();
             }
 
-            // ── 5. Mark order complete ────────────────────────────────────
-            $productionOrder->complete();
+            $productionOrder->complete();  // existing helper
 
             DB::commit();
 
@@ -1277,7 +1256,8 @@ class ProductionOrderController extends Controller
                 'redirect'    => route('production-orders.index'),
                 'data' => [
                     'total_output_quantity' => $productionOrder->outputs->sum('actual_quantity'),
-                    'inventory_updated'     => $totalActualQuantity > 0,
+                    'total_production_cost' => $totalProductionCost,
+                    'withdrawal_amount'     => $totalProductionCost,
                     'batch_number'          => $batchNumber,
                     'expiry_date'           => $expiryDate,
                 ],
@@ -1292,7 +1272,7 @@ class ProductionOrderController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Production completion failed: ' . $e->getMessage(), [
-                'trace'               => $e->getTraceAsString(),
+                'trace' => $e->getTraceAsString(),
                 'production_order_id' => $id,
             ]);
             return response()->json([
@@ -1940,6 +1920,7 @@ class ProductionOrderController extends Controller
                         'product_variant_name' => $output->productVariant->name ?? null,
                         'product_variant_sku' => $output->productVariant->sku ?? null,
                         'planned_quantity' => $output->planned_quantity,
+                        'weight' => $output->productVariant->weight ?? 1, 
                         'actual_quantity' => $output->actual_quantity,
                         'defective_quantity' => $output->defective_quantity,
                         'unit' => $output->unit,
