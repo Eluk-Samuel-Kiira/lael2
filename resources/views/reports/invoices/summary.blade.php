@@ -8,583 +8,407 @@
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
 
-                {{-- ============================================================ --}}
-                {{-- TOOLBAR SECTION --}}
-                {{-- ============================================================ --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-                        <div class="page-title d-flex flex-column">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+                {{-- Toolbar --}}
+                <div class="app-toolbar py-3 py-lg-6">
+                    <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0 w-100">
+                        <div class="page-title d-flex flex-column align-items-start text-start me-auto">
+                            <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
                                 {{ __('auth.invoice_summary_report') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('accounting.dashboard') }}</a>
-                                </li>
+                                <li class="breadcrumb-item text-muted"><a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('accounting.dashboard') }}</a></li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.invoice_reports') }}</li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.summary') }}</li>
                             </ul>
                         </div>
-                        @if(isset($summary) && $summary->total_invoices > 0)
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-primary" onclick="exportTableToExcel('invoiceSummaryTable', 'invoice_summary')">
-                                <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export_to_excel') }}
+                        <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+                            <button type="button" class="btn btn-sm btn-primary" id="isExportBtn">
+                                <i class="bi bi-download fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export_to_excel') }}</span>
                             </button>
-                            <button class="btn btn-sm btn-secondary" onclick="window.print()">
-                                <i class="ki-duotone ki-printer fs-2"></i> {{ __('accounting.print') }}
+                            <button type="button" class="btn btn-sm btn-secondary" id="isPrintBtn">
+                                <i class="bi bi-printer fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.print') }}</span>
                             </button>
                         </div>
-                        @endif
                     </div>
                 </div>
 
-                {{-- ============================================================ --}}
-                {{-- FILTER SECTION --}}
-                {{-- ============================================================ --}}
-                <div class="card mb-6">
-                    <div class="card-header">
-                        <h3 class="card-title">{{ __('accounting.filter_by') }}</h3>
+                {{-- Filters --}}
+                <div class="row mb-6"><div class="col-12"><div class="card">
+                    <div class="card-header border-0">
+                        <div class="card-title d-flex align-items-center">
+                            <i class="bi bi-funnel fs-2 me-2 text-primary"></i>
+                            <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <form method="GET" action="{{ route('reports.invoices.summary') }}" class="row g-3">
+                    <div class="card-body pt-0">
+                        <form id="isFilterForm" class="row g-3" onsubmit="return false;">
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('accounting.start_date') }}</label>
-                                <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
+                                <input type="date" class="form-control" id="isStartDate" value="{{ $startDate }}">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('accounting.end_date') }}</label>
-                                <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
+                                <input type="date" class="form-control" id="isEndDate" value="{{ $endDate }}">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('auth.location') }}</label>
-                                <select class="form-select" name="location_id" data-control="select2">
-                                    <option value="">{{ __('auth.all_locations') }}</option>
-                                    @foreach($locations as $location)
-                                        <option value="{{ $location->id }}" {{ $locationId == $location->id ? 'selected' : '' }}>{{ $location->name }}</option>
+                                <select class="form-select" id="isLocation" data-control="select2" data-placeholder="{{ __('auth.all_locations') }}">
+                                    <option value=""></option>
+                                    @foreach($locations as $loc)
+                                        <option value="{{ $loc->id }}" @selected((int)$locationId === $loc->id)>{{ $loc->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('auth.department') }}</label>
-                                <select class="form-select" name="department_id" data-control="select2">
-                                    <option value="">{{ __('auth.all_departments') }}</option>
-                                    @foreach($departments as $department)
-                                        <option value="{{ $department->id }}" {{ $departmentId == $department->id ? 'selected' : '' }}>{{ $department->name }}</option>
+                                <select class="form-select" id="isDepartment" data-control="select2" data-placeholder="{{ __('auth.all_departments') }}">
+                                    <option value=""></option>
+                                    @foreach($departments as $dep)
+                                        <option value="{{ $dep->id }}" @selected((int)$departmentId === $dep->id)>{{ $dep->name }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('auth.status') }}</label>
-                                <select class="form-select" name="status_filter">
-                                    <option value="all" {{ $statusFilter == 'all' ? 'selected' : '' }}>{{ __('auth.all_statuses') }}</option>
+                                <select class="form-select" id="isStatus">
+                                    <option value="all" @selected($statusFilter === 'all')>{{ __('auth.all_statuses') }}</option>
                                     @foreach($statuses as $s)
-                                        <option value="{{ $s['value'] }}" {{ $statusFilter == $s['value'] ? 'selected' : '' }}>{{ $s['label'] }}</option>
+                                        <option value="{{ $s['value'] }}" @selected($statusFilter === $s['value'])>{{ $s['label'] }}</option>
                                     @endforeach
                                 </select>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">{{ __('auth.customer') }}</label>
-                                <select class="form-select" name="customer_id" data-control="select2">
-                                    <option value="">{{ __('auth.all_customers') }}</option>
-                                    @foreach($customers as $customer)
-                                        <option value="{{ $customer->id }}" {{ $customerId == $customer->id ? 'selected' : '' }}>
-                                            {{ trim($customer->first_name . ' ' . $customer->last_name) }}
+                                <select class="form-select" id="isCustomer" data-control="select2" data-placeholder="{{ __('auth.all_customers') }}">
+                                    <option value=""></option>
+                                    @foreach($customers as $cust)
+                                        <option value="{{ $cust->id }}" @selected((int)$customerId === $cust->id)>
+                                            {{ trim($cust->first_name . ' ' . $cust->last_name) }}
                                         </option>
                                     @endforeach
                                 </select>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">{{ __('accounting.search') }}</label>
-                                <input type="text" class="form-control" name="search" value="{{ $search }}"
+                                <input type="text" class="form-control" id="isSearch" value="{{ $search }}"
                                        placeholder="{{ __('auth.invoice_number_or_billing_name') }}">
                             </div>
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-primary me-2">{{ __('accounting.apply_filters') }}</button>
-                                <a href="{{ route('reports.invoices.summary') }}" class="btn btn-light">{{ __('accounting.clear_filters') }}</a>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-primary" id="isApplyBtn">
+                                    <i class="bi bi-funnel me-1"></i>{{ __('accounting.apply_filters') }}
+                                </button>
+                                <button type="button" class="btn btn-light" id="isClearBtn">
+                                    <i class="bi bi-x-lg me-1"></i>{{ __('accounting.clear_filters') }}
+                                </button>
                             </div>
                         </form>
                     </div>
+                </div></div></div>
+
+                {{-- SKELETON --}}
+                <div id="isSkeleton">
+                    <div class="row g-6 mb-6">
+                        @for($i = 0; $i < 4; $i++)
+                        <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="is-sk is-sk-circle"></div>
+                                <div class="flex-grow-1">
+                                    <div class="is-sk is-sk-text mb-2" style="width:60%;"></div>
+                                    <div class="is-sk is-sk-text" style="width:40%;height:24px;"></div>
+                                </div>
+                            </div>
+                        </div></div></div>
+                        @endfor
+                    </div>
+                    <div class="row"><div class="col-12"><div class="card"><div class="card-body">
+                        @for($i = 0; $i < 8; $i++)
+                        <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                            <div class="is-sk is-sk-text" style="width:40px;"></div>
+                            <div class="flex-grow-1">
+                                <div class="is-sk is-sk-text mb-2" style="width:35%;"></div>
+                                <div class="is-sk is-sk-text" style="width:55%;height:8px;"></div>
+                            </div>
+                            <div class="is-sk is-sk-badge"></div>
+                        </div>
+                        @endfor
+                    </div></div></div></div>
                 </div>
 
-                {{-- ============================================================ --}}
-                {{-- NO DATA MESSAGE --}}
-                {{-- ============================================================ --}}
-                @if(!isset($summary) || $summary->total_invoices == 0)
-                <div class="card">
-                    <div class="card-body">
-                        <div class="text-center py-10">
-                            <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
-                            <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                            <p class="text-muted fs-6">{{ __('auth.no_invoices_found_for_period') }}</p>
+                {{-- CONTENT --}}
+                <div id="isContent" class="d-none">
+
+                    <div id="isEmpty" class="card d-none"><div class="card-body text-center py-10">
+                        <i class="bi bi-file-earmark fs-4tx text-gray-400 mb-4"></i>
+                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                        <p class="text-muted fs-6">{{ __('auth.no_invoices_found_for_period') }}</p>
+                    </div></div>
+
+                    {{-- KPI cards --}}
+                    <div id="isKpiCards" class="row g-6 mb-6"></div>
+
+                    {{-- Summary stat row --}}
+                    <div id="isStatRow" class="row g-6 mb-6"></div>
+
+                    {{-- Status breakdown --}}
+                    <div id="isStatusCard" class="card mb-6 d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-pie-chart fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('auth.status_breakdown') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('auth.status') }}</th>
+                                    <th class="text-center">{{ __('auth.count') }}</th>
+                                    <th class="text-end">{{ __('auth.total_amount') }}</th>
+                                    <th class="text-end">{{ __('auth.balance_due') }}</th>
+                                    <th class="pe-4 text-end">{{ __('auth.share') }}</th>
+                                </tr></thead>
+                                <tbody id="isStatusBody"></tbody>
+                                <tfoot class="bg-light" id="isStatusFoot"></tfoot>
+                            </table></div>
                         </div>
                     </div>
-                </div>
-                @else
 
-                {{-- ============================================================ --}}
-                {{-- KPI CARDS --}}
-                {{-- ============================================================ --}}
-                <div class="row g-6 mb-6">
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card bg-light-primary h-100">
-                            <div class="card-body">
+                    {{-- Aging buckets --}}
+                    <div id="isAgingCard" class="card mb-6 d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-hourglass-split fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('auth.aging_analysis') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body"><div id="isAgingBuckets" class="row g-4"></div></div>
+                    </div>
+
+                    {{-- Monthly trend --}}
+                    <div id="isMonthlyCard" class="card mb-6 d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-graph-up fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('auth.monthly_invoice_trend') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('auth.month') }}</th>
+                                    <th class="text-center">{{ __('auth.invoices') }}</th>
+                                    <th class="text-end">{{ __('auth.total_invoiced') }}</th>
+                                    <th class="text-end">{{ __('auth.total_collected') }}</th>
+                                    <th class="pe-4 text-end">{{ __('auth.outstanding') }}</th>
+                                </tr></thead>
+                                <tbody id="isMonthlyBody"></tbody>
+                                <tfoot class="bg-light" id="isMonthlyFoot"></tfoot>
+                            </table></div>
+                        </div>
+                    </div>
+
+                    {{-- Top customers --}}
+                    <div id="isTopCustomersCard" class="card mb-6 d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-people fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('auth.top_customers_by_invoice_value') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('auth.customer') }}</th>
+                                    <th class="text-center">{{ __('auth.invoices') }}</th>
+                                    <th class="text-end">{{ __('auth.total_billed') }}</th>
+                                    <th class="text-end">{{ __('auth.total_paid') }}</th>
+                                    <th class="pe-4 text-end">{{ __('auth.outstanding') }}</th>
+                                </tr></thead>
+                                <tbody id="isTopCustomersBody"></tbody>
+                            </table></div>
+                        </div>
+                    </div>
+
+                    {{-- Invoices table --}}
+                    <div id="isTableCard" class="card d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center justify-content-between w-100">
                                 <div class="d-flex align-items-center">
-                                    <div class="symbol symbol-50px me-3">
-                                        <span class="symbol-label bg-primary">
-                                            <i class="ki-duotone ki-document fs-2x text-white"></i>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <div class="fs-2 fw-bold">{{ number_format($summary->total_invoices) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.total_invoices') }}</div>
-                                    </div>
+                                    <i class="bi bi-table fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.invoice_breakdown') }}</h3>
                                 </div>
-                                <div class="mt-3 small text-muted">
-                                    <span class="badge badge-light-success me-1">{{ $summary->paid_count }}</span> {{ __('auth.paid') }}
-                                    <span class="badge badge-light-warning ms-2 me-1">{{ $summary->partially_paid_count }}</span> {{ __('auth.partial') }}
-                                    <span class="badge badge-light-danger ms-2 me-1">{{ $summary->overdue_count }}</span> {{ __('auth.overdue') }}
-                                </div>
+                                <span class="badge badge-light-primary fs-7" id="isTableBadge"></span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card bg-light-success h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="symbol symbol-50px me-3">
-                                        <span class="symbol-label bg-success">
-                                            <i class="ki-duotone ki-dollar fs-2x text-white"></i>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <div class="fs-4 fw-bold">{{ currency_symbol() }}{{ number_format($summary->total_invoiced, 2) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.total_invoiced') }}</div>
-                                        <div class="fs-4 fw-bold text-success mt-1">{{ currency_symbol() }}{{ number_format($summary->total_paid, 2) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.total_collected') }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card bg-light-warning h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="symbol symbol-50px me-3">
-                                        <span class="symbol-label bg-warning">
-                                            <i class="ki-duotone ki-time fs-2x text-white"></i>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <div class="fs-4 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($summary->total_outstanding, 2) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.outstanding') }}</div>
-                                        <div class="fs-4 fw-bold text-primary mt-1">{{ number_format($summary->collection_rate, 1) }}%</div>
-                                        <div class="text-muted fs-6">{{ __('auth.collection_rate') }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card bg-light-secondary h-100">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center">
-                                    <div class="symbol symbol-50px me-3">
-                                        <span class="symbol-label bg-secondary">
-                                            <i class="ki-duotone ki-chart fs-2x text-white"></i>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <div class="fs-4 fw-bold">{{ currency_symbol() }}{{ number_format($summary->average_invoice_value, 2) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.average_invoice') }}</div>
-                                        <div class="fs-4 fw-bold text-primary mt-1">{{ currency_symbol() }}{{ number_format($summary->largest_invoice, 2) }}</div>
-                                        <div class="text-muted fs-6">{{ __('auth.largest_invoice') }}</div>
-                                    </div>
-                                </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="isInvoicesTable">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('auth.invoice_number') }}</th>
+                                    <th>{{ __('auth.issue_date') }}</th>
+                                    <th>{{ __('auth.due_date') }}</th>
+                                    <th>{{ __('auth.customer') }}</th>
+                                    <th>{{ __('auth.status') }}</th>
+                                    <th class="text-end">{{ __('auth.total') }}</th>
+                                    <th class="text-end">{{ __('auth.paid') }}</th>
+                                    <th class="text-end">{{ __('auth.balance_due') }}</th>
+                                    <th class="pe-4">{{ __('auth.location') }}</th>
+                                </tr></thead>
+                                <tbody id="isInvoicesBody"></tbody>
+                                <tfoot class="bg-light" id="isInvoicesFoot"></tfoot>
+                            </table></div>
+                            <div class="card-footer d-flex justify-content-between align-items-center d-none" id="isPaginationWrap">
+                                <span class="text-muted fs-7" id="isPaginationInfo"></span>
+                                <nav><ul class="pagination m-0" id="isPagination"></ul></nav>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                {{-- ============================================================ --}}
-                {{-- SUMMARY STATS ROW --}}
-                {{-- ============================================================ --}}
-                <div class="row g-6 mb-6">
-                    <div class="col-md-3">
-                        <div class="card bg-light-info">
-                            <div class="card-body text-center">
-                                <div class="fs-6 text-muted">{{ __('auth.total_tax') }}</div>
-                                <div class="fs-3 fw-bold text-info">{{ currency_symbol() }}{{ number_format($summary->total_tax, 2) }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-light-warning">
-                            <div class="card-body text-center">
-                                <div class="fs-6 text-muted">{{ __('auth.total_discount') }}</div>
-                                <div class="fs-3 fw-bold text-warning">{{ currency_symbol() }}{{ number_format($summary->total_discount, 2) }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-light-danger">
-                            <div class="card-body text-center">
-                                <div class="fs-6 text-muted">{{ __('auth.overdue_invoices') }}</div>
-                                <div class="fs-3 fw-bold text-danger">{{ number_format($summary->overdue_count) }}</div>
-                                <div class="fs-7 text-muted">{{ $summary->outstanding_count }} {{ __('auth.outstanding') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-light-success">
-                            <div class="card-body text-center">
-                                <div class="fs-6 text-muted">{{ __('auth.fully_paid') }}</div>
-                                @php
-                                    $paidRate = $summary->total_invoices > 0
-                                        ? ($summary->paid_count / $summary->total_invoices) * 100
-                                        : 0;
-                                @endphp
-                                <div class="fs-3 fw-bold text-success">{{ number_format($paidRate, 1) }}%</div>
-                                <div class="fs-7 text-muted">{{ $summary->paid_count }} / {{ $summary->total_invoices }} {{ __('auth.invoices') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- ============================================================ --}}
-                {{-- STATUS BREAKDOWN --}}
-                {{-- ============================================================ --}}
-                @if($statusBreakdown->count() > 0)
-                <div class="card mb-6">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="ki-duotone ki-chart-pie fs-2 me-2"></i>
-                            {{ __('auth.status_breakdown') }}
-                        </h3>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>{{ __('auth.status') }}</th>
-                                        <th class="text-center">{{ __('auth.count') }}</th>
-                                        <th class="text-end">{{ __('auth.total_amount') }}</th>
-                                        <th class="text-end">{{ __('auth.balance_due') }}</th>
-                                        <th class="text-end">{{ __('auth.share') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($statusBreakdown as $row)
-                                    <tr>
-                                        <td>
-                                            <span class="badge badge-light-{{ $row->color }} fs-7 py-2 px-3">
-                                                {{ $row->label }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center fw-bold">{{ number_format($row->count) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($row->total_amount, 2) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($row->balance_due, 2) }}</td>
-                                        <td class="text-end">
-                                            <span class="badge badge-light-secondary">
-                                                {{ number_format($row->percentage, 1) }}%
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="table-light">
-                                    <tr>
-                                        <th>{{ __('accounting.total_average') }}</th>
-                                        <th class="text-center fw-bold">{{ number_format($statusBreakdown->sum('count')) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($statusBreakdown->sum('total_amount'), 2) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($statusBreakdown->sum('balance_due'), 2) }}</th>
-                                        <th class="text-end">100%</th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- ============================================================ --}}
-                {{-- AGING BUCKETS --}}
-                {{-- ============================================================ --}}
-                <div class="card mb-6">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="ki-duotone ki-time fs-2 me-2"></i>
-                            {{ __('auth.aging_analysis') }}
-                        </h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-4">
-                            @foreach([
-                                'current' => ['label' => __('auth.current'),        'color' => 'success', 'icon' => 'ki-check-circle'],
-                                '1_30'    => ['label' => __('auth.days_1_30'),      'color' => 'info',    'icon' => 'ki-information-4'],
-                                '31_60'   => ['label' => __('auth.days_31_60'),     'color' => 'warning', 'icon' => 'ki-warning-2'],
-                                '61_90'   => ['label' => __('auth.days_61_90'),     'color' => 'danger',  'icon' => 'ki-information-5'],
-                                '90_plus' => ['label' => __('auth.days_90_plus'),   'color' => 'dark',    'icon' => 'ki-cross-circle'],
-                            ] as $key => $meta)
-                                @php $bucket = $agingBuckets->$key; @endphp
-                                <div class="col-md-6 col-lg">
-                                    <div class="card bg-light-{{ $meta['color'] }} h-100">
-                                        <div class="card-body text-center">
-                                            <i class="ki-duotone {{ $meta['icon'] }} fs-2tx text-{{ $meta['color'] }} mb-2">
-                                                <span class="path1"></span><span class="path2"></span>
-                                            </i>
-                                            <div class="fs-6 text-muted">{{ $meta['label'] }}</div>
-                                            <div class="fs-2 fw-bold text-{{ $meta['color'] }}">{{ number_format($bucket['count']) }}</div>
-                                            <div class="fs-6 text-muted">{{ currency_symbol() }}{{ number_format($bucket['amount'], 2) }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                {{-- ============================================================ --}}
-                {{-- MONTHLY TREND --}}
-                {{-- ============================================================ --}}
-                @if($monthlyTrend->count() > 0)
-                <div class="card mb-6">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="ki-duotone ki-chart-line fs-2 me-2"></i>
-                            {{ __('auth.monthly_invoice_trend') }}
-                        </h3>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>{{ __('auth.month') }}</th>
-                                        <th class="text-center">{{ __('auth.invoices') }}</th>
-                                        <th class="text-end">{{ __('auth.total_invoiced') }}</th>
-                                        <th class="text-end">{{ __('auth.total_collected') }}</th>
-                                        <th class="text-end">{{ __('auth.outstanding') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($monthlyTrend as $row)
-                                    <tr>
-                                        <td><span class="fw-bold">{{ $row->month_label }}</span></td>
-                                        <td class="text-center">{{ number_format($row->invoice_count) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($row->total_amount, 2) }}</td>
-                                        <td class="text-end text-success">{{ currency_symbol() }}{{ number_format($row->paid_amount, 2) }}</td>
-                                        <td class="text-end fw-bold {{ $row->outstanding > 0 ? 'text-danger' : 'text-muted' }}">
-                                            {{ currency_symbol() }}{{ number_format($row->outstanding, 2) }}
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="table-light">
-                                    <tr>
-                                        <th>{{ __('accounting.total_average') }}</th>
-                                        <th class="text-center fw-bold">{{ number_format($monthlyTrend->sum('invoice_count')) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($monthlyTrend->sum('total_amount'), 2) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($monthlyTrend->sum('paid_amount'), 2) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($monthlyTrend->sum('outstanding'), 2) }}</th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- ============================================================ --}}
-                {{-- TOP CUSTOMERS BY INVOICE VALUE --}}
-                {{-- ============================================================ --}}
-                @if($topCustomers->count() > 0)
-                <div class="card mb-6">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="ki-duotone ki-people fs-2 me-2"></i>
-                            {{ __('auth.top_customers_by_invoice_value') }}
-                        </h3>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>{{ __('auth.customer') }}</th>
-                                        <th class="text-center">{{ __('auth.invoices') }}</th>
-                                        <th class="text-end">{{ __('auth.total_billed') }}</th>
-                                        <th class="text-end">{{ __('auth.total_paid') }}</th>
-                                        <th class="text-end">{{ __('auth.outstanding') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($topCustomers as $customer)
-                                    <tr>
-                                        <td>
-                                            <span class="fw-bold">{{ $customer->customer_name }}</span>
-                                            @if(!$customer->customer_id)
-                                                <span class="badge badge-light-secondary ms-1">{{ __('auth.guest') }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="text-center">{{ number_format($customer->invoice_count) }}</td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($customer->total_billed, 2) }}</td>
-                                        <td class="text-end text-success">{{ currency_symbol() }}{{ number_format($customer->total_paid, 2) }}</td>
-                                        <td class="text-end fw-bold {{ $customer->outstanding > 0 ? 'text-danger' : 'text-muted' }}">
-                                            {{ currency_symbol() }}{{ number_format($customer->outstanding, 2) }}
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- ============================================================ --}}
-                {{-- INVOICE DETAIL TABLE --}}
-                {{-- ============================================================ --}}
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="ki-duotone ki-tablet-text-up fs-2 me-2"></i>
-                            {{ __('auth.invoice_breakdown') }}
-                        </h3>
-                        <div class="card-toolbar">
-                            <span class="badge badge-light-primary fs-6">{{ $invoices->count() }} {{ __('auth.invoices') }}</span>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped align-middle mb-0" id="invoiceSummaryTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="min-width: 130px;">{{ __('auth.invoice_number') }}</th>
-                                        <th style="min-width: 100px;">{{ __('auth.issue_date') }}</th>
-                                        <th style="min-width: 100px;">{{ __('auth.due_date') }}</th>
-                                        <th style="min-width: 140px;">{{ __('auth.customer') }}</th>
-                                        <th style="min-width: 100px;">{{ __('auth.status') }}</th>
-                                        <th class="text-end" style="min-width: 120px;">{{ __('auth.total') }}</th>
-                                        <th class="text-end" style="min-width: 120px;">{{ __('auth.paid') }}</th>
-                                        <th class="text-end" style="min-width: 120px;">{{ __('auth.balance_due') }}</th>
-                                        <th style="min-width: 100px;">{{ __('auth.location') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($invoicesPaginated as $invoice)
-                                    <tr>
-                                        <td>
-                                            <a href="{{ route('invoices.show', $invoice->id) ?? '#' }}"
-                                               class="fw-bold text-primary text-hover-primary">
-                                                {{ $invoice->invoice_number }}
-                                            </a>
-                                        </td>
-                                        <td>
-                                            <span class="text-muted">{{ $invoice->issue_date->format('M d, Y') }}</span>
-                                        </td>
-                                        <td>
-                                            @if($invoice->due_date)
-                                                <span class="{{ $invoice->due_date->isPast() && $invoice->balance_due > 0 ? 'text-danger fw-bold' : 'text-muted' }}">
-                                                    {{ $invoice->due_date->format('M d, Y') }}
-                                                </span>
-                                            @else
-                                                <span class="text-muted">—</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <span class="fw-bold">{{ $invoice->billing_name }}</span>
-                                            @if($invoice->billing_email)
-                                                <br><small class="text-muted">{{ $invoice->billing_email }}</small>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-light-{{ $invoice->status_color }} fs-7 py-2 px-3">
-                                                {{ $invoice->status_label }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">{{ currency_symbol() }}{{ number_format($invoice->total, 2) }}</td>
-                                        <td class="text-end text-success">{{ currency_symbol() }}{{ number_format($invoice->amount_paid, 2) }}</td>
-                                        <td class="text-end fw-bold {{ $invoice->balance_due > 0 ? 'text-danger' : 'text-muted' }}">
-                                            {{ currency_symbol() }}{{ number_format($invoice->balance_due, 2) }}
-                                        </td>
-                                        <td>
-                                            <span class="text-muted fs-7">{{ $invoice->order->correct_location->name ?? 'N/A' }}</span>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="table-light">
-                                    <tr>
-                                        <th colspan="5">{{ __('accounting.total_average') }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($invoicesPaginated->sum('total'), 2) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($invoicesPaginated->sum('amount_paid'), 2) }}</th>
-                                        <th class="text-end fw-bold">{{ currency_symbol() }}{{ number_format($invoicesPaginated->sum('balance_due'), 2) }}</th>
-                                        <th></th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="card-footer">
-                        {{ $invoicesPaginated->links() }}
-                        <small class="text-muted float-end">
-                            {{ __('accounting.showing') }} {{ $invoicesPaginated->firstItem() ?? 0 }} - {{ $invoicesPaginated->lastItem() ?? 0 }} {{ __('accounting.of') }} {{ $invoicesPaginated->total() }} {{ __('auth.invoices') }}
-                        </small>
-                    </div>
-                </div>
-
-                {{-- ============================================================ --}}
-                {{-- REPORT METADATA FOOTER --}}
-                {{-- ============================================================ --}}
-                <div class="mt-6 text-muted text-center fs-7">
-                    <hr>
-                    <p>
-                        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                        {{ __('accounting.report_generated_on') }} {{ now()->format('F d, Y H:i:s') }}
-                        | {{ __('accounting.period') }}: {{ $startDate ?? 'N/A' }} {{ __('accounting.to') }} {{ $endDate ?? 'N/A' }}
-                        @if(isset($locationId) && $locationId)
-                            | {{ __('auth.location') }}: {{ $locations->where('id', $locationId)->first()->name ?? 'N/A' }}
-                        @endif
-                        @if(isset($departmentId) && $departmentId)
-                            | {{ __('auth.department') }}: {{ $departments->where('id', $departmentId)->first()->name ?? 'N/A' }}
-                        @endif
-                    </p>
-                </div>
-
-                @endif {{-- End of data check --}}
-
             </div>
         </div>
     </div>
 </div>
 
-{{-- ============================================================ --}}
-{{-- JAVASCRIPT --}}
-{{-- ============================================================ --}}
-<script>
-function exportTableToExcel(tableId, filename) {
-    const table = document.getElementById(tableId);
-    if (!table) {
-        alert('{{ __('accounting.table_not_found') }}');
-        return;
-    }
-    try {
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.table_to_sheet(table);
-        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-        XLSX.writeFile(wb, filename + '.xlsx');
-    } catch (e) {
-        alert('{{ __('accounting.export_error') }}: ' + e.message);
-    }
-}
-
-function printReport() {
-    window.print();
-}
-</script>
+{{-- ═══════════════════════════════════════════════════════════════ --}}
+{{-- DRAWER — invoice detail                                        --}}
+{{-- ═══════════════════════════════════════════════════════════════ --}}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="isDrawer" style="width: 900px; max-width: 100vw;">
+    <div class="offcanvas-header bg-primary py-4">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi bi-receipt fs-2 text-white"></i>
+            <div>
+                <h4 class="offcanvas-title text-white fw-bold mb-0" id="isDrawerLabel">{{ __('auth.invoice_breakdown') }}</h4>
+                <span class="text-white opacity-75 fs-7" id="isDrawerSubtitle"></span>
+            </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body px-5 py-6">
+        <div id="isDrawerSkeleton">
+            <div class="is-sk is-sk-text mb-3" style="width:60%;"></div>
+            <div class="is-sk is-sk-text mb-3" style="width:40%;"></div>
+            <div class="is-sk is-sk-text mb-3" style="width:80%;"></div>
+        </div>
+        <div id="isDrawerContent" class="d-none"></div>
+    </div>
+</div>
 @endsection
+
+@push('styles')
+<style>
+    .is-sk {
+        background: linear-gradient(90deg, #e4e6eb 0%, #f0f2f5 50%, #e4e6eb 100%);
+        background-size: 200% 100%;
+        animation: is-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .is-sk-text   { height: 12px; border-radius: 4px; }
+    .is-sk-circle { width: 44px; height: 44px; border-radius: 50%; }
+    .is-sk-badge  { width: 56px; height: 24px; border-radius: 12px; }
+    @keyframes is-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #isSkeleton .card { border: none; box-shadow: 0 0 0 1px #f0f2f5; }
+    .is-row { cursor: pointer; }
+    .is-row:hover { background-color: #f9f9f9; }
+    .is-notes { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; line-height: 1.5; }
+</style>
+@endpush
+
+@push('scripts')
+<script>
+    window.IS_ROUTES = {
+        data:   '{{ route("reports.invoices.summary-data") }}',
+        detail: '{{ route("reports.invoices.summary-detail", ["id" => "__ID__"]) }}',
+    };
+    window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    window.IS_BOOTSTRAP = {
+        startDate:    @json($startDate),
+        endDate:      @json($endDate),
+        locationId:   @json($locationId),
+        departmentId: @json($departmentId),
+        statusFilter: @json($statusFilter ?? 'all'),
+        customerId:   @json($customerId),
+        search:       @json($search),
+        perPage:      @json($perPage),
+    };
+    window.IS_STATUS_META = {
+        labels: @json(\App\Models\Invoice::STATUS_LABELS),
+        colors: @json(\App\Models\Invoice::STATUS_COLORS),
+    };
+    window.IS_I18N = {
+        totalInvoices:    @json(__('auth.total_invoices')),
+        paid:             @json(__('auth.paid')),
+        partial:          @json(__('auth.partial')),
+        overdue:          @json(__('auth.overdue')),
+        totalInvoiced:    @json(__('auth.total_invoiced')),
+        totalCollected:   @json(__('auth.total_collected')),
+        outstanding:      @json(__('auth.outstanding')),
+        collectionRate:   @json(__('auth.collection_rate')),
+        averageInvoice:   @json(__('auth.average_invoice')),
+        largestInvoice:   @json(__('auth.largest_invoice')),
+
+        totalTax:         @json(__('auth.total_tax')),
+        totalDiscount:    @json(__('auth.total_discount')),
+        overdueInvoices:  @json(__('auth.overdue_invoices')),
+        fullyPaid:        @json(__('auth.fully_paid')),
+        invoices:         @json(__('auth.invoices')),
+
+        status:           @json(__('auth.status')),
+        count:            @json(__('auth.count')),
+        totalAmount:      @json(__('auth.total_amount')),
+        balanceDue:       @json(__('auth.balance_due')),
+        share:            @json(__('auth.share')),
+        totalAverage:     @json(__('accounting.total_average')),
+
+        current:          @json(__('auth.current')),
+        days1_30:         @json(__('auth.days_1_30')),
+        days31_60:        @json(__('auth.days_31_60')),
+        days61_90:        @json(__('auth.days_61_90')),
+        days90plus:       @json(__('auth.days_90_plus')),
+
+        month:            @json(__('auth.month')),
+        totalPaidLbl:     @json(__('auth.total_paid')),
+
+        customer:         @json(__('auth.customer')),
+        totalBilled:      @json(__('auth.total_billed')),
+        guest:            @json(__('auth.guest')),
+
+        invoiceNumber:    @json(__('auth.invoice_number')),
+        issueDate:        @json(__('auth.issue_date')),
+        dueDate:          @json(__('auth.due_date')),
+        total:            @json(__('auth.total')),
+        location:         @json(__('auth.location')),
+
+        // drawer
+        invoiceDetails:   @json(__('auth.invoice_details')),
+        billing:          @json(__('auth.billing')),
+        item:             @json(__('auth.item')),
+        qty:              @json(__('auth.qty')),
+        unitPrice:        @json(__('auth.unit_price')),
+        discount:         @json(__('auth.discount')),
+        tax:              @json(__('auth.tax')),
+        lineTotal:        @json(__('auth.total')),
+        subtotal:         @json(__('auth.subtotal')),
+        payments:         @json(__('auth.payments')),
+        amount:           @json(__('auth.amount')),
+        method:           @json(__('auth.payment_method')),
+        processedBy:      @json(__('auth.processed_by')),
+        paymentDate:      @json(__('auth.payment_date')),
+        transactionId:    @json(__('auth.transaction_id')),
+        sends:            @json(__('auth.send_history')),
+        channel:          @json(__('auth.channel')),
+        recipient:        @json(__('auth.recipient')),
+        sentAt:           @json(__('auth.sent_at')),
+        error:            @json(__('auth.error')),
+        notes:            @json(__('auth.notes')),
+        orderInfo:        @json(__('auth.order')),
+        orderNumber:      @json(__('auth.order_number')),
+        department:       @json(__('auth.department')),
+        createdBy:        @json(__('auth.created_by')),
+        voidedBy:         @json(__('auth.voided_by')),
+        noData:           @json(__('accounting.no_data_available')),
+    };
+</script>
+@include('reports.invoices.summary-scripts')
+@endpush

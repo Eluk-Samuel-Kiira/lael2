@@ -19,6 +19,7 @@ class PurchaseOrderItem extends Model
         'product_name',
         'sku',
         'quantity',
+        'paid_total',
         'unit_cost',
         'tax_amount',
         'total_cost',
@@ -36,6 +37,7 @@ class PurchaseOrderItem extends Model
         'unit_cost' => 'integer',
         'tax_amount' => 'integer',
         'total_cost' => 'integer',
+        'paid_total' => 'integer',
     ];
 
     /**
@@ -50,10 +52,20 @@ class PurchaseOrderItem extends Model
     {
         return from_base_currency($value);
     }
+    public function getPaidTotalAttribute(?int $v): ?float
+    {
+        return $v === null ? null : from_base_currency($v);
+    }
+
+
 
     public function getTotalCostAttribute(?int $value): ?float
     {
         return from_base_currency($value);
+    }
+    public function setPaidTotalAttribute($v): void
+    {
+        $this->attributes['paid_total'] = $v === null ? null : to_base_currency($v);
     }
 
     /**

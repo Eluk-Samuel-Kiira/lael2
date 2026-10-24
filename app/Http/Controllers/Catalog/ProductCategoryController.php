@@ -20,72 +20,160 @@ class ProductCategoryController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view subcategory')) {
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
+                return response()->json(['success' => false, 'message' => __('payments.not_authorized')]);
             }
             abort(403);
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $initialFilters = [
+            'search'   => (string) $request->get('search', ''),
+            'per_page' => $perPage,
+        ];
+
+        return view('inventory.product-category-index', [
+            'initialFilters' => $initialFilters,
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view subcategory')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationships
-        $query = ProductCategory::with(['productCategoryCreater', 'parentCategory']);
-        
-        // If user is NOT super_admin, filter by tenant
+
+        $search  = trim((string) $request->get('search', ''));
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = ProductCategory::with(['parentCategory:id,name', 'productCategoryCreater:id,name']);
+
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+            $query->where('tenant_id', $tenantId);
         }
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhereHas('parentCategory', fn($p) => $p->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('productCategoryCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $products_categories = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $products_categories->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadProductCategoryComponent') {
-            return view('inventory.product-category.component', [
-                'products_categories' => $products_categories,
-            ])->render();
-        }
-        
-        // Get parent categories for create modal (FIXED: use parent_category_id column)
-        $parentCategories = ProductCategory::where('tenant_id', $tenantId)
-            ->where(function($q) {
-                $q->whereNull('parent_category_id')
-                ->orWhere('parent_category_id', 0);
-            })
-            ->get(['id', 'name']);
-        
-        // Regular page load
-        return view('inventory.product-category-index', [
-            'products_categories' => $products_categories,
-            'parentCategories' => $parentCategories,
+
+        $summary = [
+            'total'    => (clone $query)->count(),
+            'active'   => (clone $query)->where('is_active', 1)->count(),
+            'inactive' => (clone $query)->where('is_active', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(ProductCategory $c) => [
+            'id'          => $c->id,
+            'name'        => $c->name,
+            'slug'        => $c->slug,
+            'parent_name' => $c->parentCategory?->name ?? '—',
+            'parent_id'   => $c->parent_category_id,
+            'is_active'   => (bool) $c->is_active,
+            'creator'     => $c->productCategoryCreater?->name ?? '—',
+            'created_at'  => optional($c->created_at)->format('d M Y, h:i a'),
         ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ],
+            'filters' => ['search' => $search, 'per_page' => $perPage],
+        ]);
+    }
+
+    public function show(ProductCategory $productCategory)
+    {
+        $user = Auth::user();
+        if (!$user->hasPermissionTo('view subcategory')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $tenantId = $productCategory->tenant_id;
+
+        // Usage counts
+        $productCount = Product::where('category_id', $productCategory->id)->count();
+        $childCount   = ProductCategory::where('parent_category_id', $productCategory->id)->count();
+
+        // ── Parent options come from `Category`, NOT ProductCategory ──
+        $parentCategories = Category::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'success' => true,
+            'category' => [
+                'id'              => $productCategory->id,
+                'name'            => $productCategory->name,
+                'slug'            => $productCategory->slug,
+                'description'     => $productCategory->description,
+                'image_url'       => $productCategory->image_url
+                    ? productCategoryImage($productCategory->image_url)
+                    : null,
+                'parent_id'       => (int) ($productCategory->parent_category_id ?? 0),
+                'parent_name'     => $productCategory->parentCategory?->name ?? '—',
+                'is_active'       => (bool) $productCategory->is_active,
+                'creator' => [
+                    'name'  => $productCategory->productCategoryCreater?->name ?? '—',
+                    'email' => $productCategory->productCategoryCreater?->email,
+                ],
+                'created_at'      => optional($productCategory->created_at)->format('d M Y, h:i a'),
+                'updated_at'      => optional($productCategory->updated_at)->format('d M Y, h:i a'),
+                'product_count'   => $productCount,
+                'child_count'     => $childCount,
+                'can_edit'        => $user->can('edit subcategory'),
+                'can_delete'      => $user->can('delete subcategory') && !$productCategory->is_active,
+                'can_toggle'      => $user->can('edit subcategory'),
+                'parent_options'  => $parentCategories,   // Category rows, not ProductCategory
+            ],
+        ]);
+    }
+
+    public function changeStatus(Request $request, $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('edit subcategory')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $validated = $request->validate(['status' => 'required|in:1,0']);
+
+        $category = ProductCategory::where('id', $id)->where('tenant_id', $tenantId)->first();
+
+        if ($category) {
+            $category->is_active = $validated['status'];
+            if ($category->save()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => __('auth._updated'),
+                ]);
+            }
+        }
+        return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
     }
 
     /**
@@ -192,13 +280,8 @@ class ProductCategoryController extends Controller
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(ProductCategory $productCategory)
-    {
-        //
-    }
+
+    
 
     /**
      * Show the form for editing the specified resource.

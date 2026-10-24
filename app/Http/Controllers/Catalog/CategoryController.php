@@ -17,62 +17,85 @@ class CategoryController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view category')) {
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
+                return response()->json(['success' => false, 'message' => __('payments.not_authorized')]);
             }
             abort(403);
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $initialFilters = [
+            'search'   => (string) $request->get('search', ''),
+            'per_page' => $perPage,
+        ];
+
+        return view('inventory.category-index', [
+            'initialFilters' => $initialFilters,
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view category')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationships
-        $query = Category::with('categoryCreater');
-        
-        // If user is NOT super_admin, filter by tenant
+
+        $search  = trim((string) $request->get('search', ''));
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Category::with('categoryCreater:id,name');
+
         if (!$user->hasRole('super_admin')) {
             $query->where('tenant_id', $tenantId);
         }
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhereHas('categoryCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $categories = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $categories->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadCategoryComponent') {
-            return view('inventory.category.category-componenet', [
-                'all_categories' => $categories,
-            ])->render();
-        }
-        
-        // Regular page load
-        return view('inventory.category-index', [
-            'all_categories' => $categories,
+
+        $summary = [
+            'total'    => (clone $query)->count(),
+            'active'   => (clone $query)->where('is_active', 1)->count(),
+            'inactive' => (clone $query)->where('is_active', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Category $c) => [
+            'id'          => $c->id,
+            'name'        => $c->name,
+            'slug'        => $c->slug,
+            'description' => $c->description,
+            'is_active'   => (bool) $c->is_active,
+            'creator'     => $c->categoryCreater?->name ?? '—',
+            'created_at'  => optional($c->created_at)->format('d M Y, h:i a'),
+            'created_iso' => optional($c->created_at)->format('Y-m-d H:i'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $rows,
+            'summary' => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ],
+            'filters' => ['search' => $search, 'per_page' => $perPage],
         ]);
     }
 
@@ -143,7 +166,49 @@ class CategoryController extends Controller
      */
     public function show(Category $category)
     {
-        //
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view category')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        if ($category->tenant_id !== $tenantId && !$user->hasRole('super_admin')) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $category->load('categoryCreater:id,name,email');
+
+        // Usage counts
+        $usedAsParent = ProductCategory::where('parent_category_id', $category->id)
+            ->where('tenant_id', $category->tenant_id)
+            ->count();
+
+        $productCount = \App\Models\Product::whereHas('category', fn($q) => $q->where('category_id', $category->id))
+            ->count();
+            // ^ adjust to your real relation name if different
+
+        return response()->json([
+            'success' => true,
+            'category' => [
+                'id'           => $category->id,
+                'name'         => $category->name,
+                'slug'         => $category->slug,
+                'description'  => $category->description,
+                'is_active'    => (bool) $category->is_active,
+                'creator'      => [
+                    'name'  => $category->categoryCreater?->name ?? '—',
+                    'email' => $category->categoryCreater?->email,
+                ],
+                'created_at'   => optional($category->created_at)->format('d M Y, h:i a'),
+                'updated_at'   => optional($category->updated_at)->format('d M Y, h:i a'),
+                'used_as_parent' => $usedAsParent,
+                'product_count'  => $productCount,
+                'can_edit'       => $user->can('edit category'),
+                'can_delete'     => $user->can('delete category') && !$category->is_active,
+                'can_toggle'     => $user->can('update category'),
+            ],
+        ]);
     }
 
     /**

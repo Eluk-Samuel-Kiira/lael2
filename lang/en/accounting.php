@@ -14,6 +14,7 @@ return [
     'payment_method_analysis' => 'Payment Method Analysis',
     'daily_summary' => 'Daily Summary',
     'monthly_report' => 'Monthly Report',
+    'hour' => 'Hour',
     'reconciliation' => 'Reconciliation',
 
     'filter_transactions' => 'Filter Transactions',
@@ -130,6 +131,9 @@ return [
     'daily_breakdown' => 'Daily Breakdown',
     'method_breakdown' => 'Method Breakdown',
     'to' => 'To',
+    'search' => 'Search',
+    'search' => 'Search',
+    'search' => 'Search',
     'trend' => 'Trend',
     'daily_balance' => 'Daily Balance',
     'in_out_ratio' => 'In/Out Ratio',

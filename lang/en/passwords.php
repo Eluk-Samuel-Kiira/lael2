@@ -1783,6 +1783,7 @@ return [
     'consumed_input_delete_warning'             => 'This input has already been <strong>consumed</strong> from stock. Deleting it will <strong>restore</strong> the batch and overall quantity. Continue?',
     'produced_output_delete_warning'            => 'This output has already been <strong>produced</strong>. Deleting it will <strong>reverse</strong> the inventory movement. Continue?',
     'yes_delete_and_restore'                    => 'Yes, Delete & Restore',
+    'purchase_order_item_details'                    => 'Purechase Order Items',
     'yes_delete_and_reverse'                    => 'Yes, Delete & Reverse',
 
     // ─── Batch swap warning ───────────────────────────────────────
@@ -1806,6 +1807,7 @@ return [
     'items_to_return'          => 'Items to return',
     'ordered_qty'              => 'Ordered',
     'no_items'                 => 'No items',
+    'payment_details'                 => 'Payment Details',
     'movement_summary' => 'Movement summary',
     'order_total'              => 'Order total',
     'cancel_order'             => 'Cancel order',

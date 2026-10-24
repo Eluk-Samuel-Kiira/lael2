@@ -307,12 +307,44 @@ window.PODrawer = (function () {
 
 
     function renderView(order) {
-        return `
+        /* ─── Header metrics ───────────────────────────────────── */
+        const metrics = `
+            <div class="row g-3 mb-6">
+                <div class="col-6 col-md-3">
+                    <div class="bg-light-secondary rounded-3 p-3 text-center h-100">
+                        <div class="text-muted fs-8 text-uppercase mb-1">PO Total</div>
+                        <div class="fw-bold text-gray-800 fs-4">${esc(order.total_formatted || '—')}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light-info rounded-3 p-3 text-center h-100">
+                        <div class="text-muted fs-8 text-uppercase mb-1">Received</div>
+                        <div class="fw-bold text-info fs-4">${esc(order.received_total_formatted || '—')}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light-success rounded-3 p-3 text-center h-100">
+                        <div class="text-muted fs-8 text-uppercase mb-1">Paid</div>
+                        <div class="fw-bold text-success fs-4">${esc(order.total_paid_formatted || '—')}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light-${order.balance > 0 ? 'warning' : 'success'} rounded-3 p-3 text-center h-100">
+                        <div class="text-muted fs-8 text-uppercase mb-1">Balance</div>
+                        <div class="fw-bold text-${order.balance > 0 ? 'warning' : 'success'} fs-4">${esc(order.balance_formatted || '—')}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        /* ─── PO + Payment overview ────────────────────────────── */
+        const overview = `
             <div class="bg-light rounded-3 p-4 mb-6">
                 <div class="row g-4">
                     <div class="col-6">
                         <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">{{ __('passwords.supplier') }}</div>
                         <div class="fw-semibold text-gray-800 fs-7">${esc(order.supplier_name || '—')}</div>
+                        ${order.supplier_contact ? `<div class="text-muted fs-8">${esc(order.supplier_contact)}</div>` : ''}
                     </div>
                     <div class="col-6">
                         <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">{{ __('passwords.location') }}</div>
@@ -326,21 +358,47 @@ window.PODrawer = (function () {
                         <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">{{ __('passwords.expected_delivery') }}</div>
                         <div class="fw-semibold text-gray-800 fs-7">${esc(order.expected_delivery_date || '—')}</div>
                     </div>
+                    <div class="col-6">
+                        <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">Payment status</div>
+                        <span class="badge badge-light-${esc(order.payment_status_color || 'secondary')}">
+                            ${esc(order.payment_status_label || 'Pending')}
+                        </span>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted fw-semibold fs-8 text-uppercase mb-1">Payment method</div>
+                        <div class="fw-semibold text-gray-800 fs-7">
+                            ${esc(order.payment_method || 'Not specified')}
+                            ${order.payment_date ? `<span class="text-muted fs-8 d-block">${esc(order.payment_date)}</span>` : ''}
+                        </div>
+                    </div>
                 </div>
+                ${order.payment_reference ? `
+                    <div class="text-muted fs-8 mt-3">
+                        <i class="bi bi-link-45deg me-1"></i>${esc(order.payment_reference)}
+                    </div>
+                ` : ''}
             </div>
+        `;
 
-            <h6 class="fw-bold text-gray-800 mb-3">{{ __('passwords.items') }}</h6>
+        /* ─── Items table ──────────────────────────────────────── */
+        const itemsTable = `
+            <h6 class="fw-bold text-gray-800 mb-3">Items</h6>
             <div class="table-responsive border rounded-3 mb-6">
                 <table class="table table-row-dashed align-middle mb-0">
                     <thead>
                         <tr class="fw-bold text-muted bg-light fs-8">
-                            <th class="ps-3">{{ __('pagination._products') }}</th>
-                            <th class="text-center">{{ __('pagination.quantity') }}</th>
-                            <th class="text-end pe-3">{{ __('pagination._total') }}</th>
+                            <th class="ps-3">Product</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-center">Received</th>
+                            <th class="text-end">Unit Cost</th>
+                            <th class="text-end pe-3">Total</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${order.items.map(item => `
+                        ${(order.items || []).map(item => {
+                            const statusColor = item.payment_status === 'paid' ? 'success'
+                                            : item.payment_status === 'partial' ? 'info' : 'warning';
+                            return `
                             <tr>
                                 <td class="ps-3 fs-7">
                                     <div class="fw-bold text-gray-800">${esc(item.product_name || '—')}</div>
@@ -348,33 +406,142 @@ window.PODrawer = (function () {
                                 </td>
                                 <td class="text-center fs-7">
                                     ${fmt(item.quantity, 0)}
-                                    ${item.received_quantity > 0 ? `<div class="text-success fs-8">${fmt(item.received_quantity, 0)} rcvd</div>` : ''}
+                                    ${item.balance_quantity > 0 ? `<div class="text-warning fs-8">${fmt(item.balance_quantity, 0)} pending</div>` : ''}
                                 </td>
-                                <td class="text-end fs-7 fw-bold text-gray-800 pe-3">${CURRENCY}${fmt(item.total_cost, 2)}</td>
+                                <td class="text-center fs-7">
+                                    ${item.received_quantity > 0
+                                        ? `<span class="text-success fw-bold">${fmt(item.received_quantity, 0)}</span>`
+                                        : `<span class="text-muted">0</span>`}
+                                </td>
+                                <td class="text-end fs-7">${esc(CURRENCY)}${fmt(item.unit_cost, 2)}</td>
+                                <td class="text-end pe-3 fs-7 fw-bold text-gray-800">
+                                    ${esc(CURRENCY)}${fmt(item.total_cost, 2)}
+                                    <div class="badge badge-light-${statusColor} fs-8 mt-1">${esc(item.payment_status)}</div>
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        /* ─── Receipts ─────────────────────────────────────────── */
+        const receiptsBlock = (order.receipts && order.receipts.length > 0)
+            ? `
+            <h6 class="fw-bold text-gray-800 mb-3">Receipts (${order.receipts.length})</h6>
+            <div class="mb-6">
+                ${order.receipts.map(r => `
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <div>
+                                <div class="fw-bold fs-7">Receipt #${r.id}</div>
+                                <div class="text-muted fs-8">
+                                    ${esc(r.received_at || '—')} · by ${esc(r.received_by || '—')}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge badge-light-primary">${fmt(r.total_quantity, 2)} units</span>
+                                ${r.batch_number ? `<div class="text-muted fs-8 mt-1">Batch: ${esc(r.batch_number)}</div>` : ''}
+                            </div>
+                        </div>
+                        ${(r.lines || []).length > 0 ? `
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    ${r.lines.map(l => `
+                                        <tr class="fs-8">
+                                            <td class="ps-0">${esc(l.product_name || '—')}</td>
+                                            <td class="text-end">${fmt(l.quantity, 0)}</td>
+                                            <td class="text-end">${esc(CURRENCY)}${fmt(l.unit_cost, 2)}</td>
+                                            <td class="text-end">
+                                                <span class="badge badge-light-${l.payment_status === 'paid' ? 'success' : l.payment_status === 'partial' ? 'info' : 'warning'}">
+                                                    ${esc(l.payment_status)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+            ` : '';
+
+        /* ─── Tax liabilities ──────────────────────────────────── */
+        const taxBlock = (order.tax_liabilities && order.tax_liabilities.length > 0)
+            ? `
+            <h6 class="fw-bold text-gray-800 mb-3">Tax Liabilities</h6>
+            <div class="table-responsive border rounded-3 mb-6">
+                <table class="table table-row-dashed align-middle mb-0">
+                    <thead>
+                        <tr class="fw-bold text-muted bg-light fs-8">
+                            <th class="ps-3">Tax</th>
+                            <th class="text-end">Taxable</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end pe-3">Due</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${order.tax_liabilities.map(t => `
+                            <tr class="fs-8">
+                                <td class="ps-3">
+                                    <div class="fw-bold">${esc(t.tax_name)}</div>
+                                    <div class="text-muted">${t.tax_rate}%${t.is_withholding ? ' (withholding)' : ''}</div>
+                                </td>
+                                <td class="text-end">${esc(CURRENCY)}${fmt(t.taxable_amount, 2)}</td>
+                                <td class="text-end fw-bold">${esc(CURRENCY)}${fmt(t.tax_amount, 2)}</td>
+                                <td class="text-center">
+                                    <span class="badge badge-light-${t.status === 'paid' ? 'success' : t.status === 'pending' ? 'warning' : 'secondary'}">
+                                        ${esc(t.status)}
+                                    </span>
+                                </td>
+                                <td class="text-end pe-3">${esc(t.due_date || '—')}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>
+            ` : '';
 
-            <div class="bg-light-success rounded-3 p-4 mb-6">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-bold text-gray-800">{{ __('pagination._total') }}</span>
-                    <span class="fs-4 fw-bold text-success">${esc(order.total_formatted)}</span>
-                </div>
+        /* ─── Notes as a timeline ──────────────────────────────── */
+        const notesBlock = order.notes
+            ? `
+            <h6 class="fw-bold text-gray-800 mb-3">Activity</h6>
+            <div class="border rounded-3 p-3 mb-6" style="max-height: 340px; overflow-y: auto;">
+                ${renderNotes(order.notes)}
             </div>
-            
-            ${order.notes ? `
-            <h6 class="fw-bold text-gray-800 mb-3">Notes</h6>
-            <div class="text-muted fs-7 p-3 bg-light rounded-3">
-                ${String(order.notes)
-                    .split('[')
-                    .filter(Boolean)
-                    .map(note => `[${esc(note.trim())}`)
-                    .join('<br><br>')}
-            </div>
-            ` : ''}
-        `;
+            `
+            : '';
+
+        return metrics + overview + itemsTable + receiptsBlock + taxBlock + notesBlock;
+    }
+
+    /* ─── Notes parser — safe against nested brackets ───────────── */
+    function renderNotes(raw) {
+        const lines = String(raw).split('\n');
+
+        return lines
+            .filter(line => line.trim() !== '')
+            .map(line => {
+                // Each note starts with "[YYYY-MM-DD HH:MM:SS] ..."
+                const match = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+                if (match) {
+                    return `
+                        <div class="d-flex align-items-start gap-2 mb-3 fs-8">
+                            <div class="text-muted text-nowrap" style="min-width: 130px;">
+                                ${esc(match[1])}
+                            </div>
+                            <div class="text-gray-800 flex-grow-1">${esc(match[2])}</div>
+                        </div>
+                    `;
+                }
+                return `
+                    <div class="text-gray-800 fs-8 mb-2">${esc(line)}</div>
+                `;
+            })
+            .join('');
     }
 
     function renderActionBar(order, perms) {

@@ -2,9 +2,10 @@
 window.BatchTracking = (function () {
     'use strict';
 
-    const ROUTE    = window.BT_ROUTES.data;
-    const CURRENCY = window.REPORT_CURRENCY || '';
-    const BOOT     = window.BT_BOOTSTRAP || {};
+    const ROUTE        = window.BT_ROUTES.data;
+    const DETAIL_ROUTE = window.BT_ROUTES.detail;   // ← add this line
+    const CURRENCY     = window.REPORT_CURRENCY || '';
+    const BOOT         = window.BT_BOOTSTRAP || {};
 
     const state = {
         startDate: BOOT.startDate || '',
@@ -21,6 +22,7 @@ window.BatchTracking = (function () {
     let variantChart = null;
     let inFlight     = false;
     let searchTimer  = null;
+    let drawerBs     = null; 
 
     const $ = (id) => document.getElementById(id);
 
@@ -36,6 +38,17 @@ window.BatchTracking = (function () {
                 load();
             }, 400);
         });
+        $('btLogsBody')?.addEventListener('click', (e) => {
+            const row = e.target.closest('tr[data-batch-id]');
+            if (!row) return;
+            openDrawer(row.dataset.batchId);
+        });
+
+        document.getElementById('btDrawer')?.addEventListener('hidden.bs.offcanvas', () => {
+            $('btDrawerContent').innerHTML = '';
+            $('btDrawerSubtitle').textContent = '';
+        });
+
         load();
     });
 
@@ -386,7 +399,7 @@ window.BatchTracking = (function () {
                 : '-';
 
             return `
-                <tr>
+                <tr data-batch-id="${r.id}" style="cursor:pointer">
                     <td class="ps-4 text-muted fw-semibold">${idx}</td>
                     <td>${evtDate}</td>
                     <td>
@@ -492,6 +505,193 @@ window.BatchTracking = (function () {
         });
     }
     function money(n) { return CURRENCY + fmtNum(n, 2); }
+
+    // ─── Drawer ──────────────────────────────────────────────
+    function getDrawer() {
+        const el = document.getElementById('btDrawer');
+        if (!el) return null;
+        drawerBs = drawerBs || bootstrap.Offcanvas.getOrCreateInstance(el);
+        return drawerBs;
+    }
+
+    async function openDrawer(id) {
+        const inst = getDrawer();
+        if (!inst) return;
+
+        if (!DETAIL_ROUTE) {
+            window.toastr?.error('Detail endpoint not configured.');
+            return;
+        }
+
+        $('btDrawerSkeleton')?.classList.remove('d-none');
+        const content = $('btDrawerContent');
+        if (content) { content.classList.add('d-none'); content.innerHTML = ''; }
+        $('btDrawerSubtitle').textContent = '';
+        inst.show();
+
+        try {
+            const res = await fetch(DETAIL_ROUTE.replace('__ID__', id), {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.message || 'Failed');
+            renderDrawer(json.data);
+        } catch (err) {
+            console.error('[bt-drawer] load failed:', err);
+            $('btDrawerSkeleton')?.classList.add('d-none');
+            if (content) {
+                content.classList.remove('d-none');
+                content.innerHTML = `<div class="alert alert-danger">${esc(err.message || 'Failed to load')}</div>`;
+            }
+        }
+    }
+
+    function renderDrawer(d) {
+        $('btDrawerSkeleton')?.classList.add('d-none');
+        $('btDrawerSubtitle').textContent = `${d.batch_number || '#' + d.id} · ${d.event_date || ''}`;
+
+        const content = $('btDrawerContent');
+        if (!content) return;
+        content.classList.remove('d-none');
+
+        const changeCls = d.quantity_change > 0 ? 'success' : d.quantity_change < 0 ? 'danger' : 'secondary';
+        const changeSign = d.quantity_change > 0 ? '+' : '';
+        const profitCls = d.gross_profit >= 0 ? 'success' : 'danger';
+
+        const imgHtml = d.variant.image_url
+            ? `<div class="symbol symbol-60px me-3"><img src="${esc(d.variant.image_url)}" class="rounded" alt="${esc(d.variant.name)}"></div>`
+            : '';
+
+        // Reference links
+        let referenceHtml = '<em class="text-muted">No reference</em>';
+        const refParts = [];
+        if (d.purchase_order_number || d.purchase_order_id) {
+            refParts.push(`<span class="badge badge-light-info"><i class="bi bi-shop me-1"></i>PO: ${esc(d.purchase_order_number || '#' + d.purchase_order_id)}</span>`);
+        }
+        if (d.supplier_name) {
+            refParts.push(`<span class="badge badge-light-primary"><i class="bi bi-person me-1"></i>${esc(d.supplier_name)}</span>`);
+        }
+        if (d.purchase_receipt_id) {
+            refParts.push(`<span class="badge badge-light-dark">Receipt #${d.purchase_receipt_id}</span>`);
+        }
+        if (d.production_number || d.production_order_id) {
+            refParts.push(`<span class="badge badge-light-primary"><i class="bi bi-gear me-1"></i>${esc(d.production_number || 'PRD-#' + d.production_order_id)}</span>`);
+        }
+        if (refParts.length > 0) referenceHtml = `<div class="d-flex flex-wrap gap-2">${refParts.join('')}</div>`;
+
+        // Metadata rendering
+        let metadataHtml = '<em class="text-muted">No metadata</em>';
+        if (d.metadata && Object.keys(d.metadata).length > 0) {
+            const rows = Object.entries(d.metadata).map(([k, v]) => {
+                const val = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—');
+                return `<tr><th class="text-muted w-40">${esc(k)}</th><td class="text-break">${esc(val)}</td></tr>`;
+            }).join('');
+            metadataHtml = `<table class="table table-sm table-bordered mb-0"><tbody>${rows}</tbody></table>`;
+        }
+
+        // Expiry
+        let expiryHtml = '<em class="text-muted">No expiry date</em>';
+        if (d.expiry_date) {
+            const cls = d.is_expired ? 'danger' : (d.days_to_expiry !== null && d.days_to_expiry <= 30 ? 'warning' : 'success');
+            const label = d.is_expired ? 'Expired' : (d.days_to_expiry !== null && d.days_to_expiry <= 30 ? 'Expiring soon' : 'Valid');
+            expiryHtml = `
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge badge-light-${cls} fs-6 py-2 px-3">${esc(d.expiry_date)}</span>
+                    <span class="text-${cls} fw-semibold">${label}</span>
+                    ${d.days_to_expiry !== null && !d.is_expired
+                        ? `<span class="text-muted fs-7">(${d.days_to_expiry} days left)</span>`
+                        : ''}
+                </div>
+            `;
+        }
+
+        content.innerHTML = `
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <div class="d-flex align-items-center">
+                    ${imgHtml}
+                    <div>
+                        <h4 class="fw-bold mb-1">${esc(d.variant.name)}</h4>
+                        <div class="text-muted fs-7">${esc(d.variant.sku)} · ${esc(d.variant.product_name)}</div>
+                        ${d.variant.weight > 0 ? `<div class="text-muted fs-8">${fmtNum(d.variant.weight, 2)} kg / unit</div>` : ''}
+                    </div>
+                </div>
+                <span class="badge badge-light-${d.type_color} fs-6 py-2 px-3">${esc(d.type_label)}</span>
+            </div>
+
+            {{-- Quantity cards --}}
+            <div class="row g-3 mb-4">
+                <div class="col-4">
+                    <div class="card card-flush bg-light-secondary border border-secondary border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">Before</span>
+                            <div class="fs-4 fw-bold">${fmtNum(d.quantity_before, 0)}</div>
+                            <div class="text-muted fs-8">${fmtNum(d.quantity_before_kg, 0)} kg</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card card-flush bg-light-${changeCls} border border-${changeCls} border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">Change</span>
+                            <div class="fs-4 fw-bold text-${changeCls}">${changeSign}${fmtNum(d.quantity_change, 0)}</div>
+                            <div class="text-${changeCls} fs-8">${changeSign}${fmtNum(d.quantity_change_kg, 0)} kg</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">After</span>
+                            <div class="fs-4 fw-bold">${fmtNum(d.quantity_after, 0)}</div>
+                            <div class="text-muted fs-8">${fmtNum(d.quantity_after_kg, 0)} kg</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Pricing snapshot --}}
+            <h6 class="fw-bold mb-3"><i class="bi bi-currency-dollar me-2 text-primary"></i>Pricing Snapshot (Frozen at Event)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-sm table-bordered">
+                    <tbody>
+                        <tr><th class="w-50">Unit cost</th><td class="text-end">${money(d.unit_cost)}</td></tr>
+                        <tr><th>Unit cost / kg</th><td class="text-end">${money(d.unit_cost_per_kg)}</td></tr>
+                        <tr><th>Unit selling price</th><td class="text-end">${money(d.unit_selling_price)}</td></tr>
+                        <tr><th>Total cost</th><td class="text-end">${money(d.total_cost)}</td></tr>
+                        <tr><th>Total selling value</th><td class="text-end">${money(d.total_selling_value)}</td></tr>
+                        <tr class="bg-light"><th>Gross profit</th><td class="text-end fw-bold text-${profitCls}">${money(d.gross_profit)}</td></tr>
+                        ${d.pricing_source ? `<tr><th>Pricing source</th><td class="text-end"><span class="badge badge-light-dark">${esc(d.pricing_source)}</span></td></tr>` : ''}
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Reference --}}
+            <h6 class="fw-bold mb-3"><i class="bi bi-link-45deg me-2 text-primary"></i>Reference</h6>
+            <div class="border rounded p-3 mb-4">${referenceHtml}</div>
+
+            {{-- Expiry --}}
+            <h6 class="fw-bold mb-3"><i class="bi bi-calendar-x me-2 text-primary"></i>Expiry</h6>
+            <div class="border rounded p-3 mb-4">${expiryHtml}</div>
+
+            {{-- Metadata --}}
+            <h6 class="fw-bold mb-3"><i class="bi bi-code-square me-2 text-primary"></i>Metadata</h6>
+            <div class="mb-4">${metadataHtml}</div>
+
+            {{-- Context --}}
+            <h6 class="fw-bold mb-3"><i class="bi bi-geo-alt me-2 text-primary"></i>Context</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <tbody>
+                        <tr><th class="w-50">Batch number</th><td>${esc(d.batch_number || '—')}</td></tr>
+                        <tr><th>Event date</th><td>${esc(d.event_date || '—')}</td></tr>
+                        <tr><th>Performed by</th><td>${esc(d.performed_by)}</td></tr>
+                        <tr><th>Location ID</th><td>${d.location_id ?? '—'}</td></tr>
+                        <tr><th>Department ID</th><td>${d.department_id ?? '—'}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
 
     return { load };
 })();

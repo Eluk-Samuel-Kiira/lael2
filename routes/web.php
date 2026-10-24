@@ -251,14 +251,16 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::put('/update-permissions/{id}', [RoleController::class, 'updatePermission'])->name('permission.update');
         Route::put('/revoke-permissions/{id}', [RoleController::class, 'revokePermission'])->name('permission.revoke');
 
-        // Inventory - Category
-        Route::resource('category', CategoryController::class);
-        Route::post('/category-status/{id}', [CategoryController::class, 'changeCategoryStatus'])->name('category.status');
+        Route::get('category/data', [CategoryController::class, 'data'])->name('category.data');
+        Route::resource('category', CategoryController::class)
+            ->parameters(['category' => 'category']);          // ← key fix
+        Route::post('/category-status/{id}', [CategoryController::class, 'changeCategoryStatus'])
+            ->name('category.status');
 
-
+        Route::get('product-category/data', [ProductCategoryController::class, 'data'])->name('product-category.data');
+        // Resource routes using the parameter name 'productCategory' to match Laravel's default
         Route::resource('product-category', ProductCategoryController::class);
-        Route::post('/product-category-status/{id}', [ProductCategoryController::class, 'changeProductCategoryStatus'])->name('product.category.status');
-
+        Route::post('/product-category-status/{id}', [ProductCategoryController::class, 'changeStatus'])->name('product-category.status');
         // Products
         
         Route::resource('products', ProductController::class);
@@ -512,17 +514,47 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         // Order Reports Routes
         Route::prefix('reports/orders')->name('reports.orders.')->group(function () {
-            Route::get('summary', [OrderReportsController::class, 'summary'])->name('summary');
-            Route::get('profit-analysis', [OrderReportsController::class, 'profitAnalysis'])->name('profit-analysis');
-            Route::get('by-customer', [OrderReportsController::class, 'byCustomer'])->name('by-customer');
-            Route::get('by-product', [OrderReportsController::class, 'byProduct'])->name('by-product');
-            Route::get('by-payment-method', [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
-            Route::get('by-employee', [OrderReportsController::class, 'byEmployee'])->name('by-employee');
-            Route::get('time-analysis', [OrderReportsController::class, 'timeAnalysis'])->name('time-analysis');
-            Route::get('returns-refunds', [OrderReportsController::class, 'returnsRefunds'])->name('returns-refunds');
-            Route::get('discount-analysis', [OrderReportsController::class, 'discountAnalysis'])->name('discount-analysis');
-            Route::get('sales-forecast', [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
-            Route::get('inventory-sales', [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
+            Route::get('summary',      [OrderReportsController::class, 'summary'])->name('summary');
+            Route::get('summary/data', [OrderReportsController::class, 'summaryData'])->name('summary-data');
+
+            Route::get('profit-analysis',      [OrderReportsController::class, 'profitAnalysis'])->name('profit-analysis');
+            Route::get('profit-analysis/data', [OrderReportsController::class, 'profitAnalysisData'])->name('profit-analysis-data');
+
+            Route::get('by-customer',                              [OrderReportsController::class, 'byCustomer'])->name('by-customer');
+            Route::get('by-customer/data',                         [OrderReportsController::class, 'byCustomerData'])->name('by-customer-data');
+            Route::get('by-customer/{customerKey}/orders',         [OrderReportsController::class, 'byCustomerOrders'])->name('by-customer-orders');
+
+            Route::get('by-product',      [OrderReportsController::class, 'byProduct'])->name('by-product');
+            Route::get('by-product/data', [OrderReportsController::class, 'byProductData'])->name('by-product-data');
+
+            Route::get('by-payment-method',                                  [OrderReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('by-payment-method/data',                             [OrderReportsController::class, 'byPaymentMethodData'])->name('by-payment-method-data');
+            Route::get('by-payment-method/{methodId}/transactions',           [OrderReportsController::class, 'byPaymentMethodTransactions'])->name('by-payment-method-transactions');
+            Route::get('by-payment-method/{methodId}/failed-transactions',    [OrderReportsController::class, 'byPaymentMethodFailedTransactions'])->name('by-payment-method-failed');
+
+            Route::get('by-employee',                              [OrderReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('by-employee/data',                         [OrderReportsController::class, 'byEmployeeData'])->name('by-employee-data');
+            Route::get('by-employee/{employeeId}/orders',          [OrderReportsController::class, 'byEmployeeOrders'])->name('by-employee-orders');
+
+            Route::get('time-analysis',      [OrderReportsController::class, 'timeAnalysis'])->name('time-analysis');
+            Route::get('time-analysis/data', [OrderReportsController::class, 'timeAnalysisData'])->name('time-analysis-data');
+
+            Route::get('returns-refunds',                               [OrderReportsController::class, 'returnsRefunds'])->name('returns-refunds');
+            Route::get('returns-refunds/data',                          [OrderReportsController::class, 'returnsRefundsData'])->name('returns-refunds-data');
+            Route::get('returns-refunds/order/{orderId}',               [OrderReportsController::class, 'returnsRefundsOrderDetail'])->name('returns-refunds-order-detail');
+            Route::get('returns-refunds/payment/{paymentId}',           [OrderReportsController::class, 'returnsRefundsPaymentDetail'])->name('returns-refunds-payment-detail');
+
+            Route::get('discount-analysis',                       [OrderReportsController::class, 'discountAnalysis'])->name('discount-analysis');
+            Route::get('discount-analysis/data',                  [OrderReportsController::class, 'discountAnalysisData'])->name('discount-analysis-data');
+            Route::get('discount-analysis/order/{orderId}',       [OrderReportsController::class, 'discountAnalysisOrder'])->name('discount-analysis-order');
+
+            Route::get('sales-forecast',      [OrderReportsController::class, 'salesForecast'])->name('sales-forecast');
+            Route::get('sales-forecast/data', [OrderReportsController::class, 'salesForecastData'])->name('sales-forecast-data');
+
+            Route::get('inventory-sales',                       [OrderReportsController::class, 'inventorySales'])->name('inventory-sales');
+            Route::get('inventory-sales/data',                  [OrderReportsController::class, 'inventorySalesData'])->name('inventory-sales-data');
+            Route::get('inventory-sales/product/{variantId}',   [OrderReportsController::class, 'inventorySalesProduct'])->name('inventory-sales-product');
+
         });
         Route::get('/recipes/{productId}/ingredients', [OrderReportsController::class, 'getIngredients'])
             ->name('recipes.ingredients');
@@ -532,11 +564,26 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         Route::prefix('reports/invoices')->name('reports.invoices.')->group(function () {
-            Route::get('summary',        [InvoiceReportsController::class, 'summary'])->name('summary');
-            Route::get('outstanding',    [InvoiceReportsController::class, 'outstanding'])->name('outstanding');
-            Route::get('payments',       [InvoiceReportsController::class, 'payments'])->name('payments');
-            Route::get('delivery',       [InvoiceReportsController::class, 'delivery'])->name('delivery');
-            Route::get('status-trends',  [InvoiceReportsController::class, 'statusTrends'])->name('status-trends');
+            Route::get('summary',      [InvoiceReportsController::class, 'summary'])->name('summary');
+            Route::get('summary/data', [InvoiceReportsController::class, 'summaryData'])->name('summary-data');
+            Route::get('summary/{id}', [InvoiceReportsController::class, 'summaryDetail'])->name('summary-detail');
+
+            Route::get('outstanding',      [InvoiceReportsController::class, 'outstanding'])->name('outstanding');
+            Route::get('outstanding/data', [InvoiceReportsController::class, 'outstandingData'])->name('outstanding-data');
+            Route::get('outstanding/{id}', [InvoiceReportsController::class, 'outstandingDetail'])->name('outstanding-detail');
+
+            Route::get('payments',      [InvoiceReportsController::class, 'payments'])->name('payments');
+            Route::get('payments/data', [InvoiceReportsController::class, 'paymentsData'])->name('payments-data');
+            Route::get('payments/{id}', [InvoiceReportsController::class, 'paymentsDetail'])->name('payments-detail');
+
+            Route::get('delivery',      [InvoiceReportsController::class, 'delivery'])->name('delivery');
+            Route::get('delivery/data', [InvoiceReportsController::class, 'deliveryData'])->name('delivery-data');
+            Route::get('delivery/{id}', [InvoiceReportsController::class, 'deliveryDetail'])->name('delivery-detail');
+
+            Route::get('status-trends',      [InvoiceReportsController::class, 'statusTrends'])->name('status-trends');
+            Route::get('status-trends/data', [InvoiceReportsController::class, 'statusTrendsData'])->name('status-trends-data');
+            Route::get('status-trends/{id}', [InvoiceReportsController::class, 'statusTrendsDetail'])->name('status-trends-detail');
+
         });
 
 
@@ -583,8 +630,9 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             Route::get('/waste',      [ProductionOrderReportController::class, 'waste'])->name('waste');
             Route::get('/waste/data', [ProductionOrderReportController::class, 'wasteData'])->name('waste-data');
 
-            Route::get('/batch-tracking',      [ProductionOrderReportController::class, 'batchTracking'])->name('batch-tracking');
-            Route::get('/batch-tracking/data', [ProductionOrderReportController::class, 'batchTrackingData'])->name('batch-tracking-data');
+            Route::get('batch-tracking',             [ProductionOrderReportController::class, 'batchTracking'])->name('batch-tracking');
+            Route::get('batch-tracking/data',        [ProductionOrderReportController::class, 'batchTrackingData'])->name('batch-tracking-data');
+            Route::get('batch-tracking/detail/{id}', [ProductionOrderReportController::class, 'batchTrackingDetail'])->name('batch-tracking-detail');
 
             Route::get('/export',               [ProductionOrderReportController::class, 'export'])->name('export');
         });
@@ -641,16 +689,42 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
         // Purchasing Reports Routes
         Route::prefix('reports/purchasing')->name('reports.purchasing.')->group(function () {
-            Route::get('purchase-order-summary', [PurchasingReportsController::class, 'purchaseOrderSummary'])->name('purchase-order-summary');
-            Route::get('supplier-performance', [PurchasingReportsController::class, 'supplierPerformance'])->name('supplier-performance');
-            Route::get('purchase-order-status', [PurchasingReportsController::class, 'purchaseOrderStatus'])->name('purchase-order-status');
-            Route::get('purchase-receipts', [PurchasingReportsController::class, 'purchaseReceipts'])->name('purchase-receipts');
-            Route::get('supplier-spend-analysis', [PurchasingReportsController::class, 'supplierSpendAnalysis'])->name('supplier-spend-analysis');
-            Route::get('purchase-order-items', [PurchasingReportsController::class, 'purchaseOrderItems'])->name('purchase-order-items');
-            Route::get('payment-status', [PurchasingReportsController::class, 'paymentStatus'])->name('payment-status');
+            Route::get('purchase-order-summary',      [PurchasingReportsController::class, 'purchaseOrderSummary'])->name('purchase-order-summary');
+            Route::get('purchase-order-summary/data', [PurchasingReportsController::class, 'purchaseOrderSummaryData'])->name('purchase-order-summary-data');
+            Route::get('purchase-order-summary/detail/{id}', [PurchasingReportsController::class, 'purchaseOrderSummaryDetail'])->name('purchase-order-summary-detail');
+
+            Route::get('supplier-performance',      [PurchasingReportsController::class, 'supplierPerformance'])->name('supplier-performance');
+            Route::get('supplier-performance/data', [PurchasingReportsController::class, 'supplierPerformanceData'])->name('supplier-performance-data');
+
+            Route::get('purchase-order-status',             [PurchasingReportsController::class, 'purchaseOrderStatus'])->name('purchase-order-status');
+            Route::get('purchase-order-status/data',        [PurchasingReportsController::class, 'purchaseOrderStatusData'])->name('purchase-order-status-data');
+            Route::get('purchase-order-status/detail/{id}', [PurchasingReportsController::class, 'purchaseOrderStatusDetail'])->name('purchase-order-status-detail');
+
+            Route::get('purchase-receipts',             [PurchasingReportsController::class, 'purchaseReceipts'])->name('purchase-receipts');
+            Route::get('purchase-receipts/data',        [PurchasingReportsController::class, 'purchaseReceiptsData'])->name('purchase-receipts-data');
+            Route::get('purchase-receipts/detail/{id}', [PurchasingReportsController::class, 'purchaseReceiptsDetail'])->name('purchase-receipts-detail');
+
+            Route::get('supplier-spend-analysis',             [PurchasingReportsController::class, 'supplierSpendAnalysis'])->name('supplier-spend-analysis');
+            Route::get('supplier-spend-analysis/data',        [PurchasingReportsController::class, 'supplierSpendAnalysisData'])->name('supplier-spend-analysis-data');
+            Route::get('supplier-spend-analysis/detail/{id}', [PurchasingReportsController::class, 'supplierSpendAnalysisDetail'])->name('supplier-spend-analysis-detail');
+
+            Route::get('purchase-order-items',             [PurchasingReportsController::class, 'purchaseOrderItems'])->name('purchase-order-items');
+            Route::get('purchase-order-items/data',        [PurchasingReportsController::class, 'purchaseOrderItemsData'])->name('purchase-order-items-data');
+            Route::get('purchase-order-items/detail/{id}', [PurchasingReportsController::class, 'purchaseOrderItemsDetail'])->name('purchase-order-items-detail');
+
+            Route::get('payment-status',             [PurchasingReportsController::class, 'paymentStatus'])->name('payment-status');
+            Route::get('payment-status/data',        [PurchasingReportsController::class, 'paymentStatusData'])->name('payment-status-data');
+            Route::get('payment-status/detail/{id}', [PurchasingReportsController::class, 'paymentStatusDetail'])->name('payment-status-detail');
+
             Route::get('received-inventory', [PurchasingReportsController::class, 'receivedInventory'])->name('received-inventory');
-            Route::get('supplier-risk-assessment', [PurchasingReportsController::class, 'supplierRiskAssessment'])->name('supplier-risk-assessment');
-            Route::get('purchase-cost-analysis', [PurchasingReportsController::class, 'purchaseCostAnalysis'])->name('purchase-cost-analysis');
+            Route::get('received-inventory/data', [PurchasingReportsController::class, 'receivedInventoryData'])->name('received-inventory-data');
+            
+            Route::get('supplier-risk-assessment',      [PurchasingReportsController::class, 'supplierRiskAssessment'])->name('supplier-risk-assessment');
+            Route::get('supplier-risk-assessment/data', [PurchasingReportsController::class, 'supplierRiskAssessmentData'])->name('supplier-risk-assessment-data');
+
+            Route::get('purchase-cost-analysis',      [PurchasingReportsController::class, 'purchaseCostAnalysis'])->name('purchase-cost-analysis');
+            Route::get('purchase-cost-analysis/data', [PurchasingReportsController::class, 'purchaseCostAnalysisData'])->name('purchase-cost-analysis-data');
+
             
             Route::get('export', [PurchasingReportsController::class, 'export'])->name('export');
         });

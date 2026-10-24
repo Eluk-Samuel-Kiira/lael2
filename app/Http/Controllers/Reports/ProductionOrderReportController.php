@@ -3686,6 +3686,95 @@ class ProductionOrderReportController extends Controller
         ]);
     }
 
+    public function batchTrackingDetail($id)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('production reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $log = BatchLog::with([
+                'variant:id,name,sku,weight,image_url,product_id',
+                'variant.product:id,name',
+                'performedBy:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->firstOrFail();
+
+        $change   = (float) $log->quantity_change;
+        $weight   = (float) ($log->variant?->weight ?? 0);
+        $toKg     = fn($q) => $weight > 0 ? $q * $weight : $q;
+
+        $unitCost         = (float) ($log->unit_cost ?? 0);
+        $unitSellingPrice = (float) ($log->unit_selling_price ?? 0);
+        $totalCost        = (float) ($log->total_cost ?? 0);
+        $totalSelling     = (float) ($log->total_selling_value ?? 0);
+        $grossProfit      = (float) ($log->gross_profit ?? 0);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'                 => $log->id,
+                'batch_id'           => $log->batch_id,
+                'batch_number'       => $log->batch_number,
+                'type'               => $log->type,
+                'type_label'         => $log->type_label,
+                'type_color'         => $log->type_color,
+                'direction'          => $change > 0 ? 'in' : ($change < 0 ? 'out' : 'neutral'),
+
+                'variant' => [
+                    'name'         => $log->variant?->name ?? '-',
+                    'sku'          => $log->variant?->sku ?? '-',
+                    'weight'       => $weight,
+                    'image_url'    => $log->variant?->image_url,
+                    'product_name' => $log->variant?->product?->name ?? '',
+                ],
+
+                // Quantities (units + kg)
+                'quantity_change'    => round($change, 2),
+                'quantity_before'    => (float) $log->quantity_before,
+                'quantity_after'     => (float) $log->quantity_after,
+                'quantity_change_kg' => round($toKg($change), 2),
+                'quantity_before_kg' => round($toKg((float) $log->quantity_before), 2),
+                'quantity_after_kg'  => round($toKg((float) $log->quantity_after), 2),
+
+                // Frozen pricing snapshot (from BatchLog model)
+                'unit_cost'           => round($unitCost, 2),
+                'unit_selling_price'  => round($unitSellingPrice, 2),
+                'unit_cost_per_kg'    => $weight > 0 ? round($unitCost / $weight, 2) : round($unitCost, 2),
+                'total_cost'          => round($totalCost, 2),
+                'total_selling_value' => round($totalSelling, 2),
+                'gross_profit'        => round($grossProfit, 2),
+                'pricing_source'      => $log->pricing_source,
+
+                // Dates
+                'event_date'    => $log->event_date?->format('Y-m-d H:i:s'),
+                'expiry_date'   => $log->expiry_date?->format('Y-m-d'),
+                'days_to_expiry'=> $log->expiry_date
+                    ? (int) now()->diffInDays($log->expiry_date, false)
+                    : null,
+                'is_expired'    => $log->expiry_date && $log->expiry_date->isPast(),
+
+                // Reference chain
+                'purchase_order_id'         => $log->purchase_order_id,
+                'purchase_order_number'     => $log->purchase_order_number,
+                'purchase_receipt_id'       => $log->purchase_receipt_id,
+                'supplier_id'               => $log->supplier_id,
+                'supplier_name'             => $log->supplier_name,
+                'production_order_id'       => $log->production_order_id,
+                'production_number'         => $log->metadata['production_number'] ?? null,
+                'production_order_input_id' => $log->production_order_input_id,
+                'production_order_output_id'=> $log->production_order_output_id,
+
+                'location_id'   => $log->location_id,
+                'department_id' => $log->department_id,
+                'performed_by'  => $log->performedBy?->name ?? 'System',
+                'metadata'      => $log->metadata,   // array via cast
+            ],
+        ]);
+    }
 
 
 }

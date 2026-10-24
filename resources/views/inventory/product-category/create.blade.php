@@ -87,4 +87,42 @@
 
 
  
-  
+  <script>
+
+    // ─── Create Submit ───
+    async function submitProductCategoryForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+        const form = document.getElementById(formId);
+        const submitButton = document.getElementById(submitButtonId);
+        if (!form || !submitButton) return;
+
+        const formData = Object.fromEntries(new FormData(form));
+        formData._method = method;
+
+        setModalLoading(submitButton, true);
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: new URLSearchParams(formData),
+            });
+            const json = await res.json();
+            if (!res.ok || json.success === false) throw new Error(json.message || 'Failed');
+
+            window.toastr?.success?.(json.message);
+            bootstrap.Modal.getOrCreateInstance(form.closest('.modal')).hide();
+            form.reset();
+            window.ProductCategoryList?.reload?.();
+        } catch (err) {
+            window.toastr?.error?.(err.message);
+        } finally {
+            setModalLoading(submitButton, false);
+        }
+    }
+
+
+</script>
