@@ -37,7 +37,6 @@ class OrderReportsController extends Controller
     }
 
 
-    // Order Summary Report
     public function summary(Request $request)
     {
         $user = auth()->user();
@@ -49,119 +48,163 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // Default date range: Last 30 days
-        $startDate = $request->get('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->format('Y-m-d'));
-        
-        // Validate and format dates
+
+        $startDate    = $request->get('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
+        $endDate      = $request->get('end_date', Carbon::now()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // Get filter parameters
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $orderType = $request->get('order_type');
-        $orderStatus = $request->get('order_status');
-        
-        // Get all orders with filters using Eloquent
-        $ordersQuery = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->with(['location', 'department']);
-        
-        // Apply filters
-        if ($locationId) {
-            $ordersQuery->where('location_id', $locationId);
-        }
-        
-        if ($departmentId) {
-            $ordersQuery->where('department_id', $departmentId);
-        }
-        
-        if ($orderType) {
-            $ordersQuery->where('type', $orderType);
-        }
-        
-        if ($orderStatus) {
-            $ordersQuery->where('status', $orderStatus);
-        }
-        
-        $allOrders = $ordersQuery->get();
-        
-        // Get summary statistics
-        $summary = $this->getOrderSummary($allOrders);
-        
-        // Get daily breakdown for chart
-        $dailyBreakdown = $this->getDailyBreakdown($allOrders);
-        
-        // Get orders by hour
-        $hourlyBreakdown = $this->getHourlyBreakdown($allOrders);
-        
-        // Get orders by type with percentages
-        $typeBreakdown = $this->getTypeBreakdown($allOrders);
-        
-        // Get orders by status with percentages
-        $statusBreakdown = $this->getStatusBreakdown($allOrders);
-        
-        // Format daily breakdown with day names
-        $dailyBreakdown = $dailyBreakdown->map(function($item) {
-            $date = Carbon::parse($item['date']);
-            $item['day_name'] = $date->format('l');
-            $item['is_weekend'] = in_array($item['day_name'], ['Saturday', 'Sunday']);
-            $item['formatted_date'] = $date->format('M d, Y');
-            return (object)$item;
-        })->values();
-        
-        // Format hourly breakdown
-        $hourlyBreakdown = $hourlyBreakdown->map(function($item) {
-            $hour = (int)$item['hour'];
-            $item['hour_formatted'] = date('g:00 A', mktime($hour, 0, 0));
-            $item['period'] = $this->getPeriodLabel($hour);
-            return (object)$item;
-        })->sortBy('hour')->values();
-        
-        // Add colors to breakdowns
-        $typeBreakdown = $typeBreakdown->map(function($item) {
-            $item['color'] = $this->getOrderTypeColor($item['type']);
-            return (object)$item;
-        });
-        
-        $statusBreakdown = $statusBreakdown->map(function($item) {
-            $item['color'] = $this->getOrderStatusColor($item['status']);
-            return (object)$item;
-        });
-        
-        // Get filter options
+        $orderType    = $request->get('order_type');
+        $orderStatus  = $request->get('order_status');
+        $perPage      = (int) $request->get('per_page', 15);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get();
-        
-        // For display
-        $displayStartDate = $startDate;
-        $displayEndDate = $endDate;
-        
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         return view('reports.orders.summary', compact(
-            'summary',
-            'dailyBreakdown',
-            'hourlyBreakdown',
-            'typeBreakdown',
-            'statusBreakdown',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'displayStartDate',
-            'displayEndDate',
-            'locationId',
-            'departmentId',
-            'orderType',
-            'orderStatus'
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId', 'orderType', 'orderStatus', 'perPage'
         ));
+    }
+
+    public function summaryData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate    = $request->get('start_date', Carbon::now()->subDays(30)->format('Y-m-d'));
+        $endDate      = $request->get('end_date', Carbon::now()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $orderType    = $request->get('order_type');
+        $orderStatus  = $request->get('order_status');
+        $perPage      = (int) $request->get('per_page', 15);
+        $page         = max(1, (int) $request->get('page', 1));
+
+        $query = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->with(['location:id,name', 'department:id,name']);
+
+        if ($locationId)   $query->where('location_id', $locationId);
+        if ($departmentId) $query->where('department_id', $departmentId);
+        if ($orderType)    $query->where('type', $orderType);
+        if ($orderStatus)  $query->where('status', $orderStatus);
+
+        $allOrders = $query->get();
+
+        // ─── Summary ────────────────────────────────────────────
+        $summary = $this->getOrderSummary($allOrders);
+
+        // ─── Daily breakdown (paginated) ────────────────────────
+        $dailyAll = $this->getDailyBreakdown($allOrders)
+            ->map(function ($item) {
+                $date = Carbon::parse($item['date']);
+                $item['day_name']       = $date->format('l');
+                $item['is_weekend']     = in_array($item['day_name'], ['Saturday', 'Sunday']);
+                $item['formatted_date'] = $date->format('M d, Y');
+                return $item;
+            })
+            ->sortKeysDesc()
+            ->values();
+
+        $dailyTotal    = $dailyAll->count();
+        $dailyLastPage = max(1, (int) ceil($dailyTotal / $perPage));
+        $page          = min($page, $dailyLastPage);
+        $dailyOffset   = ($page - 1) * $perPage;
+
+        $dailyPage = $dailyAll->slice($dailyOffset, $perPage)->values();
+
+        $dailyTotals = [
+            'order_count'    => (float) $dailyAll->sum('order_count'),
+            'daily_total'    => (float) $dailyAll->sum('daily_total'),
+            'daily_tax'      => (float) $dailyAll->sum('daily_tax'),
+            'daily_discount' => (float) $dailyAll->sum('daily_discount'),
+            'daily_average'  => (float) ($dailyAll->avg('daily_average') ?? 0),
+        ];
+
+        // ─── Hourly breakdown ───────────────────────────────────
+        $hourly = $this->getHourlyBreakdown($allOrders)
+            ->map(function ($item) {
+                $hour = (int) $item['hour'];
+                $item['hour_formatted'] = date('g:00 A', mktime($hour, 0, 0));
+                $item['period']         = $this->getPeriodLabel($hour);
+                return $item;
+            })
+            ->sortBy('hour')->values();
+
+        $hourlyTotals = [
+            'order_count'   => (float) $hourly->sum('order_count'),
+            'hourly_total'  => (float) $hourly->sum('hourly_total'),
+            'hourly_average'=> (float) ($hourly->avg('hourly_average') ?? 0),
+        ];
+
+        // ─── Type breakdown ─────────────────────────────────────
+        $type = $this->getTypeBreakdown($allOrders)
+            ->map(function ($item) {
+                $item['color'] = $this->getOrderTypeColor($item['type']);
+                return $item;
+            })
+            ->values();
+
+        // ─── Status breakdown ───────────────────────────────────
+        $status = $this->getStatusBreakdown($allOrders)
+            ->map(function ($item) {
+                $item['color'] = $this->getOrderStatusColor($item['status']);
+                return $item;
+            })
+            ->values();
+
+        // ─── Derived percentages for payment/status cards ───────
+        $paidPercent      = $summary->total_sales > 0 ? ($summary->total_paid    / $summary->total_sales) * 100 : 0;
+        $balancePercent   = $summary->total_sales > 0 ? ($summary->total_balance / $summary->total_sales) * 100 : 0;
+        $completedPercent = $summary->total_orders > 0 ? ($summary->completed_orders / $summary->total_orders) * 100 : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'          => $summary,
+                'daily_breakdown'  => $dailyPage,
+                'daily_totals'     => $dailyTotals,
+                'daily_pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $dailyLastPage,
+                    'total'        => $dailyTotal,
+                    'from'         => $dailyTotal > 0 ? $dailyOffset + 1 : 0,
+                    'to'           => min($dailyOffset + $perPage, $dailyTotal),
+                    'per_page'     => $perPage,
+                ],
+                'hourly_breakdown' => $hourly,
+                'hourly_totals'    => $hourlyTotals,
+                'type_breakdown'   => $type,
+                'status_breakdown' => $status,
+                'derived' => [
+                    'paid_percent'      => round($paidPercent, 2),
+                    'balance_percent'   => round($balancePercent, 2),
+                    'completed_percent' => round($completedPercent, 2),
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                    'order_type'    => $orderType,
+                    'order_status'  => $orderStatus,
+                ],
+            ],
+        ]);
     }
 
 
@@ -179,262 +222,296 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $orderType = $request->get('order_type');
-        $minProfit = $request->get('min_profit');
-        $maxProfit = $request->get('max_profit');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Build Orders Query ────────────────────────────────────
+        $orderType    = $request->get('order_type');
+        $minProfit    = $request->get('min_profit');
+        $maxProfit    = $request->get('max_profit');
+        $perPage      = (int) $request->get('per_page', 25);
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
+        return view('reports.orders.profit-analysis', compact(
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId', 'orderType', 'minProfit', 'maxProfit', 'perPage'
+        ));
+    }
+
+    public function profitAnalysisData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $orderType    = $request->get('order_type');
+        $minProfit    = $request->get('min_profit');
+        $maxProfit    = $request->get('max_profit');
+        $perPage      = (int) $request->get('per_page', 25);
+        $page         = max(1, (int) $request->get('page', 1));
+
+        // ─── Build orders query ─────────────────────────────────
         $ordersQuery = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->where('status', 'completed')
-            ->with(['items.productVariant', 'location', 'department', 'customer']);
-        
-        // Apply location filter
-        if ($locationId) {
-            $ordersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $ordersQuery->where('department_id', $departmentId);
-        }
-        
-        // Apply order type filter
-        if ($orderType && $orderType !== 'all') {
-            $ordersQuery->where('type', $orderType);
-        }
-        
+            ->with([
+                'items.productVariant:id,name,sku',
+                'location:id,name',
+                'department:id,name',
+                'customer:id,first_name,last_name',
+            ]);
+
+        if ($locationId)   $ordersQuery->where('location_id', $locationId);
+        if ($departmentId) $ordersQuery->where('department_id', $departmentId);
+        if ($orderType && $orderType !== 'all') $ordersQuery->where('type', $orderType);
+
         $orders = $ordersQuery->get();
-        
-        // ─── Calculate Profit for Each Order ──────────────────────
-        $profitData = $orders->map(function($order) {
-            $totalRevenue = $order->total;
-            $totalDiscount = $order->discount_total ?? 0;
-            $totalTax = $order->tax_total ?? 0;
-            
-            // Calculate cost of goods sold (COGS) from order items
-            $totalCost = 0;
+
+        // ─── Build profit rows ──────────────────────────────────
+        $profitData = $orders->map(function ($order) {
+            $totalRevenue  = (float) $order->total;
+            $totalDiscount = (float) ($order->discount_total ?? 0);
+            $totalTax      = (float) ($order->tax_total ?? 0);
+
+            $totalCost   = 0.0;
             $itemProfits = [];
-            
+
             foreach ($order->items as $item) {
                 $variant = $item->productVariant;
-                if (! $variant) continue;
+                if (!$variant) continue;
 
-                // ★ Cascade: log → inventory item (if custom) → variant
                 [$unitCost, $unitSell, $source] = $this->resolveLinePricing($item);
 
-                $quantity = $item->quantity;
-                $itemCost = $unitCost * $quantity;
+                $qty        = (float) $item->quantity;
+                $itemCost   = $unitCost * $qty;
                 $totalCost += $itemCost;
 
-                $itemRevenue = $item->total_price ?? 0;
+                $itemRevenue = (float) ($item->total_price ?? 0);
                 $itemProfit  = $itemRevenue - $itemCost;
-                $itemProfitMargin = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
+                $itemMargin  = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
 
-                $itemProfits[] = (object)[
-                    'variant_name'  => $variant->name ?? 'Unknown',
-                    'sku'           => $variant->sku ?? 'N/A',
-                    'quantity'      => $quantity,
-                    'unit_cost'     => $unitCost,
-                    'unit_price'    => $item->unit_price ?? 0,
-                    'total_cost'    => $itemCost,
-                    'total_revenue' => $itemRevenue,
-                    'profit'        => $itemProfit,
-                    'profit_margin' => $itemProfitMargin,
-                    'pricing_source'=> $source,   // ★ new — useful for the table
+                $itemProfits[] = [
+                    'variant_name'   => $variant->name ?? 'Unknown',
+                    'sku'            => $variant->sku  ?? 'N/A',
+                    'quantity'       => round($qty, 2),
+                    'unit_cost'      => round($unitCost, 2),
+                    'unit_price'     => round((float) ($item->unit_price ?? 0), 2),
+                    'total_cost'     => round($itemCost, 2),
+                    'total_revenue'  => round($itemRevenue, 2),
+                    'profit'         => round($itemProfit, 2),
+                    'profit_margin'  => round($itemMargin, 2),
+                    'pricing_source' => $source,
                 ];
             }
-                        
-            // Calculate net profit (revenue - cost - discount)
-            $grossProfit = $totalRevenue - $totalCost;
-            $netProfit = $grossProfit - $totalDiscount;
+
+            $grossProfit  = $totalRevenue - $totalCost;
+            $netProfit    = $grossProfit - $totalDiscount;
             $profitMargin = $totalRevenue > 0 ? ($netProfit / $totalRevenue) * 100 : 0;
-            
-            return (object)[
-                'order_id' => $order->id,
-                'order_number' => $order->order_number ?? $order->id,
-                'order_type' => $order->type ?? 'sale',
-                'created_at' => $order->created_at,
-                'location' => $order->location->name ?? 'N/A',
-                'department' => $order->department->name ?? 'N/A',
-                'customer' => $order->customer->full_name ?? ($order->customer_name ?? 'Guest'),
-                'total_revenue' => $totalRevenue,
-                'total_cost' => $totalCost,
-                'total_discount' => $totalDiscount,
-                'total_tax' => $totalTax,
-                'gross_profit' => $grossProfit,
-                'net_profit' => $netProfit,
-                'profit_margin' => $profitMargin,
-                'item_count' => $order->items->count(),
-                'item_profits' => $itemProfits,
+
+            return [
+                'order_id'       => $order->id,
+                'order_number'   => $order->order_number ?? (string) $order->id,
+                'order_type'     => $order->type ?? 'sale',
+                'created_at'     => $order->created_at?->format('Y-m-d'),
+                'created_time'   => $order->created_at?->format('H:i A'),
+                'location'       => $order->location?->name ?? 'N/A',
+                'department'     => $order->department?->name ?? 'N/A',
+                'customer'       => $order->customer?->full_name
+                                    ?? ($order->customer_name ?? 'Guest'),
+                'total_revenue'  => round($totalRevenue, 2),
+                'total_cost'     => round($totalCost, 2),
+                'total_discount' => round($totalDiscount, 2),
+                'total_tax'      => round($totalTax, 2),
+                'gross_profit'   => round($grossProfit, 2),
+                'net_profit'     => round($netProfit, 2),
+                'profit_margin'  => round($profitMargin, 2),
+                'item_count'     => count($itemProfits),
+                'item_profits'   => $itemProfits,
             ];
         })->sortByDesc('net_profit')->values();
-        
-        // ─── Apply Profit Filters ──────────────────────────────────
-        if ($minProfit && is_numeric($minProfit)) {
-            $profitData = $profitData->filter(function($order) use ($minProfit) {
-                return $order->net_profit >= (float)$minProfit;
-            });
+
+        // ─── Profit range filters ───────────────────────────────
+        if ($minProfit !== null && $minProfit !== '' && is_numeric($minProfit)) {
+            $profitData = $profitData->filter(fn($o) => $o['net_profit'] >= (float) $minProfit)->values();
         }
-        
-        if ($maxProfit && is_numeric($maxProfit)) {
-            $profitData = $profitData->filter(function($order) use ($maxProfit) {
-                return $order->net_profit <= (float)$maxProfit;
-            });
+        if ($maxProfit !== null && $maxProfit !== '' && is_numeric($maxProfit)) {
+            $profitData = $profitData->filter(fn($o) => $o['net_profit'] <= (float) $maxProfit)->values();
         }
-        
-        $profitData = $profitData->values();
-        
-        // ─── Summary Statistics ────────────────────────────────────
-        $summary = (object)[
-            'total_orders' => $profitData->count(),
-            'total_revenue' => $profitData->sum('total_revenue'),
-            'total_cost' => $profitData->sum('total_cost'),
-            'total_discount' => $profitData->sum('total_discount'),
-            'total_gross_profit' => $profitData->sum('gross_profit'),
-            'total_net_profit' => $profitData->sum('net_profit'),
-            'average_net_profit' => $profitData->count() > 0 ? $profitData->sum('net_profit') / $profitData->count() : 0,
-            'average_profit_margin' => $profitData->count() > 0 ? $profitData->avg('profit_margin') : 0,
-            'max_profit_order' => $profitData->first()->order_number ?? 'N/A',
-            'max_profit_amount' => $profitData->first()->net_profit ?? 0,
-            'profitable_orders' => $profitData->filter(function($order) {
-                return $order->net_profit > 0;
-            })->count(),
-            'loss_making_orders' => $profitData->filter(function($order) {
-                return $order->net_profit < 0;
-            })->count(),
-            'break_even_orders' => $profitData->filter(function($order) {
-                return $order->net_profit == 0;
-            })->count(),
+
+        // ─── Summary ────────────────────────────────────────────
+        $first = $profitData->first();
+        $summary = [
+            'total_orders'            => $profitData->count(),
+            'total_revenue'           => round($profitData->sum('total_revenue'), 2),
+            'total_cost'              => round($profitData->sum('total_cost'), 2),
+            'total_discount'          => round($profitData->sum('total_discount'), 2),
+            'total_gross_profit'      => round($profitData->sum('gross_profit'), 2),
+            'total_net_profit'        => round($profitData->sum('net_profit'), 2),
+            'average_net_profit'      => $profitData->count() > 0 ? round($profitData->sum('net_profit') / $profitData->count(), 2) : 0,
+            'average_profit_margin'   => $profitData->count() > 0 ? round($profitData->avg('profit_margin'), 2) : 0,
+            'max_profit_order'        => $first['order_number'] ?? 'N/A',
+            'max_profit_amount'       => $first['net_profit']   ?? 0,
+            'profitable_orders'       => $profitData->where('net_profit', '>', 0)->count(),
+            'loss_making_orders'      => $profitData->where('net_profit', '<', 0)->count(),
+            'break_even_orders'       => $profitData->where('net_profit', '=', 0)->count(),
         ];
-        
-        // ─── Profit by Location ────────────────────────────────────
-        $profitByLocation = $profitData->groupBy('location')
-            ->map(function($orders, $location) {
-                return (object)[
-                    'location' => $location,
-                    'order_count' => $orders->count(),
-                    'total_revenue' => $orders->sum('total_revenue'),
-                    'total_cost' => $orders->sum('total_cost'),
-                    'total_net_profit' => $orders->sum('net_profit'),
-                    'average_margin' => $orders->avg('profit_margin') ?? 0,
-                ];
-            })
-            ->sortByDesc('total_net_profit')
-            ->values();
-        
-        // ─── Profit by Department ──────────────────────────────────
-        $profitByDepartment = $profitData->groupBy('department')
-            ->map(function($orders, $department) {
-                return (object)[
-                    'department' => $department,
-                    'order_count' => $orders->count(),
-                    'total_revenue' => $orders->sum('total_revenue'),
-                    'total_cost' => $orders->sum('total_cost'),
-                    'total_net_profit' => $orders->sum('net_profit'),
-                    'average_margin' => $orders->avg('profit_margin') ?? 0,
-                ];
-            })
-            ->sortByDesc('total_net_profit')
-            ->values();
-        
-        // ─── Top Products by Profit ───────────────────────────────
+
+        $profitabilityRate = $summary['total_orders'] > 0
+            ? ($summary['profitable_orders'] / $summary['total_orders']) * 100
+            : 0;
+
+        // ─── By location ────────────────────────────────────────
+        $profitByLocation = $profitData->groupBy('location')->map(function ($rows, $loc) {
+            return [
+                'location'         => $loc,
+                'order_count'      => $rows->count(),
+                'total_revenue'    => round($rows->sum('total_revenue'), 2),
+                'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_net_profit' => round($rows->sum('net_profit'), 2),
+                'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
+            ];
+        })->sortByDesc('total_net_profit')->values();
+
+        // ─── By department ──────────────────────────────────────
+        $profitByDepartment = $profitData->groupBy('department')->map(function ($rows, $dep) {
+            return [
+                'department'       => $dep,
+                'order_count'      => $rows->count(),
+                'total_revenue'    => round($rows->sum('total_revenue'), 2),
+                'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_net_profit' => round($rows->sum('net_profit'), 2),
+                'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
+            ];
+        })->sortByDesc('total_net_profit')->values();
+
+        // ─── Top / worst products by profit ─────────────────────
         $productProfits = collect();
         foreach ($profitData as $order) {
-            foreach ($order->item_profits as $item) {
-                $key = $item->sku;
+            foreach ($order['item_profits'] as $item) {
+                $key = $item['sku'];
                 if ($productProfits->has($key)) {
                     $existing = $productProfits->get($key);
-                    $existing->quantity_sold += $item->quantity;
-                    $existing->total_revenue += $item->total_revenue;
-                    $existing->total_cost += $item->total_cost;
-                    $existing->total_profit += $item->profit;
+                    $existing['quantity_sold'] += $item['quantity'];
+                    $existing['total_revenue'] += $item['total_revenue'];
+                    $existing['total_cost']    += $item['total_cost'];
+                    $existing['total_profit']  += $item['profit'];
+                    $productProfits->put($key, $existing);
                 } else {
-                    $productProfits->put($key, (object)[
-                        'sku' => $item->sku,
-                        'variant_name' => $item->variant_name,
-                        'quantity_sold' => $item->quantity,
-                        'total_revenue' => $item->total_revenue,
-                        'total_cost' => $item->total_cost,
-                        'total_profit' => $item->profit,
-                        'profit_margin' => $item->profit_margin,
+                    $productProfits->put($key, [
+                        'sku'           => $item['sku'],
+                        'variant_name'  => $item['variant_name'],
+                        'quantity_sold' => $item['quantity'],
+                        'total_revenue' => $item['total_revenue'],
+                        'total_cost'    => $item['total_cost'],
+                        'total_profit'  => $item['profit'],
+                        'profit_margin' => $item['profit_margin'],
                     ]);
                 }
             }
         }
-        
-        $topProducts = $productProfits->sortByDesc('total_profit')->take(10)->values();
+
+        $topProducts   = $productProfits->sortByDesc('total_profit')->take(10)->values();
         $worstProducts = $productProfits->sortBy('total_profit')->take(10)->values();
-        
-        // ─── Daily Profit Trend ────────────────────────────────────
-        $dailyProfitTrend = $profitData->groupBy(function($order) {
-            return $order->created_at->format('Y-m-d');
-        })->map(function($orders, $date) {
-            return (object)[
-                'date' => $date,
-                'order_count' => $orders->count(),
-                'total_revenue' => $orders->sum('total_revenue'),
-                'total_cost' => $orders->sum('total_cost'),
-                'total_net_profit' => $orders->sum('net_profit'),
-                'average_margin' => $orders->avg('profit_margin') ?? 0,
+
+        // ─── Daily profit trend (paginated) ─────────────────────
+        $trendAll = $profitData->groupBy('created_at')->map(function ($rows, $date) {
+            return [
+                'date'             => $date,
+                'order_count'      => $rows->count(),
+                'total_revenue'    => round($rows->sum('total_revenue'), 2),
+                'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_net_profit' => round($rows->sum('net_profit'), 2),
+                'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
             ];
         })->sortKeys()->values();
-        
-        // ─── Pagination ─────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($profitData->count(), 1));
-        $paginatedData = $profitData->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $profitDataPaginated = new LengthAwarePaginator(
-            $paginatedData,
-            $profitData->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Get Filter Options ─────────────────────────────────────
-        $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
-        $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Return View ────────────────────────────────────────────
-        return view('reports.orders.profit-analysis', compact(
-            'profitData',
-            'profitDataPaginated',
-            'summary',
-            'profitByLocation',
-            'profitByDepartment',
-            'topProducts',
-            'worstProducts',
-            'dailyProfitTrend',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'orderType',
-            'minProfit',
-            'maxProfit',
-            'perPage'
-        ));
+
+        $trendTotal    = $trendAll->count();
+        $trendLastPage = max(1, (int) ceil($trendTotal / $perPage));
+        $page          = min($page, $trendLastPage);
+        $trendOffset   = ($page - 1) * $perPage;
+        $trendPage     = $trendAll->slice($trendOffset, $perPage)->values();
+
+        $trendTotals = [
+            'order_count'      => (float) $trendAll->sum('order_count'),
+            'total_revenue'    => (float) $trendAll->sum('total_revenue'),
+            'total_cost'       => (float) $trendAll->sum('total_cost'),
+            'total_net_profit' => (float) $trendAll->sum('total_net_profit'),
+            'average_margin'   => (float) ($trendAll->avg('average_margin') ?? 0),
+        ];
+
+        // ─── Orders table pagination ────────────────────────────
+        $ordersTotal    = $profitData->count();
+        $ordersLastPage = max(1, (int) ceil($ordersTotal / $perPage));
+        $ordersOffset   = ($page - 1) * $perPage;
+        $ordersPage     = $profitData->slice($ordersOffset, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'            => $summary,
+                'profitability_rate' => round($profitabilityRate, 2),
+                'by_location'        => $profitByLocation,
+                'by_department'      => $profitByDepartment,
+                'top_products'       => $topProducts,
+                'worst_products'     => $worstProducts,
+                'daily_trend'        => $trendPage,
+                'daily_totals'       => $trendTotals,
+                'daily_pagination'   => [
+                    'current_page' => $page,
+                    'last_page'    => $trendLastPage,
+                    'total'        => $trendTotal,
+                    'from'         => $trendTotal > 0 ? $trendOffset + 1 : 0,
+                    'to'           => min($trendOffset + $perPage, $trendTotal),
+                    'per_page'     => $perPage,
+                ],
+                'orders'             => $ordersPage,
+                'orders_totals'      => [
+                    'total_revenue'  => (float) $profitData->sum('total_revenue'),
+                    'total_cost'     => (float) $profitData->sum('total_cost'),
+                    'total_discount' => (float) $profitData->sum('total_discount'),
+                    'gross_profit'   => (float) $profitData->sum('gross_profit'),
+                    'net_profit'     => (float) $profitData->sum('net_profit'),
+                    'profit_margin'  => (float) ($profitData->avg('profit_margin') ?? 0),
+                ],
+                'orders_pagination'  => [
+                    'current_page' => $page,
+                    'last_page'    => $ordersLastPage,
+                    'total'        => $ordersTotal,
+                    'from'         => $ordersTotal > 0 ? $ordersOffset + 1 : 0,
+                    'to'           => min($ordersOffset + $perPage, $ordersTotal),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                    'order_type'    => $orderType,
+                    'min_profit'    => $minProfit,
+                    'max_profit'    => $maxProfit,
+                ],
+            ],
+        ]);
     }
         
     // Helper Methods
@@ -619,244 +696,296 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
-        $departmentId = $request->get('department_id');
-        $minSpent = $request->get('min_spent');
-        $maxSpent = $request->get('max_spent');
-        $minOrders = $request->get('min_orders');
-        $maxOrders = $request->get('max_orders');
-        $customerType = $request->get('customer_type'); // 'registered', 'guest', 'all'
-        $segmentFilter = $request->get('segment_filter'); // 'new', 'returning', 'regular', 'vip'
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Build Orders Query ────────────────────────────────────
+
+        $locationId    = $request->get('location_id');
+        $departmentId  = $request->get('department_id');
+        $minSpent      = $request->get('min_spent');
+        $maxSpent      = $request->get('max_spent');
+        $minOrders     = $request->get('min_orders');
+        $maxOrders     = $request->get('max_orders');
+        $customerType  = $request->get('customer_type', 'all');
+        $segmentFilter = $request->get('segment_filter');
+        $perPage       = (int) $request->get('per_page', 25);
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
+        return view('reports.orders.by-customer', compact(
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId',
+            'minSpent', 'maxSpent', 'minOrders', 'maxOrders',
+            'customerType', 'segmentFilter', 'perPage'
+        ));
+    }
+
+    public function byCustomerData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId    = $request->get('location_id');
+        $departmentId  = $request->get('department_id');
+        $minSpent      = $request->get('min_spent');
+        $maxSpent      = $request->get('max_spent');
+        $minOrders     = $request->get('min_orders');
+        $maxOrders     = $request->get('max_orders');
+        $customerType  = $request->get('customer_type', 'all');
+        $segmentFilter = $request->get('segment_filter');
+        $perPage       = (int) $request->get('per_page', 25);
+        $page          = max(1, (int) $request->get('page', 1));
+
+        // ─── Query orders ──────────────────────────────────────
         $ordersQuery = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->with(['customer', 'location', 'department']);
-        
-        // Apply customer type filter
+            ->with(['customer:id,first_name,last_name,email,phone,city', 'location:id,name', 'department:id,name']);
+
         if ($customerType === 'registered') {
             $ordersQuery->whereNotNull('customer_id');
         } elseif ($customerType === 'guest') {
             $ordersQuery->whereNull('customer_id')->whereNotNull('customer_name');
         }
-        // 'all' - include both registered and guest
-        
-        // Apply location filter
-        if ($locationId) {
-            $ordersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $ordersQuery->where('department_id', $departmentId);
-        }
-        
+        if ($locationId)   $ordersQuery->where('location_id', $locationId);
+        if ($departmentId) $ordersQuery->where('department_id', $departmentId);
+
         $allOrders = $ordersQuery->get();
-        
-        // ─── Group by Customer ─────────────────────────────────────
-        $customerSalesRaw = $allOrders->groupBy(function($order) {
-            // Group by customer_id if exists, otherwise use customer_name as identifier
-            return $order->customer_id ?? 'guest_' . $order->customer_name;
-        })->map(function($customerOrders, $key) {
+
+        // ─── Group by customer ─────────────────────────────────
+        $customerSales = $allOrders->groupBy(function ($order) {
+            return $order->customer_id ?? 'guest_' . ($order->customer_name ?? 'unknown');
+        })->map(function ($customerOrders, $key) {
             $firstOrder = $customerOrders->first();
-            $customer = $firstOrder->customer;
-            $isGuest = is_null($firstOrder->customer_id);
-            
-            $totalSpent = $customerOrders->sum('total');
-            $totalTax = $customerOrders->sum('tax_total');
-            $totalDiscount = $customerOrders->sum('discount_total');
-            $orderCount = $customerOrders->count();
-            
-            // Get first and last order dates
+            $customer   = $firstOrder->customer;
+            $isGuest    = is_null($firstOrder->customer_id);
+
             $sortedOrders = $customerOrders->sortBy('created_at');
-            $firstOrderDate = $sortedOrders->first()->created_at;
-            $lastOrder = $sortedOrders->last();
-            
-            // Calculate average order value
-            $averageOrderValue = $orderCount > 0 ? $totalSpent / $orderCount : 0;
-            
-            // Get max and min order values
-            $maxOrderValue = $customerOrders->max('total') ?? 0;
-            $minOrderValue = $customerOrders->min('total') ?? 0;
-            
-            // Calculate customer lifetime value (CLV)
-            $clv = $totalSpent;
-            
-            // Calculate recency (days since last purchase)
-            $daysSinceLastPurchase = $lastOrder->created_at ? Carbon::now()->diffInDays($lastOrder->created_at) : null;
-            
-            // Determine customer segment
+            $firstDate    = $sortedOrders->first()->created_at;
+            $lastOrder    = $sortedOrders->last();
+
+            $orderCount     = $customerOrders->count();
+            $totalSpent     = (float) $customerOrders->sum('total');
+            $totalTax       = (float) $customerOrders->sum('tax_total');
+            $totalDiscount  = (float) $customerOrders->sum('discount_total');
+            $avgOrderValue  = $orderCount > 0 ? $totalSpent / $orderCount : 0;
+            $maxOrderValue  = (float) ($customerOrders->max('total') ?? 0);
+            $minOrderValue  = (float) ($customerOrders->min('total') ?? 0);
+            $daysSinceLast  = $lastOrder->created_at ? Carbon::now()->diffInDays($lastOrder->created_at) : null;
+
             $segment = $this->getCustomerSegment($orderCount, $totalSpent);
-            
-            return (object)[
-                'id' => $isGuest ? null : $firstOrder->customer_id,
-                'customer_id' => $firstOrder->customer_id,
-                'is_guest' => $isGuest,
-                'customer_name' => $isGuest ? ($firstOrder->customer_name ?? 'Guest') : ($customer->full_name ?? 'Unknown'),
-                'first_name' => $isGuest ? null : ($customer->first_name ?? ''),
-                'last_name' => $isGuest ? null : ($customer->last_name ?? ''),
-                'full_name' => $isGuest ? ($firstOrder->customer_name ?? 'Guest') : trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')),
-                'email' => $isGuest ? null : ($customer->email ?? ''),
-                'phone' => $isGuest ? null : ($customer->phone ?? ''),
-                'city' => $isGuest ? null : ($customer->city ?? ''),
-                'order_count' => $orderCount,
-                'total_spent' => $totalSpent,
-                'total_tax' => $totalTax,
-                'total_discount' => $totalDiscount,
-                'average_order_value' => $averageOrderValue,
-                'max_order_value' => $maxOrderValue,
-                'min_order_value' => $minOrderValue,
-                'first_order_date' => $firstOrderDate,
-                'last_order_date' => $lastOrder->created_at ?? null,
-                'last_order_amount' => $lastOrder->total ?? 0,
-                'clv' => $clv,
-                'days_since_last_purchase' => $daysSinceLastPurchase,
-                'segment' => $segment['label'],
-                'segment_color' => $segment['color'],
-                'segment_icon' => $segment['icon'],
+
+            return [
+                'key'                    => (string) $key,
+                'id'                     => $isGuest ? null : $firstOrder->customer_id,
+                'customer_id'            => $firstOrder->customer_id,
+                'is_guest'               => $isGuest,
+                'customer_name'          => $isGuest
+                                            ? ($firstOrder->customer_name ?? 'Guest')
+                                            : ($customer->full_name ?? 'Unknown'),
+                'full_name'              => $isGuest
+                                            ? ($firstOrder->customer_name ?? 'Guest')
+                                            : trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')),
+                'email'                  => $isGuest ? null : ($customer->email ?? ''),
+                'phone'                  => $isGuest ? null : ($customer->phone ?? ''),
+                'city'                   => $isGuest ? null : ($customer->city ?? ''),
+                'order_count'            => $orderCount,
+                'total_spent'            => round($totalSpent, 2),
+                'total_tax'              => round($totalTax, 2),
+                'total_discount'         => round($totalDiscount, 2),
+                'average_order_value'    => round($avgOrderValue, 2),
+                'max_order_value'        => round($maxOrderValue, 2),
+                'min_order_value'        => round($minOrderValue, 2),
+                'first_order_date'       => $firstDate?->format('Y-m-d'),
+                'last_order_date'        => $lastOrder->created_at?->format('Y-m-d'),
+                'last_order_amount'      => round((float) ($lastOrder->total ?? 0), 2),
+                'clv'                    => round($totalSpent, 2),
+                'days_since_last_purchase'=> $daysSinceLast,
+                'segment'                => $segment['label'],
+                'segment_color'          => $segment['color'],
+                'segment_icon'           => $segment['icon'],
             ];
-        })
-        ->sortByDesc('total_spent')
-        ->values();
-        
-        // ─── Apply Filters ──────────────────────────────────────────
-        $customerSales = $customerSalesRaw;
-        
-        if ($minSpent && is_numeric($minSpent)) {
-            $customerSales = $customerSales->filter(function($customer) use ($minSpent) {
-                return $customer->total_spent >= (float)$minSpent;
-            });
+        })->sortByDesc('total_spent')->values();
+
+        // ─── Range / segment filters ───────────────────────────
+        if ($minSpent !== null && $minSpent !== '' && is_numeric($minSpent)) {
+            $customerSales = $customerSales->filter(fn($c) => $c['total_spent'] >= (float) $minSpent)->values();
         }
-        
-        if ($maxSpent && is_numeric($maxSpent)) {
-            $customerSales = $customerSales->filter(function($customer) use ($maxSpent) {
-                return $customer->total_spent <= (float)$maxSpent;
-            });
+        if ($maxSpent !== null && $maxSpent !== '' && is_numeric($maxSpent)) {
+            $customerSales = $customerSales->filter(fn($c) => $c['total_spent'] <= (float) $maxSpent)->values();
         }
-        
-        if ($minOrders && is_numeric($minOrders)) {
-            $customerSales = $customerSales->filter(function($customer) use ($minOrders) {
-                return $customer->order_count >= (int)$minOrders;
-            });
+        if ($minOrders !== null && $minOrders !== '' && is_numeric($minOrders)) {
+            $customerSales = $customerSales->filter(fn($c) => $c['order_count'] >= (int) $minOrders)->values();
         }
-        
-        if ($maxOrders && is_numeric($maxOrders)) {
-            $customerSales = $customerSales->filter(function($customer) use ($maxOrders) {
-                return $customer->order_count <= (int)$maxOrders;
-            });
+        if ($maxOrders !== null && $maxOrders !== '' && is_numeric($maxOrders)) {
+            $customerSales = $customerSales->filter(fn($c) => $c['order_count'] <= (int) $maxOrders)->values();
         }
-        
-        // Apply segment filter
         if ($segmentFilter) {
-            $customerSales = $customerSales->filter(function($customer) use ($segmentFilter) {
-                return $customer->segment === $segmentFilter;
-            });
+            $customerSales = $customerSales->filter(fn($c) => $c['segment'] === $segmentFilter)->values();
         }
-        
-        // Reset collection keys
-        $customerSales = $customerSales->values();
-        
-        // ─── Calculate Customer Loyalty Segments ──────────────────
-        $customerSegments = (object)[
-            'new' => $customerSales->filter(function($customer) {
-                return $customer->segment === 'New';
-            })->count(),
-            'returning' => $customerSales->filter(function($customer) {
-                return $customer->segment === 'Returning';
-            })->count(),
-            'regular' => $customerSales->filter(function($customer) {
-                return $customer->segment === 'Regular';
-            })->count(),
-            'vip' => $customerSales->filter(function($customer) {
-                return $customer->segment === 'VIP';
-            })->count(),
+
+        // ─── Percentages ───────────────────────────────────────
+        $totalSpentAll = (float) $customerSales->sum('total_spent');
+        $customerSales = $customerSales->map(function ($c) use ($totalSpentAll) {
+            $c['percentage'] = $totalSpentAll > 0 ? round(($c['total_spent'] / $totalSpentAll) * 100, 2) : 0;
+            return $c;
+        })->values();
+
+        // ─── Segments ──────────────────────────────────────────
+        $segments = [
+            'new'       => $customerSales->where('segment', 'New')->count(),
+            'returning' => $customerSales->where('segment', 'Returning')->count(),
+            'regular'   => $customerSales->where('segment', 'Regular')->count(),
+            'vip'       => $customerSales->where('segment', 'VIP')->count(),
         ];
-        
-        // ─── Top Customers for Chart ──────────────────────────────
-        $topCustomers = $customerSales->take(10);
-        
-        // ─── Calculate Totals ──────────────────────────────────────
-        $totalSpentAll = $customerSales->sum('total_spent');
-        $totalOrdersAll = $customerSales->sum('order_count');
-        $totalTaxAll = $customerSales->sum('total_tax');
-        $totalDiscountAll = $customerSales->sum('total_discount');
-        
-        // ─── Summary Statistics ────────────────────────────────────
-        $summary = (object)[
-            'total_customers' => $customerSales->count(),
-            'total_orders' => $totalOrdersAll,
-            'total_revenue' => $totalSpentAll,
-            'total_tax' => $totalTaxAll,
-            'total_discount' => $totalDiscountAll,
-            'average_per_customer' => $customerSales->count() > 0 ? $totalSpentAll / $customerSales->count() : 0,
-            'average_orders_per_customer' => $customerSales->count() > 0 ? $totalOrdersAll / $customerSales->count() : 0,
-            'average_order_value' => $totalOrdersAll > 0 ? $totalSpentAll / $totalOrdersAll : 0,
-            'registered_customers' => $customerSales->filter(function($c) { return !$c->is_guest; })->count(),
-            'guest_customers' => $customerSales->filter(function($c) { return $c->is_guest; })->count(),
+
+        // ─── Top 10 for chart ──────────────────────────────────
+        $topCustomers = $customerSales->take(10)->values();
+
+        // ─── Top 5 / Bottom 5 ──────────────────────────────────
+        $topFive    = $customerSales->take(5)->values();
+        $bottomFive = $customerSales->sortBy('total_spent')->take(5)->values();
+
+        // ─── Summary ───────────────────────────────────────────
+        $summary = [
+            'total_customers'              => $customerSales->count(),
+            'total_orders'                 => (int) $customerSales->sum('order_count'),
+            'total_revenue'                => round($totalSpentAll, 2),
+            'total_tax'                    => round((float) $customerSales->sum('total_tax'), 2),
+            'total_discount'               => round((float) $customerSales->sum('total_discount'), 2),
+            'average_per_customer'         => $customerSales->count() > 0
+                                                ? round($totalSpentAll / $customerSales->count(), 2) : 0,
+            'average_orders_per_customer'  => $customerSales->count() > 0
+                                                ? round($customerSales->sum('order_count') / $customerSales->count(), 2) : 0,
+            'average_order_value'          => $customerSales->sum('order_count') > 0
+                                                ? round($totalSpentAll / $customerSales->sum('order_count'), 2) : 0,
+            'registered_customers'         => $customerSales->where('is_guest', false)->count(),
+            'guest_customers'              => $customerSales->where('is_guest', true)->count(),
         ];
-        
-        // ─── Add Percentage to Each Customer ──────────────────────
-        $customerSales = $customerSales->map(function($customer) use ($totalSpentAll) {
-            $customer->percentage = $totalSpentAll > 0 ? ($customer->total_spent / $totalSpentAll) * 100 : 0;
-            return $customer;
-        });
-        
-        // ─── Get Filter Options ────────────────────────────────────
-        $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-            
-        $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get();
-        
-        // ─── Pagination ─────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($customerSales->count(), 1));
-        $paginatedCustomers = $customerSales->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $customerSalesPaginated = new LengthAwarePaginator(
-            $paginatedCustomers,
-            $customerSales->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Return View ────────────────────────────────────────────
-        return view('reports.orders.by-customer', compact(
-            'customerSales',
-            'customerSalesPaginated',
-            'customerSegments',
-            'topCustomers',
-            'summary',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'minSpent',
-            'maxSpent',
-            'minOrders',
-            'maxOrders',
-            'customerType',
-            'segmentFilter',
-            'perPage',
-            'totalSpentAll'
-        ));
+
+        // ─── Pagination ────────────────────────────────────────
+        $total    = $customerSales->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+        $pageRows = $customerSales->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'        => $summary,
+                'segments'       => $segments,
+                'top_customers'  => $topCustomers,
+                'top_five'       => $topFive,
+                'bottom_five'    => $bottomFive,
+                'customers'      => $pageRows,
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                    'customer_type' => $customerType,
+                    'segment_filter'=> $segmentFilter,
+                    'min_spent'     => $minSpent,
+                    'max_spent'     => $maxSpent,
+                    'min_orders'    => $minOrders,
+                    'max_orders'    => $maxOrders,
+                ],
+            ],
+        ]);
     }
-    
+
+    public function byCustomerOrders(Request $request, $customerKey)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+
+        $query = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->with(['location:id,name', 'department:id,name', 'items.productVariant:id,name,sku']);
+
+        if ($locationId)   $query->where('location_id', $locationId);
+        if ($departmentId) $query->where('department_id', $departmentId);
+
+        // customerKey: numeric id OR 'guest_<name>'
+        if (is_numeric($customerKey)) {
+            $query->where('customer_id', (int) $customerKey);
+        } else {
+            $guestName = preg_replace('/^guest_/', '', $customerKey);
+            $query->whereNull('customer_id')->where('customer_name', $guestName);
+        }
+
+        $orders = $query->orderByDesc('created_at')->get();
+
+        $rows = $orders->map(function ($o) {
+            return [
+                'id'           => $o->id,
+                'order_number' => $o->order_number ?? (string) $o->id,
+                'created_at'   => $o->created_at?->format('Y-m-d'),
+                'created_time' => $o->created_at?->format('H:i A'),
+                'status'       => $o->status,
+                'status_color' => $this->getOrderStatusColor($o->status),
+                'location'     => $o->location?->name ?? '—',
+                'department'   => $o->department?->name ?? '—',
+                'items_count'  => $o->items->count(),
+                'subtotal'     => round((float) ($o->subtotal ?? 0), 2),
+                'tax_total'    => round((float) ($o->tax_total ?? 0), 2),
+                'discount'     => round((float) ($o->discount_total ?? 0), 2),
+                'total'        => round((float) $o->total, 2),
+                'paid'         => round((float) ($o->paid_amount ?? 0), 2),
+                'balance'      => round((float) ($o->balance_due ?? 0), 2),
+            ];
+        });
+
+        $totalSpent = (float) $orders->sum('total');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'customer_key' => (string) $customerKey,
+                'order_count'  => $orders->count(),
+                'total_spent'  => round($totalSpent, 2),
+                'orders'       => $rows,
+            ],
+        ]);
+    }
+        
     /**
      * Get customer segment based on order count and total spent
      */
@@ -902,316 +1031,251 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Check if Single Shop or Multi-Shop ──────────────────────
-        $isSingleShop = tenant_is_single_shop($tenantId);
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
-        $departmentId = $request->get('department_id');
-        $minQuantity = $request->get('min_quantity');
-        $maxQuantity = $request->get('max_quantity');
-        $minRevenue = $request->get('min_revenue');
-        $maxRevenue = $request->get('max_revenue');
-        $minProfit = $request->get('min_profit');
+
+        $locationId     = $request->get('location_id');
+        $departmentId   = $request->get('department_id');
+        $minQuantity    = $request->get('min_quantity');
+        $maxQuantity    = $request->get('max_quantity');
+        $minRevenue     = $request->get('min_revenue');
+        $maxRevenue     = $request->get('max_revenue');
+        $minProfit      = $request->get('min_profit');
         $velocityFilter = $request->get('velocity_filter');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Build Order Items Query ──────────────────────────────
-        $query = OrderItem::with(['order', 'productVariant'])
-            ->whereHas('order', function($q) use ($tenantId, $startDate, $endDate, $locationId, $departmentId) {
+        $perPage        = (int) $request->get('per_page', 25);
+
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
+        return view('reports.orders.by-product', compact(
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId',
+            'minQuantity', 'maxQuantity',
+            'minRevenue', 'maxRevenue',
+            'minProfit', 'velocityFilter', 'perPage', 'isSingleShop'
+        ));
+    }
+   
+    public function byProductData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId     = $request->get('location_id');
+        $departmentId   = $request->get('department_id');
+        $minQuantity    = $request->get('min_quantity');
+        $maxQuantity    = $request->get('max_quantity');
+        $minRevenue     = $request->get('min_revenue');
+        $maxRevenue     = $request->get('max_revenue');
+        $minProfit      = $request->get('min_profit');
+        $velocityFilter = $request->get('velocity_filter');
+        $perPage        = (int) $request->get('per_page', 25);
+        $page           = max(1, (int) $request->get('page', 1));
+
+        $daysInPeriod = $this->getDaysInPeriod($startDate, $endDate);
+
+        // ─── Build order items ────────────────────────────────
+        $query = OrderItem::with([
+                'order:id,tenant_id,status,created_at,location_id,department_id',
+                'productVariant:id,name,sku,image_url,product_id',
+                'productVariant.product:id,name,inventory_strategy',
+            ])
+            ->whereHas('order', function ($q) use ($tenantId, $startDate, $endDate, $locationId, $departmentId) {
                 $q->where('tenant_id', $tenantId)
-                    ->where('status', 'completed')
-                    ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-                
-                if ($locationId) {
-                    $q->where('location_id', $locationId);
-                }
-                
-                if ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                }
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+                if ($locationId)   $q->where('location_id', $locationId);
+                if ($departmentId) $q->where('department_id', $departmentId);
             });
-        
-        // Get all order items
+
         $orderItems = $query->get();
-        
-        // ─── Get Variant IDs from Order Items ──────────────────────
-        $variantIds = $orderItems->pluck('variant_id')->unique()->filter()->toArray();
-        
-        // ─── Get All Variants with Stock Information ──────────────
+        $variantIds = $orderItems->pluck('variant_id')->unique()->filter()->values()->toArray();
+
         $variants = ProductVariant::whereIn('id', $variantIds)
-            ->with(['product'])
+            ->with(['product:id,name,inventory_strategy'])
             ->get()
             ->keyBy('id');
-        
-        // ─── Get Stock Information Based on Shop Type ──────────────
+
         $variantStockMap = $this->getVariantStockMap($variantIds, $tenantId, $isSingleShop, $locationId, $departmentId);
-        
-        // ─── Group by Variant and Calculate Statistics ─────────────
-        $productSalesRaw = $orderItems->groupBy('variant_id')
-            ->map(function($items, $variantId) use ($variants, $variantStockMap) {
-                $variant = $variants[$variantId] ?? null;
-                
-                if (!$variant) {
-                    return null;
-                }
-                
-                $totalQuantity = $items->sum('quantity');
-                $totalRevenue = $items->sum('total_price');
-                $totalTax = $items->sum('tax_amount');
-                $totalDiscount = $items->sum('discount');
-                $orderCount = $items->pluck('order_id')->unique()->count();
-                $avgSellingPrice = $totalQuantity > 0 ? $totalRevenue / $totalQuantity : 0;
-                
-                // Get last sold date
-                $lastSold = $items->sortByDesc(function($item) {
-                    return $item->order->created_at ?? null;
-                })->first();
-                
-                // ─── Get Current Stock ──────────────────────────────────
-                $currentStock = $variantStockMap[$variantId] ?? 0;
-                
-                // ─── Profit Metrics — average the frozen costs across the actual items ──
-                $totalCostFromLogs   = 0.0;
-                $totalSellFromLogs   = 0.0;
-                $countWithCost       = 0;
 
-                foreach ($items as $item) {
-                    [$unitCost, $unitSell, $source] = $this->resolveLinePricing($item);
+        // ─── Group by variant ─────────────────────────────────
+        $productsRaw = $orderItems->groupBy('variant_id')->map(function ($items, $variantId) use ($variants, $variantStockMap) {
+            $variant = $variants[$variantId] ?? null;
+            if (!$variant) return null;
 
-                    $totalCostFromLogs += $unitCost * $item->quantity;
-                    $totalSellFromLogs += $unitSell * $item->quantity;
-                    if ($unitCost > 0) $countWithCost++;
-                }
+            $totalQuantity   = (float) $items->sum('quantity');
+            $totalRevenue    = (float) $items->sum('total_price');
+            $totalTax        = (float) $items->sum('tax_amount');
+            $totalDiscount   = (float) $items->sum('discount');
+            $orderCount      = $items->pluck('order_id')->unique()->count();
+            $avgSellingPrice = $totalQuantity > 0 ? $totalRevenue / $totalQuantity : 0;
 
-                $totalRevenueFromLogs = $totalSellFromLogs > 0 ? $totalSellFromLogs : $totalRevenue;
+            $lastSold = $items->sortByDesc(fn($i) => $i->order?->created_at)->first();
+            $currentStock = $variantStockMap[$variantId] ?? 0;
 
-                $totalProfit = $totalRevenue - $totalCostFromLogs;
-                $avgUnitCost = $totalQuantity > 0 ? $totalCostFromLogs / $totalQuantity : 0;
-                $avgUnitSell = $totalQuantity > 0 ? $totalRevenueFromLogs / $totalQuantity : 0;
-
-                $profitPerUnit = $avgUnitSell - $avgUnitCost;
-                $profitMargin  = $avgUnitSell > 0 ? ($profitPerUnit / $avgUnitSell) * 100 : 0;
-
-                $unitCost      = $avgUnitCost;
-                $unitPrice     = $avgUnitSell;
-                $discountPrice = $avgUnitSell;
-                
-                return (object)[
-                    'variant_id' => $variantId,
-                    'sku' => $variant->sku ?? 'N/A',
-                    'variant_name' => $variant->name ?? 'Unknown',
-                    'image_url' => $variant->image_url ?? null,
-                    'product_name' => $variant->product->name ?? $variant->name ?? 'Unknown',
-                    'current_price' => $unitPrice,
-                    'discount_price' => $discountPrice,
-                    'current_stock' => $currentStock,
-                    'unit_cost' => $unitCost,
-                    'profit_per_unit' => $profitPerUnit,
-                    'profit_margin' => $profitMargin,
-                    'total_profit' => $totalProfit,
-                    'total_quantity_sold' => $totalQuantity,
-                    'total_revenue' => $totalRevenue,
-                    'total_tax' => $totalTax,
-                    'total_discount' => $totalDiscount,
-                    'average_selling_price' => $avgSellingPrice,
-                    'order_count' => $orderCount,
-                    'last_sold_date' => $lastSold->order->created_at ?? null,
-                ];
-            })
-            ->filter()
-            ->values();
-        
-        
-        
-        // ─── Apply Filters ──────────────────────────────────────────
-        $productSales = $productSalesRaw->filter(function($product) use ($minQuantity, $maxQuantity, $minRevenue, $maxRevenue, $minProfit, $velocityFilter, $startDate, $endDate) {
-            if ($minQuantity && $product->total_quantity_sold < (int)$minQuantity) return false;
-            if ($maxQuantity && $product->total_quantity_sold > (int)$maxQuantity) return false;
-            if ($minRevenue && $product->total_revenue < (float)$minRevenue) return false;
-            if ($maxRevenue && $product->total_revenue > (float)$maxRevenue) return false;
-            if ($minProfit && $product->total_profit < (float)$minProfit) return false;
-            
-            if ($velocityFilter) {
-                $daysInPeriod = $this->getDaysInPeriod($startDate, $endDate);
-                $dailyRate = $product->total_quantity_sold / max($daysInPeriod, 1);
-                $category = $this->getVelocityCategory($dailyRate);
-                if ($velocityFilter !== $category) return false;
+            $totalCostFromLogs = 0.0;
+            $totalSellFromLogs = 0.0;
+            foreach ($items as $item) {
+                [$unitCost, $unitSell] = $this->resolveLinePricing($item);
+                $totalCostFromLogs += $unitCost * $item->quantity;
+                $totalSellFromLogs += $unitSell * $item->quantity;
             }
-            
+            $totalRevenueFromLogs = $totalSellFromLogs > 0 ? $totalSellFromLogs : $totalRevenue;
+
+            $totalProfit   = $totalRevenue - $totalCostFromLogs;
+            $avgUnitCost   = $totalQuantity > 0 ? $totalCostFromLogs / $totalQuantity : 0;
+            $avgUnitSell   = $totalQuantity > 0 ? $totalRevenueFromLogs / $totalQuantity : 0;
+            $profitPerUnit = $avgUnitSell - $avgUnitCost;
+            $profitMargin  = $avgUnitSell > 0 ? ($profitPerUnit / $avgUnitSell) * 100 : 0;
+
+            return [
+                'variant_id'             => $variantId,
+                'sku'                    => $variant->sku  ?? 'N/A',
+                'variant_name'           => $variant->name ?? 'Unknown',
+                'image_url'              => $variant->image_url ?? null,
+                'product_name'           => $variant->product?->name ?? $variant->name ?? 'Unknown',
+                'inventory_strategy'     => $variant->product?->inventory_strategy ?? 'quantity',
+                'has_serials'            => ($variant->product?->inventory_strategy === 'serial'),
+                'has_recipe'             => ($variant->product?->inventory_strategy === 'recipe'),
+                'current_price'          => round($avgUnitSell, 2),
+                'discount_price'         => round($avgUnitSell, 2),
+                'current_stock'          => $currentStock,
+                'unit_cost'              => round($avgUnitCost, 2),
+                'profit_per_unit'        => round($profitPerUnit, 2),
+                'profit_margin'          => round($profitMargin, 2),
+                'total_profit'           => round($totalProfit, 2),
+                'total_quantity_sold'    => round($totalQuantity, 2),
+                'total_revenue'          => round($totalRevenue, 2),
+                'total_tax'              => round($totalTax, 2),
+                'total_discount'         => round($totalDiscount, 2),
+                'average_selling_price'  => round($avgSellingPrice, 2),
+                'order_count'            => $orderCount,
+                'last_sold_date'         => $lastSold?->order?->created_at?->format('Y-m-d'),
+            ];
+        })->filter()->values();
+
+        // ─── Filters ──────────────────────────────────────────
+        $products = $productsRaw->filter(function ($p) use ($minQuantity, $maxQuantity, $minRevenue, $maxRevenue, $minProfit, $velocityFilter, $daysInPeriod) {
+            if ($minQuantity && $p['total_quantity_sold'] < (int) $minQuantity) return false;
+            if ($maxQuantity && $p['total_quantity_sold'] > (int) $maxQuantity) return false;
+            if ($minRevenue && $p['total_revenue'] < (float) $minRevenue) return false;
+            if ($maxRevenue && $p['total_revenue'] > (float) $maxRevenue) return false;
+            if ($minProfit && $p['total_profit'] < (float) $minProfit) return false;
+            if ($velocityFilter) {
+                $dailyRate = $p['total_quantity_sold'] / max($daysInPeriod, 1);
+                if ($this->getVelocityCategory($dailyRate) !== $velocityFilter) return false;
+            }
             return true;
         })->sortByDesc('total_revenue')->values();
 
-        
-        
-        // ─── Calculate Days in Period ──────────────────────────────
-        $daysInPeriod = $this->getDaysInPeriod($startDate, $endDate);
-        
-        // ─── Calculate Sales Velocity ──────────────────────────────
-        $productSales = $productSales->map(function($product) use ($daysInPeriod, $startDate, $endDate, $tenantId) {
-            $dailySalesRate = $product->total_quantity_sold / max($daysInPeriod, 1);
-            $dailyRevenueRate = $product->total_revenue / max($daysInPeriod, 1);
-            
-            $velocityData = $this->getVelocityData($dailySalesRate);
-            $product->daily_sales_rate = $dailySalesRate;
-            $product->daily_revenue_rate = $dailyRevenueRate;
-            $product->velocity_category = $velocityData['category'];
-            $product->velocity_color = $velocityData['color'];
-            $product->velocity_icon = $velocityData['icon'];
-            
-            // ─── Stock Coverage (Days of Stock) ──────────────────────
-            $product->stock_coverage_days = $dailySalesRate > 0 ? $product->current_stock / $dailySalesRate : 0;
-            
-            // ✅ Get variant and serial information
-            $variant = ProductVariant::find($product->variant_id);
-            if ($variant) {
-                $product->image_url = $variant->image_url ?? $product->image_url ?? null;
-                
-                // ─── Check if this variant's product has serial strategy ───
-                $product->inventory_strategy = $variant->product?->inventory_strategy ?? 'quantity';
-                $product->has_serials = $product->inventory_strategy === 'serial';
-                
-                if ($product->has_serials) {
-                    // Get sold serials for this variant within the period
-                    $soldSerials = SerialNumber::where('variant_id', $product->variant_id)
-                        ->where('tenant_id', $tenantId)
-                        ->where('status', SerialNumber::STATUS_SOLD)
-                        ->whereBetween('sold_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                        ->get();
-                    
-                    $product->total_serials_sold = $soldSerials->count();
-                    $product->serial_numbers = $soldSerials->pluck('serial_number')->take(10)->toArray();
-                    $product->total_available_serials = $variant->getAvailableSerialCount();
-                } else {
-                    $product->total_serials_sold = 0;
-                    $product->serial_numbers = [];
-                    $product->total_available_serials = 0;
-                }
-                
-                // ─── Check if product has recipe ──────────────────────────
-                if ($variant->product) {
-                    $product->has_recipe = $variant->product->inventory_strategy === 'recipe';
-                    $product->recipe_id = $variant->product->recipe?->id;
-                    
-                    if ($product->has_recipe && $variant->product->recipe) {
-                        $product->ingredients = $variant->product->recipe->ingredients->map(function($ingredient) {
-                            return (object)[
-                                'variant_name' => $ingredient->ingredientVariant->name ?? 'Unknown',
-                                'quantity_required' => $ingredient->quantity_required,
-                                'unit' => $ingredient->unit?->name ?? 'N/A',
-                            ];
-                        });
-                    } else {
-                        $product->ingredients = collect();
-                    }
-                } else {
-                    $product->has_recipe = false;
-                    $product->ingredients = collect();
-                }
-            } else {
-                $product->has_recipe = false;
-                $product->ingredients = collect();
-                $product->has_serials = false;
-                $product->total_serials_sold = 0;
-                $product->serial_numbers = [];
-                $product->total_available_serials = 0;
-                $product->inventory_strategy = 'quantity';
-            }
+        // ─── Velocity ─────────────────────────────────────────
+        $products = $products->map(function ($p) use ($daysInPeriod) {
+            $dailyRate    = $p['total_quantity_sold'] / max($daysInPeriod, 1);
+            $dailyRevenue = $p['total_revenue'] / max($daysInPeriod, 1);
+            $velocity     = $this->getVelocityData($dailyRate);
 
-            return $product;
-        });
-        
-        // ─── Get Top and Bottom Performers ──────────────────────────
-        $topProducts = $productSales->take(10);
-        $bottomProducts = $productSales->sortBy('total_revenue')->take(10);
-        
-        // ─── Summary Statistics ─────────────────────────────────────
-        $totalRevenue = $productSales->sum('total_revenue');
-        $totalQuantity = $productSales->sum('total_quantity_sold');
-        $totalProfit = $productSales->sum('total_profit');
-        $avgMargin = $productSales->count() > 0 ? $productSales->avg('profit_margin') : 0;
-        $uniqueProducts = $productSales->count();
-        $totalStock = $productSales->sum('current_stock');
-        
-        $summary = (object)[
-            'total_products' => $uniqueProducts,
-            'total_revenue' => $totalRevenue,
-            'total_quantity' => $totalQuantity,
-            'total_profit' => $totalProfit,
-            'avg_profit_margin' => $avgMargin,
-            'avg_daily_sales' => $daysInPeriod > 0 ? $totalQuantity / $daysInPeriod : 0,
-            'total_stock' => $totalStock,
-            'top_product' => $productSales->first()->variant_name ?? 'N/A',
-            'top_revenue' => $productSales->first()->total_revenue ?? 0,
-            'fast_movers' => $productSales->where('velocity_category', 'Fast Mover')->count(),
-            'medium_movers' => $productSales->where('velocity_category', 'Medium Mover')->count(),
-            'slow_movers' => $productSales->where('velocity_category', 'Slow Mover')->count(),
-            'is_single_shop' => $isSingleShop,
+            $p['daily_sales_rate']   = round($dailyRate, 2);
+            $p['daily_revenue_rate'] = round($dailyRevenue, 2);
+            $p['velocity_category']  = $velocity['category'];
+            $p['velocity_color']     = $velocity['color'];
+            $p['velocity_icon']      = $velocity['icon'];
+            $p['stock_coverage_days']= $dailyRate > 0 ? round($p['current_stock'] / $dailyRate, 1) : 0;
+            return $p;
+        })->values();
+
+        // ─── Summary ──────────────────────────────────────────
+        $totalRevenue  = (float) $products->sum('total_revenue');
+        $totalQuantity = (float) $products->sum('total_quantity_sold');
+        $totalProfit   = (float) $products->sum('total_profit');
+        $topProduct    = $products->first();
+
+        $summary = [
+            'total_products'       => $products->count(),
+            'total_revenue'        => round($totalRevenue, 2),
+            'total_quantity'       => round($totalQuantity, 2),
+            'total_profit'         => round($totalProfit, 2),
+            'avg_profit_margin'    => round($products->avg('profit_margin') ?? 0, 2),
+            'avg_daily_sales'      => $daysInPeriod > 0 ? round($totalQuantity / $daysInPeriod, 2) : 0,
+            'total_stock'          => (int) $products->sum('current_stock'),
+            'top_product'          => $topProduct['variant_name']  ?? 'N/A',
+            'top_revenue'          => $topProduct['total_revenue'] ?? 0,
+            'fast_movers'          => $products->where('velocity_category', 'Fast Mover')->count(),
+            'medium_movers'        => $products->where('velocity_category', 'Medium Mover')->count(),
+            'slow_movers'          => $products->where('velocity_category', 'Slow Mover')->count(),
+            'is_single_shop'       => $isSingleShop,
         ];
-        
-        // ─── Velocity Breakdown for Chart ──────────────────────────
+
         $velocityBreakdown = [
-            'Fast Mover' => $productSales->where('velocity_category', 'Fast Mover')->count(),
-            'Medium Mover' => $productSales->where('velocity_category', 'Medium Mover')->count(),
-            'Slow Mover' => $productSales->where('velocity_category', 'Slow Mover')->count(),
+            'Fast Mover'   => $products->where('velocity_category', 'Fast Mover')->count(),
+            'Medium Mover' => $products->where('velocity_category', 'Medium Mover')->count(),
+            'Slow Mover'   => $products->where('velocity_category', 'Slow Mover')->count(),
         ];
-        
-        // ─── Get Filter Options ─────────────────────────────────────
-        $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-            
-        $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get();
-        
-        // ─── Pagination ─────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($productSales->count(), 1));
-        $paginatedProducts = $productSales->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $productSalesPaginated = new LengthAwarePaginator(
-            $paginatedProducts,
-            $productSales->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Return View ────────────────────────────────────────────
-        return view('reports.orders.by-product', compact(
-            'productSales',
-            'productSalesPaginated',
-            'topProducts',
-            'bottomProducts',
-            'summary',
-            'velocityBreakdown',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'minQuantity',
-            'maxQuantity',
-            'minRevenue',
-            'maxRevenue',
-            'minProfit',
-            'velocityFilter',
-            'daysInPeriod',
-            'perPage',
-            'isSingleShop'
-        ));
+
+        // ─── Top 10 / Top 5 / Bottom 5 ────────────────────────
+        $topProducts    = $products->take(10)->values();
+        $topFive        = $products->take(5)->values();
+        $bottomFive     = $products->sortBy('total_revenue')->take(5)->values();
+
+        // ─── Percentages ──────────────────────────────────────
+        $productsWithPct = $products->map(function ($p) use ($totalRevenue) {
+            $p['percentage'] = $totalRevenue > 0 ? round(($p['total_revenue'] / $totalRevenue) * 100, 2) : 0;
+            return $p;
+        })->values();
+
+        // ─── Pagination ───────────────────────────────────────
+        $total    = $productsWithPct->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+        $pageRows = $productsWithPct->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'           => $summary,
+                'velocity_breakdown'=> $velocityBreakdown,
+                'top_products'      => $topProducts,
+                'top_five'          => $topFive,
+                'bottom_five'       => $bottomFive,
+                'products'          => $pageRows,
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'      => $startDate,
+                    'end_date'        => $endDate,
+                    'days_in_period'  => $daysInPeriod,
+                    'is_single_shop'  => $isSingleShop,
+                ],
+            ],
+        ]);
     }
-    
+
+
     /**
      * Get variant stock map based on shop type
      * 
@@ -1315,244 +1379,301 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
-        $departmentId = $request->get('department_id');
-        $paymentType = $request->get('payment_type');
-        $paymentMethodStatus = $request->get('payment_method_status', 'all');
-        $minAmount = $request->get('min_amount');
-        $maxAmount = $request->get('max_amount');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Get Order Payments ─────────────────────────────────────
-        $query = OrderPayment::with(['order', 'paymentMethod'])
-            ->whereHas('order', function($q) use ($tenantId, $locationId, $departmentId) {
-                $q->where('tenant_id', $tenantId);
-                
-                if ($locationId) {
-                    $q->where('location_id', $locationId);
-                }
-                
-                if ($departmentId) {
-                    $q->where('department_id', $departmentId);
-                }
-            })
-            ->whereBetween('processed_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-        
-        // ─── Apply Payment Status Filter ────────────────────────────
-        if ($request->has('payment_status') && $request->payment_status !== 'all') {
-            $query->where('status', $request->payment_status);
-        } else {
-            // Default: include only completed and failed
-            $query->whereIn('status', ['completed', 'failed']);
-        }
-        
-        // ─── Apply Payment Type Filter ──────────────────────────────
-        if ($paymentType && $paymentType !== 'all') {
-            $query->whereHas('paymentMethod', function($q) use ($paymentType) {
-                $q->where('type', $paymentType);
-            });
-        }
-        
-        // ─── Apply Payment Method Status Filter ─────────────────────
-        if ($paymentMethodStatus !== 'all') {
-            $isActive = $paymentMethodStatus === 'active';
-            $query->whereHas('paymentMethod', function($q) use ($isActive) {
-                $q->where('is_active', $isActive);
-            });
-        }
-        
-        $allPayments = $query->get();
-        
-        // ─── Separate Completed and Failed Payments ─────────────────
-        $completedPayments = $allPayments->where('status', 'completed');
-        $failedPayments = $allPayments->where('status', 'failed');
-        
-        // ─── Group by Payment Method ────────────────────────────────
-        $paymentMethodAnalysis = $completedPayments->groupBy('payment_method_id')
-            ->map(function($payments, $methodId) use ($failedPayments) {
-                $firstPayment = $payments->first();
-                $paymentMethod = $firstPayment->paymentMethod;
-                
-                $totalAmount = $payments->sum('amount');
-                $transactionCount = $payments->count();
-                $avgTransaction = $transactionCount > 0 ? $totalAmount / $transactionCount : 0;
-                $lastTransaction = $payments->sortByDesc('processed_at')->first();
-                
-                // ─── Failed Transactions for this Method ──────────────
-                $methodFailedPayments = $failedPayments->filter(function($payment) use ($methodId) {
-                    return $payment->payment_method_id == $methodId;
-                });
-                $failedCount = $methodFailedPayments->count();
-                $failedAmount = $methodFailedPayments->sum('amount');
-                $failureRate = ($transactionCount + $failedCount) > 0 
-                    ? ($failedCount / ($transactionCount + $failedCount)) * 100 
-                    : 0;
-                
-                return (object)[
-                    'id' => $methodId,
-                    'method_name' => $paymentMethod->name ?? 'Unknown',
-                    'method_type' => $paymentMethod->type ?? 'unknown',
-                    'is_active' => $paymentMethod->is_active ?? true,
-                    'transaction_count' => $transactionCount,
-                    'total_amount' => $totalAmount,
-                    'average_transaction' => $avgTransaction,
-                    'largest_transaction' => $payments->max('amount') ?? 0,
-                    'smallest_transaction' => $payments->min('amount') ?? 0,
-                    'last_transaction_date' => $lastTransaction->processed_at ?? null,
-                    'failed_count' => $failedCount,
-                    'failed_amount' => $failedAmount,
-                    'failure_rate' => $failureRate,
-                    'success_rate' => 100 - $failureRate,
-                ];
-            })
-            ->sortByDesc('total_amount')
-            ->values();
-        
-        // ─── Apply Amount Filters ────────────────────────────────────
-        if ($minAmount && is_numeric($minAmount)) {
-            $paymentMethodAnalysis = $paymentMethodAnalysis->filter(function($method) use ($minAmount) {
-                return $method->total_amount >= (float)$minAmount;
-            });
-        }
-        
-        if ($maxAmount && is_numeric($maxAmount)) {
-            $paymentMethodAnalysis = $paymentMethodAnalysis->filter(function($method) use ($maxAmount) {
-                return $method->total_amount <= (float)$maxAmount;
-            });
-        }
-        
-        // Reset keys
-        $paymentMethodAnalysis = $paymentMethodAnalysis->values();
-        
-        // ─── Payment Method Trends ──────────────────────────────────
-        $paymentTrendsRaw = $completedPayments->groupBy(function($payment) {
-            return $payment->processed_at->format('Y-m-d');
-        })->flatMap(function($dailyPayments, $date) {
-            return $dailyPayments->groupBy(function($payment) {
-                return $payment->paymentMethod->type ?? 'unknown';
-            })->map(function($typePayments, $type) use ($date) {
-                return (object)[
-                    'date' => $date,
-                    'type' => $type,
-                    'daily_count' => $typePayments->count(),
-                    'daily_total' => $typePayments->sum('amount'),
-                ];
-            })->values();
-        });
-        
-        $paymentTrends = $paymentTrendsRaw->groupBy('type');
-        
-        // ─── Failed Transactions Summary ────────────────────────────
-        $failedTransactions = $failedPayments->groupBy('payment_method_id')
-            ->map(function($failures, $methodId) {
-                $paymentMethod = $failures->first()->paymentMethod;
-                $totalTransactions = $this->getTotalTransactionsForMethod($methodId);
-                
-                return (object)[
-                    'id' => $methodId,
-                    'name' => $paymentMethod->name ?? 'Unknown',
-                    'type' => $paymentMethod->type ?? 'unknown',
-                    'failed_count' => $failures->count(),
-                    'failed_amount' => $failures->sum('amount'),
-                    'total_transactions' => $totalTransactions,
-                    'failure_rate' => $totalTransactions > 0 ? ($failures->count() / $totalTransactions) * 100 : 100,
-                ];
-            })
-            ->sortByDesc('failed_count')
-            ->values();
-        
-        // ─── Summary Statistics ─────────────────────────────────────
-        $totalCompletedTransactions = $paymentMethodAnalysis->sum('transaction_count');
-        $totalAmount = $paymentMethodAnalysis->sum('total_amount');
-        $totalFailedTransactions = $failedTransactions->sum('failed_count');
-        $totalFailedAmount = $failedTransactions->sum('failed_amount');
-        $overallFailureRate = ($totalCompletedTransactions + $totalFailedTransactions) > 0 
-            ? ($totalFailedTransactions / ($totalCompletedTransactions + $totalFailedTransactions)) * 100 
-            : 0;
-        
-        $summary = (object)[
-            'total_methods' => $paymentMethodAnalysis->count(),
-            'total_transactions' => $totalCompletedTransactions,
-            'total_amount' => $totalAmount,
-            'avg_transaction' => $totalCompletedTransactions > 0 ? $totalAmount / $totalCompletedTransactions : 0,
-            'most_used_method' => $paymentMethodAnalysis->first()->method_name ?? 'N/A',
-            'most_used_amount' => $paymentMethodAnalysis->first()->total_amount ?? 0,
-            'total_failed_transactions' => $totalFailedTransactions,
-            'total_failed_amount' => $totalFailedAmount,
-            'overall_failure_rate' => $overallFailureRate,
-            'success_rate' => 100 - $overallFailureRate,
-        ];
-        
-        // ─── Get Filter Options ─────────────────────────────────────
+
+        $locationId           = $request->get('location_id');
+        $departmentId         = $request->get('department_id');
+        $paymentType          = $request->get('payment_type');
+        $paymentStatus        = $request->get('payment_status', 'all');
+        $paymentMethodStatus  = $request->get('payment_method_status', 'all');
+        $minAmount            = $request->get('min_amount');
+        $maxAmount            = $request->get('max_amount');
+        $perPage              = (int) $request->get('per_page', 25);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Payment Types for Filter ───────────────────────────────
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         $paymentTypes = PaymentMethod::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->distinct()
-            ->pluck('type')
-            ->filter()
-            ->values();
-        
-        // ─── Chart Data ─────────────────────────────────────────────
-        $chartData = [
-            'labels' => $paymentMethodAnalysis->pluck('method_name'),
-            'amounts' => $paymentMethodAnalysis->pluck('total_amount'),
-            'counts' => $paymentMethodAnalysis->pluck('transaction_count'),
-            'failed_counts' => $paymentMethodAnalysis->pluck('failed_count'),
-        ];
-        
-        // ─── Pagination ─────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($paymentMethodAnalysis->count(), 1));
-        $paginatedMethods = $paymentMethodAnalysis->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $paymentMethodAnalysisPaginated = new LengthAwarePaginator(
-            $paginatedMethods,
-            $paymentMethodAnalysis->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Return View ────────────────────────────────────────────
+            ->where('is_active', true)->distinct()->pluck('type')->filter()->values();
+
         return view('reports.orders.by-payment-method', compact(
-            'paymentMethodAnalysis',
-            'paymentMethodAnalysisPaginated',
-            'paymentTrends',
-            'failedTransactions',
-            'locations',
-            'departments',
-            'paymentTypes',
-            'summary',
-            'chartData',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'paymentType',
-            'paymentMethodStatus',
-            'minAmount',
-            'maxAmount',
-            'perPage'
+            'locations', 'departments', 'paymentTypes',
+            'startDate', 'endDate',
+            'locationId', 'departmentId',
+            'paymentType', 'paymentStatus', 'paymentMethodStatus',
+            'minAmount', 'maxAmount', 'perPage'
         ));
     }
-    
+
+    public function byPaymentMethodData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId          = $request->get('location_id');
+        $departmentId        = $request->get('department_id');
+        $paymentType         = $request->get('payment_type');
+        $paymentStatus       = $request->get('payment_status', 'all');
+        $paymentMethodStatus = $request->get('payment_method_status', 'all');
+        $minAmount           = $request->get('min_amount');
+        $maxAmount           = $request->get('max_amount');
+        $perPage             = (int) $request->get('per_page', 25);
+        $page                = max(1, (int) $request->get('page', 1));
+
+        $query = OrderPayment::with([
+                'order:id,tenant_id,order_number,location_id,department_id',
+                'paymentMethod:id,name,type,is_active',
+            ])
+            ->whereHas('order', function ($q) use ($tenantId, $locationId, $departmentId) {
+                $q->where('tenant_id', $tenantId);
+                if ($locationId)   $q->where('location_id', $locationId);
+                if ($departmentId) $q->where('department_id', $departmentId);
+            })
+            ->whereBetween('processed_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+
+        if ($paymentStatus !== 'all') {
+            $query->where('status', $paymentStatus);
+        } else {
+            $query->whereIn('status', ['completed', 'failed']);
+        }
+        if ($paymentType && $paymentType !== 'all') {
+            $query->whereHas('paymentMethod', fn($q) => $q->where('type', $paymentType));
+        }
+        if ($paymentMethodStatus !== 'all') {
+            $isActive = $paymentMethodStatus === 'active';
+            $query->whereHas('paymentMethod', fn($q) => $q->where('is_active', $isActive));
+        }
+
+        $allPayments      = $query->get();
+        $completedPayments= $allPayments->where('status', 'completed');
+        $failedPayments   = $allPayments->where('status', 'failed');
+
+        // ─── Group by payment method ────────────────────────────
+        $methods = $completedPayments->groupBy('payment_method_id')->map(function ($payments, $methodId) use ($failedPayments) {
+            $method = $payments->first()->paymentMethod;
+
+            $totalAmount    = (float) $payments->sum('amount');
+            $txnCount       = $payments->count();
+            $avgTxn         = $txnCount > 0 ? $totalAmount / $txnCount : 0;
+            $lastTxn        = $payments->sortByDesc('processed_at')->first();
+
+            $methodFailed   = $failedPayments->where('payment_method_id', $methodId);
+            $failedCount    = $methodFailed->count();
+            $failedAmount   = (float) $methodFailed->sum('amount');
+            $failureRate    = ($txnCount + $failedCount) > 0
+                                ? ($failedCount / ($txnCount + $failedCount)) * 100 : 0;
+
+            return [
+                'id'                   => $methodId,
+                'method_name'          => $method?->name ?? 'Unknown',
+                'method_type'          => $method?->type ?? 'unknown',
+                'is_active'            => (bool) ($method?->is_active ?? true),
+                'transaction_count'    => $txnCount,
+                'total_amount'         => round($totalAmount, 2),
+                'average_transaction'  => round($avgTxn, 2),
+                'largest_transaction'  => round((float) ($payments->max('amount') ?? 0), 2),
+                'smallest_transaction' => round((float) ($payments->min('amount') ?? 0), 2),
+                'last_transaction_date'=> $lastTxn?->processed_at?->format('Y-m-d H:i'),
+                'failed_count'         => $failedCount,
+                'failed_amount'        => round($failedAmount, 2),
+                'failure_rate'         => round($failureRate, 2),
+                'success_rate'         => round(100 - $failureRate, 2),
+            ];
+        })->sortByDesc('total_amount')->values();
+
+        // ─── Amount filter ──────────────────────────────────────
+        if ($minAmount !== null && $minAmount !== '' && is_numeric($minAmount)) {
+            $methods = $methods->filter(fn($m) => $m['total_amount'] >= (float) $minAmount)->values();
+        }
+        if ($maxAmount !== null && $maxAmount !== '' && is_numeric($maxAmount)) {
+            $methods = $methods->filter(fn($m) => $m['total_amount'] <= (float) $maxAmount)->values();
+        }
+
+        // ─── Percentages ────────────────────────────────────────
+        $totalAmountAll = (float) $methods->sum('total_amount');
+        $methods = $methods->map(function ($m) use ($totalAmountAll) {
+            $m['share'] = $totalAmountAll > 0 ? round(($m['total_amount'] / $totalAmountAll) * 100, 2) : 0;
+            return $m;
+        })->values();
+
+        // ─── Trends (by date × type) ────────────────────────────
+        $trendsRaw = $completedPayments->groupBy(fn($p) => $p->processed_at->format('Y-m-d'))
+            ->flatMap(function ($daily, $date) {
+                return $daily->groupBy(fn($p) => $p->paymentMethod?->type ?? 'unknown')
+                    ->map(fn($tp, $type) => [
+                        'date'        => $date,
+                        'type'        => $type,
+                        'daily_count' => $tp->count(),
+                        'daily_total' => round((float) $tp->sum('amount'), 2),
+                    ])->values();
+            });
+
+        $trends = $trendsRaw->groupBy('type')->map(fn($g) => $g->values());
+
+        // ─── Failed transactions per method ─────────────────────
+        $failed = $failedPayments->groupBy('payment_method_id')->map(function ($failures, $methodId) {
+            $method = $failures->first()->paymentMethod;
+            $totalForMethod = OrderPayment::where('payment_method_id', $methodId)
+                ->whereIn('status', ['completed', 'failed'])->count();
+            return [
+                'id'             => $methodId,
+                'name'           => $method?->name ?? 'Unknown',
+                'type'           => $method?->type ?? 'unknown',
+                'failed_count'   => $failures->count(),
+                'failed_amount'  => round((float) $failures->sum('amount'), 2),
+                'total_transactions' => $totalForMethod,
+                'failure_rate'   => $totalForMethod > 0 ? round(($failures->count() / $totalForMethod) * 100, 2) : 100,
+            ];
+        })->sortByDesc('failed_count')->values();
+
+        // ─── Summary ────────────────────────────────────────────
+        $totalCompletedTxns = (int) $methods->sum('transaction_count');
+        $totalFailedTxns    = (int) $failed->sum('failed_count');
+        $totalFailedAmount  = (float) $failed->sum('failed_amount');
+        $overallFailureRate = ($totalCompletedTxns + $totalFailedTxns) > 0
+                                ? ($totalFailedTxns / ($totalCompletedTxns + $totalFailedTxns)) * 100 : 0;
+        $topMethod = $methods->first();
+
+        $summary = [
+            'total_methods'            => $methods->count(),
+            'total_transactions'       => $totalCompletedTxns,
+            'total_amount'             => round($totalAmountAll, 2),
+            'avg_transaction'          => $totalCompletedTxns > 0 ? round($totalAmountAll / $totalCompletedTxns, 2) : 0,
+            'most_used_method'         => $topMethod['method_name'] ?? 'N/A',
+            'most_used_amount'         => $topMethod['total_amount'] ?? 0,
+            'total_failed_transactions'=> $totalFailedTxns,
+            'total_failed_amount'      => round($totalFailedAmount, 2),
+            'overall_failure_rate'     => round($overallFailureRate, 2),
+            'success_rate'             => round(100 - $overallFailureRate, 2),
+        ];
+
+        // ─── Pagination ─────────────────────────────────────────
+        $total    = $methods->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+        $pageRows = $methods->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'            => $summary,
+                'methods'            => $pageRows,
+                'failed_transactions'=> $failed,
+                'trends'             => $trends,
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'  => $startDate,
+                    'end_date'    => $endDate,
+                ],
+            ],
+        ]);
+    }
+  
+    public function byPaymentMethodTransactions(Request $request, $methodId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+
+        $payments = OrderPayment::with([
+                'order:id,order_number',
+                'paymentMethod:id,name,type',
+                'processor:id,first_name,last_name',
+            ])
+            ->whereHas('order', fn($q) => $q->where('tenant_id', $tenantId))
+            ->where('payment_method_id', $methodId)
+            ->where('status', 'completed')
+            ->whereBetween('processed_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->orderByDesc('processed_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'method_id'    => (int) $methodId,
+                'total_amount' => round((float) $payments->sum('amount'), 2),
+                'count'        => $payments->count(),
+                'transactions' => $payments->map(fn($p) => [
+                    'id'             => $p->id,
+                    'amount'         => round((float) $p->amount, 2),
+                    'status'         => $p->status,
+                    'order_number'   => $p->order?->order_number,
+                    'transaction_id' => $p->transaction_id,
+                    'processed_at'   => $p->processed_at?->format('Y-m-d H:i'),
+                    'processor'      => trim(($p->processor?->first_name ?? '') . ' ' . ($p->processor?->last_name ?? '')) ?: null,
+                    'recorded_via'   => $p->recorded_via,
+                ]),
+            ],
+        ]);
+    }
+
+    public function byPaymentMethodFailedTransactions(Request $request, $methodId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+
+        $payments = OrderPayment::with(['order:id,order_number', 'paymentMethod:id,name,type'])
+            ->whereHas('order', fn($q) => $q->where('tenant_id', $tenantId))
+            ->where('payment_method_id', $methodId)
+            ->where('status', 'failed')
+            ->whereBetween('processed_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->orderByDesc('processed_at')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'method_id'      => (int) $methodId,
+                'total_amount'   => round((float) $payments->sum('amount'), 2),
+                'count'          => $payments->count(),
+                'transactions'   => $payments->map(fn($p) => [
+                    'id'             => $p->id,
+                    'amount'         => round((float) $p->amount, 2),
+                    'order_number'   => $p->order?->order_number,
+                    'transaction_id' => $p->transaction_id,
+                    'processed_at'   => $p->processed_at?->format('Y-m-d H:i'),
+                    'notes'          => $p->notes,
+                ]),
+            ],
+        ]);
+    }
+
+
     /**
      * Get total transactions for a payment method
      */
@@ -1578,162 +1699,263 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
-        
-        // Validate and format dates
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // Get filter parameters
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $employeeId = $request->get('employee_id');
-        $minSales = $request->get('min_sales');
-        $maxSales = $request->get('max_sales');
-        $perPage = $request->get('per_page', 15); // Add pagination parameter
-        
-        // First, get all relevant order IDs with filters
-        $orderQuery = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-        
-        if ($locationId) {
-            $orderQuery->where('location_id', $locationId);
-        }
-        
-        if ($departmentId) {
-            $orderQuery->where('department_id', $departmentId);
-        }
-        
-        // Get filtered order IDs
-        $filteredOrderIds = $orderQuery->pluck('id');
-        
-        // Build employee query - NO DB::raw, using Eloquent only
-        $employeesQuery = User::where('tenant_id', $tenantId)
-            ->where('status', 'active')
-            ->with(['orders' => function($query) use ($startDate, $endDate, $locationId, $departmentId, $tenantId) {
-                $query->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-                    ->where('tenant_id', $tenantId);
-                
-                if ($locationId) {
-                    $query->where('location_id', $locationId);
-                }
-                
-                if ($departmentId) {
-                    $query->where('department_id', $departmentId);
-                }
-            }]);
-        
-        // Apply employee filter
-        if ($employeeId) {
-            $employeesQuery->where('id', $employeeId);
-        }
-        
-        // Get employees with pagination
-        $employees = $employeesQuery->paginate($perPage);
-        
-        // Calculate days in period
-        $daysInPeriod = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-        
-        // Calculate performance metrics for each employee
-        $employeePerformance = collect();
-        
-        foreach ($employees as $employee) {
-            $orders = $employee->orders;
-            $orderCount = $orders->count();
-            
-            // Calculate metrics from the collection
-            $totalSales = $orders->sum('total');
-            $totalTax = $orders->sum('tax_total');
-            $totalDiscount = $orders->sum('discount_total');
-            $averageOrderValue = $orderCount > 0 ? $totalSales / $orderCount : 0;
-            $largestSale = $orders->max('total');
-            $smallestSale = $orders->min('total');
-            $uniqueCustomers = $orders->unique('customer_id')->count();
-            $lastSaleDate = $orders->max('created_at');
-            
-            $ordersPerDay = $orderCount / max($daysInPeriod, 1);
-            $salesPerDay = $totalSales / max($daysInPeriod, 1);
-            
-            // Determine performance rating
-            $performanceRating = $this->calculatePerformanceRating($salesPerDay);
-            
-            $employeePerformance->push((object)[
-                'id' => $employee->id,
-                'first_name' => $employee->first_name,
-                'last_name' => $employee->last_name,
-                'email' => $employee->email,
-                'order_count' => $orderCount,
-                'total_sales' => $totalSales,
-                'total_tax_collected' => $totalTax,
-                'total_discount_given' => $totalDiscount,
-                'average_order_value' => $averageOrderValue,
-                'largest_sale' => $largestSale ?? 0,
-                'smallest_sale' => $smallestSale ?? 0,
-                'unique_customers' => $uniqueCustomers,
-                'last_sale_date' => $lastSaleDate,
-                'orders_per_day' => $ordersPerDay,
-                'sales_per_day' => $salesPerDay,
-                'performance_rating' => $performanceRating['rating'],
-                'rating_color' => $performanceRating['color'],
-                'days_in_period' => $daysInPeriod,
-            ]);
-        }
-        
-        // Filter employees with orders (optional - remove this line to show zero-sales employees)
-        $employeePerformance = $employeePerformance->filter(function($employee) {
-            return $employee->order_count > 0;
-        });
-        
-        // Apply sales filters
-        if ($minSales && is_numeric($minSales)) {
-            $employeePerformance = $employeePerformance->filter(function($employee) use ($minSales) {
-                return $employee->total_sales >= (float)$minSales;
-            });
-        }
-        
-        if ($maxSales && is_numeric($maxSales)) {
-            $employeePerformance = $employeePerformance->filter(function($employee) use ($maxSales) {
-                return $employee->total_sales <= (float)$maxSales;
-            });
-        }
-        
-        // Sort by total sales descending and reset values
-        $employeePerformance = $employeePerformance->sortByDesc('total_sales')->values();
-        
-        // Get filter options for dropdowns
+        $employeeId   = $request->get('employee_id');
+        $minSales     = $request->get('min_sales');
+        $maxSales     = $request->get('max_sales');
+        $perPage      = (int) $request->get('per_page', 15);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         $employeesList = User::where('tenant_id', $tenantId)
-            ->where('status', 'active')
-            ->orderBy('first_name')
+            ->where('status', 'active')->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name']);
-        
+
         return view('reports.orders.by-employee', compact(
-            'employeePerformance',
-            'locations',
-            'departments',
-            'employeesList',
-            'employees',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'employeeId',
-            'minSales',
-            'maxSales',
-            'daysInPeriod',
-            'perPage'
+            'locations', 'departments', 'employeesList',
+            'startDate', 'endDate',
+            'locationId', 'departmentId',
+            'employeeId', 'minSales', 'maxSales', 'perPage'
         ));
     }
+
+    public function byEmployeeData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $employeeId   = $request->get('employee_id');
+        $minSales     = $request->get('min_sales');
+        $maxSales     = $request->get('max_sales');
+        $perPage      = (int) $request->get('per_page', 15);
+        $page         = max(1, (int) $request->get('page', 1));
+
+        $daysInPeriod = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
+
+        // ─── Employees query ────────────────────────────────────
+        $employeesQuery = User::where('tenant_id', $tenantId)
+            ->where('status', 'active')
+            ->with(['orders' => function ($q) use ($startDate, $endDate, $locationId, $departmentId, $tenantId) {
+                $q->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->where('tenant_id', $tenantId);
+                if ($locationId)   $q->where('location_id', $locationId);
+                if ($departmentId) $q->where('department_id', $departmentId);
+            }]);
+
+        if ($employeeId) $employeesQuery->where('id', $employeeId);
+
+        $employees = $employeesQuery->get();
+
+        // ─── Build performance rows ─────────────────────────────
+        $rows = $employees->map(function ($employee) use ($daysInPeriod) {
+            $orders          = $employee->orders;
+            $orderCount      = $orders->count();
+            $totalSales      = (float) $orders->sum('total');
+            $totalTax        = (float) $orders->sum('tax_total');
+            $totalDiscount   = (float) $orders->sum('discount_total');
+            $avgOrderValue   = $orderCount > 0 ? $totalSales / $orderCount : 0;
+            $largestSale     = (float) ($orders->max('total') ?? 0);
+            $smallestSale    = (float) ($orders->min('total') ?? 0);
+            $uniqueCustomers = $orders->unique('customer_id')->count();
+            $lastSale        = $orders->max('created_at');
+
+            $ordersPerDay = $orderCount / max($daysInPeriod, 1);
+            $salesPerDay  = $totalSales / max($daysInPeriod, 1);
+            $rating       = $this->calculatePerformanceRating($salesPerDay);
+
+            return [
+                'id'                   => $employee->id,
+                'first_name'           => $employee->first_name,
+                'last_name'            => $employee->last_name,
+                'email'                => $employee->email,
+                'order_count'          => $orderCount,
+                'total_sales'          => round($totalSales, 2),
+                'total_tax_collected'  => round($totalTax, 2),
+                'total_discount_given' => round($totalDiscount, 2),
+                'average_order_value'  => round($avgOrderValue, 2),
+                'largest_sale'         => round($largestSale, 2),
+                'smallest_sale'        => round($smallestSale, 2),
+                'unique_customers'     => $uniqueCustomers,
+                'last_sale_date'       => $lastSale?->format('Y-m-d'),
+                'orders_per_day'       => round($ordersPerDay, 2),
+                'sales_per_day'        => round($salesPerDay, 2),
+                'performance_rating'   => $rating['rating'],
+                'rating_color'         => $rating['color'],
+            ];
+        })->filter(fn($r) => $r['order_count'] > 0);
+
+        // ─── Sales filters ──────────────────────────────────────
+        if ($minSales !== null && $minSales !== '' && is_numeric($minSales)) {
+            $rows = $rows->filter(fn($r) => $r['total_sales'] >= (float) $minSales)->values();
+        }
+        if ($maxSales !== null && $maxSales !== '' && is_numeric($maxSales)) {
+            $rows = $rows->filter(fn($r) => $r['total_sales'] <= (float) $maxSales)->values();
+        }
+        $rows = $rows->sortByDesc('total_sales')->values();
+
+        // ─── Rating distribution ────────────────────────────────
+        $ratingCounts = ['Excellent' => 0, 'Good' => 0, 'Average' => 0, 'Needs Improvement' => 0];
+        foreach ($rows as $r) {
+            if (isset($ratingCounts[$r['performance_rating']])) $ratingCounts[$r['performance_rating']]++;
+        }
+
+        // ─── Percentages ────────────────────────────────────────
+        $totalSalesAll = (float) $rows->sum('total_sales');
+        $rows = $rows->map(function ($r) use ($totalSalesAll) {
+            $r['percentage'] = $totalSalesAll > 0 ? round(($r['total_sales'] / $totalSalesAll) * 100, 2) : 0;
+            return $r;
+        })->values();
+
+        // ─── Top / bottom 5 ─────────────────────────────────────
+        $topFive    = $rows->take(5)->values();
+        $bottomFive = $rows->sortBy('total_sales')->take(5)->values();
+
+        // ─── Summary ────────────────────────────────────────────
+        $totalOrders = (int) $rows->sum('order_count');
+        $topEmployee = $rows->first();
+
+        $summary = [
+            'total_employees'  => $rows->count(),
+            'total_sales'      => round($totalSalesAll, 2),
+            'total_orders'     => $totalOrders,
+            'avg_sales_per_day'=> $daysInPeriod > 0 ? round($totalSalesAll / $daysInPeriod, 2) : 0,
+            'avg_order_value'  => $totalOrders > 0 ? round($totalSalesAll / $totalOrders, 2) : 0,
+            'top_employee'     => $topEmployee
+                ? trim(($topEmployee['first_name'] ?? '') . ' ' . ($topEmployee['last_name'] ?? ''))
+                : null,
+            'top_employee_sales' => $topEmployee['total_sales'] ?? 0,
+            'total_tax'          => round((float) $rows->sum('total_tax_collected'), 2),
+            'total_discount'     => round((float) $rows->sum('total_discount_given'), 2),
+        ];
+
+        // ─── Chart: top 10 ──────────────────────────────────────
+        $chart = $rows->take(10)->map(fn($r) => [
+            'name'       => trim($r['first_name'] . ' ' . substr($r['last_name'] ?? '', 0, 1) . '.'),
+            'sales'      => $r['total_sales'],
+            'orders'     => $r['order_count'],
+        ])->values();
+
+        // ─── Pagination ─────────────────────────────────────────
+        $total    = $rows->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+        $pageRows = $rows->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'      => $summary,
+                'rating_counts'=> $ratingCounts,
+                'chart'        => $chart,
+                'top_five'     => $topFive,
+                'bottom_five'  => $bottomFive,
+                'employees'    => $pageRows,
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'days_in_period'=> $daysInPeriod,
+                ],
+            ],
+        ]);
+    }
+
+    public function byEmployeeOrders(Request $request, $employeeId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+
+        $employee = User::where('tenant_id', $tenantId)->where('id', $employeeId)->first();
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => 'Employee not found'], 404);
+        }
+
+        $query = Order::where('tenant_id', $tenantId)
+            ->where('created_by', $employeeId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->with(['location:id,name', 'department:id,name', 'customer:id,first_name,last_name']);
+
+        if ($locationId)   $query->where('location_id', $locationId);
+        if ($departmentId) $query->where('department_id', $departmentId);
+
+        $orders = $query->orderByDesc('created_at')->get();
+
+        $rows = $orders->map(fn($o) => [
+            'id'           => $o->id,
+            'order_number' => $o->order_number ?? (string) $o->id,
+            'created_at'   => $o->created_at?->format('Y-m-d'),
+            'created_time' => $o->created_at?->format('H:i A'),
+            'status'       => $o->status,
+            'status_color' => $this->getOrderStatusColor($o->status),
+            'customer'     => $o->customer
+                ? trim(($o->customer->first_name ?? '') . ' ' . ($o->customer->last_name ?? ''))
+                : ($o->customer_name ?? 'Guest'),
+            'location'     => $o->location?->name ?? '—',
+            'department'   => $o->department?->name ?? '—',
+            'total'        => round((float) $o->total, 2),
+            'paid'         => round((float) ($o->paid_amount ?? 0), 2),
+            'balance'      => round((float) ($o->balance_due ?? 0), 2),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'employee' => [
+                    'id'         => $employee->id,
+                    'first_name' => $employee->first_name,
+                    'last_name'  => $employee->last_name,
+                    'email'      => $employee->email,
+                ],
+                'order_count' => $orders->count(),
+                'total_sales' => round((float) $orders->sum('total'), 2),
+                'orders'      => $rows,
+            ],
+        ]);
+    }
+
 
     /**
      * Calculate performance rating based on sales per day
@@ -1767,185 +1989,283 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $orderType = $request->get('order_type');
-        $groupBy = $request->get('group_by', 'daily');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Build Orders Query ────────────────────────────────────
-        $ordersQuery = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->where('status', 'completed'); // ✅ Fixed: Use 'completed' only
-        
-        // Apply location filter
-        if ($locationId) {
-            $ordersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $ordersQuery->where('department_id', $departmentId);
-        }
-        
-        // Apply order type filter
-        if ($orderType && $orderType !== 'all') {
-            $ordersQuery->where('type', $orderType);
-        }
-        
-        // Get all orders
-        $orders = $ordersQuery->get();
-        
-        // ─── Group Orders Based on Group By ──────────────────────
-        $timeAnalysis = collect();
-        
-        switch ($groupBy) {
-            case 'hourly':
-                $grouped = $orders->groupBy(function($order) {
-                    return $order->created_at->format('H');
-                })->sortKeys();
-                
-                foreach ($grouped as $hour => $hourOrders) {
-                    $timeAnalysis->push((object)[
-                        'time_period' => (int)$hour,
-                        'order_count' => $hourOrders->count(),
-                        'total_sales' => $hourOrders->sum('total'),
-                        'average_sale' => $hourOrders->avg('total'),
-                        'total_tax' => $hourOrders->sum('tax_total'),
-                        'total_discount' => $hourOrders->sum('discount_total'),
-                    ]);
-                }
-                break;
-                
-            case 'weekly':
-                $grouped = $orders->groupBy(function($order) {
-                    return $order->created_at->year . '-W' . $order->created_at->weekOfYear;
-                })->sortKeys();
-                
-                foreach ($grouped as $key => $weekOrders) {
-                    $firstOrder = $weekOrders->first();
-                    $weekStart = $firstOrder->created_at->copy()->startOfWeek();
-                    $weekEnd = $firstOrder->created_at->copy()->endOfWeek();
-                    
-                    $timeAnalysis->push((object)[
-                        'year' => $firstOrder->created_at->year,
-                        'week_number' => $firstOrder->created_at->weekOfYear,
-                        'week_start' => $weekStart->format('Y-m-d'),
-                        'week_end' => $weekEnd->format('Y-m-d'),
-                        'order_count' => $weekOrders->count(),
-                        'total_sales' => $weekOrders->sum('total'),
-                        'average_sale' => $weekOrders->avg('total'),
-                        'total_tax' => $weekOrders->sum('tax_total'),
-                        'total_discount' => $weekOrders->sum('discount_total'),
-                    ]);
-                }
-                break;
-                
-            case 'monthly':
-                $grouped = $orders->groupBy(function($order) {
-                    return $order->created_at->format('Y-m');
-                })->sortKeys();
-                
-                foreach ($grouped as $key => $monthOrders) {
-                    $firstOrder = $monthOrders->first();
-                    
-                    $timeAnalysis->push((object)[
-                        'year' => $firstOrder->created_at->year,
-                        'month_number' => $firstOrder->created_at->month,
-                        'month_period' => $key,
-                        'order_count' => $monthOrders->count(),
-                        'total_sales' => $monthOrders->sum('total'),
-                        'average_sale' => $monthOrders->avg('total'),
-                        'total_tax' => $monthOrders->sum('tax_total'),
-                        'total_discount' => $monthOrders->sum('discount_total'),
-                    ]);
-                }
-                break;
-                
-            default: // daily
-                $grouped = $orders->groupBy(function($order) {
-                    return $order->created_at->format('Y-m-d');
-                })->sortKeys();
-                
-                foreach ($grouped as $date => $dailyOrders) {
-                    $timeAnalysis->push((object)[
-                        'date' => $date,
-                        'order_count' => $dailyOrders->count(),
-                        'total_sales' => $dailyOrders->sum('total'),
-                        'average_sale' => $dailyOrders->avg('total'),
-                        'total_tax' => $dailyOrders->sum('tax_total'),
-                        'total_discount' => $dailyOrders->sum('discount_total'),
-                    ]);
-                }
-                break;
-        }
-        
-        // ─── Sort by Date/Period ──────────────────────────────────────
-        if ($groupBy == 'daily') {
-            $timeAnalysis = $timeAnalysis->sortByDesc('date')->values();
-        } elseif ($groupBy == 'weekly') {
-            $timeAnalysis = $timeAnalysis->sortByDesc('year')->sortByDesc('week_number')->values();
-        } elseif ($groupBy == 'monthly') {
-            $timeAnalysis = $timeAnalysis->sortByDesc('year')->sortByDesc('month_number')->values();
-        } else {
-            $timeAnalysis = $timeAnalysis->sortByDesc('time_period')->values();
-        }
-        
-        // ─── Calculate Growth Metrics ──────────────────────────────
-        $growthMetrics = $this->calculateGrowthMetrics($timeAnalysis, $groupBy);
-        
-        // ─── Peak Analysis ────────────────────────────────────────────
-        $peakAnalysis = $this->analyzePeakTimes($orders, $groupBy, $startDate, $endDate);
-        
-        // ─── Pagination ──────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($timeAnalysis->count(), 1));
-        $paginatedData = $timeAnalysis->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $timeAnalysisPaginated = new LengthAwarePaginator(
-            $paginatedData,
-            $timeAnalysis->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Get Filter Options ──────────────────────────────────────
+        $orderType    = $request->get('order_type', 'all');
+        $groupBy      = $request->get('group_by', 'daily');
+        $perPage      = (int) $request->get('per_page', 25);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Return View ──────────────────────────────────────────────
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         return view('reports.orders.time-analysis', compact(
-            'timeAnalysis',
-            'timeAnalysisPaginated',
-            'growthMetrics',
-            'peakAnalysis',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'groupBy',
-            'locationId',
-            'departmentId',
-            'orderType',
-            'perPage'
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId', 'orderType', 'groupBy', 'perPage'
         ));
     }
-    
+   
+    public function timeAnalysisData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $orderType    = $request->get('order_type', 'all');
+        $groupBy      = $request->get('group_by', 'daily');
+        $perPage      = (int) $request->get('per_page', 25);
+        $page         = max(1, (int) $request->get('page', 1));
+
+        // ─── Orders query ────────────────────────────────────────
+        $ordersQuery = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->where('status', 'completed');
+
+        if ($locationId)   $ordersQuery->where('location_id', $locationId);
+        if ($departmentId) $ordersQuery->where('department_id', $departmentId);
+        if ($orderType && $orderType !== 'all') $ordersQuery->where('type', $orderType);
+
+        $orders = $ordersQuery->get();
+
+        // ─── Group by period ─────────────────────────────────────
+        $buckets = [];
+
+        switch ($groupBy) {
+            case 'hourly':
+                foreach ($orders as $o) {
+                    $h = (int) $o->created_at->format('H');
+                    $buckets[$h] ??= ['time_period' => $h, 'orders' => collect()];
+                    $buckets[$h]['orders']->push($o);
+                }
+                ksort($buckets);
+                break;
+
+            case 'weekly':
+                foreach ($orders as $o) {
+                    $key = $o->created_at->format('o-\WW');   // ISO year-week
+                    $buckets[$key] ??= ['key' => $key, 'orders' => collect()];
+                    $buckets[$key]['orders']->push($o);
+                }
+                ksort($buckets);
+                break;
+
+            case 'monthly':
+                foreach ($orders as $o) {
+                    $key = $o->created_at->format('Y-m');
+                    $buckets[$key] ??= ['key' => $key, 'orders' => collect()];
+                    $buckets[$key]['orders']->push($o);
+                }
+                ksort($buckets);
+                break;
+
+            default: // daily
+                foreach ($orders as $o) {
+                    $key = $o->created_at->format('Y-m-d');
+                    $buckets[$key] ??= ['key' => $key, 'orders' => collect()];
+                    $buckets[$key]['orders']->push($o);
+                }
+                ksort($buckets);
+        }
+
+        // ─── Build period rows (sorted desc, most recent first) ─
+        $periods = collect($buckets)->map(function ($bucket) use ($groupBy) {
+            $bucketOrders = $bucket['orders'];
+            $first        = $bucketOrders->first();
+
+            $base = [
+                'order_count'    => $bucketOrders->count(),
+                'total_sales'    => round((float) $bucketOrders->sum('total'), 2),
+                'average_sale'   => round((float) ($bucketOrders->avg('total') ?? 0), 2),
+                'total_tax'      => round((float) $bucketOrders->sum('tax_total'), 2),
+                'total_discount' => round((float) $bucketOrders->sum('discount_total'), 2),
+            ];
+
+            if ($groupBy === 'hourly') {
+                $hour = (int) $bucket['time_period'];
+                $base += [
+                    'hour'         => $hour,
+                    'hour_display' => date('g:00 A', mktime($hour, 0, 0)),
+                    'period_label' => $hour >= 5 && $hour < 12 ? 'Morning'
+                                    : ($hour >= 12 && $hour < 17 ? 'Afternoon'
+                                    : ($hour >= 17 && $hour < 21 ? 'Evening' : 'Night')),
+                    'sort_key'     => $hour,
+                ];
+            } elseif ($groupBy === 'weekly') {
+                $weekStart = $first->created_at->copy()->startOfWeek();
+                $weekEnd   = $first->created_at->copy()->endOfWeek();
+                $base += [
+                    'week_number'  => (int) $first->created_at->weekOfYear,
+                    'year'         => (int) $first->created_at->year,
+                    'week_start'   => $weekStart->format('Y-m-d'),
+                    'week_end'     => $weekEnd->format('Y-m-d'),
+                    'date_range'   => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
+                    'sort_key'     => $first->created_at->format('o-\WW'),
+                ];
+            } elseif ($groupBy === 'monthly') {
+                $base += [
+                    'year'         => (int) $first->created_at->year,
+                    'month_number' => (int) $first->created_at->month,
+                    'month_name'   => $first->created_at->format('F'),
+                    'month_short'  => $first->created_at->format('M'),
+                    'sort_key'     => $first->created_at->format('Y-m'),
+                ];
+            } else {
+                $dayName = $first->created_at->format('l');
+                $base += [
+                    'date'          => $first->created_at->format('Y-m-d'),
+                    'day_name'      => $dayName,
+                    'is_weekend'    => in_array($dayName, ['Saturday', 'Sunday']),
+                    'formatted_date'=> $first->created_at->format('M d, Y'),
+                    'sort_key'      => $first->created_at->format('Y-m-d'),
+                ];
+            }
+
+            return $base;
+        })->sortByDesc('sort_key')->values();
+
+        // ─── Compute trend per row (desc order — compare to next row) ─
+        $periods = $periods->map(function ($row, $i) use ($periods) {
+            $prev = $periods[$i + 1] ?? null;    // next in desc order = previous in time
+            if ($prev && $prev['total_sales'] > 0) {
+                $delta   = $row['total_sales'] - $prev['total_sales'];
+                $pct     = ($delta / $prev['total_sales']) * 100;
+                $row['trend_delta']   = round($delta, 2);
+                $row['trend_percent'] = round($pct, 2);
+                $row['trend_dir']     = $delta > 0 ? 'up' : ($delta < 0 ? 'down' : 'flat');
+            } else {
+                $row['trend_delta']   = null;
+                $row['trend_percent'] = null;
+                $row['trend_dir']     = null;
+            }
+            return $row;
+        })->values();
+
+        // ─── Summary ────────────────────────────────────────────
+        $summary = [
+            'total_periods'   => $periods->count(),
+            'total_orders'    => (int) $periods->sum('order_count'),
+            'total_sales'     => round((float) $periods->sum('total_sales'), 2),
+            'total_tax'       => round((float) $periods->sum('total_tax'), 2),
+            'total_discount'  => round((float) $periods->sum('total_discount'), 2),
+            'average_sale'    => round((float) ($periods->avg('average_sale') ?? 0), 2),
+        ];
+
+        // ─── Growth ─────────────────────────────────────────────
+        $growth = $this->calculateGrowthMetrics($periods, $groupBy);
+
+        // ─── Peak days / hours ──────────────────────────────────
+        $peak = $this->analyzePeakTimes($orders, $groupBy, $startDate, $endDate);
+
+        $peakDaysFormatted = $peak['peak_days']->map(function ($p) {
+            $date = Carbon::parse($p->date ?? $p['date'] ?? null);
+            $dayName = $date->format('l');
+            return [
+                'date'       => $date->format('Y-m-d'),
+                'formatted'  => $date->format('M d, Y'),
+                'day_name'   => $dayName,
+                'is_weekend' => in_array($dayName, ['Saturday', 'Sunday']),
+                'order_count'=> $p->order_count ?? $p['order_count'] ?? 0,
+                'total_sales'=> round((float) ($p->total_sales ?? $p['total_sales'] ?? 0), 2),
+            ];
+        })->values();
+
+        $peakHoursFormatted = collect($peak['peak_hours'])->map(function ($p) {
+            $h = (int) ($p->hour ?? $p['hour'] ?? 0);
+            return [
+                'hour'       => $h,
+                'display'    => date('g:00 A', mktime($h, 0, 0)),
+                'order_count'=> $p->order_count ?? $p['order_count'] ?? 0,
+                'hourly_total'=> round((float) ($p->hourly_total ?? $p['hourly_total'] ?? 0), 2),
+            ];
+        })->values();
+
+        // ─── Chart data (full periods, not paginated) ──────────
+        $chart = $periods->map(function ($row) use ($groupBy) {
+            if ($groupBy === 'hourly') {
+                $label = $row['hour_display'];
+            } elseif ($groupBy === 'weekly') {
+                $label = 'W' . $row['week_number'];
+            } elseif ($groupBy === 'monthly') {
+                $label = $row['month_short'] . ' ' . $row['year'];
+            } else {
+                $label = Carbon::parse($row['date'])->format('M d');
+            }
+            return [
+                'label'   => $label,
+                'sales'   => $row['total_sales'],
+                'orders'  => $row['order_count'],
+            ];
+        })->reverse()->values();  // chronological for chart
+
+        // ─── Paginate ──────────────────────────────────────────
+        $total    = $periods->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+        $pageRows = $periods->slice($offset, $perPage)->values();
+
+        $pageTotals = [
+            'order_count'    => (int) $pageRows->sum('order_count'),
+            'total_sales'    => round((float) $pageRows->sum('total_sales'), 2),
+            'total_tax'      => round((float) $pageRows->sum('total_tax'), 2),
+            'total_discount' => round((float) $pageRows->sum('total_discount'), 2),
+            'average_sale'   => round((float) ($pageRows->avg('average_sale') ?? 0), 2),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'group_by'      => $groupBy,
+                'summary'       => $summary,
+                'growth'        => $growth,
+                'chart'         => $chart,
+                'peak_days'     => $peakDaysFormatted,
+                'peak_hours'    => $peakHoursFormatted,
+                'periods'       => $pageRows,
+                'page_totals'   => $pageTotals,
+                'grand_totals'  => [
+                    'order_count'    => $summary['total_orders'],
+                    'total_sales'    => $summary['total_sales'],
+                    'total_tax'      => $summary['total_tax'],
+                    'total_discount' => $summary['total_discount'],
+                    'average_sale'   => $summary['average_sale'],
+                ],
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date' => $startDate,
+                    'end_date'   => $endDate,
+                ],
+            ],
+        ]);
+    }
+
+
     /**
      * Calculate growth metrics
      */
@@ -1953,62 +2273,71 @@ class OrderReportsController extends Controller
     {
         if ($timeAnalysis->count() < 2) {
             return [
-                'trend' => 'stable',
-                'daily_growth' => 0,
-                'weekly_growth' => 0,
-                'current_average' => $timeAnalysis->first() ? $timeAnalysis->first()->average_sale : 0,
-                'total_growth' => 0
+                'trend'           => 'stable',
+                'daily_growth'    => 0,
+                'weekly_growth'   => 0,
+                'current_average' => $this->periodValue($timeAnalysis->first(), 'average_sale') ?? 0,
+                'total_growth'    => 0,
             ];
         }
-        
+
         $firstPeriod = $timeAnalysis->last();
-        $lastPeriod = $timeAnalysis->first();
-        
-        $growth = 0;
-        if ($firstPeriod->total_sales > 0) {
-            $growth = (($lastPeriod->total_sales - $firstPeriod->total_sales) / $firstPeriod->total_sales) * 100;
-        }
-        
+        $lastPeriod  = $timeAnalysis->first();
+
+        $firstSales = (float) $this->periodValue($firstPeriod, 'total_sales');
+        $lastSales  = (float) $this->periodValue($lastPeriod,  'total_sales');
+
+        $growth = $firstSales > 0 ? (($lastSales - $firstSales) / $firstSales) * 100 : 0;
+
         $trend = 'stable';
-        if ($growth > 10) {
-            $trend = 'upward';
-        } elseif ($growth < -10) {
-            $trend = 'downward';
-        }
-        
-        $totalGrowth = 0;
-        $growthCount = 0;
-        
+        if ($growth > 10)  $trend = 'upward';
+        elseif ($growth < -10) $trend = 'downward';
+
+        $totalGrowth  = 0;
+        $growthCount  = 0;
+
         for ($i = 0; $i < $timeAnalysis->count() - 1; $i++) {
             $current = $timeAnalysis[$i];
-            $next = $timeAnalysis[$i + 1];
-            
-            if ($next->total_sales > 0) {
-                $periodGrowth = (($current->total_sales - $next->total_sales) / $next->total_sales) * 100;
-                $totalGrowth += $periodGrowth;
+            $next    = $timeAnalysis[$i + 1];
+
+            $curSales  = (float) $this->periodValue($current, 'total_sales');
+            $nextSales = (float) $this->periodValue($next,    'total_sales');
+
+            if ($nextSales > 0) {
+                $totalGrowth += (($curSales - $nextSales) / $nextSales) * 100;
                 $growthCount++;
             }
         }
-        
+
         $dailyGrowth = $growthCount > 0 ? $totalGrowth / $growthCount : 0;
-        
+
         $weeklyGrowth = 0;
-        if ($groupBy == 'daily' && $timeAnalysis->count() >= 8) {
-            $currentWeek = $timeAnalysis->slice(0, 7)->sum('total_sales');
-            $previousWeek = $timeAnalysis->slice(7, 7)->sum('total_sales');
-            
+        if ($groupBy === 'daily' && $timeAnalysis->count() >= 8) {
+            $currentWeek  = (float) $timeAnalysis->slice(0, 7)->sum(fn($p) => $this->periodValue($p, 'total_sales'));
+            $previousWeek = (float) $timeAnalysis->slice(7, 7)->sum(fn($p) => $this->periodValue($p, 'total_sales'));
+
             if ($previousWeek > 0) {
                 $weeklyGrowth = (($currentWeek - $previousWeek) / $previousWeek) * 100;
             }
         }
-        
+
         return [
-            'trend' => $trend,
-            'daily_growth' => $dailyGrowth,
-            'weekly_growth' => $weeklyGrowth,
-            'current_average' => $lastPeriod->average_sale ?? 0,
-            'total_growth' => $growth
+            'trend'           => $trend,
+            'daily_growth'    => round($dailyGrowth, 2),
+            'weekly_growth'   => round($weeklyGrowth, 2),
+            'current_average' => (float) $this->periodValue($lastPeriod, 'average_sale'),
+            'total_growth'    => round($growth, 2),
         ];
+    }
+
+    /**
+     * Read a key from an array or object uniformly.
+     */
+    private function periodValue($row, string $key, $default = 0)
+    {
+        if (is_array($row))  return $row[$key] ?? $default;
+        if (is_object($row)) return $row->{$key} ?? $default;
+        return $default;
     }
     
     /**
@@ -2106,248 +2435,447 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
-        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+
+        $startDate    = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate      = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $statusFilter = $request->get('status_filter');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Get Return Orders ─────────────────────────────────────
-        $returnOrdersQuery = Order::where('tenant_id', $tenantId)
+        $statusFilter = $request->get('status_filter', 'all');
+        $perPage      = (int) $request->get('per_page', 25);
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        $departments = Department::where('tenant_id', $tenantId)
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
+        return view('reports.orders.returns-refunds', compact(
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId', 'statusFilter', 'perPage'
+        ));
+    }
+
+    public function returnsRefundsData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $statusFilter = $request->get('status_filter', 'all');
+        $perPage      = (int) $request->get('per_page', 25);
+        $returnsPage  = max(1, (int) $request->get('returns_page', 1));
+        $refundsPage  = max(1, (int) $request->get('refunds_page', 1));
+
+        // ── Orders that have at least one partially/fully refunded line ──
+        $returnQuery = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->returns() // Scope for return orders
-            ->with(['customer', 'orderCreater', 'refundPayments', 'items.productVariant']);
-        
-        // Apply location filter
-        if ($locationId) {
-            $returnOrdersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $returnOrdersQuery->where('department_id', $departmentId);
-        }
-        
-        // Apply status filter
-        if ($statusFilter && $statusFilter !== 'all') {
-            $returnOrdersQuery->where('status', $statusFilter);
-        }
-        
-        $returnOrders = $returnOrdersQuery->orderBy('created_at', 'desc')->get();
-        
-        // ─── Get Refund Payments ──────────────────────────────────
-        $refundPaymentsQuery = OrderPayment::whereHas('order', function($query) use ($tenantId, $startDate, $endDate, $locationId, $departmentId) {
-                $query->where('tenant_id', $tenantId)
-                    ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-                
-                if ($locationId) {
-                    $query->where('location_id', $locationId);
-                }
-                
-                if ($departmentId) {
-                    $query->where('department_id', $departmentId);
-                }
+            ->whereHas('orderItems', fn($q) => $q->where('refunded_quantity', '>', 0))
+            ->with([
+                'customer:id,first_name,last_name,email',
+                'orderCreater:id,name',
+                'orderItems.productVariant:id,name,sku',
+                'orderPayments.paymentMethod:id,name,type',
+            ]);
+
+        if ($locationId)   $returnQuery->where('location_id', $locationId);
+        if ($departmentId) $returnQuery->where('department_id', $departmentId);
+        if ($statusFilter && $statusFilter !== 'all') $returnQuery->where('status', $statusFilter);
+
+        $refundedOrders = $returnQuery->orderByDesc('created_at')->get();
+
+        // ── Refund reason from the appended note ───────────────
+        $reasonFromNote = function (?string $notes): ?string {
+            if (!$notes) return null;
+            if (preg_match('/Reason:\s*(.+?)\./s', $notes, $m)) return trim($m[1]);
+            return null;
+        };
+
+        // ── Total refunded per order + per order amount ────────
+        $orderRefundedTotal = fn(Order $o) => (float) $o->orderPayments->sum('refunded_amount');
+
+        // ── Refund payments: refunded_amount > 0 (partial or full) ──
+        $refundPaymentsRaw = OrderPayment::whereHas('order', function ($q) use ($tenantId, $startDate, $endDate, $locationId, $departmentId) {
+                $q->where('tenant_id', $tenantId)
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+                if ($locationId)   $q->where('location_id', $locationId);
+                if ($departmentId) $q->where('department_id', $departmentId);
             })
-            ->where('status', 'refunded')
-            ->with(['order', 'paymentMethod', 'processor']);
-        
-        $refundPaymentsRaw = $refundPaymentsQuery->orderBy('processed_at', 'desc')->get();
-        
-        $refundPayments = $refundPaymentsRaw->map(function($payment) {
-            return (object)[
-                'id' => $payment->id,
-                'order_id' => $payment->order_id,
-                'order_number' => $payment->order->order_number ?? 'N/A',
-                'order_total' => $payment->order->total ?? 0,
-                'amount' => $payment->amount,
-                'payment_method' => $payment->paymentMethod->name ?? 'Unknown',
-                'payment_method_type' => $payment->paymentMethod->type ?? 'other',
-                'processed_at' => $payment->processed_at,
-                'status' => $payment->status,
-                'reference' => $payment->transaction_id ?? 'N/A', // ✅ Fixed: Use transaction_id
-                'processed_by' => $payment->processor->name ?? 'System',
-            ];
-        });
-        
-        // ─── Return Reasons Analysis ─────────────────────────────
-        $returnReasonsCollection = $returnOrders->where('type', 'return')
-            ->groupBy(function($order) {
-                // ✅ Fixed: Use notes field as return reason
-                $notes = $order->notes ?? '';
-                if (strpos($notes, ':') !== false) {
-                    return trim(substr($notes, 0, strpos($notes, ':')));
-                }
-                return $notes ?: 'Other';
-            })
-            ->map(function($orders, $reason) use ($returnOrders) {
-                return (object)[
-                    'reason' => $reason,
-                    'count' => $orders->count(),
-                    'total_amount' => $orders->sum('total'),
-                    'percentage' => $returnOrders->count() > 0 ? ($orders->count() / $returnOrders->count()) * 100 : 0,
+            ->where('refunded_amount', '>', 0)
+            ->with(['order:id,order_number,total', 'paymentMethod:id,name,type', 'processor:id,first_name,last_name'])
+            ->orderByDesc('processed_at')
+            ->get();
+
+        $refundPayments = $refundPaymentsRaw->map(fn($p) => [
+            'id'                  => $p->id,
+            'order_id'            => $p->order_id,
+            'order_number'        => $p->order?->order_number ?? 'N/A',
+            'order_total'         => round((float) ($p->order?->total ?? 0), 2),
+            'amount'              => round((float) ($p->refunded_amount ?? 0), 2),  // ← refunded portion
+            'original_amount'     => round((float) $p->amount, 2),
+            'payment_method'      => $p->paymentMethod?->name ?? 'Unknown',
+            'payment_method_type' => $p->paymentMethod?->type ?? 'other',
+            'processed_at'        => $p->processed_at?->format('Y-m-d H:i'),
+            'status'              => $p->status,                                     // may still be 'completed'
+            'reference'           => $p->transaction_id,
+            'processed_by'        => trim(($p->processor?->first_name ?? '') . ' ' . ($p->processor?->last_name ?? '')) ?: 'System',
+        ])->values();
+
+        // ── Refund reasons aggregated across ALL refunded lines ──
+        $reasonsCollection = $refundedOrders
+            ->map(function (Order $o) use ($reasonFromNote, $orderRefundedTotal) {
+                return [
+                    'reason' => $reasonFromNote($o->notes) ?? 'Unspecified',
+                    'order'  => $o,
+                    'amount' => $orderRefundedTotal($o),
                 ];
             })
-            ->sortByDesc('count')
-            ->values();
-        
-        // ─── Return Rate Calculation ──────────────────────────────
-        $totalOrders = Order::where('tenant_id', $tenantId)
+            ->groupBy('reason')
+            ->map(fn($rows, $reason) => [
+                'reason'       => $reason,
+                'count'        => $rows->count(),
+                'total_amount' => round((float) $rows->sum('amount'), 2),
+                'percentage'   => $refundedOrders->count() > 0
+                                    ? round(($rows->count() / $refundedOrders->count()) * 100, 2) : 0,
+            ])
+            ->sortByDesc('count')->values();
+
+        // ── Rates ──────────────────────────────────────────────
+        $totalSalesOrders = Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->sales()
-            ->count();
-        
-        $totalReturnOrders = $returnOrders->where('type', 'return')->count();
-        $returnRate = $totalOrders > 0 ? ($totalReturnOrders / $totalOrders) * 100 : 0;
-        
-        // ─── Refund Rate Calculation ─────────────────────────────
-        $totalSalesValue = Order::where('tenant_id', $tenantId)
+            ->sales()->count();
+
+        $totalRefundedOrders = $refundedOrders->count();
+        $returnRate          = $totalSalesOrders > 0 ? ($totalRefundedOrders / $totalSalesOrders) * 100 : 0;
+
+        $totalSalesValue  = (float) Order::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->sales()
-            ->sum('total');
-        
-        $totalRefundValue = $refundPayments->sum('amount');
-        $refundRate = $totalSalesValue > 0 ? ($totalRefundValue / $totalSalesValue) * 100 : 0;
-        
-        // ─── Top Returned Products ────────────────────────────────
-        $topReturnedProducts = collect();
-        
-        foreach ($returnOrders->where('type', 'return') as $returnOrder) {
-            foreach ($returnOrder->items as $item) {
+            ->sales()->sum('total');
+        $totalRefundValue = (float) $refundedOrders->sum(fn($o) => $orderRefundedTotal($o));
+        $refundRate       = $totalSalesValue > 0 ? ($totalRefundValue / $totalSalesValue) * 100 : 0;
+
+        // ── Top refunded products (by refunded_quantity) ──────
+        $topReturned = collect();
+        foreach ($refundedOrders as $o) {
+            foreach ($o->orderItems as $item) {
+                $refunded = (float) ($item->refunded_quantity ?? 0);
+                if ($refunded <= 0) continue;
                 $variant = $item->productVariant;
-                if ($variant) {
-                    $key = $variant->id;
-                    $existing = $topReturnedProducts->get($key);
-                    
-                    if ($existing) {
-                        $existing->return_quantity += $item->quantity;
-                        $existing->return_value += $item->total_price;
-                        $existing->return_count++;
-                    } else {
-                        $topReturnedProducts->put($key, (object)[
-                            'sku' => $variant->sku ?? 'N/A',
-                            'name' => $variant->name ?? 'Unknown',
-                            'return_quantity' => $item->quantity,
-                            'return_value' => $item->total_price,
-                            'return_count' => 1,
-                        ]);
-                    }
+                if (!$variant) continue;
+
+                $key = $variant->id;
+                $value = $refunded * (float) $item->unit_price;
+
+                if ($topReturned->has($key)) {
+                    $existing = $topReturned->get($key);
+                    $existing->return_quantity += $refunded;
+                    $existing->return_value    += $value;
+                    $existing->return_count    += 1;
+                } else {
+                    $topReturned->put($key, (object) [
+                        'sku'             => $variant->sku ?? 'N/A',
+                        'name'            => $variant->name ?? 'Unknown',
+                        'return_quantity' => $refunded,
+                        'return_value'    => $value,
+                        'return_count'    => 1,
+                    ]);
                 }
             }
         }
-        
-        $topReturnedProducts = $topReturnedProducts->sortByDesc('return_quantity')->take(10)->values();
-        
-        // ─── Metrics ──────────────────────────────────────────────
-        $metrics = (object)[
-            'total_return_orders' => $totalReturnOrders,
-            'total_refund_amount' => $totalRefundValue,
-            'average_return_value' => $totalReturnOrders > 0 ? $totalRefundValue / $totalReturnOrders : 0,
-            'return_rate' => $returnRate,
-            'refund_rate' => $refundRate,
-            'total_sales_value' => $totalSalesValue,
-            'total_orders' => $totalOrders,
+        $topReturned = $topReturned->sortByDesc('return_quantity')->take(10)->values();
+
+        // ── Metrics ────────────────────────────────────────────
+        $metrics = [
+            'total_return_orders'  => $totalRefundedOrders,
+            'total_refund_amount'  => round($totalRefundValue, 2),
+            'average_return_value' => $totalRefundedOrders > 0 ? round($totalRefundValue / $totalRefundedOrders, 2) : 0,
+            'return_rate'          => round($returnRate, 2),
+            'refund_rate'          => round($refundRate, 2),
+            'total_sales_value'    => round($totalSalesValue, 2),
+            'total_orders'         => $totalSalesOrders,
+            'items_returned'       => (int) $topReturned->sum('return_quantity'),
+            'unique_products'      => $topReturned->count(),
         ];
-        
-        // ─── Monthly Return Trends ───────────────────────────────
-        $monthlyReturnTrends = $returnOrders
-            ->groupBy(function($order) {
-                return $order->created_at->format('Y-m');
-            })
-            ->map(function($orders, $month) use ($returnOrders) {
-                return (object)[
-                    'month' => $month,
-                    'return_count' => $orders->count(),
-                    'return_value' => $orders->sum('total'),
-                    'percentage_of_total' => $returnOrders->count() > 0 ? ($orders->count() / $returnOrders->count()) * 100 : 0,
+
+        // ── Monthly trends (by refunded money) ─────────────────
+        $monthlyTrends = $refundedOrders->groupBy(fn($o) => $o->created_at->format('Y-m'))
+            ->map(fn($orders, $month) => [
+                'month'               => $month,
+                'return_count'        => $orders->count(),
+                'return_value'        => round((float) $orders->sum(fn($o) => $orderRefundedTotal($o)), 2),
+                'percentage_of_total' => $refundedOrders->count() > 0
+                                            ? round(($orders->count() / $refundedOrders->count()) * 100, 2) : 0,
+            ])->sortKeys()->values();
+
+        // ── Returns by payment method (by refunded amount) ─────
+        $byPaymentMethod = $refundPayments
+            ->groupBy('payment_method')
+            ->map(fn($rows, $method) => [
+                'payment_method' => $method,
+                'return_count'   => $rows->count(),
+                'return_value'   => round((float) $rows->sum('amount'), 2),
+            ])
+            ->filter(fn($r) => $r['return_count'] > 0)
+            ->sortByDesc('return_value')->values();
+
+        // ── Paginate refunded orders ───────────────────────────
+        $returnsTotal    = $refundedOrders->count();
+        $returnsLastPage = max(1, (int) ceil($returnsTotal / $perPage));
+        $returnsPage     = min($returnsPage, $returnsLastPage);
+        $returnsOffset   = ($returnsPage - 1) * $perPage;
+
+        $returnOrdersPage = $refundedOrders->slice($returnsOffset, $perPage)->values()
+            ->map(function ($o) use ($reasonFromNote, $orderRefundedTotal) {
+                $statusColors = [
+                    'pending'    => 'warning', 'refunded'   => 'dark',
+                    'rejected'   => 'danger',  'processing' => 'info',
+                    'completed'  => 'success', 'cancelled'  => 'secondary',
                 ];
-            })
-            ->sortKeys()
-            ->values();
-        
-        // ─── Returns by Payment Method ──────────────────────────
-        $returnsByPaymentMethod = $returnOrders
-            ->groupBy(function($order) {
-                $firstPayment = $order->refundPayments->first();
-                return $firstPayment ? ($firstPayment->paymentMethod->name ?? 'Unknown') : 'Unknown';
-            })
-            ->map(function($orders, $method) {
-                return (object)[
-                    'payment_method' => $method,
-                    'return_count' => $orders->count(),
-                    'return_value' => $orders->sum('total'),
+
+                // Count fully/partially refunded lines for the row display
+                $refundedLines = $o->orderItems->filter(fn($i) => (float) ($i->refunded_quantity ?? 0) > 0)->count();
+                $totalLines    = $o->orderItems->count();
+
+                return [
+                    'id'            => $o->id,
+                    'order_number'  => $o->order_number ?? (string) $o->id,
+                    'status'        => $o->status,
+                    'status_color'  => $statusColors[$o->status] ?? 'secondary',
+                    'customer'      => [
+                        'name'  => trim(($o->customer?->first_name ?? '') . ' ' . ($o->customer?->last_name ?? '')) ?: ($o->customer_name ?? 'N/A'),
+                        'email' => $o->customer?->email,
+                    ],
+                    'order_total'   => round((float) $o->total, 2),
+                    'return_amount' => round($orderRefundedTotal($o), 2),
+                    'reason'        => $reasonFromNote($o->notes) ?? '—',
+                    'refunded_lines'=> $refundedLines,
+                    'total_lines'   => $totalLines,
+                    'created_at'    => $o->created_at?->format('Y-m-d H:i'),
+                    'creator'       => $o->orderCreater?->name ?? '—',
                 ];
-            })
-            ->filter(function($item) {
-                return $item->payment_method !== 'Unknown' || $item->return_count > 0;
-            })
-            ->sortByDesc('return_value')
-            ->values();
-        
-        // ─── Pagination for Return Orders ──────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage('returns_page');
-        $perPage = min($perPage, max($returnOrders->count(), 1));
-        $paginatedReturns = $returnOrders->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $returnOrdersPaginated = new LengthAwarePaginator(
-            $paginatedReturns,
-            $returnOrders->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'returns_page']
-        );
-        
-        // ─── Pagination for Refund Payments ────────────────────
-        $currentRefundPage = LengthAwarePaginator::resolveCurrentPage('refunds_page');
-        $paginatedRefunds = $refundPayments->slice(($currentRefundPage - 1) * $perPage, $perPage)->values();
-        
-        $refundPaymentsPaginated = new LengthAwarePaginator(
-            $paginatedRefunds,
-            $refundPayments->count(),
-            $perPage,
-            $currentRefundPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath(), 'pageName' => 'refunds_page']
-        );
-        
-        // ─── Get Filter Options ──────────────────────────────────
-        $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
-        $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Return View ──────────────────────────────────────────
-        return view('reports.orders.returns-refunds', compact(
-            'returnOrders',
-            'returnOrdersPaginated',
-            'refundPayments',
-            'refundPaymentsPaginated',
-            'returnReasonsCollection',
-            'returnRate',
-            'refundRate',
-            'topReturnedProducts',
-            'metrics',
-            'monthlyReturnTrends',
-            'returnsByPaymentMethod',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'statusFilter',
-            'perPage'
-        ));
+            });
+
+        // ── Paginate refund payments ───────────────────────────
+        $refundsTotal    = $refundPayments->count();
+        $refundsLastPage = max(1, (int) ceil($refundsTotal / $perPage));
+        $refundsPage     = min($refundsPage, $refundsLastPage);
+        $refundsOffset   = ($refundsPage - 1) * $perPage;
+
+        $refundsPageRows = $refundPayments->slice($refundsOffset, $perPage)->values()
+            ->map(function ($p) {
+                $p['refund_percentage'] = $p['original_amount'] > 0
+                    ? round(($p['amount'] / $p['original_amount']) * 100, 2)
+                    : 0;
+                return $p;
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'           => $metrics,
+                'reasons'           => $reasonsCollection,
+                'monthly_trends'    => $monthlyTrends,
+                'by_payment_method' => $byPaymentMethod,
+                'top_returned'      => $topReturned,
+                'return_orders'     => $returnOrdersPage,
+                'return_orders_pagination' => [
+                    'current_page' => $returnsPage,
+                    'last_page'    => $returnsLastPage,
+                    'total'        => $returnsTotal,
+                    'from'         => $returnsTotal > 0 ? $returnsOffset + 1 : 0,
+                    'to'           => min($returnsOffset + $perPage, $returnsTotal),
+                    'per_page'     => $perPage,
+                    'page_param'   => 'returns_page',
+                ],
+                'refund_payments'   => $refundsPageRows,
+                'refund_payments_pagination' => [
+                    'current_page' => $refundsPage,
+                    'last_page'    => $refundsLastPage,
+                    'total'        => $refundsTotal,
+                    'from'         => $refundsTotal > 0 ? $refundsOffset + 1 : 0,
+                    'to'           => min($refundsOffset + $perPage, $refundsTotal),
+                    'per_page'     => $perPage,
+                    'page_param'   => 'refunds_page',
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                    'status_filter' => $statusFilter,
+                ],
+            ],
+        ]);
     }
+
+    public function returnsRefundsOrderDetail($orderId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $order = Order::where('tenant_id', $tenantId)
+            ->with([
+                'customer:id,first_name,last_name,email,phone',
+                'orderCreater:id,name',
+                'orderItems.productVariant:id,name,sku',
+                'orderPayments.paymentMethod:id,name,type',
+                'orderPayments.processor:id,first_name,last_name',
+            ])->findOrFail($orderId);
+
+        $items = $order->orderItems->map(function ($i) {
+            $qty      = (float) $i->quantity;
+            $refunded = (float) ($i->refunded_quantity ?? 0);
+            $remaining= max(0, $qty - $refunded);
+
+            // Label mirrors the UI you showed
+            if ($refunded <= 0) {
+                $refundLabel = '—';
+                $refundColor = 'secondary';
+            } elseif ($remaining <= 0.0001) {
+                $refundLabel = 'Fully refunded';
+                $refundColor = 'danger';
+            } else {
+                $refundLabel = "Partially refunded ({$refunded}/{$qty})";
+                $refundColor = 'warning';
+            }
+
+            return [
+                'id'               => $i->id,
+                'sku'              => $i->productVariant?->sku ?? 'N/A',
+                'name'             => $i->productVariant?->name ?? 'Unknown',
+                'quantity'         => $qty,
+                'unit_price'       => round((float) $i->unit_price, 2),
+                'discount'         => round((float) $i->discount, 2),
+                'total_price'      => round((float) $i->total_price, 2),
+                'refunded_qty'     => $refunded,
+                'refundable_qty'   => $remaining,
+                'refunded_value'   => round($refunded * (float) $i->unit_price, 2),
+                'refund_label'     => $refundLabel,
+                'refund_color'     => $refundColor,
+            ];
+        })->values();
+
+        $payments = $order->orderPayments->map(fn($p) => [
+            'id'                => $p->id,
+            'amount'            => round((float) $p->amount, 2),
+            'refunded_amount'   => round((float) ($p->refunded_amount ?? 0), 2),
+            'refundable_amount' => max(0, round((float) $p->amount - (float) ($p->refunded_amount ?? 0), 2)),
+            'method'            => $p->paymentMethod?->name ?? 'Unknown',
+            'method_type'       => $p->paymentMethod?->type ?? 'other',
+            'status'            => $p->status,
+            'processed_at'      => $p->processed_at?->format('Y-m-d H:i'),
+            'reference'         => $p->transaction_id,
+            'processor'         => trim(($p->processor?->first_name ?? '') . ' ' . ($p->processor?->last_name ?? '')) ?: 'System',
+            'notes'             => $p->notes,
+        ])->values();
+
+        $refundedTotal   = round((float) $order->orderPayments->sum('refunded_amount'), 2);
+        $refundableCap   = round(max(0, (float) $order->paid_amount), 2);
+        $fullyRefunded   = $items->filter(fn($i) => $i['refundable_qty'] <= 0.0001 && $i['refunded_qty'] > 0)->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'             => $order->id,
+                'order_number'   => $order->order_number ?? (string) $order->id,
+                'status'         => $order->status,
+                'created_at'     => $order->created_at?->format('Y-m-d H:i'),
+                'customer'       => [
+                    'name'  => trim(($order->customer?->first_name ?? '') . ' ' . ($order->customer?->last_name ?? '')) ?: ($order->customer_name ?? 'N/A'),
+                    'email' => $order->customer?->email,
+                    'phone' => $order->customer?->phone,
+                ],
+                'creator'        => $order->orderCreater?->name ?? '—',
+                'subtotal'       => round((float) $order->subtotal, 2),
+                'discount'       => round((float) $order->discount_total, 2),
+                'tax'            => round((float) $order->tax_total, 2),
+                'total'          => round((float) $order->total, 2),
+                'paid_amount'    => round((float) $order->paid_amount, 2),
+                'balance_due'    => round((float) $order->balance_due, 2),
+                'refunded_total' => $refundedTotal,
+                'refundable_cap' => $refundableCap,
+                'fully_refunded' => $fullyRefunded,
+                'total_items'    => $items->count(),
+                'notes'          => $order->notes,
+                'items'          => $items,
+                'payments'       => $payments,
+            ],
+        ]);
+    }
+
+    public function returnsRefundsPaymentDetail($paymentId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $payment = OrderPayment::whereHas('order', fn($q) => $q->where('tenant_id', $tenantId))
+            ->with([
+                'order:id,order_number,total,paid_amount,balance_due,created_at',
+                'paymentMethod:id,name,type',
+                'processor:id,first_name,last_name',
+            ])
+            ->findOrFail($paymentId);
+
+        $trail = OrderPayment::where('order_id', $payment->order_id)
+            ->with(['paymentMethod:id,name,type'])
+            ->orderBy('processed_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'              => $p->id,
+                'amount'          => round((float) $p->amount, 2),
+                'refunded_amount' => round((float) ($p->refunded_amount ?? 0), 2),
+                'status'          => $p->status,
+                'method'          => $p->paymentMethod?->name ?? 'Unknown',
+                'processed_at'    => $p->processed_at?->format('Y-m-d H:i'),
+                'reference'       => $p->transaction_id,
+            ])->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'                => $payment->id,
+                'amount'            => round((float) $payment->amount, 2),
+                'refunded_amount'   => round((float) ($payment->refunded_amount ?? 0), 2),
+                'refundable_amount' => max(0, round((float) $payment->amount - (float) ($payment->refunded_amount ?? 0), 2)),
+                'status'            => $payment->status,
+                'payment_method'    => $payment->paymentMethod?->name ?? 'Unknown',
+                'payment_method_type'=> $payment->paymentMethod?->type ?? 'other',
+                'processed_at'      => $payment->processed_at?->format('Y-m-d H:i'),
+                'reference'         => $payment->transaction_id,
+                'processed_by'      => trim(($payment->processor?->first_name ?? '') . ' ' . ($payment->processor?->last_name ?? '')) ?: 'System',
+                'notes'             => $payment->notes,
+                'order' => [
+                    'id'           => $payment->order?->id,
+                    'order_number' => $payment->order?->order_number ?? 'N/A',
+                    'total'        => round((float) ($payment->order?->total ?? 0), 2),
+                    'paid_amount'  => round((float) ($payment->order?->paid_amount ?? 0), 2),
+                    'balance_due'  => round((float) ($payment->order?->balance_due ?? 0), 2),
+                    'created_at'   => $payment->order?->created_at?->format('Y-m-d'),
+                ],
+                'trail'             => $trail,
+            ],
+        ]);
+    }
+
 
     /**
      * Discount Analysis Report
@@ -2364,250 +2892,333 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
+
+        $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
-        $employeeId = $request->get('employee_id');
-        $perPage = $request->get('per_page', 25);
-        
-        // ─── Get Orders with Discounts ─────────────────────────────
-        $discountedOrdersQuery = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->withDiscounts()
-            ->with(['customer', 'orderCreater']);
-        
-        // Apply location filter
-        if ($locationId) {
-            $discountedOrdersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $discountedOrdersQuery->where('department_id', $departmentId);
-        }
-        
-        // Apply employee filter
-        if ($employeeId) {
-            $discountedOrdersQuery->where('created_by', $employeeId);
-        }
-        
-        $discountedOrders = $discountedOrdersQuery->orderBy('discount_total', 'desc')->get();
-        
-        // ─── Discount Summary ───────────────────────────────────────
-        $discountSummary = [
-            'total_discounted_orders' => $discountedOrders->count(),
-            'total_discount_amount' => $discountedOrders->sum('discount_total'),
-            'average_discount_per_order' => $discountedOrders->avg('discount_total') ?? 0,
-            'max_discount' => $discountedOrders->max('discount_total') ?? 0,
-            'min_discount' => $discountedOrders->min('discount_total') ?? 0,
-            'discount_rate' => $discountedOrders->sum('total') > 0 ? 
-                ($discountedOrders->sum('discount_total') / $discountedOrders->sum('total')) * 100 : 0,
-        ];
-        
-        // ─── Discount by Employee ──────────────────────────────────
-        $discountByEmployee = $discountedOrders
-            ->groupBy('created_by')
-            ->map(function($orders, $userId) {
-                $firstOrder = $orders->first();
-                $employee = $firstOrder->orderCreater;
-                
-                $totalDiscount = $orders->sum('discount_total');
-                $orderCount = $orders->count();
-                $totalRevenue = $orders->sum('total');
-                
-                return (object)[
-                    'id' => $userId,
-                    'first_name' => $employee->first_name ?? 'Unknown',
-                    'last_name' => $employee->last_name ?? '',
-                    'email' => $employee->email ?? '',
-                    'order_count' => $orderCount,
-                    'total_discount_given' => $totalDiscount,
-                    'average_discount' => $orders->avg('discount_total') ?? 0,
-                    'max_discount_given' => $orders->max('discount_total') ?? 0,
-                    'discount_per_order' => $orderCount > 0 ? $totalDiscount / $orderCount : 0,
-                    'discount_as_percentage_of_sales' => $totalRevenue > 0 ? ($totalDiscount / $totalRevenue) * 100 : 0,
-                ];
-            })
-            ->filter(function($employee) {
-                return $employee->first_name !== 'Unknown';
-            })
-            ->sortByDesc('total_discount_given')
-            ->values();
-        
-        // ─── Discount Patterns by Day of Week ──────────────────────
-        $discountByDay = $discountedOrders
-            ->groupBy(function($order) {
-                return $order->created_at->format('l');
-            })
-            ->map(function($orders, $day) {
-                return (object)[
-                    'day' => $day,
-                    'discount_count' => $orders->count(),
-                    'total_amount' => $orders->sum('discount_total'),
-                    'average_amount' => $orders->avg('discount_total') ?? 0,
-                    'order_count' => $orders->count(),
-                ];
-            })
-            ->sortBy(function($item, $key) {
-                $order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                return array_search($key, $order);
-            })
-            ->values();
-        
-        // ─── Discount Patterns by Hour ─────────────────────────────
-        $discountByHour = $discountedOrders
-            ->groupBy(function($order) {
-                return $order->created_at->format('H');
-            })
-            ->map(function($orders, $hour) {
-                return (object)[
-                    'hour' => (int)$hour,
-                    'hour_formatted' => date('g:00 A', mktime($hour, 0, 0)),
-                    'discount_count' => $orders->count(),
-                    'total_amount' => $orders->sum('discount_total'),
-                    'average_amount' => $orders->avg('discount_total') ?? 0,
-                ];
-            })
-            ->sortKeys()
-            ->values();
-        
-        // ─── Orders with Discount vs Orders Without ──────────────
-        $ordersWithDiscountData = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->withDiscounts();
-        
-        if ($locationId) {
-            $ordersWithDiscountData->where('location_id', $locationId);
-        }
-        if ($departmentId) {
-            $ordersWithDiscountData->where('department_id', $departmentId);
-        }
-        $ordersWithDiscountData = $ordersWithDiscountData->get();
-        
-        $ordersWithoutDiscountData = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->withoutDiscounts();
-        
-        if ($locationId) {
-            $ordersWithoutDiscountData->where('location_id', $locationId);
-        }
-        if ($departmentId) {
-            $ordersWithoutDiscountData->where('department_id', $departmentId);
-        }
-        $ordersWithoutDiscountData = $ordersWithoutDiscountData->get();
-        
-        $ordersWithDiscount = (object)[
-            'order_count' => $ordersWithDiscountData->count(),
-            'average_order_value' => $ordersWithDiscountData->avg('total') ?? 0,
-            'average_discount' => $ordersWithDiscountData->avg('discount_total') ?? 0,
-            'total_revenue' => $ordersWithDiscountData->sum('total'),
-        ];
-        
-        $ordersWithoutDiscount = (object)[
-            'order_count' => $ordersWithoutDiscountData->count(),
-            'average_order_value' => $ordersWithoutDiscountData->avg('total') ?? 0,
-            'total_revenue' => $ordersWithoutDiscountData->sum('total'),
-        ];
-        
-        // ─── Discount Range Distribution ──────────────────────────
-        $discountRanges = [
-            '0-10%' => 0,
-            '10-20%' => 0,
-            '20-30%' => 0,
-            '30-40%' => 0,
-            '40-50%' => 0,
-            '50%+' => 0,
-        ];
-        
-        foreach ($discountedOrders as $order) {
-            // ✅ Fixed: Calculate discount percentage from total and discount_total
-            $percentage = $order->total > 0 ? ($order->discount_total / ($order->total + $order->discount_total)) * 100 : 0;
-            
-            if ($percentage <= 10) {
-                $discountRanges['0-10%']++;
-            } elseif ($percentage <= 20) {
-                $discountRanges['10-20%']++;
-            } elseif ($percentage <= 30) {
-                $discountRanges['20-30%']++;
-            } elseif ($percentage <= 40) {
-                $discountRanges['30-40%']++;
-            } elseif ($percentage <= 50) {
-                $discountRanges['40-50%']++;
-            } else {
-                $discountRanges['50%+']++;
-            }
-        }
-        
-        // ─── Discount Effectiveness ────────────────────────────────
-        $discountEffectiveness = (object)[
-            'with_discount_avg' => $ordersWithDiscount->average_order_value ?? 0,
-            'without_discount_avg' => $ordersWithoutDiscount->average_order_value ?? 0,
-            'difference' => ($ordersWithDiscount->average_order_value ?? 0) - ($ordersWithoutDiscount->average_order_value ?? 0),
-            'percentage_difference' => $ordersWithoutDiscount->average_order_value > 0 ? 
-                ((($ordersWithDiscount->average_order_value ?? 0) - ($ordersWithoutDiscount->average_order_value ?? 0)) / $ordersWithoutDiscount->average_order_value) * 100 : 0,
-            'with_discount_count' => $ordersWithDiscount->order_count ?? 0,
-            'without_discount_count' => $ordersWithoutDiscount->order_count ?? 0,
-        ];
-        
-        // ─── Pagination ──────────────────────────────────────────────
-        $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $perPage = min($perPage, max($discountedOrders->count(), 1));
-        $paginatedOrders = $discountedOrders->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        $discountedOrdersPaginated = new LengthAwarePaginator(
-            $paginatedOrders,
-            $discountedOrders->count(),
-            $perPage,
-            $currentPage,
-            ['path' => LengthAwarePaginator::resolveCurrentPath()]
-        );
-        
-        // ─── Get Filter Options ─────────────────────────────────────
+        $employeeId   = $request->get('employee_id');
+        $perPage      = (int) $request->get('per_page', 25);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         $employeesList = User::where('tenant_id', $tenantId)
-            ->where('status', 'active')
-            ->orderBy('first_name')
+            ->where('status', 'active')->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name']);
-        
-        // ─── Return View ────────────────────────────────────────────
+
         return view('reports.orders.discount-analysis', compact(
-            'discountedOrders',
-            'discountedOrdersPaginated',
-            'discountSummary',
-            'discountByEmployee',
-            'discountByDay',
-            'discountByHour',
-            'ordersWithDiscount',
-            'ordersWithoutDiscount',
-            'discountRanges',
-            'discountEffectiveness',
-            'locations',
-            'departments',
-            'employeesList',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'employeeId',
-            'perPage'
+            'locations', 'departments', 'employeesList',
+            'startDate', 'endDate',
+            'locationId', 'departmentId', 'employeeId', 'perPage'
         ));
     }
 
+    public function discountAnalysisData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+        $employeeId   = $request->get('employee_id');
+        $perPage      = (int) $request->get('per_page', 25);
+        $page         = max(1, (int) $request->get('page', 1));
+
+        // ── Base query ──────────────────────────────────────────
+        $baseQuery = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+
+        if ($locationId)   $baseQuery->where('location_id', $locationId);
+        if ($departmentId) $baseQuery->where('department_id', $departmentId);
+
+        // ── Discounted orders ───────────────────────────────────
+        $discountedQuery = (clone $baseQuery)->withDiscounts()
+            ->with(['customer:id,first_name,last_name,email', 'orderCreater:id,name']);
+
+        if ($employeeId) $discountedQuery->where('created_by', $employeeId);
+
+        $discountedOrders = $discountedQuery->orderByDesc('discount_total')->get();
+
+        // ── Helper: discount % of pre-discount subtotal ─────────
+        $discountPct = function (Order $o) {
+            $pre = (float) ($o->subtotal_before_bargain ?: ($o->total + $o->discount_total));
+            if ($pre <= 0) return 0;
+            return round(((float) $o->discount_total / $pre) * 100, 2);
+        };
+
+        // ── Summary ─────────────────────────────────────────────
+        $totalDiscountAmount = (float) $discountedOrders->sum('discount_total');
+        $preDiscountSum      = (float) $discountedOrders->sum(fn($o) =>
+            (float) ($o->subtotal_before_bargain ?: ($o->total + $o->discount_total))
+        );
+
+        $discountSummary = [
+            'total_discounted_orders'   => $discountedOrders->count(),
+            'total_discount_amount'     => round($totalDiscountAmount, 2),
+            'average_discount_per_order'=> $discountedOrders->count() > 0
+                                            ? round($totalDiscountAmount / $discountedOrders->count(), 2) : 0,
+            'max_discount'              => round((float) ($discountedOrders->max('discount_total') ?? 0), 2),
+            'min_discount'              => round((float) ($discountedOrders->min('discount_total') ?? 0), 2),
+            'discount_rate'             => $preDiscountSum > 0
+                                            ? round(($totalDiscountAmount / $preDiscountSum) * 100, 2) : 0,
+        ];
+
+        // ── By employee ─────────────────────────────────────────
+        $discountByEmployee = $discountedOrders->groupBy('created_by')->map(function ($orders, $uid) {
+            $first = $orders->first();
+            $user  = $first->orderCreater;
+
+            $totalDiscount = (float) $orders->sum('discount_total');
+            $totalRevenue  = (float) $orders->sum('total');
+            $count         = $orders->count();
+
+            return [
+                'id'                             => $uid,
+                'name'                           => $user?->name ?? 'Unknown',
+                'email'                          => $user?->email ?? '',
+                'order_count'                    => $count,
+                'total_discount_given'           => round($totalDiscount, 2),
+                'average_discount'               => round((float) ($orders->avg('discount_total') ?? 0), 2),
+                'max_discount_given'             => round((float) ($orders->max('discount_total') ?? 0), 2),
+                'discount_per_order'             => $count > 0 ? round($totalDiscount / $count, 2) : 0,
+                'discount_as_percentage_of_sales'=> $totalRevenue > 0
+                                                    ? round(($totalDiscount / $totalRevenue) * 100, 2) : 0,
+            ];
+        })
+        ->filter(fn($e) => $e['name'] !== 'Unknown')
+        ->sortByDesc('total_discount_given')->values();
+
+        // ── By day of week ──────────────────────────────────────
+        $discountByDay = $discountedOrders
+            ->groupBy(fn($o) => $o->created_at->format('l'))
+            ->map(fn($orders, $day) => [
+                'day'            => $day,
+                'discount_count' => $orders->count(),
+                'total_amount'   => round((float) $orders->sum('discount_total'), 2),
+                'average_amount' => round((float) ($orders->avg('discount_total') ?? 0), 2),
+                'order_count'    => $orders->count(),
+            ])
+            ->sortBy(fn($item) => array_search($item['day'], ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']))
+            ->values();
+
+        // ── By hour ─────────────────────────────────────────────
+        $discountByHour = $discountedOrders
+            ->groupBy(fn($o) => $o->created_at->format('H'))
+            ->map(fn($orders, $hour) => [
+                'hour'           => (int) $hour,
+                'hour_formatted' => date('g:00 A', mktime((int) $hour, 0, 0)),
+                'discount_count' => $orders->count(),
+                'total_amount'   => round((float) $orders->sum('discount_total'), 2),
+                'average_amount' => round((float) ($orders->avg('discount_total') ?? 0), 2),
+            ])
+            ->sortKeys()->values();
+
+        // ── With vs without discount ────────────────────────────
+        $withQ    = (clone $baseQuery)->withDiscounts();
+        $withoutQ = (clone $baseQuery)->withoutDiscounts();
+        $withData    = $withQ->get();
+        $withoutData = $withoutQ->get();
+
+        $ordersWithDiscount = [
+            'order_count'         => $withData->count(),
+            'average_order_value' => round((float) ($withData->avg('total') ?? 0), 2),
+            'average_discount'    => round((float) ($withData->avg('discount_total') ?? 0), 2),
+            'total_revenue'       => round((float) $withData->sum('total'), 2),
+        ];
+        $ordersWithoutDiscount = [
+            'order_count'         => $withoutData->count(),
+            'average_order_value' => round((float) ($withoutData->avg('total') ?? 0), 2),
+            'total_revenue'       => round((float) $withoutData->sum('total'), 2),
+        ];
+
+        $withAvg    = $ordersWithDiscount['average_order_value'];
+        $withoutAvg = $ordersWithoutDiscount['average_order_value'];
+        $difference = round($withAvg - $withoutAvg, 2);
+        $pctDiff    = $withoutAvg > 0 ? round((($withAvg - $withoutAvg) / $withoutAvg) * 100, 2) : 0;
+
+        // ── Range distribution ──────────────────────────────────
+        $discountRanges = [
+            '0-10%' => 0, '10-20%' => 0, '20-30%' => 0,
+            '30-40%' => 0, '40-50%' => 0, '50%+' => 0,
+        ];
+        foreach ($discountedOrders as $o) {
+            $p = $discountPct($o);
+            if ($p <= 10)      $discountRanges['0-10%']++;
+            elseif ($p <= 20)  $discountRanges['10-20%']++;
+            elseif ($p <= 30)  $discountRanges['20-30%']++;
+            elseif ($p <= 40)  $discountRanges['30-40%']++;
+            elseif ($p <= 50)  $discountRanges['40-50%']++;
+            else               $discountRanges['50%+']++;
+        }
+
+        // ── Paginate discounted orders ──────────────────────────
+        $total    = $discountedOrders->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min($page, $lastPage);
+        $offset   = ($page - 1) * $perPage;
+
+        $statusColors = [
+            'completed' => 'success', 'pending' => 'warning', 'processing' => 'info',
+            'cancelled' => 'danger',  'refunded' => 'secondary', 'confirmed' => 'primary',
+        ];
+
+        $rows = $discountedOrders->slice($offset, $perPage)->values()->map(function ($o) use ($discountPct, $statusColors) {
+            $pre = (float) ($o->subtotal_before_bargain ?: ($o->total + $o->discount_total));
+            return [
+                'id'            => $o->id,
+                'order_number'  => $o->order_number ?? (string) $o->id,
+                'customer_name' => $o->customer
+                    ? trim(($o->customer->first_name ?? '') . ' ' . ($o->customer->last_name ?? ''))
+                    : ($o->customer_name ?? 'Guest'),
+                'customer_email'=> $o->customer?->email,
+                'order_total'   => round((float) $o->total, 2),
+                'pre_discount'  => round($pre, 2),
+                'discount_total'=> round((float) $o->discount_total, 2),
+                'bargain'       => round((float) ($o->bargain_discount_applied ?? 0), 2),
+                'discount_pct'  => $discountPct($o),
+                'final_amount'  => round((float) ($o->total - $o->discount_total), 2),
+                'employee'      => $o->orderCreater?->name ?? '—',
+                'created_at'    => $o->created_at?->format('Y-m-d H:i'),
+                'status'        => $o->status,
+                'status_color'  => $statusColors[$o->status] ?? 'secondary',
+            ];
+        });
+
+        // ── Page-level + grand totals ───────────────────────────
+        $pageTotals = [
+            'order_total'    => round((float) $rows->sum('order_total'), 2),
+            'discount_total' => round((float) $rows->sum('discount_total'), 2),
+        ];
+        $grandTotals = [
+            'order_total'    => round((float) $discountedOrders->sum('total'), 2),
+            'discount_total' => round($totalDiscountAmount, 2),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary'              => $discountSummary,
+                'discount_effectiveness' => [
+                    'with_discount_avg'      => $withAvg,
+                    'without_discount_avg'   => $withoutAvg,
+                    'difference'             => $difference,
+                    'percentage_difference'  => $pctDiff,
+                    'with_discount_count'    => $ordersWithDiscount['order_count'],
+                    'without_discount_count' => $ordersWithoutDiscount['order_count'],
+                ],
+                'orders_with_discount'    => $ordersWithDiscount,
+                'orders_without_discount' => $ordersWithoutDiscount,
+                'by_employee'             => $discountByEmployee,
+                'by_day'                  => $discountByDay,
+                'by_hour'                 => $discountByHour,
+                'ranges'                 => $discountRanges,
+                'orders'                 => $rows,
+                'page_totals'            => $pageTotals,
+                'grand_totals'           => $grandTotals,
+                'pagination' => [
+                    'current_page' => $page,
+                    'last_page'    => $lastPage,
+                    'total'        => $total,
+                    'from'         => $total > 0 ? $offset + 1 : 0,
+                    'to'           => min($offset + $perPage, $total),
+                    'per_page'     => $perPage,
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                    'employee_id'   => $employeeId,
+                ],
+            ],
+        ]);
+    }
+
+    public function discountAnalysisOrder($orderId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $order = Order::where('tenant_id', $tenantId)
+            ->with([
+                'customer:id,first_name,last_name,email,phone',
+                'orderCreater:id,name',
+                'orderItems.productVariant:id,name,sku',
+            ])
+            ->findOrFail($orderId);
+
+        // Per-line discount (line discount is separate from order-level bargain)
+        $items = $order->orderItems->map(fn($i) => [
+            'id'             => $i->id,
+            'sku'            => $i->productVariant?->sku ?? 'N/A',
+            'name'           => $i->productVariant?->name ?? 'Unknown',
+            'quantity'       => (float) $i->quantity,
+            'unit_price'     => round((float) $i->unit_price, 2),
+            'line_discount'  => round((float) $i->discount, 2),
+            'tax_amount'     => round((float) $i->tax_amount, 2),
+            'total_price'    => round((float) $i->total_price, 2),
+        ])->values();
+
+        // Sum of line-level discounts across items
+        $lineDiscountSum = (float) $order->orderItems->sum('discount');
+
+        // Bargain (order-level) discount tracked separately on the order
+        $bargainDiscount = (float) ($order->bargain_discount_applied ?? 0);
+
+        $subtotalBeforeBargain = (float) ($order->subtotal_before_bargain ?: ($order->subtotal + $bargainDiscount));
+
+        $discountTotal = (float) $order->discount_total;
+        $discountPct   = $subtotalBeforeBargain > 0
+            ? round(($discountTotal / $subtotalBeforeBargain) * 100, 2)
+            : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'            => $order->id,
+                'order_number'  => $order->order_number ?? (string) $order->id,
+                'status'        => $order->status,
+                'created_at'    => $order->created_at?->format('Y-m-d H:i'),
+                'customer'      => [
+                    'name'  => $order->customer
+                        ? trim(($order->customer->first_name ?? '') . ' ' . ($order->customer->last_name ?? ''))
+                        : ($order->customer_name ?? 'Guest'),
+                    'email' => $order->customer?->email,
+                    'phone' => $order->customer?->phone,
+                ],
+                'employee'      => $order->orderCreater?->name ?? '—',
+                'subtotal'             => round((float) $order->subtotal, 2),
+                'subtotal_before_bargain'=> round($subtotalBeforeBargain, 2),
+                'discount_total'       => round($discountTotal, 2),
+                'line_discount_total'  => round($lineDiscountSum, 2),
+                'bargain_discount'     => round($bargainDiscount, 2),
+                'discount_pct'         => $discountPct,
+                'tax'                  => round((float) $order->tax_total, 2),
+                'total'                => round((float) $order->total, 2),
+                'final_amount'         => round((float) ($order->total - $order->discount_total), 2),
+                'items'                => $items,
+            ],
+        ]);
+    }
 
     /**
      * Sales Forecast Report
@@ -2624,140 +3235,218 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Date Range ──────────────────────────────────────────────
-        $startDate = $request->get('start_date', Carbon::now()->subDays(90)->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->format('Y-m-d'));
-        $forecastDays = $request->get('forecast_days', 30);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
-        $departmentId = $request->get('department_id');
-        
-        // ─── Pagination Parameters ──────────────────────────────────
-        $historicalPerPage = $request->get('historical_per_page', 15);
-        $forecastPerPage = $request->get('forecast_per_page', 15);
-        
-        // ─── Validate Dates ─────────────────────────────────────────
+
+        $startDate    = $request->get('start_date', Carbon::now()->subDays(90)->format('Y-m-d'));
+        $endDate      = $request->get('end_date',   Carbon::now()->format('Y-m-d'));
+        $forecastDays = (int) $request->get('forecast_days', 30);
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Build Orders Query ─────────────────────────────────────
-        $ordersQuery = Order::where('tenant_id', $tenantId)
-            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->where('status', 'completed'); // ✅ Fixed: Use 'completed' only
-        
-        // Apply location filter
-        if ($locationId) {
-            $ordersQuery->where('location_id', $locationId);
-        }
-        
-        // Apply department filter
-        if ($departmentId) {
-            $ordersQuery->where('department_id', $departmentId);
-        }
-        
-        $orders = $ordersQuery->get();
-        
-        // ─── Historical Data Collection ─────────────────────────────
-        $historicalDataCollection = $orders
-            ->groupBy(function($order) {
-                return $order->created_at->format('Y-m-d');
-            })
-            ->map(function($dailyOrders, $date) {
-                return (object)[
-                    'date' => $date,
-                    'order_count' => $dailyOrders->count(),
-                    'daily_sales' => $dailyOrders->sum('total'),
-                    'average_order_value' => $dailyOrders->avg('total') ?? 0,
-                ];
-            })
-            ->sortKeysDesc()
-            ->values();
-        
-        // ─── Pagination for Historical Data ─────────────────────────
-        $currentPage = Paginator::resolveCurrentPage('historical_page');
-        $historicalData = new LengthAwarePaginator(
-            $historicalDataCollection->slice(($currentPage - 1) * $historicalPerPage, $historicalPerPage)->values(),
-            $historicalDataCollection->count(),
-            $historicalPerPage,
-            $currentPage,
-            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'historical_page']
-        );
-        
-        // ─── Calculate Trends ───────────────────────────────────────
-        $trends = $this->calculateSalesTrends($historicalDataCollection);
-        
-        // ─── Generate Forecast ──────────────────────────────────────
-        $forecast = $this->generateForecast($historicalDataCollection, $trends, $forecastDays);
-        
-        // ─── Pagination for Forecast Data ───────────────────────────
-        $forecastCollection = collect($forecast);
-        $currentForecastPage = Paginator::resolveCurrentPage('forecast_page');
-        $forecastData = new LengthAwarePaginator(
-            $forecastCollection->slice(($currentForecastPage - 1) * $forecastPerPage, $forecastPerPage)->values(),
-            $forecastCollection->count(),
-            $forecastPerPage,
-            $currentForecastPage,
-            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'forecast_page']
-        );
-        
-        // ─── Seasonality Analysis ───────────────────────────────────
-        $seasonality = $orders
-            ->groupBy(function($order) {
-                return $order->created_at->dayOfWeek;
-            })
-            ->map(function($dayOrders, $dayOfWeek) {
-                return (object)[
-                    'day_of_week' => (int)$dayOfWeek,
-                    'order_count' => $dayOrders->count(),
-                    'average_sales' => $dayOrders->avg('total') ?? 0,
-                    'total_sales' => $dayOrders->sum('total'),
-                    'day_name' => $this->getDayNameFromNumber($dayOfWeek),
-                ];
-            })
-            ->sortKeys()
-            ->values();
-        
-        // ─── Growth Rate ─────────────────────────────────────────────
-        $growthRate = $this->calculateGrowthRate($historicalDataCollection);
-        
-        // ─── Historical Average ─────────────────────────────────────
-        $historicalAvg = $historicalDataCollection->avg('daily_sales') ?? 0;
-        
-        // ─── Get Filter Options ─────────────────────────────────────
+
+        $locationId        = $request->get('location_id');
+        $departmentId      = $request->get('department_id');
+        $historicalPerPage = (int) $request->get('historical_per_page', 15);
+        $forecastPerPage   = (int) $request->get('forecast_per_page', 15);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Return View ─────────────────────────────────────────────
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         return view('reports.orders.sales-forecast', compact(
-            'historicalData',
-            'historicalDataCollection',
-            'forecast',
-            'forecastData',
-            'forecastCollection',
-            'seasonality',
-            'trends',
-            'growthRate',
-            'historicalAvg',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'forecastDays',
-            'historicalPerPage',
-            'forecastPerPage',
-            'locationId',
-            'departmentId'
+            'locations', 'departments',
+            'startDate', 'endDate', 'forecastDays',
+            'locationId', 'departmentId',
+            'historicalPerPage', 'forecastPerPage'
         ));
     }
-    
+
+    public function salesForecastData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $startDate    = $request->get('start_date', Carbon::now()->subDays(90)->format('Y-m-d'));
+        $endDate      = $request->get('end_date',   Carbon::now()->format('Y-m-d'));
+        $forecastDays = (int) $request->get('forecast_days', 30);
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId        = $request->get('location_id');
+        $departmentId      = $request->get('department_id');
+        $historicalPerPage = (int) $request->get('historical_per_page', 15);
+        $forecastPerPage   = (int) $request->get('forecast_per_page', 15);
+        $historicalPage    = max(1, (int) $request->get('historical_page', 1));
+        $forecastPage      = max(1, (int) $request->get('forecast_page', 1));
+
+        // ── Orders ─────────────────────────────────────────────
+        $ordersQuery = Order::where('tenant_id', $tenantId)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->where('status', 'completed');
+
+        if ($locationId)   $ordersQuery->where('location_id', $locationId);
+        if ($departmentId) $ordersQuery->where('department_id', $departmentId);
+
+        $orders = $ordersQuery->get();
+
+        if ($orders->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'empty' => true,
+                    'meta' => ['start_date' => $startDate, 'end_date' => $endDate, 'forecast_days' => $forecastDays],
+                ],
+            ]);
+        }
+
+        // ── Historical daily aggregation ───────────────────────
+        $historical = $orders->groupBy(fn($o) => $o->created_at->format('Y-m-d'))
+            ->map(fn($daily, $date) => [
+                'date'                => $date,
+                'order_count'         => $daily->count(),
+                'daily_sales'         => round((float) $daily->sum('total'), 2),
+                'average_order_value' => round((float) ($daily->avg('total') ?? 0), 2),
+            ])
+            ->sortByDesc('date')     // most recent first
+            ->values();
+
+        // ── Trend & deviation per row (computed across pagination boundaries) ──
+        $historicalAvg = round((float) $historical->avg('daily_sales'), 2);
+
+        $historical = $historical->map(function ($row, $i) use ($historical, $historicalAvg) {
+            $prev = $historical[$i + 1] ?? null;    // next in desc order = previous in time
+
+            if ($prev && $prev['daily_sales'] > 0) {
+                $delta   = $row['daily_sales'] - $prev['daily_sales'];
+                $row['trend']       = round($delta, 2);
+                $row['trend_pct']   = round(($delta / $prev['daily_sales']) * 100, 2);
+                $row['trend_dir']   = $delta > 0 ? 'up' : ($delta < 0 ? 'down' : 'flat');
+            } else {
+                $row['trend']     = null;
+                $row['trend_pct'] = null;
+                $row['trend_dir'] = null;
+            }
+
+            $row['deviation_pct'] = $historicalAvg > 0
+                ? round((($row['daily_sales'] - $historicalAvg) / $historicalAvg) * 100, 2)
+                : 0;
+
+            return $row;
+        })->values();
+
+        // ── Trends + Forecast ──────────────────────────────────
+        $historicalCollection = $historical->map(fn($r) => (object) $r);
+
+        $trends   = $this->calculateSalesTrends($historicalCollection);
+        $forecast = $this->generateForecast($historicalCollection, $trends, $forecastDays);
+        $forecastCollection = collect($forecast);
+
+        // ── Seasonality ────────────────────────────────────────
+        $seasonality = $orders->groupBy(fn($o) => $o->created_at->dayOfWeek)
+            ->map(fn($dayOrders, $dow) => [
+                'day_of_week'   => (int) $dow,
+                'order_count'   => $dayOrders->count(),
+                'average_sales' => round((float) ($dayOrders->avg('total') ?? 0), 2),
+                'total_sales'   => round((float) $dayOrders->sum('total'), 2),
+                'day_name'      => $this->getDayNameFromNumber($dow),
+            ])
+            ->sortKeys()->values();
+
+        $growthRate = $this->calculateGrowthRate($historicalCollection);
+
+        // ── Forecast summary ───────────────────────────────────
+        $forecastSum = (float) $forecastCollection->sum('forecast_sales');
+        $forecastAvg = (float) ($forecastCollection->avg('forecast_sales') ?? 0);
+        $forecastMax = (float) ($forecastCollection->max('forecast_sales') ?? 0);
+        $forecastMin = (float) ($forecastCollection->min('forecast_sales') ?? 0);
+
+        $growthPct       = $growthRate * 100;
+        $confidenceScore = min(95, max(60, 85 - abs($growthPct) * 2));
+
+        // ── Chart series (full, not paginated) ─────────────────
+        $chart = [
+            'historical' => $historical->sortBy('date')->values()->map(fn($r) => [
+                'date'  => $r['date'],
+                'sales' => $r['daily_sales'],
+            ]),
+            'forecast' => collect($forecast)->values()->map(fn($f) => [
+                'date'            => $f['date'],
+                'sales'           => round((float) $f['forecast_sales'], 2),
+                'confidence_low'  => round((float) $f['confidence_low'], 2),
+                'confidence_high' => round((float) $f['confidence_high'], 2),
+            ]),
+        ];
+
+        // ── Historical pagination ──────────────────────────────
+        $histTotal    = $historical->count();
+        $histLastPage = max(1, (int) ceil($histTotal / $historicalPerPage));
+        $historicalPage = min($historicalPage, $histLastPage);
+        $histOffset   = ($historicalPage - 1) * $historicalPerPage;
+        $histPage     = $historical->slice($histOffset, $historicalPerPage)->values();
+
+        // ── Forecast pagination ────────────────────────────────
+        $fcastTotal    = $forecastCollection->count();
+        $fcastLastPage = max(1, (int) ceil($fcastTotal / $forecastPerPage));
+        $forecastPage  = min($forecastPage, $fcastLastPage);
+        $fcastOffset   = ($forecastPage - 1) * $forecastPerPage;
+        $fcastPage     = $forecastCollection->slice($fcastOffset, $forecastPerPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'empty' => false,
+                'summary' => [
+                    'forecast_sum'        => round($forecastSum, 2),
+                    'forecast_avg'        => round($forecastAvg, 2),
+                    'forecast_max'        => round($forecastMax, 2),
+                    'forecast_min'        => round($forecastMin, 2),
+                    'growth_rate_pct'     => round($growthPct, 2),
+                    'growth_direction'    => $growthPct >= 0 ? 'up' : 'down',
+                    'confidence_score'    => round($confidenceScore, 2),
+                    'confidence_level'    => $confidenceScore >= 85 ? 'high' : ($confidenceScore >= 70 ? 'medium' : 'low'),
+                    'historical_avg'      => $historicalAvg,
+                    'historical_days'     => $historical->count(),
+                    'forecast_days'       => $forecastDays,
+                ],
+                'chart'       => $chart,
+                'seasonality' => $seasonality,
+                'historical'  => $histPage,
+                'historical_pagination' => [
+                    'current_page' => $historicalPage,
+                    'last_page'    => $histLastPage,
+                    'total'        => $histTotal,
+                    'from'         => $histTotal > 0 ? $histOffset + 1 : 0,
+                    'to'           => min($histOffset + $historicalPerPage, $histTotal),
+                    'per_page'     => $historicalPerPage,
+                    'page_param'   => 'historical_page',
+                    'per_page_param' => 'historical_per_page',
+                ],
+                'forecast'    => $fcastPage,
+                'forecast_pagination' => [
+                    'current_page' => $forecastPage,
+                    'last_page'    => $fcastLastPage,
+                    'total'        => $fcastTotal,
+                    'from'         => $fcastTotal > 0 ? $fcastOffset + 1 : 0,
+                    'to'           => min($fcastOffset + $forecastPerPage, $fcastTotal),
+                    'per_page'     => $forecastPerPage,
+                    'page_param'   => 'forecast_page',
+                    'per_page_param' => 'forecast_per_page',
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'forecast_days' => $forecastDays,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                ],
+            ],
+        ]);
+    }
+        
     /**
      * Calculate sales trends from historical data
      */
@@ -2967,102 +3656,347 @@ class OrderReportsController extends Controller
         if (!tenant_can('order_reports')) {
             abort(403, __('payments.feature_not_available_in_plan'));
         }
-        
-        // ─── Check if Single Shop or Multi-Shop ──────────────────────
-        $isSingleShop = tenant_is_single_shop($tenantId);
-        
-        // ─── Date Range ──────────────────────────────────────────────
+
         $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
         [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
-        
-        // ─── Filter Parameters ──────────────────────────────────────
-        $locationId = $request->get('location_id');
-        $departmentId = $request->get('department_id');
-        
-        // ─── Pagination Parameters ──────────────────────────────────
-        $soldPerPage = $request->get('sold_per_page', 15);
-        $unsoldPerPage = $request->get('unsold_per_page', 15);
-        $deadStockPerPage = $request->get('dead_stock_per_page', 10);
-        
-        // ─── Days in Period ──────────────────────────────────────────
-        $daysInPeriod = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
-        
-        // ─── Get All Active Products ─────────────────────────────────
-        $allProducts = ProductVariant::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->get();
-        
-        // ─── Get Sold Products from OrderItems ──────────────────────
-        $soldProductsCollection = $this->getSoldProducts($tenantId, $startDate, $endDate, $locationId, $departmentId, $daysInPeriod, $isSingleShop);
-        
-        // ─── Get Sold Product IDs ───────────────────────────────────
-        $soldProductIds = $soldProductsCollection->pluck('id')->toArray();
-        
-        // ─── Get Unsold Products ─────────────────────────────────────
-        $unsoldProductsCollection = $this->getUnsoldProducts($allProducts, $soldProductIds, $tenantId, $isSingleShop, $locationId, $departmentId);
-        
-        // ─── Calculate Inventory Metrics ─────────────────────────────
-        $totalInventoryValue = $this->calculateTotalInventoryValue($allProducts, $tenantId, $isSingleShop, $locationId, $departmentId);
-        $soldInventoryValue  = $soldProductsCollection->sum('revenue_generated');
-        $soldInventoryCost   = $soldProductsCollection->sum('total_cost_generated');
-        $soldInventoryProfit = $soldInventoryValue - $soldInventoryCost;
-        $turnoverRate = $totalInventoryValue > 0 ? ($soldInventoryValue / $totalInventoryValue) * 100 : 0;
-        
-        // ─── Stock Aging Analysis ────────────────────────────────────
-        $stockAging = $this->calculateStockAging($soldProductsCollection, $unsoldProductsCollection);
-        
-        // ─── Dead Stock ──────────────────────────────────────────────
-        $deadStockCollection = $unsoldProductsCollection->filter(function($product) {
-            return $product->current_stock > 10;
-        })->values();
-        
-        // ─── Apply Pagination ─────────────────────────────────────────
-        $soldProducts = $this->paginateCollection($soldProductsCollection, $soldPerPage, 'sold_page');
-        $unsoldProducts = $this->paginateCollection($unsoldProductsCollection, $unsoldPerPage, 'unsold_page');
-        $deadStock = $this->paginateCollection($deadStockCollection, $deadStockPerPage, 'dead_stock_page');
-        
-        $productMovement = $soldProductsCollection;
-        
-        // ─── Get Filter Options ─────────────────────────────────────
+
+        $locationId        = $request->get('location_id');
+        $departmentId      = $request->get('department_id');
+        $soldPerPage       = (int) $request->get('sold_per_page', 15);
+        $unsoldPerPage     = (int) $request->get('unsold_per_page', 15);
+        $deadStockPerPage  = (int) $request->get('dead_stock_per_page', 10);
+
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
         $locations = Location::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-            
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
         $departments = Department::where('tenant_id', $tenantId)
-            ->where('isActive', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
-        
-        // ─── Return View ─────────────────────────────────────────────
+            ->where('isActive', true)->orderBy('name')->get(['id', 'name']);
+
         return view('reports.orders.inventory-sales', compact(
-            'soldProducts',
-            'soldProductsCollection',
-            'unsoldProducts',
-            'unsoldProductsCollection',
-            'deadStock',
-            'deadStockCollection',
-            'productMovement',
-            'totalInventoryValue',
-            'soldInventoryValue',
-            'turnoverRate',
-            'stockAging',
-            'locations',
-            'departments',
-            'startDate',
-            'endDate',
-            'locationId',
-            'departmentId',
-            'soldPerPage',
-            'unsoldPerPage',
-            'deadStockPerPage',
-            'daysInPeriod',
-            'isSingleShop',
-            'soldInventoryCost',
-            'soldInventoryProfit',
+            'locations', 'departments',
+            'startDate', 'endDate',
+            'locationId', 'departmentId',
+            'soldPerPage', 'unsoldPerPage', 'deadStockPerPage', 'isSingleShop'
         ));
     }
+
+    public function inventorySalesData(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        if (!tenant_can('order_reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.feature_not_available_in_plan')], 403);
+        }
+        $tenantId = $user->tenant_id;
+
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId       = $request->get('location_id');
+        $departmentId     = $request->get('department_id');
+        $soldPerPage      = (int) $request->get('sold_per_page', 15);
+        $unsoldPerPage    = (int) $request->get('unsold_per_page', 15);
+        $deadStockPerPage = (int) $request->get('dead_stock_per_page', 10);
+
+        $soldPage      = max(1, (int) $request->get('sold_page', 1));
+        $unsoldPage    = max(1, (int) $request->get('unsold_page', 1));
+        $deadStockPage = max(1, (int) $request->get('dead_stock_page', 1));
+
+        $daysInPeriod = Carbon::parse($startDate)->diffInDays(Carbon::parse($endDate)) + 1;
+
+        // ── Data sources ────────────────────────────────────────
+        $allProducts = ProductVariant::where('tenant_id', $tenantId)
+            ->where('is_active', true)->get();
+
+        $soldProductsCollection = $this->getSoldProducts(
+            $tenantId, $startDate, $endDate, $locationId, $departmentId, $daysInPeriod, $isSingleShop
+        );
+
+        $soldProductIds = $soldProductsCollection->pluck('id')->toArray();
+
+        $unsoldProductsCollection = $this->getUnsoldProducts(
+            $allProducts, $soldProductIds, $tenantId, $isSingleShop, $locationId, $departmentId
+        );
+
+        // ── Metrics ────────────────────────────────────────────
+        $totalInventoryValue = $this->calculateTotalInventoryValue($allProducts, $tenantId, $isSingleShop, $locationId, $departmentId);
+        $soldRevenue         = (float) $soldProductsCollection->sum('revenue_generated');
+        $soldCost            = (float) $soldProductsCollection->sum('total_cost_generated');
+        $soldProfit          = $soldRevenue - $soldCost;
+        $turnoverRate        = $totalInventoryValue > 0 ? ($soldRevenue / $totalInventoryValue) * 100 : 0;
+
+        // ── Stock aging ────────────────────────────────────────
+        $stockAging = $this->calculateStockAging($soldProductsCollection, $unsoldProductsCollection);
+
+        // ── Dead stock ─────────────────────────────────────────
+        $deadStockCollection = $unsoldProductsCollection
+            ->filter(fn($p) => $p->current_stock > 10)->values();
+
+        // ── Sold pagination ────────────────────────────────────
+        $soldTotal    = $soldProductsCollection->count();
+        $soldLastPage = max(1, (int) ceil($soldTotal / $soldPerPage));
+        $soldPage     = min($soldPage, $soldLastPage);
+        $soldOffset   = ($soldPage - 1) * $soldPerPage;
+
+        $movementColors = ['Fast Mover' => 'success', 'Medium Mover' => 'warning', 'Slow Mover' => 'danger'];
+
+        $soldRows = $soldProductsCollection->slice($soldOffset, $soldPerPage)->values()
+            ->map(function ($p, $i) use ($soldOffset, $movementColors) {
+                $revenue = (float) ($p->revenue_generated ?? 0);
+                $cost    = (float) ($p->total_cost_generated ?? 0);
+                $profit  = $revenue - $cost;
+                $margin  = $revenue > 0 ? ($profit / $revenue) * 100 : 0;
+                $stockVal = (float) ($p->stock_value ?? ($p->current_stock * ($p->price ?? 0)));
+                $mc = $movementColors[$p->movement_category ?? ''] ?? 'secondary';
+
+                return [
+                    'rank'                => $soldOffset + $i + 1,
+                    'id'                  => $p->id,
+                    'name'                => $p->name,
+                    'sku'                 => $p->sku,
+                    'quantity_sold'       => round((float) $p->quantity_sold, 2),
+                    'revenue'             => round($revenue, 2),
+                    'cost'                => round($cost, 2),
+                    'profit'              => round($profit, 2),
+                    'margin'              => round($margin, 2),
+                    'current_stock'       => (int) $p->current_stock,
+                    'stock_value'         => round($stockVal, 2),
+                    'times_ordered'       => (int) ($p->times_ordered ?? 0),
+                    'daily_sales_rate'    => round((float) ($p->daily_sales_rate ?? 0), 2),
+                    'movement_category'   => $p->movement_category ?? 'Slow Mover',
+                    'movement_color'      => $mc,
+                    'last_sold_date'      => $p->last_sold_date
+                        ? Carbon::parse($p->last_sold_date)->format('Y-m-d')
+                        : null,
+                ];
+            });
+
+        // ── Unsold pagination ──────────────────────────────────
+        $unsoldTotal    = $unsoldProductsCollection->count();
+        $unsoldLastPage = max(1, (int) ceil($unsoldTotal / $unsoldPerPage));
+        $unsoldPage     = min($unsoldPage, $unsoldLastPage);
+        $unsoldOffset   = ($unsoldPage - 1) * $unsoldPerPage;
+
+        $unsoldRows = $unsoldProductsCollection->slice($unsoldOffset, $unsoldPerPage)->values()
+            ->map(function ($p) {
+                $stockClass = $p->current_stock <= 5 ? 'danger' : ($p->current_stock <= 10 ? 'warning' : 'info');
+                $sv = (float) ($p->stock_value ?? ($p->current_stock * ($p->price ?? 0)));
+
+                return [
+                    'id'            => $p->id,
+                    'name'          => $p->name,
+                    'sku'           => $p->sku,
+                    'current_stock' => (int) $p->current_stock,
+                    'price'         => round((float) ($p->price ?? 0), 2),
+                    'stock_value'   => round($sv, 2),
+                    'stock_class'   => $stockClass,
+                    'is_dead_stock' => $p->current_stock > 10,
+                ];
+            });
+
+        // ── Dead stock pagination ──────────────────────────────
+        $deadTotal    = $deadStockCollection->count();
+        $deadLastPage = max(1, (int) ceil($deadTotal / $deadStockPerPage));
+        $deadStockPage = min($deadStockPage, $deadLastPage);
+        $deadOffset   = ($deadStockPage - 1) * $deadStockPerPage;
+
+        $deadRows = $deadStockCollection->slice($deadOffset, $deadStockPerPage)->values()
+            ->map(function ($p) {
+                $sv = (float) ($p->stock_value ?? ($p->current_stock * ($p->price ?? 0)));
+                return [
+                    'id'            => $p->id,
+                    'name'          => $p->name,
+                    'sku'           => $p->sku,
+                    'current_stock' => (int) $p->current_stock,
+                    'price'         => round((float) ($p->price ?? 0), 2),
+                    'stock_value'   => round($sv, 2),
+                ];
+            });
+
+        // ── Movement breakdown ─────────────────────────────────
+        $productMovement = $soldProductsCollection;
+        $fastMovers   = $productMovement->where('movement_category', 'Fast Mover')->count();
+        $mediumMovers = $productMovement->where('movement_category', 'Medium Mover')->count();
+        $slowMovers   = $productMovement->where('movement_category', 'Slow Mover')->count();
+        $totalMovers  = max($productMovement->count(), 1);
+
+        // ── Sell-through ───────────────────────────────────────
+        $soldCount       = $soldProductsCollection->count();
+        $unsoldCount     = $unsoldProductsCollection->count();
+        $totalProducts   = $soldCount + $unsoldCount;
+        $sellThroughRate = $totalProducts > 0 ? ($soldCount / $totalProducts) * 100 : 0;
+        $totalUnitsSold  = (float) $soldProductsCollection->sum('quantity_sold');
+        $avgDailySales   = $daysInPeriod > 0 ? $totalUnitsSold / $daysInPeriod : 0;
+        $soldMargin      = $soldRevenue > 0 ? ($soldProfit / $soldRevenue) * 100 : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'is_single_shop'  => $isSingleShop,
+                'days_in_period'  => $daysInPeriod,
+                'summary' => [
+                    'total_products'        => $totalProducts,
+                    'sold_count'            => $soldCount,
+                    'unsold_count'          => $unsoldCount,
+                    'sell_through_rate'     => round($sellThroughRate, 2),
+                    'turnover_rate'         => round($turnoverRate, 2),
+                    'total_units_sold'      => round($totalUnitsSold, 2),
+                    'avg_daily_sales'       => round($avgDailySales, 2),
+                    'sold_revenue'          => round($soldRevenue, 2),
+                    'sold_cost'             => round($soldCost, 2),
+                    'sold_profit'           => round($soldProfit, 2),
+                    'sold_margin'           => round($soldMargin, 2),
+                    'total_inventory_value' => round($totalInventoryValue, 2),
+                ],
+                'movement' => [
+                    'fast_movers'   => $fastMovers,
+                    'medium_movers' => $mediumMovers,
+                    'slow_movers'   => $slowMovers,
+                    'total'         => $productMovement->count(),
+                    'fast_pct'      => round(($fastMovers / $totalMovers) * 100, 2),
+                    'medium_pct'    => round(($mediumMovers / $totalMovers) * 100, 2),
+                    'slow_pct'      => round(($slowMovers / $totalMovers) * 100, 2),
+                ],
+                'dead_stock' => $deadRows,
+                'dead_stock_pagination' => [
+                    'current_page' => $deadStockPage,
+                    'last_page'    => $deadLastPage,
+                    'total'        => $deadTotal,
+                    'from'         => $deadTotal > 0 ? $deadOffset + 1 : 0,
+                    'to'           => min($deadOffset + $deadStockPerPage, $deadTotal),
+                    'per_page'     => $deadStockPerPage,
+                    'page_param'   => 'dead_stock_page',
+                    'per_page_param' => 'dead_stock_per_page',
+                ],
+                'sold_products'   => $soldRows,
+                'sold_pagination' => [
+                    'current_page' => $soldPage,
+                    'last_page'    => $soldLastPage,
+                    'total'        => $soldTotal,
+                    'from'         => $soldTotal > 0 ? $soldOffset + 1 : 0,
+                    'to'           => min($soldOffset + $soldPerPage, $soldTotal),
+                    'per_page'     => $soldPerPage,
+                    'page_param'   => 'sold_page',
+                    'per_page_param' => 'sold_per_page',
+                ],
+                'unsold_products'   => $unsoldRows,
+                'unsold_pagination' => [
+                    'current_page' => $unsoldPage,
+                    'last_page'    => $unsoldLastPage,
+                    'total'        => $unsoldTotal,
+                    'from'         => $unsoldTotal > 0 ? $unsoldOffset + 1 : 0,
+                    'to'           => min($unsoldOffset + $unsoldPerPage, $unsoldTotal),
+                    'per_page'     => $unsoldPerPage,
+                    'page_param'   => 'unsold_page',
+                    'per_page_param' => 'unsold_per_page',
+                ],
+                'meta' => [
+                    'start_date'    => $startDate,
+                    'end_date'      => $endDate,
+                    'location_id'   => $locationId,
+                    'department_id' => $departmentId,
+                ],
+            ],
+        ]);
+    }
+
+    public function inventorySalesProduct(Request $request, $variantId)
+    {
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('order reports')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+        $tenantId = $user->tenant_id;
+        $isSingleShop = tenant_is_single_shop($tenantId);
+
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
+        $endDate   = $request->get('end_date', Carbon::now()->endOfMonth()->format('Y-m-d'));
+        [$startDate, $endDate] = $this->validateAndFormatDates($startDate, $endDate);
+
+        $locationId   = $request->get('location_id');
+        $departmentId = $request->get('department_id');
+
+        $variant = ProductVariant::where('tenant_id', $tenantId)
+            ->with(['product:id,name'])
+            ->find($variantId);
+
+        if (!$variant) {
+            return response()->json(['success' => false, 'message' => 'Variant not found'], 404);
+        }
+
+        // Lines sold in period (from completed orders)
+        $orderItemsQuery = OrderItem::where('variant_id', $variantId)
+            ->whereHas('order', function ($q) use ($tenantId, $startDate, $endDate, $locationId, $departmentId) {
+                $q->where('tenant_id', $tenantId)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+                if ($locationId)   $q->where('location_id', $locationId);
+                if ($departmentId) $q->where('department_id', $departmentId);
+            })
+            ->with(['order:id,order_number,created_at,customer_name,customer_id,status', 'order.customer:id,first_name,last_name']);
+
+        $items = $orderItemsQuery->orderByDesc('created_at')->limit(50)->get();
+
+        $recentSales = $items->map(function ($item) {
+            $revenue = (float) ($item->total_price ?? 0);
+            $cost    = (float) ($item->total_cost_price ?? 0);
+            $qty     = (float) $item->quantity;
+
+            return [
+                'order_id'      => $item->order?->id,
+                'order_number'  => $item->order?->order_number ?? '—',
+                'order_date'    => $item->order?->created_at?->format('Y-m-d H:i'),
+                'customer_name' => $item->order?->customer
+                    ? trim(($item->order->customer->first_name ?? '') . ' ' . ($item->order->customer->last_name ?? ''))
+                    : ($item->order?->customer_name ?? 'Guest'),
+                'quantity'      => round($qty, 2),
+                'unit_price'    => round((float) ($item->unit_price ?? 0), 2),
+                'total_price'   => round($revenue, 2),
+                'total_cost'    => round($cost, 2),
+                'profit'        => round($revenue - $cost, 2),
+            ];
+        });
+
+        $totalQty     = (float) $items->sum('quantity');
+        $totalRevenue = (float) $items->sum('total_price');
+        $totalCost    = (float) $items->sum('total_cost_price');
+        $totalProfit  = $totalRevenue - $totalCost;
+
+        // Current stock snapshot
+        $currentStock = $this->getVariantStock($variant->id, $tenantId, $isSingleShop, $locationId, $departmentId);
+        $price        = (float) ($variant->selling_price ?? 0);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'           => $variant->id,
+                'name'         => $variant->name,
+                'sku'          => $variant->sku,
+                'product_name' => $variant->product?->name,
+                'current_stock'=> $currentStock,
+                'price'        => round($price, 2),
+                'stock_value'  => round($currentStock * $price, 2),
+                'summary' => [
+                    'total_units_sold' => round($totalQty, 2),
+                    'total_revenue'    => round($totalRevenue, 2),
+                    'total_cost'       => round($totalCost, 2),
+                    'total_profit'     => round($totalProfit, 2),
+                    'margin'           => $totalRevenue > 0 ? round(($totalProfit / $totalRevenue) * 100, 2) : 0,
+                    'sale_count'       => $items->count(),
+                ],
+                'recent_sales' => $recentSales,
+            ],
+        ]);
+    }
+   
     
     /**
      * Get sold products from OrderItems (source of truth for sales)

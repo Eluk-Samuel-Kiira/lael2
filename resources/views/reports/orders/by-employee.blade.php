@@ -1,4 +1,3 @@
-{{-- resources/views/reports/orders/by-employee.blade.php --}}
 @extends('layouts.app')
 
 @section('title', __('auth.employee_performance'))
@@ -8,595 +7,341 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                
-                {{-- ============================================================ --}}
-                {{-- TOOLBAR --}}
-                {{-- ============================================================ --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-                        <div class="page-title d-flex flex-column">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+
+                {{-- Toolbar --}}
+                <div class="app-toolbar py-3 py-lg-6">
+                    <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0 w-100">
+                        <div class="page-title d-flex flex-column align-items-start text-start me-auto">
+                            <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
                                 {{ __('auth.employee_performance') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('accounting.dashboard') }}
-                                    </a>
-                                </li>
+                                <li class="breadcrumb-item text-muted"><a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('accounting.dashboard') }}</a></li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.order_reports') }}</li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('auth.employee_performance') }}</li>
                             </ul>
                         </div>
-                        @if($employeePerformance->count() > 0)
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                <i class="ki-duotone ki-file-down fs-2"></i> {{ __('accounting.export') }}
+                        <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+                            <button type="button" class="btn btn-sm btn-primary" id="epExportBtn">
+                                <i class="bi bi-download fs-2 me-1 me-sm-2"></i>
+                                <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
                             </button>
-                            <ul class="dropdown-menu">
-                                <li>
-                                    <a class="dropdown-item" href="javascript:void(0)" 
-                                       onclick="exportTableToExcel('employeePerformanceTable', 'employee_performance')">
-                                        <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                        {{ __('accounting.export_to_excel') }}
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="javascript:void(0)" 
-                                       onclick="exportTableToCSV('employeePerformanceTable', 'employee_performance')">
-                                        <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
-                                        {{ __('accounting.export_to_csv') }}
-                                    </a>
-                                </li>
-                            </ul>
                         </div>
-                        @endif
                     </div>
                 </div>
 
-                {{-- ============================================================ --}}
-                {{-- FILTER SECTION --}}
-                {{-- ============================================================ --}}
-                <div class="card mb-6">
+                {{-- Filters --}}
+                <div class="row mb-6"><div class="col-12"><div class="card">
                     <div class="card-header border-0">
-                        <div class="card-title">
-                            <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary"></i>
+                        <div class="card-title d-flex align-items-center">
+                            <i class="bi bi-funnel fs-2 me-2 text-primary"></i>
                             <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                         </div>
                     </div>
                     <div class="card-body pt-0">
-                        <form method="GET" action="{{ route('reports.orders.by-employee') }}" id="filterForm">
-                            <div class="row g-3">
-                                {{-- Date Range --}}
-                                <div class="col-md-3">
-                                    <label class="form-label fw-semibold">{{ __('accounting.start_date') }}</label>
-                                    <input type="date" class="form-control" name="start_date" value="{{ $startDate }}">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label fw-semibold">{{ __('accounting.end_date') }}</label>
-                                    <input type="date" class="form-control" name="end_date" value="{{ $endDate }}">
-                                </div>
-                                
-                                {{-- Location --}}
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold">{{ __('auth.location') }}</label>
-                                    <select class="form-select" name="location_id" data-control="select2">
-                                        <option value="">{{ __('auth.all_locations') }}</option>
-                                        @foreach($locations as $location)
-                                            <option value="{{ $location->id }}" {{ $locationId == $location->id ? 'selected' : '' }}>
-                                                {{ $location->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                
-                                {{-- Department --}}
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold">{{ __('auth.department') }}</label>
-                                    <select class="form-select" name="department_id" data-control="select2">
-                                        <option value="">{{ __('auth.all_departments') }}</option>
-                                        @foreach($departments as $department)
-                                            <option value="{{ $department->id }}" {{ $departmentId == $department->id ? 'selected' : '' }}>
-                                                {{ $department->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                
-                                {{-- Employee --}}
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold">{{ __('accounting.employee') }}</label>
-                                    <select class="form-select" name="employee_id" data-control="select2">
-                                        <option value="">{{ __('auth.all_employees') }}</option>
-                                        @foreach($employeesList as $emp)
-                                            <option value="{{ $emp->id }}" {{ $employeeId == $emp->id ? 'selected' : '' }}>
-                                                {{ $emp->first_name }} {{ $emp->last_name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                        <form id="epFilterForm" class="row g-3" onsubmit="return false;">
+                            <div class="col-md-3">
+                                <label class="form-label">{{ __('accounting.start_date') }}</label>
+                                <input type="date" class="form-control" id="epStartDate" value="{{ $startDate }}">
                             </div>
-
-                            <div class="row g-3 mt-3">
-                                {{-- Min Sales --}}
-                                <div class="col-md-3">
-                                    <label class="form-label fw-semibold">{{ __('auth.min_sales') }}</label>
-                                    <input type="number" class="form-control" name="min_sales" value="{{ $minSales }}" placeholder="0.00" step="0.01">
-                                </div>
-                                
-                                {{-- Max Sales --}}
-                                <div class="col-md-3">
-                                    <label class="form-label fw-semibold">{{ __('auth.max_sales') }}</label>
-                                    <input type="number" class="form-control" name="max_sales" value="{{ $maxSales }}" placeholder="1000000.00" step="0.01">
-                                </div>
-                                
-                                {{-- Actions --}}
-                                <div class="col-md-6 d-flex align-items-end gap-2">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="ki-duotone ki-filter fs-2 me-1"></i> {{ __('accounting.apply_filters') }}
-                                    </button>
-                                    <a href="{{ route('reports.orders.by-employee') }}" class="btn btn-light">
-                                        <i class="ki-duotone ki-cross fs-2 me-1"></i> {{ __('accounting.clear_filters') }}
-                                    </a>
-                                    <span class="text-muted ms-3 small">
-                                        <i class="ki-duotone ki-information-4 fs-2"></i>
-                                        {{ __('accounting.showing') }} {{ $employeePerformance->count() }} {{ __('accounting.employees') }}
-                                    </span>
-                                </div>
+                            <div class="col-md-3">
+                                <label class="form-label">{{ __('accounting.end_date') }}</label>
+                                <input type="date" class="form-control" id="epEndDate" value="{{ $endDate }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.location') }}</label>
+                                <select class="form-select" id="epLocation" data-control="select2" data-placeholder="{{ __('auth.all_locations') }}">
+                                    <option value=""></option>
+                                    @foreach($locations as $loc)
+                                        <option value="{{ $loc->id }}" @selected((int)$locationId === $loc->id)>{{ $loc->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('auth.department') }}</label>
+                                <select class="form-select" id="epDepartment" data-control="select2" data-placeholder="{{ __('auth.all_departments') }}">
+                                    <option value=""></option>
+                                    @foreach($departments as $dep)
+                                        <option value="{{ $dep->id }}" @selected((int)$departmentId === $dep->id)>{{ $dep->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">{{ __('accounting.employee') }}</label>
+                                <select class="form-select" id="epEmployee" data-control="select2" data-placeholder="{{ __('auth.all_employees') }}">
+                                    <option value=""></option>
+                                    @foreach($employeesList as $emp)
+                                        <option value="{{ $emp->id }}" @selected((int)$employeeId === $emp->id)>{{ $emp->first_name }} {{ $emp->last_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">{{ __('auth.min_sales') }}</label>
+                                <input type="number" step="0.01" class="form-control" id="epMinSales" value="{{ $minSales }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">{{ __('auth.max_sales') }}</label>
+                                <input type="number" step="0.01" class="form-control" id="epMaxSales" value="{{ $maxSales }}">
+                            </div>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-primary" id="epApplyBtn">
+                                    <i class="bi bi-funnel me-1"></i>{{ __('accounting.apply_filters') }}
+                                </button>
+                                <button type="button" class="btn btn-light" id="epClearBtn">
+                                    <i class="bi bi-x-lg me-1"></i>{{ __('accounting.clear_filters') }}
+                                </button>
                             </div>
                         </form>
                     </div>
+                </div></div></div>
+
+                {{-- SKELETON --}}
+                <div id="epSkeleton">
+                    <div class="row g-6 mb-6">
+                        @for($i = 0; $i < 6; $i++)
+                        <div class="col-md-6 col-lg-2"><div class="card h-100"><div class="card-body text-center">
+                            <div class="ep-sk ep-sk-circle mx-auto mb-3"></div>
+                            <div class="ep-sk ep-sk-text mx-auto" style="width:60%;height:24px;"></div>
+                            <div class="ep-sk ep-sk-text mx-auto mt-2" style="width:80%;"></div>
+                        </div></div></div>
+                        @endfor
+                    </div>
+                    <div class="row g-6 mb-6">
+                        <div class="col-12"><div class="card"><div class="card-body">
+                            <div class="ep-sk" style="height:400px;border-radius:8px;"></div>
+                        </div></div></div>
+                    </div>
+                    <div class="row"><div class="col-12"><div class="card"><div class="card-body">
+                        @for($i = 0; $i < 8; $i++)
+                        <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                            <div class="ep-sk ep-sk-text" style="width:40px;"></div>
+                            <div class="flex-grow-1">
+                                <div class="ep-sk ep-sk-text mb-2" style="width:35%;"></div>
+                                <div class="ep-sk ep-sk-text" style="width:55%;height:8px;"></div>
+                            </div>
+                            <div class="ep-sk ep-sk-badge"></div>
+                        </div>
+                        @endfor
+                    </div></div></div></div>
                 </div>
 
-                {{-- ============================================================ --}}
-                {{-- NO DATA --}}
-                {{-- ============================================================ --}}
-                @if($employeePerformance->count() == 0)
-                <div class="card">
-                    <div class="card-body text-center py-10">
-                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"></i>
+                {{-- CONTENT --}}
+                <div id="epContent" class="d-none">
+
+                    <div id="epEmpty" class="card d-none"><div class="card-body text-center py-10">
+                        <i class="bi bi-file-earmark fs-4tx text-gray-400 mb-4"></i>
                         <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
                         <p class="text-muted fs-6">{{ __('auth.no_employees_found_for_period') }}</p>
-                    </div>
-                </div>
-                @else
+                    </div></div>
 
-                {{-- ============================================================ --}}
-                {{-- SUMMARY CARDS --}}
-                {{-- ============================================================ --}}
-                <div class="row g-6 mb-6">
-                    @php
-                        $totalSales = $employeePerformance->sum('total_sales');
-                        $totalOrders = $employeePerformance->sum('order_count');
-                        $avgSalesPerDay = $daysInPeriod > 0 ? $totalSales / $daysInPeriod : 0;
-                        $avgOrderValue = $totalOrders > 0 ? $totalSales / $totalOrders : 0;
-                        $topEmployee = $employeePerformance->first();
-                    @endphp
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-primary h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-primary">{{ $employeePerformance->count() }}</div>
-                                <div class="text-muted">{{ __('auth.total_employees') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-success h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-success">{{ currency_symbol() }}{{ number_format($totalSales, 2) }}</div>
-                                <div class="text-muted">{{ __('accounting.total_sales') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-info h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-info">{{ number_format($totalOrders) }}</div>
-                                <div class="text-muted">{{ __('auth.total_orders') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-warning h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-warning">{{ currency_symbol() }}{{ number_format($avgSalesPerDay, 2) }}</div>
-                                <div class="text-muted">{{ __('auth.avg_sales_per_day') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-danger h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-danger">{{ currency_symbol() }}{{ number_format($avgOrderValue, 2) }}</div>
-                                <div class="text-muted">{{ __('auth.avg_order_value') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6 col-lg-2">
-                        <div class="card bg-light-secondary h-100">
-                            <div class="card-body text-center">
-                                <div class="fs-6 fw-bold text-gray-800">{{ Str::limit($topEmployee->first_name . ' ' . $topEmployee->last_name, 15) }}</div>
-                                <div class="text-muted">{{ currency_symbol() }}{{ number_format($topEmployee->total_sales, 2) }}</div>
-                                <div class="text-muted small">{{ __('auth.top_employee') }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    {{-- Summary --}}
+                    <div id="epSummaryCards" class="row g-6 mb-6"></div>
 
-                {{-- ============================================================ --}}
-                {{-- PERFORMANCE DISTRIBUTION --}}
-                {{-- ============================================================ --}}
-                <div class="row g-6 mb-6">
-                    @php
-                        $ratingColors = ['Excellent' => 'success', 'Good' => 'primary', 'Average' => 'warning', 'Needs Improvement' => 'danger'];
-                        $ratingCounts = ['Excellent' => 0, 'Good' => 0, 'Average' => 0, 'Needs Improvement' => 0];
-                        foreach($employeePerformance as $emp) {
-                            if (isset($ratingCounts[$emp->performance_rating])) $ratingCounts[$emp->performance_rating]++;
-                        }
-                    @endphp
-                    
-                    @foreach($ratingColors as $rating => $color)
-                    @php $count = $ratingCounts[$rating] ?? 0; $pct = $employeePerformance->count() > 0 ? ($count / $employeePerformance->count()) * 100 : 0; @endphp
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card bg-light-{{ $color }} border border-{{ $color }} border-dashed">
-                            <div class="card-body text-center">
-                                <div class="fs-1 fw-bold text-{{ $color }}">{{ $count }}</div>
-                                <div class="text-gray-600">{{ $rating }}</div>
-                                <div class="progress mt-2" style="height: 6px;">
-                                    <div class="progress-bar bg-{{ $color }}" style="width: {{ $pct }}%;"></div>
+                    {{-- Rating distribution --}}
+                    <div id="epRatingCards" class="row g-6 mb-6"></div>
+
+                    {{-- Chart --}}
+                    <div id="epChartCard" class="card mb-6 d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-bar-chart fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('auth.top_performers') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body pt-0">
+                            <div id="epChart" style="height:400px;"></div>
+                        </div>
+                    </div>
+
+                    {{-- Employees table --}}
+                    <div id="epTableCard" class="card d-none">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-table fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.employee_performance_report') }}</h3>
                                 </div>
-                                <span class="badge badge-light-{{ $color }} mt-2">{{ number_format($pct, 1) }}%</span>
+                                <span class="badge badge-light-primary fs-7" id="epTableBadge"></span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="epEmployeesTable">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4">{{ __('accounting.rank') }}</th>
+                                    <th>{{ __('accounting.employee') }}</th>
+                                    <th class="text-center">{{ __('auth.order_count') }}</th>
+                                    <th class="text-end">{{ __('accounting.total_sales') }}</th>
+                                    <th class="text-end">{{ __('accounting.total_tax') }}</th>
+                                    <th class="text-end">{{ __('accounting.total_discount') }}</th>
+                                    <th class="text-end">{{ __('accounting.average_amount') }}</th>
+                                    <th class="text-end">{{ __('auth.largest_sale') }}</th>
+                                    <th class="text-end">{{ __('auth.smallest_sale') }}</th>
+                                    <th class="text-center">{{ __('auth.unique_customers') }}</th>
+                                    <th class="text-center">{{ __('auth.orders_per_day') }}</th>
+                                    <th class="text-end">{{ __('auth.sales_per_day') }}</th>
+                                    <th>{{ __('auth.performance_rating') }}</th>
+                                    <th>{{ __('auth.last_sale_date') }}</th>
+                                    <th class="pe-4" style="width:15%;">{{ __('accounting.percentage') }}</th>
+                                </tr></thead>
+                                <tbody id="epEmployeesBody"></tbody>
+                                <tfoot class="bg-light" id="epEmployeesFoot"></tfoot>
+                            </table></div>
+                            <div class="card-footer d-flex justify-content-between align-items-center d-none" id="epPaginationWrap">
+                                <span class="text-muted fs-7" id="epPaginationInfo"></span>
+                                <nav><ul class="pagination m-0" id="epPagination"></ul></nav>
                             </div>
                         </div>
                     </div>
-                    @endforeach
-                </div>
 
-                {{-- ============================================================ --}}
-                {{-- TOP PERFORMERS CHART --}}
-                {{-- ============================================================ --}}
-                <div class="card mb-6">
-                    <div class="card-header border-0">
-                        <div class="card-title">
-                            <i class="ki-duotone ki-chart-bar fs-2 me-2 text-primary"></i>
-                            <h3 class="fw-bold m-0">{{ __('auth.top_performers') }}</h3>
-                        </div>
-                    </div>
-                    <div class="card-body pt-0">
-                        <div id="topPerformersChart" style="height: 400px;"></div>
-                    </div>
-                </div>
-
-                {{-- ============================================================ --}}
-                {{-- EMPLOYEE PERFORMANCE TABLE --}}
-                {{-- ============================================================ --}}
-                <div class="card">
-                    <div class="card-header border-0">
-                        <div class="card-title">
-                            <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
-                            <h3 class="fw-bold m-0">{{ __('auth.employee_performance_report') }}</h3>
-                        </div>
-                        <div class="card-toolbar">
-                            <span class="badge badge-light-primary fs-7">
-                                {{ $employeePerformance->count() }} {{ __('accounting.employees') }}
-                            </span>
-                            <span class="badge badge-light-secondary ms-2 fs-7">
-                                {{ $daysInPeriod }} {{ __('auth.days') }}
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="employeePerformanceTable">
-                                <thead>
-                                    <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                        <th class="min-w-50px ps-4">{{ __('accounting.rank') }}</th>
-                                        <th class="min-w-200px">{{ __('accounting.employee') }}</th>
-                                        <th class="min-w-100px">{{ __('auth.order_count') }}</th>
-                                        <th class="min-w-120px">{{ __('accounting.total_sales') }}</th>
-                                        <th class="min-w-120px">{{ __('accounting.total_tax') }}</th>
-                                        <th class="min-w-120px">{{ __('accounting.total_discount') }}</th>
-                                        <th class="min-w-120px">{{ __('accounting.average_amount') }}</th>
-                                        <th class="min-w-120px">{{ __('auth.largest_sale') }}</th>
-                                        <th class="min-w-120px">{{ __('auth.smallest_sale') }}</th>
-                                        <th class="min-w-100px">{{ __('auth.unique_customers') }}</th>
-                                        <th class="min-w-120px">{{ __('auth.orders_per_day') }}</th>
-                                        <th class="min-w-120px">{{ __('auth.sales_per_day') }}</th>
-                                        <th class="min-w-100px">{{ __('auth.performance_rating') }}</th>
-                                        <th class="min-w-150px">{{ __('auth.last_sale_date') }}</th>
-                                        <th class="min-w-100px">{{ __('accounting.percentage') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($employees as $index => $employee)
-                                    @php
-                                        $empData = $employeePerformance->firstWhere('id', $employee->id);
-                                        if (!$empData) continue;
-                                        $totalSalesAll = $employeePerformance->sum('total_sales');
-                                        $percentage = $totalSalesAll > 0 ? ($empData->total_sales / $totalSalesAll) * 100 : 0;
-                                    @endphp
-                                    <tr>
-                                        <td class="ps-4">
-                                            <span class="fw-bold">{{ $index + 1 }}</span>
-                                            @if($index < 3)
-                                            <span class="badge badge-light-{{ $index == 0 ? 'danger' : ($index == 1 ? 'warning' : 'info') }}">
-                                                {{ $index == 0 ? '🥇' : ($index == 1 ? '🥈' : '🥉') }}
-                                            </span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="symbol symbol-40px symbol-circle me-3">
-                                                    <div class="symbol-label bg-light-{{ $empData->rating_color }}">
-                                                        <i class="ki-duotone ki-user fs-2"></i>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <div class="fw-bold">{{ $empData->first_name }} {{ $empData->last_name }}</div>
-                                                    <small class="text-muted">{{ $empData->email }}</small>
-                                                    <span class="badge badge-light-{{ $empData->rating_color }} badge-sm mt-1 d-block">
-                                                        {{ $empData->performance_rating }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td><span class="badge badge-light-primary">{{ $empData->order_count }}</span></td>
-                                        <td class="fw-bold text-success">{{ currency_symbol() }}{{ number_format($empData->total_sales, 2) }}</td>
-                                        <td class="text-info">{{ currency_symbol() }}{{ number_format($empData->total_tax_collected, 2) }}</td>
-                                        <td class="text-warning">{{ currency_symbol() }}{{ number_format($empData->total_discount_given, 2) }}</td>
-                                        <td>{{ currency_symbol() }}{{ number_format($empData->average_order_value, 2) }}</td>
-                                        <td class="text-danger">{{ currency_symbol() }}{{ number_format($empData->largest_sale, 2) }}</td>
-                                        <td class="text-secondary">{{ currency_symbol() }}{{ number_format($empData->smallest_sale, 2) }}</td>
-                                        <td><span class="badge badge-light-info">{{ $empData->unique_customers }}</span></td>
-                                        <td>
-                                            <span class="badge badge-light-{{ $empData->orders_per_day >= 5 ? 'success' : ($empData->orders_per_day >= 2 ? 'warning' : 'danger') }}">
-                                                {{ number_format($empData->orders_per_day, 1) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-light-{{ $empData->sales_per_day >= 1000 ? 'success' : ($empData->sales_per_day >= 500 ? 'warning' : 'danger') }}">
-                                                {{ currency_symbol() }}{{ number_format($empData->sales_per_day, 0) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-light-{{ $empData->rating_color }}">
-                                                {{ $empData->performance_rating }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @if($empData->last_sale_date)
-                                                {{ optional($empData->last_sale_date)->format('M d, Y') ?? '-' }}
-                                            @else
-                                                <span class="text-muted">-</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="progress w-100 me-3" style="height: 8px;">
-                                                    <div class="progress-bar bg-{{ $empData->rating_color }}" style="width: {{ min($percentage, 100) }}%;"></div>
-                                                </div>
-                                                <span class="fw-bold min-w-60px text-end">{{ number_format($percentage, 1) }}%</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot class="bg-light">
-                                    <tr>
-                                        <th colspan="3" class="text-end fw-bold">{{ __('accounting.totals') }}</th>
-                                        <th class="fw-bold text-success">{{ currency_symbol() }}{{ number_format($employeePerformance->sum('total_sales'), 2) }}</th>
-                                        <th class="fw-bold text-info">{{ currency_symbol() }}{{ number_format($employeePerformance->sum('total_tax_collected'), 2) }}</th>
-                                        <th class="fw-bold text-warning">{{ currency_symbol() }}{{ number_format($employeePerformance->sum('total_discount_given'), 2) }}</th>
-                                        <th colspan="9"></th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-
-                    {{-- ============================================================ --}}
-                    {{-- PAGINATION --}}
-                    {{-- ============================================================ --}}
-                    @if($employees->hasPages())
-                    <div class="card-footer">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                            <div>
-                                {{ $employees->appends(request()->query())->links() }}
-                            </div>
-                            <div class="text-muted fs-7">
-                                {{ __('accounting.showing') }} {{ $employees->firstItem() ?? 0 }} 
-                                {{ __('accounting.to') }} {{ $employees->lastItem() ?? 0 }} 
-                                {{ __('accounting.of') }} {{ $employees->total() }} 
-                                {{ __('accounting.employees') }}
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-                </div>
-
-                {{-- ============================================================ --}}
-                {{-- TOP VS BOTTOM PERFORMERS --}}
-                {{-- ============================================================ --}}
-                <div class="row mt-6">
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-header bg-light-success">
-                                <h3 class="card-title">
-                                    <i class="ki-duotone ki-crown fs-2 me-2 text-success"></i>
-                                    {{ __('auth.top_5_performers') }}
-                                </h3>
+                    {{-- Top / Bottom 5 --}}
+                    <div class="row g-6 mt-6">
+                        <div class="col-lg-6"><div id="epTop5Card" class="card h-100 d-none">
+                            <div class="card-header bg-light-success border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="bi bi-trophy fs-2 me-2 text-success"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.top_5_performers') }}</h3>
+                                </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 bg-light">
-                                                <th class="ps-4">{{ __('accounting.rank') }}</th>
-                                                <th>{{ __('accounting.employee') }}</th>
-                                                <th class="text-end">{{ __('accounting.total_sales') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($employeePerformance->take(5) as $index => $emp)
-                                            <tr>
-                                                <td class="ps-4 fw-bold">{{ $index + 1 }}</td>
-                                                <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
-                                                <td class="text-end fw-bold text-success">{{ currency_symbol() }}{{ number_format($emp->total_sales, 2) }}</td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                    <thead><tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th class="ps-4">{{ __('accounting.rank') }}</th>
+                                        <th>{{ __('accounting.employee') }}</th>
+                                        <th class="text-end pe-4">{{ __('accounting.total_sales') }}</th>
+                                    </tr></thead>
+                                    <tbody id="epTop5Body"></tbody>
+                                </table></div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-header bg-light-danger">
-                                <h3 class="card-title">
-                                    <i class="ki-duotone ki-clock fs-2 me-2 text-danger"></i>
-                                    {{ __('auth.bottom_5_performers') }}
-                                </h3>
+                        </div></div>
+                        <div class="col-lg-6"><div id="epBottom5Card" class="card h-100 d-none">
+                            <div class="card-header bg-light-danger border-0">
+                                <div class="card-title d-flex align-items-center">
+                                    <i class="bi bi-arrow-down-circle fs-2 me-2 text-danger"></i>
+                                    <h3 class="fw-bold m-0">{{ __('auth.bottom_5_performers') }}</h3>
+                                </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 bg-light">
-                                                <th class="ps-4">{{ __('accounting.rank') }}</th>
-                                                <th>{{ __('accounting.employee') }}</th>
-                                                <th class="text-end">{{ __('accounting.total_sales') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($employeePerformance->sortBy('total_sales')->take(5) as $index => $emp)
-                                            <tr>
-                                                <td class="ps-4 fw-bold text-danger">{{ $employeePerformance->count() - $index }}</td>
-                                                <td>{{ $emp->first_name }} {{ $emp->last_name }}</td>
-                                                <td class="text-end text-danger">{{ currency_symbol() }}{{ number_format($emp->total_sales, 2) }}</td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                    <thead><tr class="fw-bold fs-6 text-gray-800 bg-light">
+                                        <th class="ps-4">{{ __('accounting.rank') }}</th>
+                                        <th>{{ __('accounting.employee') }}</th>
+                                        <th class="text-end pe-4">{{ __('accounting.total_sales') }}</th>
+                                    </tr></thead>
+                                    <tbody id="epBottom5Body"></tbody>
+                                </table></div>
                             </div>
-                        </div>
+                        </div></div>
                     </div>
+
                 </div>
-                
-                @endif
-                
             </div>
         </div>
     </div>
 </div>
 
-{{-- ============================================================ --}}
-{{-- METADATA FOOTER --}}
-{{-- ============================================================ --}}
-<div class="mt-6 text-muted text-center fs-7">
-    <hr>
-    <p>
-        <i class="ki-duotone ki-calendar-8 fs-2"></i>
-        {{ __('auth.report_generated_on') }} {{ now()->format('F d, Y H:i:s') }} 
-        | {{ __('accounting.period') }}: {{ $startDate ?? 'N/A' }} {{ __('accounting.to') }} {{ $endDate ?? 'N/A' }}
-        @if(isset($locationId) && $locationId)
-            | {{ __('auth.location') }}: {{ $locations->where('id', $locationId)->first()->name ?? 'N/A' }}
-        @endif
-        @if(isset($departmentId) && $departmentId)
-            | {{ __('auth.department') }}: {{ $departments->where('id', $departmentId)->first()->name ?? 'N/A' }}
-        @endif
-        | {{ $employeePerformance->count() ?? 0 }} {{ __('auth.employees') }}
-        | {{ $daysInPeriod ?? 0 }} {{ __('auth.days_analyzed') }}
-        @if(isset($totalSales))
-            | {{ __('accounting.total_sales') }}: {{ currency_symbol() }}{{ number_format($totalSales, 2) }}
-        @endif
-    </p>
+{{-- ═══════════════════════════════════════════════════════════════ --}}
+{{-- DRAWER — per-employee orders                                   --}}
+{{-- ═══════════════════════════════════════════════════════════════ --}}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="epDrawer" style="width: 900px; max-width: 100vw;">
+    <div class="offcanvas-header bg-primary py-4">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi bi-person-badge fs-2 text-white"></i>
+            <div>
+                <h4 class="offcanvas-title text-white fw-bold mb-0" id="epDrawerLabel">{{ __('auth.employee_performance_report') }}</h4>
+                <span class="text-white opacity-75 fs-7" id="epDrawerSubtitle"></span>
+            </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body px-5 py-6">
+        <div id="epDrawerSkeleton">
+            <div class="ep-sk ep-sk-text mb-3" style="width:60%;"></div>
+            <div class="ep-sk ep-sk-text mb-3" style="width:40%;"></div>
+            <div class="ep-sk ep-sk-text mb-3" style="width:80%;"></div>
+        </div>
+        <div id="epDrawerContent" class="d-none"></div>
+    </div>
 </div>
+@endsection
 
-{{-- ============================================================ --}}
-{{-- SCRIPTS --}}
-{{-- ============================================================ --}}
-@push('scripts')
-@if($employeePerformance->count() > 0)
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const data = @json($employeePerformance->take(10));
-    const names = data.map(e => e.first_name + ' ' + e.last_name.substring(0, 1) + '.');
-    const sales = data.map(e => parseFloat(e.total_sales));
-    const orders = data.map(e => parseFloat(e.order_count));
-    
-    new ApexCharts(document.querySelector("#topPerformersChart"), {
-        series: [
-            { name: 'Sales', data: sales, type: 'bar' },
-            { name: 'Orders', data: orders, type: 'line' }
-        ],
-        chart: { type: 'bar', height: 400, toolbar: { show: true } },
-        plotOptions: { bar: { horizontal: false, columnWidth: '60%' } },
-        stroke: { width: [0, 3] },
-        xaxis: { categories: names, labels: { rotate: -45 } },
-        yaxis: [
-            { title: { text: 'Sales ($)' }, labels: { formatter: v => '$' + v.toLocaleString() } },
-            { opposite: true, title: { text: 'Orders' } }
-        ],
-        colors: ['#3E97FF', '#50CD89'],
-        tooltip: {
-            y: {
-                formatter: function(val, { seriesIndex }) {
-                    return seriesIndex === 0 ? '$' + val.toLocaleString(undefined, {minimumFractionDigits: 2}) : val.toLocaleString();
-                }
-            }
-        }
-    }).render();
-});
-</script>
-@endif
-
-<script>
-function exportTableToExcel(tableId, filename) {
-    const table = document.getElementById(tableId);
-    if (!table) return alert('Table not found!');
-    try {
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(table), 'Employees');
-        XLSX.writeFile(wb, filename + '.xlsx');
-    } catch(e) { alert('Error: ' + e.message); }
-}
-
-function exportTableToCSV(tableId, filename) {
-    const table = document.getElementById(tableId);
-    if (!table) return alert('Table not found!');
-    try {
-        const rows = table.querySelectorAll('tr');
-        let csv = [];
-        rows.forEach(row => {
-            const cols = row.querySelectorAll('td, th');
-            csv.push(Array.from(cols).map(c => c.innerText.trim()).join(','));
-        });
-        const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename + '.csv';
-        link.click();
-        URL.revokeObjectURL(link.href);
-    } catch(e) { alert('Error: ' + e.message); }
-}
-
-document.getElementById('filterForm')?.addEventListener('submit', function(e) {
-    const start = new Date(document.querySelector('[name="start_date"]').value);
-    const end = new Date(document.querySelector('[name="end_date"]').value);
-    if (start > end) { e.preventDefault(); alert('{{ __("auth.start_date_cannot_be_after_end_date") }}'); }
-});
-</script>
+@push('styles')
+<style>
+    .ep-sk {
+        background: linear-gradient(90deg, #e4e6eb 0%, #f0f2f5 50%, #e4e6eb 100%);
+        background-size: 200% 100%;
+        animation: ep-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .ep-sk-text   { height: 12px; border-radius: 4px; }
+    .ep-sk-circle { width: 44px; height: 44px; border-radius: 50%; }
+    .ep-sk-badge  { width: 56px; height: 24px; border-radius: 12px; }
+    @keyframes ep-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #epSkeleton .card { border: none; box-shadow: 0 0 0 1px #f0f2f5; }
+    .ep-row { cursor: pointer; }
+    .ep-row:hover { background-color: #f9f9f9; }
+</style>
 @endpush
 
-@endsection
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+    window.EP_ROUTES = {
+        data:   '{{ route("reports.orders.by-employee-data") }}',
+        orders: '{{ route("reports.orders.by-employee-orders", ["employeeId" => "__ID__"]) }}',
+    };
+    window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    window.EP_BOOTSTRAP = {
+        startDate:    @json($startDate),
+        endDate:      @json($endDate),
+        locationId:   @json($locationId),
+        departmentId: @json($departmentId),
+        employeeId:   @json($employeeId),
+        minSales:     @json($minSales),
+        maxSales:     @json($maxSales),
+        perPage:      @json($perPage),
+    };
+    window.EP_I18N = {
+        totalEmployees:  @json(__('auth.total_employees')),
+        totalSales:      @json(__('accounting.total_sales')),
+        totalOrders:     @json(__('auth.total_orders')),
+        avgSalesPerDay:  @json(__('auth.avg_sales_per_day')),
+        avgOrderValue:   @json(__('accounting.average_amount')),
+        topEmployee:     @json(__('auth.top_employee')),
+
+        employee:        @json(__('accounting.employee')),
+        orderCount:      @json(__('auth.order_count')),
+        totalTax:        @json(__('accounting.total_tax')),
+        totalDiscount:   @json(__('accounting.total_discount')),
+        largestSale:     @json(__('auth.largest_sale')),
+        smallestSale:    @json(__('auth.smallest_sale')),
+        uniqueCustomers: @json(__('auth.unique_customers')),
+        ordersPerDay:    @json(__('auth.orders_per_day')),
+        salesPerDay:     @json(__('auth.sales_per_day')),
+        performanceRating: @json(__('auth.performance_rating')),
+        lastSaleDate:    @json(__('auth.last_sale_date')),
+        rank:            @json(__('accounting.rank')),
+        percentage:      @json(__('accounting.percentage')),
+        totals:          @json(__('accounting.totals')),
+
+        excellent:       @json(__('auth.excellent')),
+        good:            @json(__('auth.good')),
+        average:         @json(__('auth.average')),
+        needsImprovement:@json(__('auth.needs_improvement')),
+
+        // drawer
+        orderNumber:     @json(__('auth.order_number')),
+        date:            @json(__('auth.date')),
+        status:          @json(__('auth.status')),
+        customer:        @json(__('auth.customer')),
+        location:        @json(__('auth.location')),
+        department:      @json(__('auth.department')),
+        total:           @json(__('auth.total')),
+        paid:            @json(__('auth.paid')),
+        balance:         @json(__('auth.balance')),
+        noOrders:        @json(__('auth.no_orders_found_for_period')),
+    };
+</script>
+@include('reports.orders.by-employee-scripts')
+@endpush

@@ -1,4 +1,3 @@
-{{-- resources/views/reports/purchasing/purchase-cost-analysis.blade.php --}}
 @extends('layouts.app')
 
 @section('title', __('pagination.purchase_cost_analysis'))
@@ -8,762 +7,320 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
-                <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                    <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-                        <div class="page-title d-flex flex-column">
-                            <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
+
+                {{-- Toolbar --}}
+                <div class="app-toolbar py-3 py-lg-6">
+                    <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0 w-100">
+
+                        {{-- Title block — extreme left --}}
+                        <div class="page-title d-flex flex-column align-items-start text-start me-auto">
+                            <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
                                 {{ __('pagination.purchase_cost_analysis') }}
                             </h1>
                             <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                                <li class="breadcrumb-item text-muted">
-                                    <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
-                                        {{ __('pagination.dashboard') }}
-                                    </a>
-                                </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item text-muted"><a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">{{ __('pagination.dashboard') }}</a></li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.purchasing_reports') }}</li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('pagination.purchase_cost_analysis') }}</li>
                             </ul>
                         </div>
-                        <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if($productAnalysis->count() > 0)
+
+                        {{-- Export button — extreme right --}}
+                        <div class="d-flex align-items-stretch w-100 w-lg-auto ms-auto">
                             <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
+                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-download fs-2 me-1 me-sm-2"></i>
                                     <span class="d-none d-sm-inline">{{ __('pagination.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('pagination.export') }}</span>
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" onclick="exportReport('excel')">
-                                            <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
-                                            {{ __('pagination.export_to_excel') }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" onclick="exportReport('pdf')">
-                                            <i class="ki-duotone ki-file-pdf fs-2 me-2 text-danger"></i>
-                                            {{ __('pagination.export_to_pdf') }}
-                                        </a>
-                                    </li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" id="pcaExportExcel">
+                                        <i class="bi bi-file-earmark-excel fs-2 me-2 text-success"></i>{{ __('pagination.export_to_excel') }}
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" id="pcaExportPdf">
+                                        <i class="bi bi-file-earmark-pdf fs-2 me-2 text-danger"></i>{{ __('pagination.export_to_pdf') }}
+                                    </a></li>
                                 </ul>
                             </div>
-                            @endif
                         </div>
                     </div>
                 </div>
 
-                {{-- Filter Section --}}
+                {{-- Filters --}}
                 <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header border-0">
-                                <div class="card-title d-flex align-items-center">
-                                    <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
+                    <div class="col-12"><div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center">
+                                <i class="bi bi-funnel fs-2 me-2 text-primary"></i>
+                                <h3 class="fw-bold m-0">{{ __('pagination.filter_by') }}</h3>
+                            </div>
+                        </div>
+                        <div class="card-body pt-0">
+                            <form id="pcaFilterForm" class="row g-3" onsubmit="return false;">
+                                <div class="col-md-3">
+                                    <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
+                                    <input type="date" class="form-control" id="pcaStartDate" value="{{ $startDate }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
+                                    <input type="date" class="form-control" id="pcaEndDate" value="{{ $endDate }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
+                                    <select class="form-select" id="pcaVariant" data-control="select2" data-placeholder="{{ __('passwords.all_products') }}">
+                                        <option value=""></option>
+                                        @foreach($variants as $v)
+                                            <option value="{{ $v->id }}" @selected((int)$productVariantId === $v->id)>
+                                                {{ $v->name }}@if($v->product) ({{ $v->product->name }})@endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
+                                    <select class="form-select" id="pcaSupplier" data-control="select2" data-placeholder="{{ __('passwords.all_suppliers') }}">
+                                        <option value=""></option>
+                                        @foreach($suppliers as $s)
+                                            <option value="{{ $s->id }}" @selected((int)$supplierId === $s->id)>{{ $s->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-12 d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-primary" id="pcaApplyBtn">
+                                        <i class="bi bi-funnel me-1"></i>{{ __('pagination.apply_filters') }}
+                                    </button>
+                                    <button type="button" class="btn btn-light" id="pcaClearBtn">
+                                        <i class="bi bi-x-lg me-1"></i>{{ __('pagination.clear_filters') }}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div></div>
+                </div>
+
+                {{-- SKELETON --}}
+                <div id="pcaSkeleton">
+                    <div class="row g-6 mb-6">
+                        @for($i = 0; $i < 4; $i++)
+                        <div class="col-md-6 col-lg-3"><div class="card card-flush h-100"><div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="pca-sk pca-sk-circle"></div>
+                                <div class="flex-grow-1">
+                                    <div class="pca-sk pca-sk-text mb-2" style="width:60%;"></div>
+                                    <div class="pca-sk pca-sk-text" style="width:40%;height:24px;"></div>
                                 </div>
                             </div>
-                            <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.purchasing.purchase-cost-analysis') }}" id="filterForm">
-                                    {{-- First Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Start Date --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('pagination.start_date') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="start_date" 
-                                                    value="{{ $startDate }}" required>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- End Date --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label required fw-semibold">{{ __('pagination.end_date') }}</label>
-                                            <div class="input-group w-100">
-                                                <span class="input-group-text bg-light">
-                                                    <i class="ki-duotone ki-calendar-8 fs-2"></i>
-                                                </span>
-                                                <input type="date" class="form-control" name="end_date" 
-                                                    value="{{ $endDate }}" required>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Product Variant --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('passwords.product_variant') }}</label>
-                                            <div class="input-group w-100">
-                                                <select class="form-select" name="variant_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
-                                                    <option value="">{{ __('passwords.all_products') }}</option>
-                                                    @foreach($variants as $variant)
-                                                        <option value="{{ $variant->id }}" 
-                                                                {{ $productVariantId == $variant->id ? 'selected' : '' }}>
-                                                            {{ $variant->name }} 
-                                                            @if($variant->product)
-                                                                ({{ $variant->product->name }})
-                                                            @endif
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {{-- Second Line --}}
-                                    <div class="d-flex flex-column flex-xl-row gap-4 gap-xl-6 flex-wrap mb-4">
-                                        {{-- Supplier --}}
-                                        <div class="flex-grow-1">
-                                            <label class="form-label fw-semibold">{{ __('passwords.supplier') }}</label>
-                                            <div class="input-group w-100">
-                                                <select class="form-select" name="supplier_id" data-control="select2" data-placeholder="{{ __('payments.all_status') }}">
-                                                    <option value="">{{ __('passwords.all_suppliers') }}</option>
-                                                    @foreach($suppliers as $supplier)
-                                                        <option value="{{ $supplier->id }}" 
-                                                                {{ $supplierId == $supplier->id ? 'selected' : '' }}>
-                                                            {{ $supplier->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        
-                                        {{-- Action Buttons --}}
-                                        <div class="d-flex gap-2" style="margin-top: auto;">
-                                            <button type="submit" class="btn btn-primary" id="applyFilters">
-                                                <i class="ki-duotone ki-filter fs-2 me-1"></i>
-                                                {{ __('pagination.apply_filters') }}
-                                            </button>
-                                            <a href="{{ route('reports.purchasing.purchase-cost-analysis') }}" class="btn btn-light btn-active-light-primary">
-                                                <i class="ki-duotone ki-cross fs-2 me-1"></i>
-                                                {{ __('pagination.clear_filters') }}
-                                            </a>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+                        </div></div></div>
+                        @endfor
                     </div>
+                    <div class="row g-6 mb-6">
+                        <div class="col-12"><div class="card"><div class="card-body"><div class="pca-sk pca-sk-chart"></div></div></div></div>
+                    </div>
+                    <div class="row"><div class="col-12"><div class="card"><div class="card-body">
+                        @for($i = 0; $i < 10; $i++)
+                        <div class="d-flex align-items-center gap-4 py-4 border-bottom">
+                            <div class="pca-sk pca-sk-text" style="width:40px;"></div>
+                            <div class="flex-grow-1">
+                                <div class="pca-sk pca-sk-text mb-2" style="width:35%;"></div>
+                                <div class="pca-sk pca-sk-text" style="width:55%;height:8px;"></div>
+                            </div>
+                            <div class="pca-sk pca-sk-badge"></div>
+                            <div class="pca-sk pca-sk-text" style="width:100px;"></div>
+                        </div>
+                        @endfor
+                    </div></div></div></div>
                 </div>
 
-                {{-- Summary Cards --}}
-                <div class="row mb-6">
-                    @php
-                        $summaryCards = [
-                            [
-                                'title' => __('passwords.total_products_analyzed'),
-                                'value' => number_format($summary['total_products']),
-                                'color' => 'primary',
-                                'icon' => 'ki-element-plus',
-                                'description' => __('passwords.unique_products')
-                            ],
-                            [
-                                'title' => __('passwords.total_quantity'),
-                                'value' => number_format($summary['total_quantity']),
-                                'color' => 'success',
-                                'icon' => 'ki-arrow-up',
-                                'description' => __('passwords.total_units_purchased')
-                            ],
-                            [
-                                'title' => __('passwords.total_cost'),
-                                'value' => currency_symbol() . number_format($summary['total_cost'], 2),
-                                'color' => 'info',
-                                'icon' => 'ki-dollar',
-                                'description' => __('passwords.total_spend')
-                            ],
-                            [
-                                'title' => __('passwords.avg_price_change'),
-                                'value' => number_format($summary['avg_price_increase'] ?? 0, 2) . '%',
-                                'color' => $summary['avg_price_increase'] > 0 ? 'danger' : 'success',
-                                'icon' => 'ki-chart-line',
-                                'description' => __('passwords.average_price_movement')
-                            ]
-                        ];
-                    @endphp
-                    
-                    @foreach($summaryCards as $card)
-                    <div class="col-md-6 col-lg-3 mb-4">
-                        <div class="card card-flush bg-light-{{ $card['color'] }} border border-{{ $card['color'] }} border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center">
-                                <div class="d-flex align-items-center">
-                                    <i class="ki-duotone {{ $card['icon'] }} fs-2tx text-{{ $card['color'] }} me-3">
-                                        @for($i = 1; $i <= 2; $i++)
-                                        <span class="path{{ $i }}"></span>
-                                        @endfor
-                                    </i>
-                                    <div>
-                                        <div class="fs-4 fw-bold text-gray-800">{{ $card['title'] }}</div>
-                                        <div class="fs-2 fw-bold text-{{ $card['color'] }}">{{ $card['value'] }}</div>
-                                        @if($card['description'])
-                                        <div class="text-muted fs-7">{{ $card['description'] }}</div>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
+                {{-- CONTENT --}}
+                <div id="pcaContent" class="d-none">
 
-                {{-- Price Movement Cards --}}
-                <div class="row mb-6">
-                    @php
-                        $priceMovementCards = [
-                            [
-                                'title' => __('passwords.products_with_price_increase'),
-                                'value' => number_format($summary['products_with_price_increase']),
-                                'color' => 'danger',
-                                'icon' => 'ki-arrow-up-right',
-                                'description' => __('passwords.price_increased')
-                            ],
-                            [
-                                'title' => __('passwords.products_with_price_decrease'),
-                                'value' => number_format($summary['products_with_price_decrease']),
-                                'color' => 'success',
-                                'icon' => 'ki-arrow-down-right',
-                                'description' => __('passwords.price_decreased')
-                            ],
-                            [
-                                'title' => __('passwords.price_stable_products'),
-                                'value' => number_format($summary['total_products'] - $summary['products_with_price_increase'] - $summary['products_with_price_decrease']),
-                                'color' => 'warning',
-                                'icon' => 'ki-chart-line',
-                                'description' => __('passwords.price_remained_stable')
-                            ]
-                        ];
-                    @endphp
-                    
-                    @foreach($priceMovementCards as $card)
-                    <div class="col-md-4 mb-4">
-                        <div class="card card-flush bg-light-{{ $card['color'] }} border border-{{ $card['color'] }} border-dashed h-100">
-                            <div class="card-body d-flex flex-column justify-content-center">
-                                <div class="d-flex align-items-center">
-                                    <i class="ki-duotone {{ $card['icon'] }} fs-2tx text-{{ $card['color'] }} me-3">
-                                        @for($i = 1; $i <= 2; $i++)
-                                        <span class="path{{ $i }}"></span>
-                                        @endfor
-                                    </i>
-                                    <div>
-                                        <div class="fs-4 fw-bold text-gray-800">{{ $card['title'] }}</div>
-                                        <div class="fs-2 fw-bold text-{{ $card['color'] }}">{{ $card['value'] }}</div>
-                                        @if($card['description'])
-                                        <div class="text-muted fs-7">{{ $card['description'] }}</div>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
+                    {{-- Summary cards --}}
+                    <div class="row g-6 mb-6" id="pcaSummaryCards"></div>
 
-                {{-- Price Trend Chart --}}
-                @if($priceTrends->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
+                    {{-- Price movement cards --}}
+                    <div class="row g-6 mb-6" id="pcaMovementCards"></div>
+
+                    {{-- Price trend chart --}}
+                    <div class="row g-6 mb-6" id="pcaTrendWrap">
+                        <div class="col-12"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center justify-content-between w-100">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-chart-line-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                        </i>
+                                        <i class="bi bi-graph-up fs-2 me-2 text-primary"></i>
                                         <h3 class="fw-bold m-0">{{ __('passwords.price_trend_analysis') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('pagination.period') }}: {{ $startDate }} {{ __('pagination.to') }} {{ $endDate }}
-                                    </span>
+                                    <span class="badge badge-light-primary fs-7" id="pcaPeriodBadge"></span>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <div id="priceTrendChart" style="height: 400px;"></div>
+                                <div id="pcaChart" style="height:400px;"></div>
+                                <div id="pcaChartEmpty" class="text-center text-muted py-10 d-none">{{ __('passwords.no_data') }}</div>
                             </div>
-                        </div>
+                        </div></div>
                     </div>
-                </div>
-                @endif
 
-                {{-- Top Products by Spend --}}
-                @if(isset($topProducts) && $topProducts->count() > 0)
-                <div class="row mb-6">
-                    <div class="col-12">
-                        <div class="card">
+                    {{-- Top products --}}
+                    <div class="row g-6 mb-6 d-none" id="pcaTopWrap">
+                        <div class="col-12"><div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center justify-content-between w-100">
                                     <div class="d-flex align-items-center">
-                                        <i class="ki-duotone ki-crown fs-2 me-2 text-warning">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
+                                        <i class="bi bi-trophy fs-2 me-2 text-warning"></i>
                                         <h3 class="fw-bold m-0">{{ __('passwords.top_products_by_spend') }}</h3>
                                     </div>
-                                    <span class="badge badge-light-warning fs-7">
-                                        {{ __('pagination.top') }} {{ $topProducts->count() }} {{ __('passwords.products') }}
-                                    </span>
+                                    <span class="badge badge-light-warning fs-7" id="pcaTopBadge"></span>
                                 </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                                        <thead>
-                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                <th class="ps-4">{{ __('passwords.product') }}</th>
-                                                <th>{{ __('passwords.total_quantity') }}</th>
-                                                <th>{{ __('passwords.avg_unit_cost') }}</th>
-                                                <th>{{ __('passwords.total_cost') }}</th>
-                                                <th>{{ __('passwords.price_change') }}</th>
-                                                <th>{{ __('passwords.price_change_percentage') }}</th>
-                                                <th>{{ __('passwords.purchase_count') }}</th>
-                                                <th class="text-end pe-4">{{ __('passwords.trend') }}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($topProducts as $analysis)
-                                            @php
-                                                $product = $analysis->product ?? null;
-                                                $priceChange = $analysis->price_change ?? 0;
-                                                $priceChangePercentage = $analysis->price_change_percentage ?? 0;
-                                                
-                                                // Determine trend color
-                                                $trendColor = $priceChangePercentage > 5 ? 'danger' : 
-                                                            ($priceChangePercentage > 0 ? 'warning' : 
-                                                            ($priceChangePercentage < -5 ? 'success' : 'info'));
-                                                $trendIcon = $priceChangePercentage > 0 ? 'ki-arrow-up-right' : 
-                                                            ($priceChangePercentage < 0 ? 'ki-arrow-down-right' : 'ki-chart-line');
-                                                $trendText = $priceChangePercentage > 5 ? __('passwords.significant_increase') :
-                                                            ($priceChangePercentage > 0 ? __('passwords.moderate_increase') :
-                                                            ($priceChangePercentage < -5 ? __('passwords.significant_decrease') :
-                                                            ($priceChangePercentage < 0 ? __('passwords.moderate_decrease') : __('passwords.stable'))));
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    @if($product)
-                                                    <div class="d-flex align-items-center gap-3">
-                                                        <div class="symbol symbol-40px flex-shrink-0">
-                                                            <div class="symbol-label bg-light-primary text-primary fw-bold fs-6">
-                                                                {{ strtoupper(substr($product->name, 0, 2)) }}
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div class="fw-bold">{{ $product->name }}</div>
-                                                            <small class="text-muted">
-                                                                {{ $product->sku ?? 'N/A' }}
-                                                                @if($product->product)
-                                                                    <br>{{ $product->product->name }}
-                                                                @endif
-                                                            </small>
-                                                        </div>
-                                                    </div>
-                                                    @else
-                                                    <span class="text-muted">{{ __('passwords.product_not_found') }}</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold">{{ number_format($analysis->total_quantity ?? 0) }}</span>
-                                                    <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-primary">
-                                                        {{ currency_symbol() }}{{ number_format($analysis->avg_unit_cost ?? 0, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-success">
-                                                        {{ currency_symbol() }}{{ number_format($analysis->total_cost ?? 0, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="fw-bold text-{{ $trendColor }}">
-                                                        {{ currency_symbol() }}{{ number_format($priceChange, 2) }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <span class="fw-bold text-{{ $trendColor }} me-2">
-                                                            {{ number_format($priceChangePercentage, 2) }}%
-                                                        </span>
-                                                        @if($priceChangePercentage != 0)
-                                                        <i class="ki-duotone {{ $trendIcon }} fs-2 text-{{ $trendColor }}">
-                                                            <span class="path1"></span>
-                                                            <span class="path2"></span>
-                                                        </i>
-                                                        @endif
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-info">
-                                                        {{ $analysis->purchase_count ?? 0 }} {{ __('passwords.purchases') }}
-                                                    </span>
-                                                </td>
-                                                <td class="text-end pe-4">
-                                                    <span class="badge badge-{{ $trendColor }}">
-                                                        {{ $trendText }}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                    <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                        <th class="ps-4">{{ __('passwords.product') }}</th>
+                                        <th>{{ __('passwords.total_quantity') }}</th>
+                                        <th>{{ __('passwords.avg_unit_cost') }}</th>
+                                        <th>{{ __('passwords.total_cost') }}</th>
+                                        <th>{{ __('passwords.price_change') }}</th>
+                                        <th>{{ __('passwords.price_change_percentage') }}</th>
+                                        <th>{{ __('passwords.purchase_count') }}</th>
+                                        <th class="text-end pe-4">{{ __('passwords.trend') }}</th>
+                                    </tr></thead>
+                                    <tbody id="pcaTopBody"></tbody>
+                                </table></div>
+                            </div>
+                        </div></div>
+                    </div>
+
+                    {{-- Full table --}}
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <div class="card-title d-flex align-items-center justify-content-between w-100">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-table fs-2 me-2 text-primary"></i>
+                                    <h3 class="fw-bold m-0">{{ __('passwords.complete_cost_analysis') }}</h3>
                                 </div>
+                                <span class="badge badge-light-primary fs-7" id="pcaBadge"></span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive"><table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                <thead><tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                    <th class="ps-4 text-center">#</th>
+                                    <th>{{ __('passwords.product') }}</th>
+                                    <th>{{ __('passwords.category') }}</th>
+                                    <th class="text-end">{{ __('passwords.total_quantity') }}</th>
+                                    <th class="text-end">{{ __('passwords.avg_unit_cost') }}</th>
+                                    <th class="text-end">{{ __('passwords.total_cost') }}</th>
+                                    <th class="text-end">{{ __('passwords.price_change') }}</th>
+                                    <th class="text-center">{{ __('passwords.price_change_percentage') }}</th>
+                                    <th class="text-center">{{ __('passwords.purchase_frequency') }}</th>
+                                    <th class="text-center pe-4">{{ __('passwords.cost_efficiency') }}</th>
+                                </tr></thead>
+                                <tbody id="pcaTableBody"></tbody>
+                                <tfoot class="bg-light" id="pcaTableFoot"></tfoot>
+                            </table></div>
+                            <div id="pcaEmpty" class="text-center py-10 d-none">
+                                <i class="bi bi-inbox fs-4tx text-gray-400 mb-4"></i>
+                                <h4 class="text-gray-600 fw-semibold mb-2">{{ __('passwords.no_data') }}</h4>
+                                <p class="text-muted fs-6">{{ __('passwords.no_purchase_cost_data_for_filters') }}</p>
+                            </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center d-none" id="pcaPaginationWrap">
+                                <span class="text-muted fs-7" id="pcaPaginationInfo"></span>
+                                <nav><ul class="pagination m-0" id="pcaPagination"></ul></nav>
                             </div>
                         </div>
                     </div>
                 </div>
-                @endif
-
-{{-- Complete Cost Analysis Table (with Pagination) --}}
-@if($productAnalysis->count() > 0)
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header border-0">
-                <div class="card-title d-flex align-items-center justify-content-between w-100 flex-wrap gap-3">
-                    <div class="d-flex align-items-center">
-                        <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary"></i>
-                        <h3 class="fw-bold m-0">{{ __('passwords.complete_cost_analysis') }}</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
-                        <thead>
-                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                <th class="ps-4 min-w-50px text-center">#</th>
-                                <th class="min-w-200px">{{ __('passwords.product') }}</th>
-                                <th class="min-w-150px">{{ __('passwords.category') }}</th>
-                                <th class="min-w-100px text-end">{{ __('passwords.total_quantity') }}</th>
-                                <th class="min-w-120px text-end">{{ __('passwords.avg_unit_cost') }}</th>
-                                <th class="min-w-150px text-end">{{ __('passwords.total_cost') }}</th>
-                                <th class="min-w-120px text-end">{{ __('passwords.price_change') }}</th>
-                                <th class="min-w-120px text-center">{{ __('passwords.price_change_percentage') }}</th>
-                                <th class="min-w-150px text-center">{{ __('passwords.purchase_frequency') }}</th>
-                                <th class="min-w-130px text-center pe-4">{{ __('passwords.cost_efficiency') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($productAnalysis as $index => $analysis)
-                            @php
-                                $globalIndex = $productAnalysisCollection->search(function($item) use ($analysis) {
-                                    return $item->variant_id === $analysis->variant_id;
-                                });
-                                $displayIndex = $globalIndex !== false ? $globalIndex + 1 : ($index + 1);
-                                
-                                $product = $analysis->product;
-                                $priceChange = $analysis->price_change ?? 0;
-                                $priceChangePercentage = $analysis->price_change_percentage ?? 0;
-                                
-                                $trendColor = $priceChangePercentage > 5 ? 'danger' : 
-                                            ($priceChangePercentage > 0 ? 'warning' : 
-                                            ($priceChangePercentage < -5 ? 'success' : 'info'));
-                                                
-                                $avgCostPerPurchase = $analysis->purchase_count > 0 ? $analysis->total_cost / $analysis->purchase_count : 0;
-                                                
-                                if ($avgCostPerPurchase > 1000) {
-                                    $costEfficiency = 'low';
-                                    $efficiencyColor = 'danger';
-                                } elseif ($avgCostPerPurchase > 500) {
-                                    $costEfficiency = 'medium';
-                                    $efficiencyColor = 'warning';
-                                } else {
-                                    $costEfficiency = 'high';
-                                    $efficiencyColor = 'success';
-                                }
-                                                
-                                $daysInPeriod = \Carbon\Carbon::parse($endDate)->diffInDays(\Carbon\Carbon::parse($startDate)) + 1;
-                                $frequencyPerMonth = $daysInPeriod > 0 ? ($analysis->purchase_count / $daysInPeriod) * 30 : 0;                                                
-                                                
-                                if ($frequencyPerMonth > 4) {
-                                    $purchaseFrequency = 'very_high';
-                                    $frequencyColor = 'primary';
-                                } elseif ($frequencyPerMonth > 2) {
-                                    $purchaseFrequency = 'high';
-                                    $frequencyColor = 'success';
-                                } elseif ($frequencyPerMonth > 1) {
-                                    $purchaseFrequency = 'moderate';
-                                    $frequencyColor = 'info';
-                                } elseif ($frequencyPerMonth > 0.5) {
-                                    $purchaseFrequency = 'low';
-                                    $frequencyColor = 'warning';
-                                } else {
-                                    $purchaseFrequency = 'very_low';
-                                    $frequencyColor = 'danger';
-                                }
-                            @endphp
-                            <tr>
-                                <td class="ps-4 text-center">
-                                    <span class="fw-bold">{{ $displayIndex }}</span>
-                                </td>
-                                <td>
-                                    @if($product)
-                                    <div class="fw-bold">{{ $product->name }}</div>
-                                    <small class="text-muted">{{ $product->sku ?? 'N/A' }}</small>
-                                    @else
-                                    <span class="text-muted">{{ __('passwords.product_not_found') }}</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    @if($product && $product->product && $product->product->category)
-                                    <span class="badge badge-light-info">
-                                        {{ $product->product->category->name ?? 'N/A' }}
-                                    </span>
-                                    @else
-                                    <span class="text-muted">-</span>
-                                    @endif
-                                </td>
-                                <td class="text-end">
-                                    <span class="fw-bold">{{ number_format($analysis->total_quantity) }}</span>
-                                    <div class="text-muted fs-8">{{ __('passwords.units') }}</div>
-                                </td>
-                                <td class="text-end">
-                                    <span class="fw-bold text-primary">
-                                        {{ currency_symbol() }}{{ number_format($analysis->avg_unit_cost, 2) }}
-                                    </span>
-                                </td>
-                                <td class="text-end">
-                                    <span class="fw-bold text-success">
-                                        {{ currency_symbol() }}{{ number_format($analysis->total_cost, 2) }}
-                                    </span>
-                                </td>
-                                <td class="text-end">
-                                    <div class="d-flex align-items-center justify-content-end">
-                                        <span class="fw-bold text-{{ $trendColor }} me-1">
-                                            {{ currency_symbol() }}{{ number_format($priceChange, 2) }}
-                                        </span>
-                                        @if($priceChange != 0)
-                                        <i class="ki-duotone {{ $priceChange > 0 ? 'ki-arrow-up-right' : 'ki-arrow-down-right' }} fs-2 text-{{ $trendColor }}"></i>
-                                        @endif
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-light-{{ $trendColor }}">
-                                        {{ number_format($priceChangePercentage, 2) }}%
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-light-{{ $frequencyColor }}">
-                                        {{ __("passwords.{$purchaseFrequency}_frequency") }}
-                                    </span>
-                                    <div class="text-muted fs-8">
-                                        {{ $analysis->purchase_count }} {{ __('passwords.orders') }}
-                                    </div>
-                                </td>
-                                <td class="text-center pe-4">
-                                    <span class="badge badge-{{ $efficiencyColor }}">
-                                        {{ __("passwords.{$costEfficiency}_efficiency") }}
-                                    </span>
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        @php
-                            $pageTotalCost = $productAnalysis->sum('total_cost');
-                            $pageTotalQuantity = $productAnalysis->sum('total_quantity');
-                        @endphp
-                        <tfoot class="bg-light">
-                            <tr>
-                                {{-- Total 10 columns: #, Product, Category, Total Qty, Avg Cost, Total Cost, Price Change, Price Change %, Purchase Frequency, Cost Efficiency --}}
-                                <td colspan="3" class="text-end fw-bold">{{ __('pagination.current_page') }} ({{ __('passwords.total_quantity') }}):</td>
-                                <td class="text-end fw-bold">{{ number_format($pageTotalQuantity) }}</td>
-                                <td colspan="1" class="text-end fw-bold">{{ __('pagination.current_page') }} ({{ __('passwords.total_cost') }}):</td>
-                                <td class="text-end fw-bold text-primary">{{ currency_symbol() }}{{ number_format($pageTotalCost, 2) }}</td>
-                                <td colspan="4"></td>
-                            </tr>
-                            @if($productAnalysis->total() > $productAnalysis->count())
-                            <tr>
-                                <td colspan="3" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }} ({{ __('passwords.total_quantity') }}):</td>
-                                <td class="text-end fw-bold text-muted">{{ number_format($summary['total_quantity']) }}</td>
-                                <td colspan="1" class="text-end fw-bold text-muted">{{ __('pagination.grand_total') }} ({{ __('passwords.total_cost') }}):</td>
-                                <td class="text-end fw-bold text-primary">{{ currency_symbol() }}{{ number_format($summary['total_cost'], 2) }}</td>
-                                <td colspan="4"></td>
-                            </tr>
-                            @endif
-                        </tfoot>
-                    </table>
-                </div>
-                
-                {{-- Pagination Component --}}
-                <div class="card-footer">
-                    @include('partials.pagination', [
-                        'paginator' => $productAnalysis,
-                        'pageName' => 'page',
-                        'perPageName' => 'per_page',
-                        'showPerPage' => true
-                    ])
-                </div>
             </div>
         </div>
     </div>
 </div>
-@endif
+@endsection
 
-            </div>
-        </div>
-    </div>
-</div>
+@push('styles')
+<style>
+    .pca-sk {
+        background: linear-gradient(90deg, #e4e6eb 0%, #f0f2f5 50%, #e4e6eb 100%);
+        background-size: 200% 100%;
+        animation: pca-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }
+    .pca-sk-text   { height: 12px; border-radius: 4px; }
+    .pca-sk-circle { width: 44px; height: 44px; border-radius: 50%; }
+    .pca-sk-badge  { width: 56px; height: 24px; border-radius: 12px; }
+    .pca-sk-chart  { width: 100%; height: 400px; border-radius: 8px; }
+    @keyframes pca-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    #pcaSkeleton .card { border: none; box-shadow: 0 0 0 1px #f0f2f5; }
+</style>
+@endpush
 
 @push('scripts')
-@if($priceTrends->count() > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Form validation
-        document.getElementById('filterForm').addEventListener('submit', function(e) {
-            const startDate = new Date(document.querySelector('[name="start_date"]').value);
-            const endDate = new Date(document.querySelector('[name="end_date"]').value);
-            
-            if (startDate > endDate) {
-                e.preventDefault();
-                alert('{{ __("pagination.start_date_cannot_be_after_end_date") }}');
-                return false;
-            }
-        });
+    window.PCA_ROUTES = { data: '{{ route("reports.purchasing.purchase-cost-analysis-data") }}' };
+    window.REPORT_CURRENCY = '{{ currency_symbol() }}';
+    window.PCA_BOOTSTRAP = {
+        startDate:  @json($startDate),
+        endDate:    @json($endDate),
+        variantId:  @json($productVariantId),
+        supplierId: @json($supplierId),
+        perPage:    @json($perPage),
+    };
+    window.PCA_I18N = {
+        // summary
+        totalProductsAnalyzed: @json(__('passwords.total_products_analyzed')),
+        uniqueProducts:        @json(__('passwords.unique_products')),
+        totalQuantity:         @json(__('passwords.total_quantity')),
+        totalUnitsPurchased:   @json(__('passwords.total_units_purchased')),
+        totalCost:             @json(__('passwords.total_cost')),
+        totalSpend:            @json(__('passwords.total_spend')),
+        avgPriceChange:        @json(__('passwords.avg_price_change')),
+        averagePriceMovement:  @json(__('passwords.average_price_movement')),
 
-        // Price Trend Chart
-        @php
-            $chartDates = [];
-            $chartPrices = [];
-            $chartQuantities = [];
-            
-            foreach ($priceTrends as $date => $trend) {
-                $chartDates[] = $date;
-                $chartPrices[] = $trend->avg_unit_cost ?? 0;      // Changed from array to object
-                $chartQuantities[] = $trend->total_quantity ?? 0; // Changed from array to object
-            }
-        @endphp
+        // movement cards
+        productsWithPriceIncrease: @json(__('passwords.products_with_price_increase')),
+        priceIncreased:            @json(__('passwords.price_increased')),
+        productsWithPriceDecrease: @json(__('passwords.products_with_price_decrease')),
+        priceDecreased:            @json(__('passwords.price_decreased')),
+        priceStableProducts:       @json(__('passwords.price_stable_products')),
+        priceRemainedStable:       @json(__('passwords.price_remained_stable')),
 
-        // Price Trend Chart
-        const priceTrendChart = new ApexCharts(document.querySelector("#priceTrendChart"), {
-            series: [
-                {
-                    name: '{{ __("passwords.avg_unit_cost") }}',
-                    type: 'line',
-                    data: @json($chartPrices)
-                },
-                {
-                    name: '{{ __("passwords.total_quantity") }}',
-                    type: 'bar',
-                    data: @json($chartQuantities)
-                }
-            ],
-            chart: {
-                height: 400,
-                width: '100%',
-                type: 'line',
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true
-                    }
-                }
-            },
-            colors: ['#3E97FF', '#50CD89'],
-            stroke: {
-                width: [3, 0]
-            },
-            dataLabels: {
-                enabled: true,
-                enabledOnSeries: [0],
-                formatter: function(val) {
-                    return '{{ currency_symbol() }}' + val.toFixed(2);
-                },
-                offsetY: -10
-            },
-            xaxis: {
-                categories: @json($chartDates),
-                labels: {
-                    rotate: -45,
-                    style: { fontSize: '11px' }
-                },
-                title: {
-                    text: '{{ __("pagination.date") }}',
-                    style: { fontSize: '12px', fontWeight: 'bold' }
-                }
-            },
-            yaxis: [
-                {
-                    title: {
-                        text: '{{ __("passwords.avg_unit_cost") }} ({{ currency_symbol() }})',
-                        style: { fontSize: '12px', fontWeight: 'bold' }
-                    },
-                    labels: {
-                        formatter: function(val) {
-                            return '{{ currency_symbol() }}' + val.toFixed(2);
-                        }
-                    }
-                },
-                {
-                    opposite: true,
-                    title: {
-                        text: '{{ __("passwords.total_quantity") }}',
-                        style: { fontSize: '12px', fontWeight: 'bold' }
-                    },
-                    labels: {
-                        formatter: function(val) {
-                            return val.toFixed(0);
-                        }
-                    }
-                }
-            ],
-            tooltip: {
-                shared: true,
-                intersect: false,
-                y: [
-                    {
-                        formatter: function(val) {
-                            return '{{ currency_symbol() }}' + val.toFixed(2);
-                        }
-                    },
-                    {
-                        formatter: function(val) {
-                            return val.toFixed(0) + ' {{ __("passwords.units") }}';
-                        }
-                    }
-                ]
-            },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center'
-            },
-            plotOptions: {
-                bar: {
-                    borderRadius: 4,
-                    columnWidth: '60%'
-                }
-            },
-            grid: {
-                borderColor: '#e7e7e7',
-                row: {
-                    colors: ['#f3f3f3', 'transparent'],
-                    opacity: 0.3
-                }
-            }
-        });
-        priceTrendChart.render();
-                
-        // Simple export function
-        function exportReport(format) {
-            // Your existing export implementation
-            console.log('Exporting as', format);
-        }
-        
-        window.exportReport = exportReport;
-    });
+        // trends
+        significant_increase: @json(__('passwords.significant_increase')),
+        moderate_increase:    @json(__('passwords.moderate_increase')),
+        significant_decrease: @json(__('passwords.significant_decrease')),
+        moderate_decrease:    @json(__('passwords.moderate_decrease')),
+        stable:               @json(__('passwords.stable')),
+
+        // efficiency
+        low_efficiency:    @json(__('passwords.low_efficiency')),
+        medium_efficiency: @json(__('passwords.medium_efficiency')),
+        high_efficiency:   @json(__('passwords.high_efficiency')),
+
+        // frequency
+        very_high_frequency: @json(__('passwords.very_high_frequency')),
+        high_frequency:      @json(__('passwords.high_frequency')),
+        moderate_frequency:  @json(__('passwords.moderate_frequency')),
+        low_frequency:       @json(__('passwords.low_frequency')),
+        very_low_frequency:  @json(__('passwords.very_low_frequency')),
+
+        // labels
+        product:               @json(__('passwords.product')),
+        category:              @json(__('passwords.category')),
+        units:                 @json(__('passwords.units')),
+        purchases:             @json(__('passwords.purchases')),
+        orders:                @json(__('passwords.orders')),
+        avgUnitCost:           @json(__('passwords.avg_unit_cost')),
+        priceChange:           @json(__('passwords.price_change')),
+        priceChangePercentage: @json(__('passwords.price_change_percentage')),
+        purchaseCount:         @json(__('passwords.purchase_count')),
+        purchaseFrequency:     @json(__('passwords.purchase_frequency')),
+        costEfficiency:        @json(__('passwords.cost_efficiency')),
+        trend:                 @json(__('passwords.trend')),
+        currentPage:           @json(__('pagination.current_page')),
+        grandTotal:            @json(__('pagination.grand_total')),
+        productNotFound:       @json(__('passwords.product_not_found')),
+    };
 </script>
-@endif
+@include('reports.purchasing.purchase-cost-analysis-scripts')
 @endpush
-@endsection

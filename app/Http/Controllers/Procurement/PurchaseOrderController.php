@@ -154,14 +154,21 @@ class PurchaseOrderController extends Controller
 
     public function details($id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view purchase_orders')) {
             return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        $order = PurchaseOrder::with(['items.productVariant', 'supplier', 'location', 'creator', 'receipts'])
+        $order = PurchaseOrder::with([
+                'items.productVariant.product',
+                'supplier',
+                'location',
+                'creator',
+                'receipts.receiver',
+                'receipts.items.purchaseOrderItem',
+            ])
             ->where('tenant_id', $tenantId)
             ->find($id);
 
@@ -169,44 +176,154 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
         }
 
+        // ── Latest real payment for this PO ──────────────────────────────
+        $latestPayment = \App\Models\PaymentTransactionLog::query()
+            ->where('tenant_id', $tenantId)
+            ->where('reference_table', 'purchase_orders')
+            ->where('reference_id', $order->id)
+            ->where('status', 'COMPLETED')
+            ->orderByDesc('transaction_date')
+            ->with('paymentMethod:id,name')
+            ->first();
+
+        // ── Tax liabilities attached to this PO ─────────────────────────
+        $taxLiabilities = \App\Models\SupplierTaxLiability::query()
+            ->where('tenant_id', $tenantId)
+            ->where('purchase_order_id', $order->id)
+            ->orderByDesc('id')
+            ->get(['id', 'tax_name', 'tax_code', 'tax_rate', 'taxable_amount', 'tax_amount',
+                'status', 'due_date', 'is_withholding_tax'])
+            ->map(fn($t) => [
+                'id'              => $t->id,
+                'tax_name'        => $t->tax_name,
+                'tax_code'        => $t->tax_code,
+                'tax_rate'        => (float) $t->tax_rate,
+                'taxable_amount'  => (float) $t->taxable_amount,
+                'tax_amount'      => (float) $t->tax_amount,
+                'status'          => $t->status,
+                'due_date'        => $t->due_date ? Carbon::parse($t->due_date)->format('Y-m-d') : null,
+                'is_withholding'  => (bool) $t->is_withholding_tax,
+            ]);
+
+        // ── Totals ─────────────────────────────────────────────────────
+        $totalCost    = (float) $order->total;
+        $receivedCost = (float) ($order->received_total ?? 0);
+        $paid         = (float) ($order->total_paid ?? 0);
+        $balance      = max(0, $receivedCost - $paid);
+
+        // ── Derived payment status ──────────────────────────────────────
+        $paymentStatus = match (true) {
+            $paid <= 0 && $receivedCost <= 0 => 'pending',
+            $paid <= 0                        => 'pending',
+            $paid >= $receivedCost            => 'paid',
+            default                           => 'partial',
+        };
+        if ($paymentStatus !== 'paid' && $latestPayment?->transaction_date) {
+            $dueDate = Carbon::parse($latestPayment->transaction_date)->addDays(30);
+            if ($dueDate->isPast()) $paymentStatus = 'overdue';
+        }
+
         return response()->json([
             'success' => true,
             'order' => [
-                'id' => $order->id,
-                'po_number' => $order->po_number,
-                'status' => $order->status,
-                'status_badge' => $order->status_badge ?? 'secondary',
-                'status_label' => ucfirst(str_replace('_', ' ', $order->status)),
-                'supplier_name' => $order->supplier?->name,
-                'location_name' => $order->location?->name,
-                'creator_name' => $order->creator?->name,
-                'created_at' => optional($order->created_at)->format('d M Y, h:i a'),
-                'expected_delivery_date' => optional($order->expected_delivery_date)->format('M d, Y'),
-                'total' => (float) $order->total,
-                'total_formatted' => currency_symbol() . number_format((float) $order->total, 2),
-                'subtotal' => (float) $order->subtotal,
-                'tax_total' => (float) $order->tax_total,
-                'notes' => $order->notes,
-                'items' => $order->items->map(function($item) {
+                'id'                    => $order->id,
+                'po_number'             => $order->po_number,
+                'status'                => $order->status,
+                'status_badge'          => $order->status_badge ?? 'secondary',
+                'status_label'          => ucfirst(str_replace('_', ' ', $order->status)),
+                'supplier_name'         => $order->supplier?->name,
+                'supplier_contact'      => $order->supplier?->contact_person,
+                'supplier_email'        => $order->supplier?->email,
+                'supplier_phone'        => $order->supplier?->phone,
+                'location_name'         => $order->location?->name,
+                'creator_name'          => $order->creator?->name,
+                'created_at'            => optional($order->created_at)->format('d M Y, h:i a'),
+                'expected_delivery_date'=> optional($order->expected_delivery_date)->format('M d, Y'),
+                'subtotal'              => (float) $order->subtotal,
+                'tax_total'             => (float) $order->tax_total,
+                'total'                 => $totalCost,
+                'total_formatted'       => currency_symbol() . number_format($totalCost, 2),
+
+                // NEW: received and paid blocks
+                'received_subtotal'     => (float) ($order->received_subtotal ?? 0),
+                'received_tax_total'    => (float) ($order->received_tax_total ?? 0),
+                'received_total'        => $receivedCost,
+                'received_total_formatted' => currency_symbol() . number_format($receivedCost, 2),
+
+                'total_paid'            => $paid,
+                'total_paid_formatted'  => currency_symbol() . number_format($paid, 2),
+                'balance'               => $balance,
+                'balance_formatted'     => currency_symbol() . number_format($balance, 2),
+
+                // NEW: payment summary
+                'payment_status'        => $paymentStatus,
+                'payment_status_label'  => __('passwords.' . $paymentStatus),
+                'payment_status_color'  => match ($paymentStatus) {
+                    'pending' => 'warning', 'partial' => 'info',
+                    'paid'    => 'success', 'overdue' => 'danger',
+                    default   => 'secondary',
+                },
+                'payment_method'        => $latestPayment?->paymentMethod?->name,
+                'payment_date'          => $latestPayment?->transaction_date?->format('Y-m-d'),
+                'payment_reference'     => $latestPayment ? 'TXN #' . $latestPayment->id : null,
+                'has_real_payment'      => (bool) $latestPayment,
+
+                'notes'                 => $order->notes,
+
+                // Items with received qty + line payment status
+                'items' => $order->items->map(function ($item) {
+                    $itemTotal = (float) $item->total_cost;
+                    $itemPaid  = (float) ($item->paid_total ?? 0);
+
                     return [
-                        'id' => $item->id,
-                        'product_name' => $item->product_name,
-                        'sku' => $item->sku,
-                        'quantity' => (float) $item->quantity,
-                        'unit_cost' => (float) $item->unit_cost,
-                        'total_cost' => (float) $item->total_cost,
+                        'id'                => $item->id,
+                        'product_name'      => $item->product_name,
+                        'sku'               => $item->sku,
+                        'quantity'          => (float) $item->quantity,
+                        'unit_cost'         => (float) $item->unit_cost,
+                        'total_cost'        => $itemTotal,
                         'received_quantity' => (float) $item->received_quantity,
+                        'balance_quantity'  => max(0, (float) $item->quantity - (float) $item->received_quantity),
+                        'paid_total'        => $itemPaid,
+                        'balance_cost'      => max(0, $itemTotal - $itemPaid),
+                        'payment_status'    => $itemPaid <= 0 ? 'pending'
+                                            : ($itemPaid >= $itemTotal ? 'paid' : 'partial'),
                     ];
                 }),
+
+                // Receipt history
+                'receipts' => $order->receipts->map(fn($r) => [
+                    'id'              => $r->id,
+                    'received_at'     => $r->received_at?->format('Y-m-d H:i'),
+                    'received_by'     => $r->receiver?->name,
+                    'batch_number'    => $r->batch_number,
+                    'expiry_date'     => $r->expiry_date ? Carbon::parse($r->expiry_date)->format('Y-m-d') : null,
+                    'notes'           => $r->notes,
+                    'items_count'     => $r->items->count(),
+                    'total_quantity'  => round((float) $r->items->sum('quantity_received'), 2),
+                    'lines' => $r->items->map(fn($ri) => [
+                        'product_name'     => $ri->purchaseOrderItem?->product_name,
+                        'sku'              => $ri->purchaseOrderItem?->sku,
+                        'quantity'         => (float) $ri->quantity_received,
+                        'unit_cost'        => (float) $ri->unit_cost,
+                        'paid_total'       => (float) ($ri->paid_total ?? 0),
+                        'payment_status'   => $ri->payment_status ?? 'pending',
+                        'batch_number'     => $ri->batch_number,
+                        'expiry_date'      => $ri->expiry_date ? Carbon::parse($ri->expiry_date)->format('Y-m-d') : null,
+                    ]),
+                ]),
+
+                // Tax liabilities
+                'tax_liabilities' => $taxLiabilities,
             ],
             'permissions' => [
-                'can_submit' => $user->can('submit purchase_orders') && $order->status === 'draft',
+                'can_submit'  => $user->can('submit purchase_orders')  && $order->status === 'draft',
                 'can_approve' => $user->can('approve purchase_orders') && $order->status === 'pending_approval',
-                'can_send' => $user->can('send purchase_orders') && $order->status === 'approved',
+                'can_send'    => $user->can('send purchase_orders')    && $order->status === 'approved',
                 'can_receive' => $user->can('receive purchase_orders') && in_array($order->status, ['sent', 'partially_received']),
-                'can_cancel' => $user->can('cancel purchase_orders') && in_array($order->status, ['draft', 'approved', 'pending_approval', 'sent']),
-                'can_delete' => $user->can('delete purchase_orders') && in_array($order->status, ['draft', 'cancelled']),
-            ]
+                'can_cancel'  => $user->can('cancel purchase_orders')  && in_array($order->status, ['draft', 'approved', 'pending_approval', 'sent']),
+                'can_delete'  => $user->can('delete purchase_orders')  && in_array($order->status, ['draft', 'cancelled']),
+            ],
         ]);
     }
 
@@ -1104,9 +1221,9 @@ class PurchaseOrderController extends Controller
 
     public function receiveItems(Request $request, PurchaseOrder $purchaseOrder)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('receive purchase_orders')) {
             return response()->json([
                 'success' => false,
@@ -1114,43 +1231,40 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
+        // ─── Normalize items input ────────────────────────────────────
         $items = $request->input('items', []);
-        
-        // If items is empty or missing, get all purchase order items and set quantity to 0
         if (empty($items)) {
-            $purchaseOrderItems = $purchaseOrder->items;
             $items = [];
-            foreach ($purchaseOrderItems as $orderItem) {
+            foreach ($purchaseOrder->items as $orderItem) {
                 $items[$orderItem->id] = [
                     'purchase_order_item_id' => $orderItem->id,
-                    'product_variant_id' => $orderItem->product_variant_id,
-                    'quantity_received' => 0,
+                    'product_variant_id'     => $orderItem->product_variant_id,
+                    'quantity_received'      => 0,
                 ];
             }
             $request->merge(['items' => $items]);
         }
 
+        // ─── Validation ───────────────────────────────────────────────
         $validated = $request->validate([
-            'status' => 'required|in:partially_received,received',
-            'items' => 'required|array',
-            'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
-            'items.*.product_variant_id' => 'required|exists:product_variants,id',
-            'items.*.quantity_received' => 'required|integer|min:0',
-            'items.*.actual_unit_cost' => 'nullable|numeric|min:0', // The actual cost from supplier
-            'expiry_date' => 'nullable|date|after_or_equal:today',
-            'notes' => 'nullable|string|max:500',
-            'selected_taxes' => 'nullable|array',
-            'selected_taxes.*' => 'exists:taxes,id',
-            'batch_number' => 'required|string|max:100',
-            'payment_method_id' => 'required_if:payment_amount,gt:0|nullable|exists:payment_methods,id',
-            'payment_amount'    => 'required|numeric|gt:0',
-            'payment_date'      => 'nullable|date',
+            'status'                              => 'required|in:partially_received,received',
+            'items'                               => 'required|array',
+            'items.*.purchase_order_item_id'      => 'required|exists:purchase_order_items,id',
+            'items.*.product_variant_id'          => 'required|exists:product_variants,id',
+            'items.*.quantity_received'           => 'required|integer|min:0',
+            'items.*.actual_unit_cost'            => 'nullable|numeric|min:0',
+            'expiry_date'                         => 'nullable|date|after_or_equal:today',
+            'notes'                               => 'nullable|string|max:500',
+            'selected_taxes'                      => 'nullable|array',
+            'selected_taxes.*'                    => 'exists:taxes,id',
+            'batch_number'                        => 'required|string|max:100',
+            'payment_method_id'                   => 'required_if:payment_amount,gt:0|nullable|exists:payment_methods,id',
+            'payment_amount'                      => 'nullable|numeric|min:0',
+            'payment_date'                        => 'nullable|date',
         ]);
 
-        // Generate batch number with incoming value + date + random
         $validated['batch_number'] = $this->generateBatchNumber($request->batch_number);
 
-        // Check if purchase order can receive items
         if (!in_array($purchaseOrder->status, ['sent', 'partially_received'])) {
             return response()->json([
                 'success' => false,
@@ -1158,7 +1272,7 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        // Check for over supply of the ordered quantities
+        // ─── Over-receipt guard ───────────────────────────────────────
         $overReceipts = [];
         foreach ($validated['items'] as $itemData) {
             if (($itemData['quantity_received'] ?? 0) <= 0) continue;
@@ -1191,285 +1305,269 @@ class PurchaseOrderController extends Controller
 
         DB::beginTransaction();
         try {
-            $totalReceived = 0;
-            $receiptItems = [];
-            $currentReceiptSubtotal = 0;
-            $user = auth()->user();
-            $isSingleShop = tenant_is_single_shop($tenantId);
+            $totalReceived           = 0;
+            $receiptItems            = [];
+            $currentReceiptSubtotal  = 0;
+            $isSingleShop            = tenant_is_single_shop($tenantId);
+            $grossAmount             = (float) ($request->gross_amount ?? 0);
 
-            // Get the gross amount from form or calculate from items
-            $grossAmount = $request->gross_amount ?? 0;
-            
-            // Create purchase receipt record first
+            // ═══════════════════════════════════════════════════════════
+            // 1. Create receipt header
+            // ═══════════════════════════════════════════════════════════
             $purchaseReceipt = PurchaseReceipt::create([
                 'purchase_order_id' => $purchaseOrder->id,
-                'received_by' => $user->id,
-                'received_at' => now(),
-                'batch_number' => $validated['batch_number'] ?? null,
-                'expiry_date' => $validated['expiry_date'] ?? null,
-                'notes' => $validated['notes'] ?? null,
+                'received_by'       => $user->id,
+                'received_at'       => now(),
+                'batch_number'      => $validated['batch_number'] ?? null,
+                'expiry_date'       => $validated['expiry_date']   ?? null,
+                'notes'             => $validated['notes']         ?? null,
             ]);
-
-            
-            $actor    = $this->actorLabel($user);
-            $supplier = $this->supplierLabel($purchaseOrder->supplier);
 
             $receiptLine = sprintf(
                 '%s received goods on purchase order %s from %s. Batch: %s. Receipt #%s. Expiry: %s.',
-                $actor,
+                $this->actorLabel($user),
                 $purchaseOrder->po_number,
-                $supplier,
+                $this->supplierLabel($purchaseOrder->supplier),
                 $validated['batch_number'],
                 $purchaseReceipt->id,
                 $validated['expiry_date'] ?? 'N/A'
             );
+            $purchaseReceipt->update([
+                'notes' => $this->appendNote($purchaseReceipt->notes, $receiptLine),
+            ]);
 
-            $purchaseReceipt->update(['notes' => $this->appendNote($purchaseReceipt->notes, $receiptLine)]);
-
-            // Process each item and calculate current receipt subtotal
+            // ═══════════════════════════════════════════════════════════
+            // 2. Process each received line item
+            //    (NO payment_status here — payment hasn't happened yet)
+            // ═══════════════════════════════════════════════════════════
             foreach ($validated['items'] as $itemData) {
-                $quantityReceived = $itemData['quantity_received'];
-                
-                if ($quantityReceived > 0) {
-                    $purchaseOrderItem = PurchaseOrderItem::find($itemData['purchase_order_item_id']);
-                    
-                    // Get the actual unit cost from the request, or fallback to the PO unit cost
-                    $actualUnitCost = isset($itemData['actual_unit_cost']) && $itemData['actual_unit_cost'] > 0
-                        ? $itemData['actual_unit_cost']
-                        : $purchaseOrderItem->unit_cost;
+                $quantityReceived = (int) $itemData['quantity_received'];
+                if ($quantityReceived <= 0) continue;
 
-                    // Calculate item cost using the ACTUAL unit cost
-                    $itemCost = $actualUnitCost * $quantityReceived;
-                    $currentReceiptSubtotal += $itemCost;
+                $purchaseOrderItem = PurchaseOrderItem::find($itemData['purchase_order_item_id']);
+                if (!$purchaseOrderItem) {
+                    throw new \Exception("Purchase order item not found: {$itemData['purchase_order_item_id']}");
+                }
 
-                    // Get the variant from the purchase order item
-                    $variant = ProductVariant::find($itemData['product_variant_id']);
-                    
-                    if (!$variant) {
-                        throw new \Exception("Product variant not found: {$itemData['product_variant_id']}");
-                    }
+                $actualUnitCost = isset($itemData['actual_unit_cost']) && $itemData['actual_unit_cost'] > 0
+                    ? (float) $itemData['actual_unit_cost']
+                    : (float) $purchaseOrderItem->unit_cost;
 
-                    // ── UPDATE VARIANT COST PRICE ─────────────────────────────
-                    // When receiving items at a different cost, update the variant's
-                    // supplier_cost_price. This ensures the cost reflects the actual
-                    // price paid to the supplier.
-                    if ($actualUnitCost != $variant->supplier_cost_price) {
-                        $recorder  = app('inventory-pricing-history');
-                        $oldValues = $recorder->snapshot($variant);
+                $itemCost = $actualUnitCost * $quantityReceived;
+                $currentReceiptSubtotal += $itemCost;
 
-                        $variant->supplier_cost_price = $actualUnitCost;
-                        if ($variant->total_shipping_cost || $variant->ura_taxes_applied || $variant->additional_expenses) {
-                            $variant->grand_total_cost_price = $actualUnitCost
-                                + ($variant->total_shipping_cost ?? 0)
-                                + ($variant->ura_taxes_applied   ?? 0)
-                                + ($variant->additional_expenses ?? 0);
-                        } else {
-                            $variant->grand_total_cost_price = $actualUnitCost;
-                        }
-                        $variant->save();
+                $variant = ProductVariant::find($itemData['product_variant_id']);
+                if (!$variant) {
+                    throw new \Exception("Product variant not found: {$itemData['product_variant_id']}");
+                }
 
-                        $recorder->record(
-                            $variant,
-                            $oldValues,
-                            \App\Models\InventoryPricingHistory::CHANGE_UPDATED,
-                            sprintf(
-                                'Cost updated from PO receipt %s (PO %s, receipt #%s, supplier %s).',
-                                $purchaseReceipt->batch_number ?? 'N/A',
-                                $purchaseOrder->po_number,
-                                $purchaseReceipt->id,
-                                $purchaseOrder->supplier?->name ?? 'unknown supplier'
-                            )
-                        );
-                    }
+                // ── Update variant cost price if different ───────────────
+                if ($actualUnitCost != $variant->supplier_cost_price) {
+                    $recorder  = app('inventory-pricing-history');
+                    $oldValues = $recorder->snapshot($variant);
 
-                    // Determine inventory strategy for THIS variant's product
-                    $strategy = $variant->product
-                        ? $variant->product->resolvedInventoryStrategy()
-                        : 'quantity';
-
-                    $quantityBefore = $variant->overal_quantity_at_hand;
-                    $quantityRemainingForBatch = null;
-
-                    if ($strategy === 'batch') {
-                        // BATCH STRATEGY - don't touch overall quantity
-                        $quantityAfter = $quantityBefore;
-                        $quantityRemainingForBatch = $quantityReceived;
+                    $variant->supplier_cost_price = $actualUnitCost;
+                    if ($variant->total_shipping_cost || $variant->ura_taxes_applied || $variant->additional_expenses) {
+                        $variant->grand_total_cost_price = $actualUnitCost
+                            + ($variant->total_shipping_cost ?? 0)
+                            + ($variant->ura_taxes_applied   ?? 0)
+                            + ($variant->additional_expenses ?? 0);
                     } else {
-                        // QUANTITY STRATEGY - update overall quantity
-                        $variant->overal_quantity_at_hand += $quantityReceived;
-                        $variant->save();
-                        $quantityAfter = $variant->overal_quantity_at_hand;
+                        $variant->grand_total_cost_price = $actualUnitCost;
                     }
+                    $variant->save();
 
-                    // Update purchase order item received quantity
-                    $newReceivedQuantity = (float) $purchaseOrderItem->received_quantity + (float) $quantityReceived;
-                    $purchaseOrderItem->received_quantity = $newReceivedQuantity;
-                    $purchaseOrderItem->save();
+                    $recorder->record(
+                        $variant,
+                        $oldValues,
+                        \App\Models\InventoryPricingHistory::CHANGE_UPDATED,
+                        sprintf(
+                            'Cost updated from PO receipt %s (PO %s, receipt #%s, supplier %s).',
+                            $purchaseReceipt->batch_number ?? 'N/A',
+                            $purchaseOrder->po_number,
+                            $purchaseReceipt->id,
+                            $purchaseOrder->supplier?->name ?? 'unknown supplier'
+                        )
+                    );
+                }
 
-                    $totalReceived += $quantityReceived;
-                    
-                    // ✅ Create receipt item with unit_cost field
-                    $receiptItem = PurchaseReceiptItem::create([
-                        'purchase_receipt_id' => $purchaseReceipt->id,
-                        'purchase_order_item_id' => $purchaseOrderItem->id,
-                        'quantity_received' => $quantityReceived,
-                        'quantity_remaining' => $quantityRemainingForBatch,
-                        'unit_cost' => $actualUnitCost, // ✅ Now this field exists
-                        'batch_number' => $validated['batch_number'] ?? null,
-                        'expiry_date' => $validated['expiry_date'] ?? null,
-                        'tenant_id' => $tenantId,
-                    ]);
+                // ── Inventory strategy ───────────────────────────────────
+                $strategy = $variant->product
+                    ? $variant->product->resolvedInventoryStrategy()
+                    : 'quantity';
 
-                    // Log batch receipt for batch-strategy items
-                    if ($strategy === 'batch' && $quantityReceived > 0) {
-                        $this->logBatchReceipt(
-                            $receiptItem,
-                            $variant,
-                            $purchaseOrder,
-                            $purchaseReceipt,
-                            $quantityReceived,
-                            $actualUnitCost, // Pass the actual unit cost
-                            $user,
-                            $tenantId
-                        );
-                    }
+                $quantityBefore = (float) $variant->overal_quantity_at_hand;
+                $quantityRemainingForBatch = null;
 
-                    $actor = $this->actorLabel($user);
+                if ($strategy === 'batch') {
+                    $quantityAfter = $quantityBefore;
+                    $quantityRemainingForBatch = $quantityReceived;
+                } else {
+                    $variant->overal_quantity_at_hand += $quantityReceived;
+                    $variant->save();
+                    $quantityAfter = (float) $variant->overal_quantity_at_hand;
+                }
 
-                    $lineNote = sprintf(
-                        '%s received %s × "%s" (SKU %s) from purchase order %s receipt #%s. '
-                        . 'Unit cost: %s. Line total: %s. Inventory: %s → %s.',
-                        $actor,
+                // ── Update PO line received qty ─────────────────────────
+                $purchaseOrderItem->received_quantity =
+                    (float) $purchaseOrderItem->received_quantity + $quantityReceived;
+                $purchaseOrderItem->save();
+
+                $totalReceived += $quantityReceived;
+
+                // ── Create receipt item ─────────────────────────────────
+                $receiptItem = PurchaseReceiptItem::create([
+                    'purchase_receipt_id'      => $purchaseReceipt->id,
+                    'purchase_order_item_id'   => $purchaseOrderItem->id,
+                    'quantity_received'        => $quantityReceived,
+                    'quantity_remaining'       => $quantityRemainingForBatch,
+                    'unit_cost'                => $actualUnitCost,
+                    'batch_number'             => $validated['batch_number'] ?? null,
+                    'expiry_date'              => $validated['expiry_date']   ?? null,
+                    'tenant_id'                => $tenantId,
+                ]);
+
+                // ── Batch receipt log ───────────────────────────────────
+                if ($strategy === 'batch') {
+                    $this->logBatchReceipt(
+                        $receiptItem,
+                        $variant,
+                        $purchaseOrder,
+                        $purchaseReceipt,
+                        $quantityReceived,
+                        $actualUnitCost,
+                        $user,
+                        $tenantId
+                    );
+                }
+
+                // ── Line narrative ───────────────────────────────────────
+                $lineNote = sprintf(
+                    '%s received %s × "%s" (SKU %s) from purchase order %s receipt #%s. '
+                    . 'Unit cost: %s. Line total: %s. Inventory: %s → %s.',
+                    $this->actorLabel($user),
+                    number_format($quantityReceived, 2),
+                    $variant->name,
+                    $variant->sku ?? 'N/A',
+                    $purchaseOrder->po_number,
+                    $purchaseReceipt->id,
+                    currency_symbol() . number_format($actualUnitCost, 2),
+                    currency_symbol() . number_format($itemCost, 2),
+                    number_format($quantityBefore, 2),
+                    number_format($quantityAfter, 2)
+                );
+
+                // ── Received variant audit row ──────────────────────────
+                ReceivedProductVariant::create([
+                    'purchase_order_id'          => $purchaseOrder->id,
+                    'purchase_receipt_id'        => $purchaseReceipt->id,
+                    'purchase_order_item_id'     => $purchaseOrderItem->id,
+                    'product_variant_id'         => $variant->id,
+                    'quantity_received'          => $quantityReceived,
+                    'unit_cost'                  => $actualUnitCost,
+                    'total_cost'                 => $itemCost,
+                    'batch_number'               => $validated['batch_number'] ?? null,
+                    'expiry_date'                => $validated['expiry_date']   ?? null,
+                    'inventory_quantity_before'  => $quantityBefore,
+                    'inventory_quantity_after'   => $quantityAfter,
+                    'received_by'                => $user->id,
+                    'tenant_id'                  => $tenantId,
+                    'notes'                      => $lineNote,
+                ]);
+
+                // ── Single-shop inventory log ───────────────────────────
+                if ($isSingleShop && $strategy === 'quantity') {
+                    $logNarrative = sprintf(
+                        '%s received %s × "%s" (SKU %s) from purchase order %s via receipt #%s. '
+                        . 'Supplier: %s. Unit cost: %s. Stock: %s → %s. Batch: %s.',
+                        $this->actorLabel($user),
                         number_format($quantityReceived, 2),
                         $variant->name,
                         $variant->sku ?? 'N/A',
                         $purchaseOrder->po_number,
                         $purchaseReceipt->id,
+                        $purchaseOrder->supplier->name ?? 'unknown supplier',
                         currency_symbol() . number_format($actualUnitCost, 2),
-                        currency_symbol() . number_format($itemCost, 2),
                         number_format($quantityBefore, 2),
-                        number_format($quantityAfter, 2)
+                        number_format($quantityAfter, 2),
+                        $validated['batch_number']
                     );
 
-                    // Log received product variant
-                    ReceivedProductVariant::create([
-                        'purchase_order_id' => $purchaseOrder->id,
-                        'purchase_receipt_id' => $purchaseReceipt->id,
-                        'purchase_order_item_id' => $purchaseOrderItem->id,
-                        'product_variant_id' => $variant->id,
-                        'quantity_received' => $quantityReceived,
-                        'unit_cost' => $actualUnitCost, // Use actual cost
-                        'total_cost' => $itemCost,
-                        'batch_number' => $validated['batch_number'] ?? null,
-                        'expiry_date' => $validated['expiry_date'] ?? null,
-                        'notes' => $validated['notes'] ?? null,
-                        'inventory_quantity_before' => $quantityBefore,
-                        'inventory_quantity_after' => $quantityAfter,
-                        'received_by' => $user->id,
-                        'tenant_id' => $tenantId,
-                        'notes' => $lineNote,
-                        
+                    SingleShopInventoryLog::create([
+                        'variant_id'       => $variant->id,
+                        'order_id'         => $purchaseOrder->id,
+                        'tenant_id'        => $tenantId,
+                        'created_by'       => $user->id,
+                        'quantity_before'  => $quantityBefore,
+                        'quantity_after'   => $quantityAfter,
+                        'quantity_change'  => $quantityReceived,
+                        'reason'           => 'purchase_receipt',
+                        'notes'            => $logNarrative,
+                        'source'           => 'purchase',
+                        'metadata' => [
+                            'purchase_order_id'      => $purchaseOrder->id,
+                            'purchase_receipt_id'    => $purchaseReceipt->id,
+                            'purchase_order_item_id' => $purchaseOrderItem->id,
+                            'batch_number'           => $validated['batch_number'] ?? null,
+                            'expiry_date'            => $validated['expiry_date']   ?? null,
+                            'unit_cost'              => $actualUnitCost,
+                            'total_cost'             => $itemCost,
+                            'inventory_strategy'     => $strategy,
+                            'supplier_cost_updated'  => true,
+                            'narrative'              => $logNarrative,
+                        ],
                     ]);
-
-                    // LOG TO SINGLE SHOP INVENTORY LOG
-                    if ($isSingleShop && $strategy === 'quantity') {
-                        $actor = $this->actorLabel($user);
-
-                        $logNarrative = sprintf(
-                            '%s received %s × "%s" (SKU %s) from purchase order %s via receipt #%s. '
-                            . 'Supplier: %s. Unit cost: %s. Stock: %s → %s. Batch: %s.',
-                            $actor,
-                            number_format($quantityReceived, 2),
-                            $variant->name,
-                            $variant->sku ?? 'N/A',
-                            $purchaseOrder->po_number,
-                            $purchaseReceipt->id,
-                            $purchaseOrder->supplier->name ?? 'unknown supplier',
-                            currency_symbol() . number_format($actualUnitCost, 2),
-                            number_format($quantityBefore, 2),
-                            number_format($quantityAfter, 2),
-                            $validated['batch_number']
-                        );
-
-                        
-                        SingleShopInventoryLog::create([
-                            'variant_id' => $variant->id,
-                            'order_id' => $purchaseOrder->id,
-                            'tenant_id' => $tenantId,
-                            'created_by' => $user->id,
-                            'quantity_before' => $quantityBefore,
-                            'quantity_after' => $quantityAfter,
-                            'quantity_change' => $quantityReceived,
-                            'reason' => 'purchase_receipt',
-                            'notes'    => $logNarrative,
-                            'source' => 'purchase',
-                            'metadata' => [
-                                'purchase_order_id' => $purchaseOrder->id,
-                                'purchase_receipt_id' => $purchaseReceipt->id,
-                                'purchase_order_item_id' => $purchaseOrderItem->id,
-                                'batch_number' => $validated['batch_number'] ?? null,
-                                'expiry_date' => $validated['expiry_date'] ?? null,
-                                'unit_cost' => $actualUnitCost,
-                                'total_cost' => $itemCost,
-                                'inventory_strategy' => $strategy,
-                                'supplier_cost_updated' => true,
-                                'narrative' => $logNarrative,
-                            ],
-                        ]);
-                    }
-
-                    $receiptItems[] = $receiptItem;
                 }
+
+                $receiptItems[] = $receiptItem;
             }
 
-            // Determine taxable amount for this receipt
+            // ═══════════════════════════════════════════════════════════
+            // 3. Compute taxes for this receipt
+            // ═══════════════════════════════════════════════════════════
             $taxableAmount = $grossAmount > 0 ? $grossAmount : $currentReceiptSubtotal;
-            
-            // Calculate taxes for this receipt only
-            $currentReceiptTaxAmount = 0;
-            $currentReceiptAdditiveTax = 0;
-            $currentReceiptWithholdingTax = 0;
-            $taxBreakdown = [];
-            $taxLiabilities = [];
-            
+
+            $currentReceiptTaxAmount       = 0;
+            $currentReceiptAdditiveTax     = 0;
+            $currentReceiptWithholdingTax  = 0;
+            $taxBreakdown                  = [];
+            $taxLiabilities                = [];
+
             if (!empty($validated['selected_taxes'])) {
                 $taxes = Tax::whereIn('id', $validated['selected_taxes'])
                     ->where('tenant_id', $tenantId)
                     ->where('is_active', true)
                     ->get();
-                
+
                 foreach ($taxes as $tax) {
-                    if ($tax->type === Tax::TYPE_PERCENTAGE) {
-                        $taxAmount = $taxableAmount * ($tax->rate / 100);
-                    } else {
-                        $taxAmount = $tax->rate;
-                    }
-                    
+                    $taxAmount = $tax->type === Tax::TYPE_PERCENTAGE
+                        ? $taxableAmount * ($tax->rate / 100)
+                        : $tax->rate;
+
                     $currentReceiptTaxAmount += $taxAmount;
-                    
+
                     if ($tax->is_withholding_tax) {
                         $currentReceiptWithholdingTax += $taxAmount;
                     } else {
                         $currentReceiptAdditiveTax += $taxAmount;
                     }
-                    
+
                     $taxBreakdown[] = [
-                        'tax_id' => $tax->id,
-                        'tax_name' => $tax->name,
-                        'tax_code' => $tax->code,
-                        'rate' => $tax->rate,
-                        'type' => $tax->type,
-                        'amount' => $taxAmount,
-                        'is_withholding_tax' => $tax->is_withholding_tax ?? false,
+                        'tax_id'              => $tax->id,
+                        'tax_name'            => $tax->name,
+                        'tax_code'            => $tax->code,
+                        'rate'                => $tax->rate,
+                        'type'                => $tax->type,
+                        'amount'              => $taxAmount,
+                        'is_withholding_tax'  => $tax->is_withholding_tax ?? false,
                     ];
-                    
-                    $actor  = $this->actorLabel($user);
+
                     $isWith = (bool) ($tax->is_withholding_tax ?? false);
 
                     $taxNarrative = sprintf(
                         '%s recorded a %s tax liability of %s on receipt #%s from PO %s (supplier %s). '
                         . 'Tax: %s @ %s%%. Taxable base: %s. Due %s. Status: pending.',
-                        $actor,
+                        $this->actorLabel($user),
                         $isWith ? 'withholding' : 'additive',
                         currency_symbol() . number_format($taxAmount, 2),
                         $purchaseReceipt->id,
@@ -1482,50 +1580,58 @@ class PurchaseOrderController extends Controller
                     );
 
                     $taxLiabilities[] = SupplierTaxLiability::create([
-                        'tenant_id' => $tenantId,
-                        'supplier_id' => $purchaseOrder->supplier_id,
-                        'purchase_order_id' => $purchaseOrder->id,
-                        'purchase_receipt_id' => $purchaseReceipt->id,
-                        'taxable_amount' => $taxableAmount,
-                        'tax_amount' => $taxAmount,
-                        'tax_rate' => $tax->rate,
-                        'tax_name' => $tax->name,
-                        'tax_code' => $tax->code,
-                        'tax_type' => $tax->type,
-                        'reference_number' => $purchaseOrder->po_number . '-' . $purchaseReceipt->id,
-                        'transaction_date' => now(),
-                        'due_date' => $this->calculateTaxDueDate(),
-                        'status' => 'pending',
-                        'tax_year' => now()->year,
-                        'tax_month' => now()->month,
-                        'tax_quarter' => ceil(now()->month / 3),
-                        'is_withholding_tax' => $tax->is_withholding_tax ?? false,
-                        'notes' => $taxNarrative,
+                        'tenant_id'              => $tenantId,
+                        'supplier_id'            => $purchaseOrder->supplier_id,
+                        'purchase_order_id'      => $purchaseOrder->id,
+                        'purchase_receipt_id'    => $purchaseReceipt->id,
+                        'taxable_amount'         => $taxableAmount,
+                        'tax_amount'             => $taxAmount,
+                        'tax_rate'               => $tax->rate,
+                        'tax_name'               => $tax->name,
+                        'tax_code'               => $tax->code,
+                        'tax_type'               => $tax->type,
+                        'reference_number'       => $purchaseOrder->po_number . '-' . $purchaseReceipt->id,
+                        'transaction_date'       => now(),
+                        'due_date'               => $this->calculateTaxDueDate(),
+                        'status'                 => 'pending',
+                        'tax_year'               => now()->year,
+                        'tax_month'              => now()->month,
+                        'tax_quarter'            => ceil(now()->month / 3),
+                        'is_withholding_tax'     => $tax->is_withholding_tax ?? false,
+                        'notes'                  => $taxNarrative,
                         'metadata' => [
                             'purchase_order_number' => $purchaseOrder->po_number,
-                            'receipt_id' => $purchaseReceipt->id,
-                            'supplier_name' => $purchaseOrder->supplier->name,
-                            'items_received' => $totalReceived,
+                            'receipt_id'            => $purchaseReceipt->id,
+                            'supplier_name'         => $purchaseOrder->supplier->name,
+                            'items_received'        => $totalReceived,
                             'narrative'             => $taxNarrative,
                         ],
                     ]);
                 }
             }
-            
-            // Calculate current receipt total payable
-            $currentReceiptPayable = $currentReceiptSubtotal + $currentReceiptAdditiveTax - $currentReceiptWithholdingTax;
-            
-            // Get current cumulative totals from the purchase order
-            $cumulativeSubtotal = $purchaseOrder->received_subtotal ?? 0;
-            $cumulativeTaxTotal = $purchaseOrder->received_tax_total ?? 0;
-            $cumulativeTotal = $purchaseOrder->received_total ?? 0;
-            
-            // Update cumulative totals with current receipt values
-            $newCumulativeSubtotal = $cumulativeSubtotal + $currentReceiptSubtotal;
-            $newCumulativeTaxTotal = $cumulativeTaxTotal + $currentReceiptTaxAmount;
-            $newCumulativeTotal = $cumulativeTotal + $currentReceiptPayable;
 
-            // Process optional payment
+            $currentReceiptPayable = $currentReceiptSubtotal
+                + $currentReceiptAdditiveTax
+                - $currentReceiptWithholdingTax;
+
+            // ═══════════════════════════════════════════════════════════
+            // 4. Cumulative totals
+            // ═══════════════════════════════════════════════════════════
+            $cumulativeSubtotal   = (float) ($purchaseOrder->received_subtotal  ?? 0);
+            $cumulativeTaxTotal   = (float) ($purchaseOrder->received_tax_total ?? 0);
+            $cumulativeTotal      = (float) ($purchaseOrder->received_total     ?? 0);
+
+            $newCumulativeSubtotal  = $cumulativeSubtotal  + $currentReceiptSubtotal;
+            $newCumulativeTaxTotal  = $cumulativeTaxTotal  + $currentReceiptTaxAmount;
+            $newCumulativeTotal     = $cumulativeTotal     + $currentReceiptPayable;
+
+            // ═══════════════════════════════════════════════════════════
+            // 5. Optional payment — MUST happen BEFORE line-item
+            //    payment_status derivation, otherwise $paymentAmount
+            //    is undefined when we need it.
+            // ═══════════════════════════════════════════════════════════
+            $paymentAmount = 0.0;
+
             if (!empty($validated['payment_amount']) && $validated['payment_amount'] > 0) {
                 $paymentMethod = PaymentMethod::findForTenant($validated['payment_method_id'], $tenantId);
                 if (!$paymentMethod) {
@@ -1537,11 +1643,11 @@ class PurchaseOrderController extends Controller
 
                 if ($paymentAmount < $requestedAmount) {
                     \Log::info('[Receiving] Payment clamped to receipt payable', [
-                        'purchase_order_id'  => $purchaseOrder->id,
-                        'purchase_receipt_id'=> $purchaseReceipt->id,
-                        'requested'          => $requestedAmount,
-                        'receipt_payable'    => $currentReceiptPayable,
-                        'charged'            => $paymentAmount,
+                        'purchase_order_id'   => $purchaseOrder->id,
+                        'purchase_receipt_id' => $purchaseReceipt->id,
+                        'requested'           => $requestedAmount,
+                        'receipt_payable'     => $currentReceiptPayable,
+                        'charged'             => $paymentAmount,
                     ]);
                 }
 
@@ -1552,7 +1658,10 @@ class PurchaseOrderController extends Controller
 
                 $amountStr  = number_format($paymentAmount, 2) . ' ' . $currency;
                 $receiptStr = number_format((float) $currentReceiptPayable, 2) . ' ' . $currency;
-                $itemCount  = count(array_filter($validated['items'], fn($i) => ($i['quantity_received'] ?? 0) > 0));
+                $itemCount  = count(array_filter(
+                    $validated['items'],
+                    fn($i) => ($i['quantity_received'] ?? 0) > 0
+                ));
 
                 $narrative = "{$actor} paid {$amountStr} from {$methodName} to {$supplierName} "
                     . "for goods received on PO {$purchaseOrder->po_number} (receipt #{$purchaseReceipt->id}). "
@@ -1564,46 +1673,138 @@ class PurchaseOrderController extends Controller
                         . number_format($requestedAmount, 2) . " {$currency}).";
                 }
 
-
-                $transactionLog = app('payment-transaction')->recordTransaction([
-                    'user_id' => $user->id,
-                    'tenant_id' => $tenantId,
-                    'payment_method_id' => $paymentMethod->id,
-                    'transaction_type' => 'WITHDRAWAL',
+                $transactionLog  = app('payment-transaction')->recordTransaction([   // ← capture return
+                    'user_id'              => $user->id,
+                    'tenant_id'            => $tenantId,
+                    'payment_method_id'    => $paymentMethod->id,
+                    'transaction_type'     => 'WITHDRAWAL',
                     'transaction_category' => 'PURCHASE_ORDER',
-                    'amount' => $paymentAmount,
-                    'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                    'reference_table' => 'purchase_orders',
-                    'reference_id' => $purchaseOrder->id,
-                    'description' => $narrative,
-                    'notes' => 'Payment against goods actually received, not original PO estimate.',
+                    'amount'               => $paymentAmount,
+                    'currency_id'          => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+                    'reference_table'      => 'purchase_orders',
+                    'reference_id'         => $purchaseOrder->id,
+                    'description'          => $narrative,
+                    'notes'                => 'Payment against goods actually received, not original PO estimate.',
                     'metadata' => [
                         'purchase_receipt_id' => $purchaseReceipt->id,
-                        'receipt_payable' => $currentReceiptPayable,
+                        'receipt_payable'     => $currentReceiptPayable,
                         'narrative'           => $narrative,
                     ],
                 ]);
 
-                $purchaseOrder->total_paid = ($purchaseOrder->total_paid ?? 0) + $paymentAmount;
+                $latestPaymentId = $transactionLog->id ?? null;                      // ← NEW
+
+                $purchaseOrder->total_paid = ((float) ($purchaseOrder->total_paid ?? 0)) + $paymentAmount;
+            }         
+
+            // ═══════════════════════════════════════════════════════════
+            // 5b. Distribute the payment across the receipt lines
+            //     (must run BEFORE status derivation so line totals
+            //      reflect paid_total when we classify each line)
+            // ═══════════════════════════════════════════════════════════
+            if ($paymentAmount > 0 && !empty($receiptItems)) {
+                // Sum of all receipt line totals for THIS receipt only
+                $thisReceiptLineSum = collect($receiptItems)
+                    ->sum(fn($r) => (float) $r->unit_cost * (float) $r->quantity_received);
+
+                foreach ($receiptItems as $rLine) {
+                    $lineTotal = (float) $rLine->unit_cost * (float) $rLine->quantity_received;
+
+                    // Proportional share of this receipt's payment to this line
+                    $share = $thisReceiptLineSum > 0
+                        ? ($lineTotal / $thisReceiptLineSum) * $paymentAmount
+                        : 0;
+
+                    // ── Receipt item (row in purchase_receipt_items) ──
+                    $rLine->paid_total             = ((float) ($rLine->paid_total ?? 0)) + $share;
+                    $rLine->payment_method_id      = $paymentMethod->id;
+                    $rLine->payment_date           = now();
+                    $rLine->payment_transaction_id = $latestPaymentId ?? null;
+
+                    $rLine->payment_status = $lineTotal > 0 && $rLine->paid_total >= $lineTotal
+                        ? 'paid'
+                        : ($rLine->paid_total > 0 ? 'partial' : 'pending');
+                    $rLine->save();
+
+                    // ── PO line (row in purchase_order_items) ──
+                    $poi = $rLine->purchaseOrderItem;
+                    if ($poi) {
+                        $poi->paid_total        = ((float) ($poi->paid_total ?? 0)) + $share;
+                        $poi->payment_method_id = $paymentMethod->id;
+                        $poi->payment_date      = now();
+
+                        $poiTotal = (float) $poi->total_cost;
+                        $poi->payment_status = $poiTotal > 0 && $poi->paid_total >= $poiTotal
+                            ? 'paid'
+                            : ($poi->paid_total > 0 ? 'partial' : 'pending');
+                        $poi->save();
+                    }
+                }
             }
 
-            // Update purchase order with CUMULATIVE totals
-            $purchaseOrder->received_subtotal = $newCumulativeSubtotal;
+            // ═══════════════════════════════════════════════════════════
+            // 6. Derive PO + line-item payment_status from FINAL numbers
+            // ═══════════════════════════════════════════════════════════
+            $finalPaid = (float) ($purchaseOrder->total_paid ?? 0);
+
+            // PO-level
+            if ($newCumulativeTotal <= 0) {
+                $purchaseOrder->payment_status = 'pending';
+            } elseif ($finalPaid >= $newCumulativeTotal) {
+                $purchaseOrder->payment_status = 'paid';
+            } elseif ($finalPaid > 0) {
+                $purchaseOrder->payment_status = 'partial';
+            } else {
+                $purchaseOrder->payment_status = 'pending';
+            }
+
+            // Line-item level — allocate the *cumulative paid* proportionally
+            // to each received line's total_cost.
+            // Line-item level — re-read paid_total (set by 5b) and derive
+            // status from it, instead of re-allocating from cumulative paid.
+            $receivedItemIds = collect($validated['items'])
+                ->filter(fn($i) => ($i['quantity_received'] ?? 0) > 0)
+                ->pluck('purchase_order_item_id')
+                ->unique()
+                ->values();
+
+            $receivedLines = PurchaseOrderItem::whereIn('id', $receivedItemIds)->get();
+
+            foreach ($receivedLines as $line) {
+                $lineTotal = (float) ($line->total_cost ?? 0);
+                $linePaid  = (float) ($line->paid_total ?? 0);
+
+                if ($lineTotal > 0 && $linePaid >= $lineTotal) {
+                    $line->payment_status = 'paid';
+                } elseif ($linePaid > 0) {
+                    $line->payment_status = 'partial';
+                } else {
+                    $line->payment_status = 'pending';
+                }
+                $line->save();
+            }
+
+            // ═══════════════════════════════════════════════════════════
+            // 7. Save PO
+            // ═══════════════════════════════════════════════════════════
+            $purchaseOrder->received_subtotal  = $newCumulativeSubtotal;
             $purchaseOrder->received_tax_total = $newCumulativeTaxTotal;
-            $purchaseOrder->received_total = $newCumulativeTotal;
-            $purchaseOrder->subtotal = $purchaseOrder->subtotal ?? $newCumulativeSubtotal;
+            $purchaseOrder->received_total     = $newCumulativeTotal;
+
+            $purchaseOrder->subtotal  = $purchaseOrder->subtotal  ?? $newCumulativeSubtotal;
             $purchaseOrder->tax_total = $purchaseOrder->tax_total ?? $newCumulativeTaxTotal;
-            $purchaseOrder->total = $purchaseOrder->total ?? $newCumulativeTotal;
-            $purchaseOrder->status = $validated['status'];
+            $purchaseOrder->total     = $purchaseOrder->total     ?? $newCumulativeTotal;
+
+            $purchaseOrder->status      = $validated['status'];
             $purchaseOrder->received_at = now();
             $purchaseOrder->received_by = $user->id;
-            $actor = $this->actorLabel($user);
 
             $summaryLine = sprintf(
                 '%s received goods for PO %s. Status: %s → %s. '
                 . 'Receipt #%s — subtotal %s, tax %s, payable %s. '
-                . 'Cumulative received: subtotal %s, tax %s, total %s.',
-                $actor,
+                . 'Cumulative received: subtotal %s, tax %s, total %s. '
+                . 'Payment status → %s (paid %s of %s).',
+                $this->actorLabel($user),
                 $purchaseOrder->po_number,
                 $purchaseOrder->getOriginal('status'),
                 $validated['status'],
@@ -1613,49 +1814,54 @@ class PurchaseOrderController extends Controller
                 currency_symbol() . number_format($currentReceiptPayable, 2),
                 currency_symbol() . number_format($newCumulativeSubtotal, 2),
                 currency_symbol() . number_format($newCumulativeTaxTotal, 2),
+                currency_symbol() . number_format($newCumulativeTotal, 2),
+                $purchaseOrder->payment_status,
+                currency_symbol() . number_format($finalPaid, 2),
                 currency_symbol() . number_format($newCumulativeTotal, 2)
             );
 
             $purchaseOrder->notes = $this->appendNote($purchaseOrder->notes, $summaryLine);
-
             $purchaseOrder->save();
 
             DB::commit();
 
+            // ═══════════════════════════════════════════════════════════
+            // 8. Response
+            // ═══════════════════════════════════════════════════════════
             $response = [
                 'success' => true,
-                'message' => $validated['status'] === 'received' 
+                'message' => $validated['status'] === 'received'
                     ? __('passwords.items_fully_received_success')
                     : __('passwords.items_partially_received_success'),
                 'reload' => true,
                 'data' => [
-                    'total_received' => $totalReceived,
-                    'receipt_subtotal' => $currentReceiptSubtotal,
-                    'receipt_additive_tax' => $currentReceiptAdditiveTax,
-                    'receipt_withholding_tax' => $currentReceiptWithholdingTax,
-                    'receipt_tax' => $currentReceiptTaxAmount,
-                    'receipt_payable' => $currentReceiptPayable,
-                    'cumulative_subtotal' => $newCumulativeSubtotal,
-                    'cumulative_tax' => $newCumulativeTaxTotal,
-                    'cumulative_total' => $newCumulativeTotal,
-                    'purchase_receipt_id' => $purchaseReceipt->id,
-                ]
+                    'total_received'           => $totalReceived,
+                    'receipt_subtotal'         => $currentReceiptSubtotal,
+                    'receipt_additive_tax'     => $currentReceiptAdditiveTax,
+                    'receipt_withholding_tax'  => $currentReceiptWithholdingTax,
+                    'receipt_tax'              => $currentReceiptTaxAmount,
+                    'receipt_payable'          => $currentReceiptPayable,
+                    'cumulative_subtotal'      => $newCumulativeSubtotal,
+                    'cumulative_tax'           => $newCumulativeTaxTotal,
+                    'cumulative_total'         => $newCumulativeTotal,
+                    'total_paid'               => $finalPaid,
+                    'payment_status'           => $purchaseOrder->payment_status,
+                    'purchase_receipt_id'      => $purchaseReceipt->id,
+                ],
             ];
 
             if (!empty($taxLiabilities)) {
-                $response['tax_liabilities'] = collect($taxLiabilities)->map(function($liability) {
-                    return [
-                        'id' => $liability->id,
-                        'tax_name' => $liability->tax_name,
-                        'tax_amount' => $liability->tax_amount,
-                        'status' => $liability->status,
-                        'due_date' => $liability->due_date,
-                    ];
-                });
+                $response['tax_liabilities'] = collect($taxLiabilities)->map(fn($l) => [
+                    'id'         => $l->id,
+                    'tax_name'   => $l->tax_name,
+                    'tax_amount' => $l->tax_amount,
+                    'status'     => $l->status,
+                    'due_date'   => $l->due_date,
+                ]);
             }
-            
+
             session()->flash('toast', [
-                'type' => 'success',
+                'type'    => 'success',
                 'message' => $response['message'],
             ]);
 
@@ -1664,7 +1870,7 @@ class PurchaseOrderController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error receiving items: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
+                'trace'        => $e->getTraceAsString(),
                 'request_data' => $request->all(),
             ]);
             return response()->json([

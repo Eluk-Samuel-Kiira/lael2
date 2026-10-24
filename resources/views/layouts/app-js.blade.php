@@ -1366,95 +1366,19 @@
     }
 
     
-    function submitCategoryForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
+    // Bridge the old liveblade helper name to the current global.
+    function setModalLoading(button, isLoading) {
+        if (!window.LiveBlade?.toggleButtonLoading) {
+            // Fallback if the liveblade bundle isn't loaded
+            if (button) button.disabled = !!isLoading;
             return;
         }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
+        window.LiveBlade.toggleButtonLoading(button, isLoading);
     }
 
-    function editCategoryInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('editUOMButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_modal_edit_uom_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('category.update', ['category' => ':id']) }}'.replace(':id', uniqueId);
-        
-        // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
-    }
-    
-    function updateCategoryStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/category-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
 </script>
 
-<!-- Product Category  -->
- <script>
-    function submitProductCategoryForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
 
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-    function editProductCategoryInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('editProductCategoryButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_ecommerce_edit_product_category_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('product-category.update', ['product_category' => ':id']) }}'.replace(':id', uniqueId);
-        
-        // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
-    }
- </script>
 
  <script>
 document.addEventListener('DOMContentLoaded', function () {

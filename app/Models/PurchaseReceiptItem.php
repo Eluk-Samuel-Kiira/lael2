@@ -20,6 +20,12 @@ class PurchaseReceiptItem extends Model
         'location_id',
         'department_id',
 
+        'paid_total',
+        'payment_status',
+        'payment_method_id',
+        'payment_date',
+        'payment_transaction_id',
+
         // Cost side
         'unit_cost',
         'grand_total_cost_price',
@@ -39,6 +45,9 @@ class PurchaseReceiptItem extends Model
         'quantity_received'  => 'decimal:2',
         'quantity_remaining' => 'decimal:2',
         'expiry_date'        => 'date',
+
+        'paid_total'   => 'integer',
+        'payment_date' => 'date',
 
         // Money — base-currency integers
         'unit_cost'              => 'integer',
@@ -65,8 +74,19 @@ class PurchaseReceiptItem extends Model
     {
         return $v === null ? null : from_base_currency($v);
     }
+    public function getPaidTotalAttribute(?int $v): ?float
+    {
+        return $v === null ? null : from_base_currency($v);
+    }
+
+
 
     // Mutators
+    public function setPaidTotalAttribute($v): void
+    {
+        $this->attributes['paid_total'] = $v === null ? null : to_base_currency($v);
+    }
+
     public function setUnitCostAttribute($v): void
     {
         $this->attributes['unit_cost'] = $v === null ? null : to_base_currency($v);
@@ -94,6 +114,11 @@ class PurchaseReceiptItem extends Model
 
         $v = $this->purchaseOrderItem?->productVariant;
         return (float) ($v->discount_selling_price ?? $v->selling_price ?? 0);
+    }
+
+    public function paymentMethod(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PaymentMethod::class);
     }
 
     public function getEffectiveCostPriceAttribute(): float

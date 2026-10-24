@@ -175,7 +175,7 @@
                     <div class="menu-sub menu-sub-accordion">
                         @can('view category')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('category.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('category.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -185,7 +185,7 @@
                         @endcan
                         @can('view subcategory')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('product-category.index') }}')">
+                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('product-category.index') }}')">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
