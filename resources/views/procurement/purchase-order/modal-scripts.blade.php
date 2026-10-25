@@ -116,6 +116,11 @@
             const orderId = form.id.replace('receiveItemsForm', '');
             updateItemsTotal(orderId, form);
         }
+
+        if (e.target.id.startsWith('payment_amount_')) {
+            // User is now in manual mode — stop auto-syncing
+            e.target.dataset.autofill = '0';
+        }
     });
 
     // 2. Handle Tax Preview Click
@@ -389,11 +394,31 @@
     function updatePaymentMax(orderId, payableAmount) {
         const paymentInput = document.getElementById(`payment_amount_${orderId}`);
         if (!paymentInput) return;
-        const rounded = Math.max(0, payableAmount || 0);
+
+        const rounded = Math.max(0, Number(payableAmount) || 0);
+
+        // Clamp
         paymentInput.setAttribute('max', rounded.toFixed(2));
+
+        // ── Auto-fill: mirror the payable unless the user has overridden it ──
+        const userOverrode =
+            paymentInput.dataset.autofill === '0' &&
+            (parseFloat(paymentInput.value) || 0) > 0;
+
+        if (!userOverrode) {
+            // Still in auto mode → keep the input in sync with the payable
+            paymentInput.value = rounded.toFixed(2);
+            paymentInput.dataset.autofill = '1';
+        } else {
+            // User typed something smaller than payable — just clamp to max
+            if ((parseFloat(paymentInput.value) || 0) > rounded) {
+                paymentInput.value = rounded.toFixed(2);
+            }
+        }
+
+        // Update the helper label under the input
         const maxDisplay = document.getElementById(`payment_max_display_${orderId}`);
         if (maxDisplay) maxDisplay.textContent = rounded.toFixed(2);
-        if ((parseFloat(paymentInput.value) || 0) > rounded) paymentInput.value = rounded.toFixed(2);
     }
 
     function buildOverReceiptHtml(overReceipts) {

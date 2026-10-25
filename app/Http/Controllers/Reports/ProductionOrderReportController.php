@@ -256,10 +256,10 @@ class ProductionOrderReportController extends Controller
      */
     public function detail($orderId)
     {
-        $tenantId = $this->getTenantId();
+        $tenantId     = $this->getTenantId();
         $isSingleShop = tenant_is_single_shop($tenantId);
         $purchaseOrderItems = $this->resolveProductionPOItems($orderId);
-        
+
         $order = ProductionOrder::with([
             'inputs.productVariant.product.category',
             'outputs.productVariant.product.category',
@@ -268,13 +268,13 @@ class ProductionOrderReportController extends Controller
             'startedBy',
             'completedBy',
             'cancelledBy',
-            'paymentMethod'
+            'paymentMethod',
         ])
         ->where('tenant_id', $tenantId)
         ->where('id', $orderId)
         ->firstOrFail();
-        
-        // ─── Get Inventory Logs for this order ──────────────────────────
+
+        // ─── Inventory / batch logs ─────────────────────────────────────
         $inventoryLogs = SingleShopInventoryLog::with('variant')
             ->where('order_id', $orderId)
             ->where(function ($q) {
@@ -287,25 +287,22 @@ class ProductionOrderReportController extends Controller
             })
             ->orderBy('created_at', 'desc')
             ->get();
-        
-        // ─── Get Batch Logs for this order ─────────────────────────────
+
         $batchLogs = BatchLog::where('production_order_id', $orderId)
             ->orderBy('event_date', 'desc')
             ->get();
-        
-        // ─── Determine if this order mixes weight-units (bagged) ───────
+
+        // ─── Weight aggregation ─────────────────────────────────────────
         $hasWeightedOutputs = $order->outputs->contains(function ($o) {
             return $o->productVariant && (float) $o->productVariant->weight > 0;
         });
 
-        // ─── Input KG ────
         $totalInputKg = $order->inputs->sum(function ($i) {
             return $i->productVariant
                 ? $i->productVariant->toKilograms($i->actual_quantity)
                 : $i->actual_quantity;
         });
 
-        // ─── Output KG ───
         $totalOutputKg = $order->outputs->sum(function ($o) {
             return $o->productVariant
                 ? $o->productVariant->toKilograms($o->actual_quantity)
@@ -313,63 +310,73 @@ class ProductionOrderReportController extends Controller
         });
 
         // ─── Financials ─────────────────────────────────────────────────
-        
+
         // 1. Raw Materials (COGS) — what was actually paid to the supplier
-        $poCost = collect($purchaseOrderItems)->sum('subtotal');
+        $poCost = (float) collect($purchaseOrderItems)->sum('subtotal');
         if ($poCost <= 0) {
             $poCost = (float) $order->total_input_cost;
         }
 
-        // 2. Overhead — what was withdrawn to run production (labor, power, packaging, etc.)
-        $paymentTransaction = \App\Models\PaymentTransactionLog::where('tenant_id', $tenantId)
+        // 2. Overhead — every withdrawal logged against this production order
+        $overheadCost = (float) \App\Models\PaymentTransactionLog::where('tenant_id', $tenantId)
             ->where('reference_table', 'production_orders')
             ->where('reference_id', $order->id)
             ->where('transaction_type', 'WITHDRAWAL')
-            ->where('status', 'COMPLETED')
-            ->first();
-            
-        $overheadCost = $paymentTransaction ? (float) $paymentTransaction->amount : 0;
+            ->sum('amount');
 
-        // 3. Total Cash Out = Raw Materials + Overhead
+        // Fallback: no withdrawal row? Use the frozen sum of output total_cost
+        if ($overheadCost <= 0) {
+            $overheadCost = (float) $order->outputs->sum('total_cost');
+        }
+
+        // 3. Total Cash Out
         $totalProductionCost = $poCost + $overheadCost;
 
-        // 4. Output Selling Value (Revenue)
-        $totalRevenue = $order->outputs->sum(function ($o) {
-            return $o->productVariant
-                ? $o->productVariant->toRevenue($o->actual_quantity)
-                : 0;
+        // 4. Revenue — frozen per-unit selling_price × actual_quantity
+        $totalRevenue = (float) $order->outputs->sum(function ($o) {
+            return (float) $o->actual_quantity * (float) $o->selling_price;
         });
 
-        // ─── ★ Cost each output by its variant's grand_total_cost ───────
-        // This is only used for the per-row "Potential Profit" column in the
-        // outputs table. It is NOT used to compute overall profit.
-        $totalInventoryValue = 0;
+        // ─── Decorate each output row with frozen snapshot values ───────
+        // Everything the JS reads now comes from here, so a change to the
+        // variant's grand_total_cost_price / selling_price cannot leak in.
+        $totalInventoryValue = 0.0;
 
-        $order->outputs->transform(function($output) use (&$totalInventoryValue) {
-            $qty = (float) $output->actual_quantity;
-            $unitCost = (float) ($output->productVariant->grand_total_cost_price ?? 0);
-            $allocatedCost = $qty * $unitCost;
-            
-            $totalInventoryValue += $allocatedCost;
+        $order->outputs->transform(function ($output) use (&$totalInventoryValue) {
+            $qty          = (float) $output->actual_quantity;
+            $unitCost     = (float) $output->production_cost; // per unit — frozen
+            $rowCost      = (float) $output->total_cost;      // total    — frozen
+            $unitSell     = (float) $output->selling_price;   // per unit — frozen
 
-            $output->production_cost = round($allocatedCost, 2);
-            $output->unit_cost = $unitCost;
+            $rowSellingValue = $qty * $unitSell;
+            $rowProfit       = $rowSellingValue - $rowCost;
+            $rowMargin       = $rowSellingValue > 0 ? ($rowProfit / $rowSellingValue) * 100 : 0;
+
+            $totalInventoryValue += $rowCost;
+
+            // Attach non-persisted helper attributes for the view layer
+            $output->setAttribute('frozen_unit_cost',        round($unitCost, 2));
+            $output->setAttribute('frozen_total_cost',       round($rowCost, 2));
+            $output->setAttribute('frozen_selling_price',    round($unitSell, 2));
+            $output->setAttribute('frozen_selling_value',    round($rowSellingValue, 2));
+            $output->setAttribute('frozen_profit',           round($rowProfit, 2));
+            $output->setAttribute('frozen_profit_margin',    round($rowMargin, 2));
 
             return $output;
         });
 
-        // ─── Loss = input − sum of all outputs (in kg) ────────────────
+        // ─── Loss ───────────────────────────────────────────────────────
         $lossKg  = max(0, $totalInputKg - $totalOutputKg);
         $lossPct = $totalInputKg > 0 ? ($lossKg / $totalInputKg) * 100 : 0;
 
-        // ─── Per-category breakdown ────────────────────────────────────
+        // ─── Per-output breakdown (weight-based) ────────────────────────
+        // Revenue here uses the FROZEN selling_price too.
         $outputBreakdown = $order->outputs->map(function ($o) use ($totalInputKg) {
             $kg  = $o->productVariant
                 ? $o->productVariant->toKilograms($o->actual_quantity)
                 : $o->actual_quantity;
-            $rev = $o->productVariant
-                ? $o->productVariant->toRevenue($o->actual_quantity)
-                : 0;
+
+            $rev = (float) $o->actual_quantity * (float) $o->selling_price; // frozen
 
             return [
                 'variant_name' => $o->productVariant->name ?? 'N/A',
@@ -384,11 +391,10 @@ class ProductionOrderReportController extends Controller
 
         // ─── Profit calculations ────────────────────────────────────────
         // Gross Profit = Revenue − Raw Materials
-        $grossProfit = $totalRevenue - $poCost;
-        
         // Net Production Profit = Gross Profit − Overhead
-        $netProfit = $grossProfit - $overheadCost;
-        
+        $grossProfit = $totalRevenue - $poCost;
+        $netProfit   = $grossProfit - $overheadCost;
+
         $grossMargin = $totalRevenue > 0 ? ($grossProfit / $totalRevenue) * 100 : 0;
         $netMargin   = $totalRevenue > 0 ? ($netProfit   / $totalRevenue) * 100 : 0;
 
@@ -406,15 +412,14 @@ class ProductionOrderReportController extends Controller
                 : 0,
             'yield_mode'            => $hasWeightedOutputs ? 'weight_based' : 'quantity_based',
 
-            // ─── Financials ─────────────────────────────────────────
+            // Financials
             'po_cost'               => round($poCost, 2),
             'overhead_cost'         => round($overheadCost, 2),
             'total_production_cost' => round($totalProductionCost, 2),
-            'inventory_value'       => round($totalInventoryValue, 2), // informational only
-            
+            'inventory_value'       => round($totalInventoryValue, 2),
             'total_revenue'         => round($totalRevenue, 2),
-            
-            // ─── Profits ────────────────────────────────────────────
+
+            // Profits
             'gross_profit'          => round($grossProfit, 2),
             'gross_margin'          => round($grossMargin, 2),
             'net_profit'            => round($netProfit, 2),
@@ -435,8 +440,8 @@ class ProductionOrderReportController extends Controller
 
             'output_breakdown'      => $outputBreakdown,
         ];
-        
-        // ─── Get Inputs with Quality Stats ─────────────────────────────
+
+        // ─── Input quality stats ────────────────────────────────────────
         $inputStats = [
             'total_planned' => $order->inputs->sum('planned_quantity'),
             'total_actual'  => $order->inputs->sum('actual_quantity'),
@@ -445,20 +450,25 @@ class ProductionOrderReportController extends Controller
             'rejected'      => $order->inputs->where('quality_status', ProductionOrderInput::QUALITY_REJECTED)->count(),
             'pending'       => $order->inputs->where('quality_status', ProductionOrderInput::QUALITY_PENDING)->count(),
         ];
-        
-        // ─── Get Outputs with Quality Stats ────────────────────────────
+
+        // ─── Output quality stats + frozen cost roll-ups ────────────────
         $outputStats = [
-            'total_planned'   => $order->outputs->sum('planned_quantity'),
-            'total_actual'    => $order->outputs->sum('actual_quantity'),
-            'total_defective' => $order->outputs->sum('defective_quantity'),
+            'total_planned'   => (float) $order->outputs->sum('planned_quantity'),
+            'total_actual'    => (float) $order->outputs->sum('actual_quantity'),
+            'total_defective' => (float) $order->outputs->sum('defective_quantity'),
+            'total_cost'      => (float) $order->outputs->sum('total_cost'),                    // frozen
+            'total_value'     => (float) $order->outputs->sum(
+                fn($o) => (float) $o->actual_quantity * (float) $o->selling_price              // frozen
+            ),
+            'total_profit'    => (float) $order->outputs->sum('frozen_profit'),
             'approved'        => $order->outputs->where('quality_status', ProductionOrderOutput::QUALITY_APPROVED)->count(),
             'rejected'        => $order->outputs->where('quality_status', ProductionOrderOutput::QUALITY_REJECTED)->count(),
             'pending'         => $order->outputs->where('quality_status', ProductionOrderOutput::QUALITY_PENDING)->count(),
-            'yield_rate'      => $order->outputs->sum('planned_quantity') > 0 
-                ? ($order->outputs->sum('actual_quantity') / $order->outputs->sum('planned_quantity')) * 100 
+            'yield_rate'      => $order->outputs->sum('planned_quantity') > 0
+                ? ($order->outputs->sum('actual_quantity') / $order->outputs->sum('planned_quantity')) * 100
                 : 0,
         ];
-        
+
         return response()->json([
             'order'                => $order,
             'metrics'              => $metrics,

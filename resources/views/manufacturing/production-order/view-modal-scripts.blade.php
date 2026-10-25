@@ -376,6 +376,7 @@ window.POView = (function () {
     }
 
     // ── Outputs table ───────────────────────────────────────────
+    // ── Outputs table ───────────────────────────────────────────
     function renderOutputs(order) {
         if (!order.outputs || order.outputs.length === 0) {
             return `<div class="alert alert-light-info">No outputs recorded.</div>`;
@@ -385,26 +386,24 @@ window.POView = (function () {
             pending: 'secondary', approved: 'success', rejected: 'danger',
         };
 
-        // ── Compute per-row potential profit ────────────────────────
-        //   selling value = actual_quantity × selling_price
-        //   (prefer discount_selling_price when present, fall back to selling_price)
-        //   cost value    = production_cost (already stored as TOTAL on the row)
-        //   profit        = selling value − cost value
+        // ── EVERYTHING below comes from the frozen production_order_outputs row ──
+        //   production_cost = per-unit packaging + milling cost (frozen)
+        //   total_cost      = actual_quantity × production_cost  (frozen COGS)
+        //   selling_price   = per-unit selling price at completion (frozen)
         const rows = order.outputs.map(output => {
             const variant = output.product_variant || {};
 
-            const actual    = Number(output.actual_quantity || 0);
-            const listSell  = Number(variant.discount_selling_price ?? variant.selling_price ?? 0);
-            
-            // ★ Use the production_cost (which is now correctly allocated from the server)
-            const rowCost = Number(output.production_cost || 0);
+            const actual     = Number(output.actual_quantity || 0);
 
-            const sellingValue = actual * listSell;
-            const profit       = sellingValue - rowCost;
+            // ★ FROZEN fields — never re-derive from variant
+            const unitCost   = Number(output.frozen_unit_cost    ?? output.production_cost ?? 0);
+            const totalCost  = Number(output.frozen_total_cost   ?? output.total_cost      ?? 0);
+            const unitSell   = Number(output.frozen_selling_price?? output.selling_price   ?? 0);
+
+            const sellingValue = actual * unitSell;
+            const profit       = sellingValue - totalCost;
             const marginPct    = sellingValue > 0 ? (profit / sellingValue) * 100 : 0;
             const profitColor  = profit >= 0 ? 'success' : 'danger';
-
-            // ...
 
             const yieldPct = Number(output.planned_quantity) > 0
                 ? (actual / Number(output.planned_quantity) * 100)
@@ -421,8 +420,9 @@ window.POView = (function () {
                     <td class="text-end text-success fw-bold">${fmtNum(actual, 2)}</td>
                     <td class="text-end text-danger">${fmtNum(output.defective_quantity, 2)}</td>
                     <td class="text-end">${yieldPct.toFixed(1)}%</td>
-                    <td class="text-end">${fmtMoney(rowCost)}</td>
-                    <td class="text-end">${fmtMoney(listSell)}</td>
+                    <td class="text-end">${fmtMoney(unitCost)}</td>
+                    <td class="text-end fw-bold">${fmtMoney(totalCost)}</td>
+                    <td class="text-end">${fmtMoney(unitSell)}</td>
                     <td class="text-end">${fmtMoney(sellingValue)}</td>
                     <td class="text-end fw-bold text-${profitColor}">
                         ${fmtMoney(profit)}
@@ -434,11 +434,13 @@ window.POView = (function () {
             `;
         }).join('');
 
-        // ── Totals row ──────────────────────────────────────────────
-        const totalCost   = order.outputs.reduce((s, o) => s + Number(o.production_cost || 0), 0);
+        // ── Totals — all from frozen columns ────────────────────────
+        const totalCost   = order.outputs.reduce(
+            (s, o) => s + Number(o.frozen_total_cost ?? o.total_cost ?? 0), 0
+        );
         const totalSell   = order.outputs.reduce((s, o) => {
-            const v = o.product_variant || {};
-            return s + Number(o.actual_quantity || 0) * Number(v.discount_selling_price ?? v.selling_price ?? 0);
+            const unitSell = Number(o.frozen_selling_price ?? o.selling_price ?? 0);
+            return s + Number(o.actual_quantity || 0) * unitSell;
         }, 0);
         const totalProfit = totalSell - totalCost;
         const totalMargin = totalSell > 0 ? (totalProfit / totalSell) * 100 : 0;
@@ -455,7 +457,8 @@ window.POView = (function () {
                             <th class="text-end">Actual</th>
                             <th class="text-end">Defective</th>
                             <th class="text-end">Yield</th>
-                            <th class="text-end">Cost</th>
+                            <th class="text-end">Packaging &amp; Milling Cost <small class="d-block text-muted fw-normal fs-8">per unit</small></th>
+                            <th class="text-end">Packaging &amp; Milling Cost <small class="d-block text-muted fw-normal fs-8">Total Cost</th>
                             <th class="text-end">Unit Sell Price</th>
                             <th class="text-end">Selling Value</th>
                             <th class="text-end">Potential Profit</th>
@@ -467,6 +470,7 @@ window.POView = (function () {
                     <tfoot class="bg-light fw-bold">
                         <tr>
                             <td colspan="6" class="text-end">Totals</td>
+                            <td class="text-end text-muted">—</td>
                             <td class="text-end">${fmtMoney(totalCost)}</td>
                             <td class="text-end text-muted">—</td>
                             <td class="text-end">${fmtMoney(totalSell)}</td>
@@ -607,9 +611,8 @@ window.POView = (function () {
         const effectiveCost = poCostTotal > 0 ? poCostTotal : Number(order.total_input_cost || 0);
 
         const outputSellTotal = (order.outputs || []).reduce((s, o) => {
-            const v = o.product_variant || {};
-            const price = Number(v.discount_selling_price ?? v.selling_price ?? 0);
-            return s + Number(o.actual_quantity || 0) * price;
+            const unitSell = Number(o.frozen_selling_price ?? o.selling_price ?? 0);
+            return s + Number(o.actual_quantity || 0) * unitSell;
         }, 0);
 
         const potentialProfit = outputSellTotal - effectiveCost;
