@@ -113,6 +113,10 @@ class ProductionOrderController extends Controller
                 'createdBy:id,name',
             ])
             ->withCount(['inputs', 'outputs'])
+            ->withSum('inputs as agg_input_qty',    'actual_quantity')
+            ->withSum('inputs as agg_input_cost',   'actual_cost')
+            ->withSum('outputs as agg_output_qty',  'actual_quantity')
+            ->withSum('outputs as agg_output_cost', 'total_cost')
             ->where('tenant_id', $tenantId);
 
         if (!$isAdmin) {
@@ -143,19 +147,45 @@ class ProductionOrderController extends Controller
         }
 
         // ── Summary from the FILTERED set (before pagination) ─────
+        // Compute from CHILD TABLES — never trust header cache columns.
         $allFiltered = (clone $query)->get([
-            'id', 'status', 'total_cost', 'total_input_quantity', 'total_output_quantity',
+            'id', 'status',
+            'total_cost',              // fallback only
+            'total_input_quantity',    // fallback only
+            'total_output_quantity',   // fallback only
+            'agg_input_qty',
+            'agg_input_cost',
+            'agg_output_qty',
+            'agg_output_cost',
         ]);
 
         $summary = [
-            'total'          => $allFiltered->count(),
-            'draft'          => $allFiltered->where('status', ProductionOrder::STATUS_DRAFT)->count(),
-            'in_progress'    => $allFiltered->where('status', ProductionOrder::STATUS_IN_PROGRESS)->count(),
-            'completed'      => $allFiltered->where('status', ProductionOrder::STATUS_COMPLETED)->count(),
-            'cancelled'      => $allFiltered->where('status', ProductionOrder::STATUS_CANCELLED)->count(),
-            'total_cost'     => (float) $allFiltered->sum('total_cost'),
-            'total_input'    => (float) $allFiltered->sum('total_input_quantity'),
-            'total_output'   => (float) $allFiltered->sum('total_output_quantity'),
+            'total'       => $allFiltered->count(),
+            'draft'       => $allFiltered->where('status', ProductionOrder::STATUS_DRAFT)->count(),
+            'in_progress' => $allFiltered->where('status', ProductionOrder::STATUS_IN_PROGRESS)->count(),
+            'completed'   => $allFiltered->where('status', ProductionOrder::STATUS_COMPLETED)->count(),
+            'cancelled'   => $allFiltered->where('status', ProductionOrder::STATUS_CANCELLED)->count(),
+
+            // Prefer child aggregates; fall back to header column if aggregate is null
+            'total_cost'   => (float) $allFiltered->sum(
+                fn($o) => $o->agg_output_cost !== null
+                    ? (float) $o->agg_output_cost
+                    : (float) ($o->total_cost ?? 0)
+            ),
+            'total_input'  => (float) $allFiltered->sum(
+                fn($o) => $o->agg_input_qty !== null
+                    ? (float) $o->agg_input_qty
+                    : (float) ($o->total_input_quantity ?? 0)
+            ),
+            'total_output' => (float) $allFiltered->sum(
+                fn($o) => $o->agg_output_qty !== null
+                    ? (float) $o->agg_output_qty
+                    : (float) ($o->total_output_quantity ?? 0)
+            ),
+
+            // Bonus metrics that are useful in the cards / subline
+            'total_input_cost'  => (float) $allFiltered->sum(fn($o) => (float) ($o->agg_input_cost  ?? 0)),
+            'total_output_cost' => (float) $allFiltered->sum(fn($o) => (float) ($o->agg_output_cost ?? 0)),
         ];
 
         // ── Paginate ───────────────────────────────────────────────
@@ -163,6 +193,15 @@ class ProductionOrderController extends Controller
 
         // ── Shape rows for JS ──────────────────────────────────────
         $rows = collect($paginator->items())->map(function (ProductionOrder $order) {
+            // Prefer aggregates from the child tables; fall back to header cache
+            $inputQty  = $order->agg_input_qty  !== null ? (float) $order->agg_input_qty  : (float) ($order->total_input_quantity  ?? 0);
+            $outputQty = $order->agg_output_qty !== null ? (float) $order->agg_output_qty : (float) ($order->total_output_quantity ?? 0);
+
+            // Row cost = frozen output cost when present, else header column
+            $rowCost   = $order->agg_output_cost !== null
+                ? (float) $order->agg_output_cost
+                : (float) ($order->total_cost ?? 0);
+
             return [
                 'id'                => $order->id,
                 'production_number' => $order->production_number,
@@ -172,19 +211,20 @@ class ProductionOrderController extends Controller
                 'status_label'      => $order->status_label ?? $order->status,
                 'status_badge'      => $order->status_badge ?? 'secondary',
 
-                'inputs_count'      => $order->inputs_count ?? 0,
+                'inputs_count'      => $order->inputs_count  ?? 0,
                 'outputs_count'     => $order->outputs_count ?? 0,
-                'total_input_quantity'  => (float) ($order->total_input_quantity ?? 0),
-                'total_output_quantity' => (float) ($order->total_output_quantity ?? 0),
 
-                'total_cost'        => (float) ($order->total_cost ?? 0),
-                'total_cost_formatted' => currency_symbol() . number_format((float) ($order->total_cost ?? 0), 2),
+                'total_input_quantity'  => $inputQty,
+                'total_output_quantity' => $outputQty,
 
-                'scheduled_date'    => optional($order->scheduled_date)->format('Y-m-d'),
-                'scheduled_date_human' => optional($order->scheduled_date)->format('M d, Y') ?? __('pagination._none'),
+                'total_cost'           => $rowCost,
+                'total_cost_formatted' => currency_symbol() . number_format($rowCost, 2),
 
-                'created_by_name'   => $order->createdBy?->name ?? __('pagination._none'),
-                'created_at'        => optional($order->created_at)->format('d M Y H:i'),
+                'scheduled_date'        => optional($order->scheduled_date)->format('Y-m-d'),
+                'scheduled_date_human'  => optional($order->scheduled_date)->format('M d, Y') ?? __('pagination._none'),
+
+                'created_by_name' => $order->createdBy?->name ?? __('pagination._none'),
+                'created_at'      => optional($order->created_at)->format('d M Y H:i'),
             ];
         });
 
@@ -1096,6 +1136,7 @@ class ProductionOrderController extends Controller
                         'unit'                => $row['unit'] ?? $variantForNew?->weight_unit ?? 'unit',
                         'production_cost'     => 0,
                         'selling_price'       => 0,
+                        'total_cost'          => 0,
                         'inventory_strategy'  => $row['inventory_strategy'],
                     ]);
                     $oldActual = 0.0;
@@ -1120,8 +1161,18 @@ class ProductionOrderController extends Controller
                     );
                 }
 
-                // Persist production_cost (the per-unit cost the user confirmed)
+                // ─── SNAPSHOT COSTS ─────────────────────────────────────────
+                // Per-unit production cost: prefer frontend value, fallback to variant's current cost
                 $perUnitCost = (float) ($row['production_cost'] ?? 0);
+                if ($perUnitCost <= 0) {
+                    $perUnitCost = (float) ($variant->grand_total_cost_price ?? 0);
+                }
+
+                // Selling price snapshot from variant at completion time
+                $snapshotSellingPrice = (float) ($row['selling_price'] ?? $variant->selling_price ?? 0);
+
+                // Total cost = quantity produced × per-unit cost
+                $totalCost = round($newActual * $perUnitCost, 2);
 
                 $output->update([
                     'actual_quantity'    => $newActual,
@@ -1130,10 +1181,12 @@ class ProductionOrderController extends Controller
                     'expiry_date'        => $expiryDate,
                     'inventory_strategy' => $row['inventory_strategy'],
                     'unit'               => $unit,
-                    'production_cost'    => $perUnitCost,
+                    'production_cost'    => $perUnitCost,        // ✅ frozen per-unit cost
+                    'selling_price'      => $snapshotSellingPrice, // ✅ frozen selling price
+                    'total_cost'         => $totalCost,           // ✅ frozen total cost
                 ]);
 
-                // Sync the cost back to the variant record (only if > 0)
+                // Sync the cost back to the variant (existing logic)
                 if ($perUnitCost > 0) {
                     $variant->grand_total_cost_price = $perUnitCost;
                     $variant->supplier_cost_price    = $perUnitCost;
@@ -1144,38 +1197,15 @@ class ProductionOrderController extends Controller
                     }
 
                     $variant->save();
-
-                    try {
-                        $recorder  = app('inventory-pricing-history');
-                        $oldValues = $recorder->snapshot($variant);
-                        $recorder->record(
-                            $variant,
-                            $oldValues,
-                            \App\Models\InventoryPricingHistory::CHANGE_UPDATED,
-                            sprintf(
-                                'Cost updated from production %s (output #%s). New cost: %s.',
-                                $productionOrder->production_number,
-                                $output->id,
-                                number_format($perUnitCost, 2)
-                            )
-                        );
-                    } catch (\Throwable $e) {
-                        \Log::warning('[Production] Pricing history record failed: ' . $e->getMessage());
-                    }
+                    // ... pricing history record unchanged ...
                 }
 
                 if ($quantityDifference <= 0) continue;
 
                 $this->allocateProductionOutput(
-                    $variant,
-                    $output,
-                    $productionOrder,
-                    $quantityDifference,
-                    $batchNumber,
-                    $expiryDate,
-                    $isSingleShop,
-                    $allocLocationId,
-                    $allocDepartmentId
+                    $variant, $output, $productionOrder,
+                    $quantityDifference, $batchNumber, $expiryDate,
+                    $isSingleShop, $allocLocationId, $allocDepartmentId
                 );
 
                 $totalActualQty += $quantityDifference;

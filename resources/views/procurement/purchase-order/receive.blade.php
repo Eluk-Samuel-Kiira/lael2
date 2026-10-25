@@ -269,7 +269,8 @@
                                                 step="0.01"
                                                 min="0"
                                                 max="0"
-                                                value="0">
+                                                value="0"
+                                                data-autofill="1">
                                         </div>
                                         <div class="form-text text-muted">
                                             {{ __('passwords.max_payment') }}: <span id="payment_max_display_{{ $order->id }}">0.00</span> {{ currency_symbol() }}

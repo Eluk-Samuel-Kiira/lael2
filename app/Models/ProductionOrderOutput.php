@@ -57,6 +57,7 @@ class ProductionOrderOutput extends Model
         $this->attributes['production_cost'] = to_base_currency($value);
     }
 
+
     public function getSellingPriceAttribute($value): float
     {
         return from_base_currency($value);
@@ -122,34 +123,31 @@ class ProductionOrderOutput extends Model
         return 0;
     }
 
-    public function getCostPerUnitAttribute(): float
-    {
-        if ($this->actual_quantity > 0) {
-            return $this->production_cost / $this->actual_quantity;
-        }
-        return 0;
-    }
-
     public function getProfitPerUnitAttribute(): float
     {
-        if ($this->selling_price && $this->actual_quantity > 0) {
-            return ($this->selling_price - $this->production_cost) / $this->actual_quantity;
-        }
-        return 0;
+        // both are per-unit → simple subtraction
+        return $this->selling_price - $this->production_cost;
     }
 
     public function getTotalProfitAttribute(): float
     {
-        if ($this->selling_price) {
-            return $this->selling_price - $this->production_cost;
-        }
-        return 0;
+        return $this->total_cost > 0
+            ? ($this->selling_price * $this->actual_quantity) - $this->total_cost
+            : 0;
     }
 
     public function getProfitMarginAttribute(): float
     {
-        if ($this->selling_price && $this->selling_price > 0) {
+        if ($this->selling_price > 0) {
             return (($this->selling_price - $this->production_cost) / $this->selling_price) * 100;
+        }
+        return 0;
+    }
+
+    public function getCostPerUnitAttribute(): float
+    {
+        if ($this->actual_quantity > 0) {
+            return $this->total_cost / $this->actual_quantity;
         }
         return 0;
     }
