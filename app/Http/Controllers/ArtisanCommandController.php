@@ -18,7 +18,7 @@ class ArtisanCommandController extends Controller
         'config:cache'         => 'Cache configuration',
         'route:clear'          => 'Clear route cache',
         'route:cache'          => 'Cache routes',
-        'inventory:backfill-pricing'          => 'Backfil pricing of outputs',
+        'backfill-output-costs'          => 'Backfil pricing of outputs',
         'view:clear'           => 'Clear compiled views',
         'optimize:clear'       => 'Clear all cached data',
         'optimize'             => 'Cache config, routes & views',
