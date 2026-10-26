@@ -106,13 +106,13 @@
         const tbody = document.getElementById('productionTableBody');
         tbody.innerHTML = rows.map(row => {
             const isChecked = selectedIds.has(String(row.id));
-            const actions = buildActions(row);
-
             return `
-                <tr data-order-id="${row.id}">
+                <tr data-order-id="${row.id}" class="production-row" style="cursor:pointer;">
                     <td>
                         <div class="form-check form-check-sm form-check-custom form-check-solid">
-                            <input class="form-check-input production-row-checkbox" type="checkbox" value="${row.id}" ${isChecked ? 'checked' : ''} />
+                            <input class="form-check-input production-row-checkbox" type="checkbox"
+                                value="${row.id}" ${isChecked ? 'checked' : ''}
+                                onclick="event.stopPropagation()" />
                         </div>
                     </td>
                     <td><span class="fw-bold text-primary">${escapeHtml(row.production_number)}</span></td>
@@ -129,11 +129,20 @@
                     <td><span class="badge badge-light fw-bold">${escapeHtml(row.total_cost_formatted)}</span></td>
                     <td><span class="badge badge-light fw-bold">${escapeHtml(row.scheduled_date_human)}</span></td>
                     <td><span class="badge badge-light fw-bold">${escapeHtml(row.created_by_name)}</span></td>
-                    <td><div class="d-flex gap-2 justify-content-end">${actions}</div></td>
                 </tr>
             `;
         }).join('');
 
+        // Row click → drawer
+        tbody.querySelectorAll('tr.production-row').forEach(tr => {
+            tr.addEventListener('click', (e) => {
+                if (e.target.closest('input[type="checkbox"]')) return;
+                const id = parseInt(tr.dataset.orderId, 10);
+                if (id && window.ProductionDrawer) window.ProductionDrawer.open(id);
+            });
+        });
+
+        // Checkboxes
         tbody.querySelectorAll('.production-row-checkbox').forEach(cb => {
             cb.addEventListener('change', function () {
                 toggleRowSelection(this.value, this.checked);

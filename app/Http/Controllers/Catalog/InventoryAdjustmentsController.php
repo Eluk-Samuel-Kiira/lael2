@@ -192,7 +192,7 @@ class InventoryAdjustmentsController extends Controller
             ->where('inventory_id', $item->id)
             ->where('tenant_id', $tenantId)
             ->latest()
-            ->limit(100)
+            ->limit(40)
             ->get()
             ->map(fn($a) => [
                 'id'              => $a->id,
@@ -211,7 +211,7 @@ class InventoryAdjustmentsController extends Controller
             ->where('inventory_id', $item->id)
             ->where('tenant_id', $tenantId)
             ->latest()
-            ->limit(100)
+            ->limit(40)
             ->get()
             ->map(fn($t) => [
                 'id'              => $t->id,
@@ -611,216 +611,182 @@ class InventoryAdjustmentsController extends Controller
 
     public function transferStock(Request $request, string $id)
     {
-        // Log::info('=== TRANSFER STOCK START ===');
-        // Log::info('Request data:', $request->all());
-        // Log::info('ID: ' . $id);
-        
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('transfer stock')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
-            ]);
+            ], 403);
         }
-        
+
+        // ── Validate ──────────────────────────────────────────────
+        $validated = $request->validate([
+            'department_id' => [
+                'required', 'integer', 'exists:departments,id',
+                function ($attribute, $value, $fail) use ($tenantId, $request) {
+                    $department = Department::where('id', $value)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+                    if (!$department) {
+                        $fail(__('pagination.department_invalid'));
+                        return;
+                    }
+                    if ($department->location_id != $request->location_id) {
+                        $fail(__('pagination.department_not_belong_to_location'));
+                    }
+                },
+            ],
+            'location_id' => [
+                'required', 'integer', 'exists:locations,id',
+                function ($attribute, $value, $fail) use ($tenantId) {
+                    $location = Location::where('id', $value)
+                        ->where('tenant_id', $tenantId)
+                        ->first();
+                    if (!$location) {
+                        $fail(__('pagination.location_invalid'));
+                    }
+                },
+            ],
+            'transfer_amount' => 'required|integer|min:1',
+        ], [
+            'department_id.required'   => __('pagination.department_required'),
+            'location_id.required'     => __('pagination.location_required'),
+            'transfer_amount.required' => __('pagination.transfer_amount_required'),
+            'transfer_amount.integer'  => __('pagination.transfer_amount_integer'),
+            'transfer_amount.min'      => __('pagination.transfer_amount_min'),
+        ]);
+
+        $adjustAmount = (int) $validated['transfer_amount'];
+
+        // ── Resolve source + target context (before touching any stock) ──
+        $sourceItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+            ->where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$sourceItem) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        // Guards that shouldn't consume the transaction
+        if ($sourceItem->location_id == $validated['location_id']
+            && $sourceItem->department_id == $validated['department_id']) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.stock_already_present'),
+            ], 422);
+        }
+
+        $current = (int) $sourceItem->quantity_allocated;
+        if ($adjustAmount > $current) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.max_quantity_reached'),
+            ], 422);
+        }
+
+        $targetLocation = Location::where('id', $validated['location_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        $targetDepartment = Department::where('id', $validated['department_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$targetLocation || !$targetDepartment) {
+            return response()->json([
+                'success' => false,
+                'message' => __('pagination.invalid_target_location_or_department'),
+            ], 422);
+        }
+
+        $targetItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
+            ->where('variant_id', $sourceItem->variant_id)
+            ->where('location_id', $validated['location_id'])
+            ->where('department_id', $validated['department_id'])
+            ->where('tenant_id', $tenantId)
+            ->first();
+
+        if (!$targetItem) {
+            return response()->json([
+                'success' => false,
+                'message' => __('passwords.create_inv_first'),
+            ], 422);
+        }
+
+        // ── Capture state BEFORE any mutation ───────────────────
+        $sourceBefore = (int) $sourceItem->quantity_allocated;
+        $targetBefore = (int) $targetItem->quantity_allocated;
+
+        $sourceAfter = $sourceBefore - $adjustAmount;
+        $targetAfter = $targetBefore + $adjustAmount;
+
+        // ── Build narratives from the pre-computed values ───────
+        $actor       = $this->actorLabel($user);
+        $variantName = $sourceItem->variant?->name ?? 'Unknown Item';
+        $variantSku  = $sourceItem->variant?->sku  ?? 'N/A';
+
+        $sourceLocationName   = $sourceItem->itemLocation?->name   ?? "Location #{$sourceItem->location_id}";
+        $sourceDepartmentName = $sourceItem->departmentItem?->name ?? "Department #{$sourceItem->department_id}";
+        $targetLocationName   = $targetLocation->name;
+        $targetDepartmentName = $targetDepartment->name;
+
+        $sharedHeader = sprintf(
+            '%s transferred %s unit(s) of "%s" (SKU %s)',
+            $actor,
+            number_format($adjustAmount),
+            $variantName,
+            $variantSku
+        );
+
+        $fromTo = sprintf(
+            'from %s (%s) to %s (%s)',
+            $sourceLocationName,
+            $sourceDepartmentName,
+            $targetLocationName,
+            $targetDepartmentName
+        );
+
+        $transferNarrative = sprintf(
+            '%s %s. Source branch stock: %s → %s units. '
+            . 'The stock now belongs to %s (%s).',
+            $sharedHeader,
+            $fromTo,
+            number_format($sourceBefore),
+            number_format($sourceAfter),
+            $targetLocationName,
+            $targetDepartmentName
+        );
+
+        $receivedNarrative = sprintf(
+            '%s %s. Receiving branch stock: %s → %s units. '
+            . 'The stock came from %s (%s).',
+            $sharedHeader,
+            $fromTo,
+            number_format($targetBefore),
+            number_format($targetAfter),
+            $sourceLocationName,
+            $sourceDepartmentName
+        );
+
+        // ── Persist everything in one transaction ───────────────
         DB::beginTransaction();
+
         try {
-            // ✅ Validate the essential fields
-            $validated = $request->validate([
-                'department_id'    => [
-                    'required',
-                    'integer',
-                    'exists:departments,id',
-                    function ($attribute, $value, $fail) use ($tenantId, $request) {
-                        $department = Department::where('id', $value)
-                                            ->where('tenant_id', $tenantId)
-                                            ->first();
-                        
-                        if (!$department) {
-                            $fail(__('pagination.department_invalid'));
-                            return;
-                        }
-                        
-                        if ($department->location_id != $request->location_id) {
-                            $fail(__('pagination.department_not_belong_to_location'));
-                        }
-                    }
-                ],
-                'location_id'      => [
-                    'required',
-                    'integer',
-                    'exists:locations,id',
-                    function ($attribute, $value, $fail) use ($tenantId) {
-                        $location = Location::where('id', $value)
-                                        ->where('tenant_id', $tenantId)
-                                        ->first();
-                        if (!$location) {
-                            $fail(__('pagination.location_invalid'));
-                        }
-                    }
-                ],
-                'transfer_amount'  => 'required|integer|min:1',
-            ], [
-                'department_id.required' => __('pagination.department_required'),
-                'location_id.required' => __('pagination.location_required'),
-                'transfer_amount.required' => __('pagination.transfer_amount_required'),
-                'transfer_amount.integer' => __('pagination.transfer_amount_integer'),
-                'transfer_amount.min' => __('pagination.transfer_amount_min'),
-            ]);
-
-            $adjustAmount = (int) $validated['transfer_amount'];
-
-            // ✅ Get source inventory item with eager loaded relationships
-            $sourceItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
-                            ->where('id', $id)
-                            ->where('tenant_id', $tenantId)
-                            ->first();
-
-            if (!$sourceItem) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('auth._not_found'),
-                ]);
-            }
-
-            // ✅ Get target location and department names
-            $targetLocation = Location::where('id', $validated['location_id'])
-                                ->where('tenant_id', $tenantId)
-                                ->first();
-            
-            $targetDepartment = Department::where('id', $validated['department_id'])
-                                ->where('tenant_id', $tenantId)
-                                ->first();
-
-            if (!$targetLocation || !$targetDepartment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('pagination.invalid_target_location_or_department'),
-                ]);
-            }
-
-            // ✅ Get the REAL current quantity from the database
-            $current = (int) $sourceItem->quantity_allocated;
-            
-            Log::info("Source item found. Real current quantity: $current");
-
-            // ✅ Check if adjust amount exceeds current quantity
-            if ($adjustAmount > $current) {
-                Log::warning("Adjust amount ($adjustAmount) exceeds current ($current)");
-                return response()->json([
-                    'success' => false,
-                    'message' => __('pagination.max_quantity_reached')
-                ]);
-            }
-
-            // ✅ If source and target are same location & department, do nothing
-            if ($sourceItem->location_id == $validated['location_id'] &&
-                $sourceItem->department_id == $validated['department_id']) {
-                
-                Log::warning('Source and target are the same');
-                return response()->json([
-                    'success' => false,
-                    'message' => __('passwords.stock_already_present'),
-                ]);
-            }
-
-            // ✅ Find target inventory item
-            $targetItem = InventoryItems::with(['variant', 'itemLocation', 'departmentItem'])
-                ->where('variant_id', $sourceItem->variant_id)
-                ->where('location_id', $validated['location_id'])
-                ->where('department_id', $validated['department_id'])
-                ->where('tenant_id', $tenantId)
-                ->first();
-
-            if (!$targetItem) {
-                Log::error('Target inventory item not found');
-                return response()->json([
-                    'success' => false,
-                    'message' => __('passwords.create_inv_first')
-                ]);
-            }
-
-            // ─── Gather context ────────────────────────────────────────
-            $actor = $this->actorLabel($user);
-
-            $variantName = $sourceItem->variant?->name ?? 'Unknown Item';
-            $variantSku  = $sourceItem->variant?->sku  ?? 'N/A';
-
-            $sourceLocationName   = $sourceItem->itemLocation?->name   ?? "Location #{$sourceItem->location_id}";
-            $sourceDepartmentName = $sourceItem->departmentItem?->name ?? "Department #{$sourceItem->department_id}";
-            $targetLocationName   = $targetLocation->name;
-            $targetDepartmentName = $targetDepartment->name;
-
-            // ✅ Update target stock
-            $targetBefore = (int) $targetItem->quantity_allocated;
-            $targetItem->quantity_allocated += $adjustAmount;
+            // 1. Update target stock — exactly once
+            $targetItem->quantity_allocated = $targetAfter;
             $targetItem->save();
-            $targetAfter = (int) $targetItem->quantity_allocated;
 
-            // ✅ Update source stock
-            $sourceBefore = (int) $sourceItem->quantity_allocated;
-            $sourceItem->quantity_allocated -= $adjustAmount;
+            // 2. Update source stock — exactly once
+            $sourceItem->quantity_allocated = $sourceAfter;
             $sourceItem->save();
-            $sourceAfter = (int) $sourceItem->quantity_allocated;
 
-            // ─── The two sides of the story ────────────────────────────
-            $sharedHeader = sprintf(
-                '%s transferred %s unit(s) of "%s" (SKU %s)',
-                $actor,
-                number_format($adjustAmount),
-                $variantName,
-                $variantSku
-            );
-
-            $fromTo = sprintf(
-                'from %s (%s) to %s (%s)',
-                $sourceLocationName,
-                $sourceDepartmentName,
-                $targetLocationName,
-                $targetDepartmentName
-            );
-
-            // ★ Source side: sending
-            $transferNarrative = sprintf(
-                '%s %s. Source branch stock: %s → %s units. '
-                . 'The stock now belongs to %s (%s).',
-                $sharedHeader,
-                $fromTo,
-                number_format($sourceBefore),
-                number_format($sourceAfter),
-                $targetLocationName,
-                $targetDepartmentName
-            );
-
-            // ★ Target side: receiving
-            $receivedNarrative = sprintf(
-                '%s %s. Receiving branch stock: %s → %s units. '
-                . 'The stock came from %s (%s).',
-                $sharedHeader,
-                $fromTo,
-                number_format($targetBefore),
-                number_format($targetAfter),
-                $sourceLocationName,
-                $sourceDepartmentName
-            );
-
-            // ✅ Update target stock
-            $targetBefore = $targetItem->quantity_allocated;
-            $targetItem->quantity_allocated += $adjustAmount;
-            $targetItem->save();
-            $targetAfter = $targetItem->quantity_allocated;
-
-            // ✅ Update source stock
-            $sourceBefore = $sourceItem->quantity_allocated;
-            $sourceItem->quantity_allocated -= $adjustAmount;
-            $sourceItem->save();
-            $sourceAfter = $sourceItem->quantity_allocated;
-
-            // Log::info("Source: $sourceBefore → $sourceAfter, Target: $targetBefore → $targetAfter");
-
-            // ✅ Source adjustment
+            // 3. Source adjustment
             InventoryAdjustments::create([
                 'inventory_id'    => $sourceItem->id,
                 'quantity_before' => $sourceBefore,
@@ -831,7 +797,7 @@ class InventoryAdjustmentsController extends Controller
                 'tenant_id'       => $sourceItem->tenant_id,
             ]);
 
-            // ✅ Target adjustment
+            // 4. Target adjustment
             InventoryAdjustments::create([
                 'inventory_id'    => $targetItem->id,
                 'quantity_before' => $targetBefore,
@@ -842,7 +808,7 @@ class InventoryAdjustmentsController extends Controller
                 'tenant_id'       => $targetItem->tenant_id,
             ]);
 
-            // ✅ Source transaction (money OUT)
+            // 5. Source transaction (out)
             InventoryTransactions::create([
                 'inventory_id'   => $sourceItem->id,
                 'quantity'       => -$adjustAmount,
@@ -852,11 +818,9 @@ class InventoryAdjustmentsController extends Controller
                 'notes'          => $transferNarrative,
                 'created_by'     => $user->id,
                 'tenant_id'      => $sourceItem->tenant_id,
-
-                
             ]);
 
-            // ✅ Target transaction (money IN)
+            // 6. Target transaction (in)
             InventoryTransactions::create([
                 'inventory_id'   => $targetItem->id,
                 'quantity'       => $adjustAmount,
@@ -871,31 +835,34 @@ class InventoryAdjustmentsController extends Controller
             DB::commit();
 
             return response()->json([
-                'success' => true,
-                'reload' => true,
-                'refresh' => false,
+                'success'     => true,
+                'reload'      => true,
+                'refresh'     => false,
                 'componentId' => 'reloadStockComponent',
-                'message' => __('passwords.stock_transfer_success'),
-                'redirect' => route('stocks.index'),
+                'message'     => __('passwords.stock_transfer_success'),
+                'redirect'    => route('stocks.index'),
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
-            Log::error('Validation errors:', $e->errors());
+            Log::error('Transfer validation errors:', $e->errors());
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $e->errors(),
+                'errors'  => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Transfer error:', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            DB::rollBack();
+            Log::error('Transfer error:', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred: ' . $e->getMessage(),
             ], 500);
         }
     }
-    
 
     /**
      * Sentence fragment: "Fred (fred@shop.com)".

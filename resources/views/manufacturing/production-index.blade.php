@@ -77,6 +77,7 @@
                 @endcan
 
                 @include('manufacturing.production-order.create')
+                @include('manufacturing.production-order.drawer')
             </div>
         </div>
     </div>
@@ -176,7 +177,7 @@
                                             <th class="min-w-120px">{{ __('passwords.total_cost') }}</th>
                                             <th class="min-w-120px">{{ __('passwords.scheduled_date') }}</th>
                                             <th class="min-w-120px">{{ __('auth._creater') }}</th>
-                                            <th class="min-w-100px text-end">{{ __('auth._actions') }}</th>
+                                            {{-- <th class="min-w-100px text-end">{{ __('auth._actions') }}</th> --}}
                                         </tr>
                                     </thead>
                                     <tbody id="productionTableBody"></tbody>
@@ -231,46 +232,23 @@
 
     @push('scripts')
         <script>
-            window.__VARIANT_OPTIONS__ = `
-                @foreach($variants as $variant)
-                    <option value="{{ $variant->name }}"
-                            data-id="{{ $variant->id }}"
-                            data-uom-id="{{ $variant->weight_unit }}"
-                            data-cost-price="{{ $variant->supplier_cost_price }}"
-                            data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
-                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
-                    </option>
-                @endforeach
-            `;
-
-            window.__VARIANT_OUTPUT_OPTIONS__ = `
-                @foreach($variants as $variant)
-                    <option value="{{ $variant->name }}"
-                            data-id="{{ $variant->id }}"
-                            data-uom-id="{{ $variant->weight_unit }}"
-                            data-selling-price="{{ $variant->selling_price }}"
-                            data-grand-total-cost="{{ $variant->grand_total_cost_price }}"
-                            data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}">
-                    </option>
-                @endforeach
-            `;
-
-            window.__UOM_OPTIONS__ = `{!! $uoms->map(fn($u) => sprintf(
-                '<option value="%s">%s</option>',
-                $u->id, e($u->name)
-            ))->implode('') !!}`;
+            window.__VARIANT_OPTIONS__ = `@foreach($variants as $variant)<option value="{{ $variant->name }}" data-id="{{ $variant->id }}" data-uom-id="{{ $variant->weight_unit }}" data-cost-price="{{ $variant->supplier_cost_price }}" data-grand-total-cost="{{ $variant->grand_total_cost_price }}" data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}"></option>@endforeach`;
+            window.__VARIANT_OUTPUT_OPTIONS__ = `@foreach($variants as $variant)<option value="{{ $variant->name }}" data-id="{{ $variant->id }}" data-uom-id="{{ $variant->weight_unit }}" data-selling-price="{{ $variant->selling_price }}" data-grand-total-cost="{{ $variant->grand_total_cost_price }}" data-inventory-strategy="{{ $variant->product?->resolvedInventoryStrategy() ?? 'quantity' }}"></option>@endforeach`;
+            window.__UOM_OPTIONS__ = `{!! $uoms->map(fn($u) => sprintf('<option value="%s">%s</option>', $u->id, e($u->name)))->implode('') !!}`;
         </script>
 
         @include('manufacturing.production-order.list-scripts')
+
+        {{-- Only the modals you still need --}}
         @include('manufacturing.production-order.edit-modal-shared')
-        @include('manufacturing.production-order.view-modal-shared')
         @include('manufacturing.production-order.start-modal-shared')
-        @include('manufacturing.production-order.complete-modal-shared') 
+        @include('manufacturing.production-order.complete-modal-shared')
         @include('manufacturing.production-order.edit-modal-scripts')
-        @include('manufacturing.production-order.view-modal-scripts')  
         @include('manufacturing.production-order.start-modal-scripts')
         @include('manufacturing.production-order.complete-modal-scripts')
-        
+
+        {{-- Drawer scripts --}}
+        @include('manufacturing.production-order.drawer-scripts')
     @endpush
 </x-app-layout>
 
