@@ -263,15 +263,18 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/product-category-status/{id}', [ProductCategoryController::class, 'changeStatus'])->name('product-category.status');
         // Products
         
-        Route::resource('products', ProductController::class);
+        Route::get('products/data',        [ProductController::class, 'data'])->name('products.data');
+        Route::get('products/{product}/drawer-data', [ProductController::class, 'showData'])->name('products.drawer-data');
+        Route::resource('products',        ProductController::class);
         Route::post('/product-status/{id}', [ProductController::class, 'changeProductStatus'])->name('product.status');
         Route::post('/product-tax-status/{id}', [ProductController::class, 'changeProductTaxStatus'])->name('product.taxable');
+
         Route::resource('variants', ProductVariantController::class);
         Route::post('/variant-status/{id}', [ProductVariantController::class, 'changeVariantStatus'])->name('variant.status');
         Route::post('/variant-tax-status/{id}', [ProductVariantController::class, 'changeProductVariantTaxStatus'])->name('product.taxable');
         Route::post('/product/upload-image', [ProductController::class, 'uploadProductImage'])->name('product.upload_image');
         Route::post('/variant/upload-image', [ProductVariantController::class, 'uploadVariantImage'])->name('variant.upload_image');
-        Route::put('/products/{product}/update-assignment', [ProductController::class, 'updateProductAssignments'])
+        Route::put('/products/{product:id}/update-assignment', [ProductController::class, 'updateProductAssignments'])
             ->name('assign.product');
         Route::put('/assignment/{product}', [ProductVariantController::class, 'updateVariantAssignments'])
             ->name('assign.variant');

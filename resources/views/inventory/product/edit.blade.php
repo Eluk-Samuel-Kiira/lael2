@@ -94,6 +94,115 @@
     </div>
 </div>  
 
+<script>
+    async function editProductInstanceLoop(uniqueId) {
+        const form         = document.getElementById('kt_modal_product_form' + uniqueId);
+        const submitButton = document.getElementById('editProductButton' + uniqueId);
+        const modalEl      = document.getElementById('editProduct' + uniqueId);
+        if (!form || !submitButton) return;
+
+        // ── 1. Collect form data ────────────────────────────────
+        const data = Object.fromEntries(new FormData(form));
+        data._method = 'PUT';
+
+        // Drop empty strings so Laravel validates against null, not ""
+        Object.keys(data).forEach(k => {
+            if (data[k] === '' || data[k] === 'undefined') delete data[k];
+        });
+
+        // ── 2. Loading state ────────────────────────────────────
+        setEditModalLoading(submitButton, true);
+        clearEditFormErrors(form);
+
+        try {
+            // ── 3. Submit ──────────────────────────────────────
+            const url = '{{ route('products.update', ['product' => ':id']) }}'.replace(':id', uniqueId);
+
+            const res = await fetch(url, {
+                method: 'POST',   // _method=PUT inside body
+                headers: {
+                    'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'Accept':           'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: new URLSearchParams(data),
+            });
+
+            const json = await res.json().catch(() => ({}));
+
+            // ── 4. Validation errors (422) ─────────────────────
+            if (res.status === 422) {
+                if (json.errors) {
+                    Object.entries(json.errors).forEach(([field, messages]) => {
+                        showEditFieldError(form, uniqueId, field, messages[0]);
+                    });
+                }
+                window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+                return;
+            }
+
+            if (!res.ok || json.success === false) {
+                throw new Error(json.message || 'Request failed');
+            }
+
+            // ── 5. Success ─────────────────────────────────────
+            window.toastr?.success?.(json.message || 'Product updated.');
+
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+
+            // Refresh the table
+            window.ProductList?.reload?.();
+
+            // Refresh the drawer if it's still showing this product
+            if (window.ProductDrawer?.isOpenFor?.(uniqueId)) {
+                window.ProductDrawer.reload(uniqueId);
+            }
+
+        } catch (err) {
+            console.error('[editProduct] failed:', err);
+            window.toastr?.error?.(err.message || 'Something went wrong.');
+        } finally {
+            setEditModalLoading(submitButton, false);
+        }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────
+    function setEditModalLoading(button, busy) {
+        if (!button) return;
+        const label    = button.querySelector('.indicator-label');
+        const progress = button.querySelector('.indicator-progress');
+        button.disabled = busy;
+        if (label)    label.style.display    = busy ? 'none' : '';
+        if (progress) progress.style.display = busy ? 'inline-flex' : 'none';
+    }
+
+    function clearEditFormErrors(form) {
+        if (!form) return;
+        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        form.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+    }
+
+    function showEditFieldError(form, productId, fieldName, message) {
+        if (!form) return;
+
+        const field = form.querySelector(`[name="${fieldName}"]`);
+        if (!field) return;
+
+        field.classList.add('is-invalid');
+
+        // Reuse the `<div id="fieldName{productId}">` holder if present
+        let holder = form.querySelector(`#${fieldName}${productId}`);
+
+        if (!holder) {
+            holder = document.createElement('div');
+            holder.id = `${fieldName}${productId}`;
+            field.parentNode.appendChild(holder);
+        }
+
+        holder.classList.add('invalid-feedback', 'd-block');
+        holder.textContent = message;
+    }
+</script>
 
 
 

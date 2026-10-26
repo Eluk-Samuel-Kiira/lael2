@@ -19,7 +19,7 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view product')) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -29,28 +29,64 @@ class ProductController extends Controller
             }
             abort(403);
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) {
             $perPage = 15;
         }
-        
-        // Build the query with relationships
-        $query = Product::with(['category', 'productCreater']);
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
+
+        $categories = ProductCategory::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $productTypes = [
+            'physical'  => 'Physical',
+            'digital'   => 'Digital',
+            'service'   => 'Service',
+            'composite' => 'Composite',
+        ];
+
+        $locations   = Location::where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'name']);
+        $departments = Department::where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'name']);
+
+        $initialFilters = [
+            'search'      => (string) $request->get('search', ''),
+            'category_id' => (string) $request->get('category_id', ''),
+            'type'        => (string) $request->get('type', ''),
+            'per_page'    => $perPage,
+        ];
+
+        return view('inventory.product-index', [
+            'categories'     => $categories,
+            'productTypes'   => $productTypes,
+            'locations'      => $locations,
+            'departments'    => $departments,
+            'initialFilters' => $initialFilters,
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view product')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+
+        $search     = trim((string) $request->get('search', ''));
+        $categoryId = $request->get('category_id');
+        $type       = $request->get('type');
+        $perPage    = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Product::with(['category:id,name', 'productCreater:id,name'])
+            ->withCount('variants')
+            ->where('tenant_id', $tenantId);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('sku', 'like', "%{$search}%")
                 ->orWhere('type', 'like', "%{$search}%")
@@ -59,58 +95,49 @@ class ProductController extends Controller
                 ->orWhereHas('productCreater', fn($cr) => $cr->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Apply category filter if provided
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->category_id);
-        }
-        
-        // Apply type filter if provided
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-        
-        // Paginate with dynamic per_page
-        $products = $query->latest()->paginate($perPage);
-        
-        // Preserve filters in pagination links
-        $products->appends([
-            'per_page' => $perPage, 
-            'search' => $request->search,
-            'category_id' => $request->category_id,
-            'type' => $request->type
-        ]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadProductComponent') {
-            return view('inventory.product.component', [
-                'all_products' => $products,
-            ])->render();
-        }
-        
-        // Get categories for filter
-        $categories = ProductCategory::where('tenant_id', $tenantId)
-            ->where('is_active', 1)
-            ->get(['id', 'name']);
-        
-        // Get product types for filter
-        $productTypes = ['simple' => 'Simple', 'variable' => 'Variable', 'digital' => 'Digital', 'service' => 'Service'];
-        
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        $departments = Department::where('tenant_id', $tenantId)->get();
+        if ($categoryId) $query->where('category_id', $categoryId);
+        if ($type)       $query->where('type', $type);
 
-        // Regular page load
-        return view('inventory.product-index', [
-            'all_products' => $products,
-            'categories' => $categories,
-            'productTypes' => $productTypes,
-            'locations' => $locations,
-            'departments' => $departments,
-            
+        $summary = [
+            'total'     => (clone $query)->count(),
+            'active'    => (clone $query)->where('is_active', 1)->count(),
+            'inactive'  => (clone $query)->where('is_active', 0)->count(),
+            'taxable'   => (clone $query)->where('is_taxable', 1)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Product $p) => [
+            'id'                 => $p->id,
+            'sku'                => $p->sku,
+            'name'               => $p->name,
+            'image_url'          => $p->image_url ? productImage($p->image_url) : null,
+            'category_name'      => $p->category?->name ?? '—',
+            'inventory_strategy' => $p->inventory_strategy,
+            'type'               => $p->type,
+            'is_taxable'         => (bool) $p->is_taxable,
+            'is_active'          => (bool) $p->is_active,
+            'creator'            => $p->productCreater?->name ?? '—',
+            'created_at'         => optional($p->created_at)->format('d M Y, h:i a'),
+            'variants_count'     => $p->variants_count ?? 0,
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ],
+            'filters' => ['search' => $search, 'category_id' => $categoryId, 'type' => $type],
         ]);
     }
+
 
     /**
      * Show the form for creating a new resource.
@@ -265,6 +292,148 @@ class ProductController extends Controller
         }
         
         return view('inventory.product-variant.index', compact('product_variants'));
+    }
+
+    /**
+     * JSON payload for the drawer (product + variants).
+     * GET /products/{id}/drawer-data
+     */
+    public function showData(Request $request, string $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view product')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.not_authorized'),
+            ], 403);
+        }
+
+        $product = Product::with([
+            'category:id,name',
+            'productCreater:id,name,email',
+            'taxes:id,name,code',
+            'promotions:id,name',
+            'locations:id,name',
+            'departments:id,name,location_id',
+        ])
+        ->withCount('variants')
+        ->where('tenant_id', $tenantId)
+        ->where('id', $id)
+        ->first();
+
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth._not_found'),
+            ], 404);
+        }
+
+        // ── Variants ────────────────────────────────────────────────
+        $variants = ProductVariant::with(['unitMeasure:id,name'])
+            ->where('product_id', $product->id)
+            ->where('tenant_id', $tenantId)
+            ->latest()
+            ->get()
+            ->map(function (ProductVariant $v) {
+                return [
+                    'id'                     => $v->id,
+                    'name'                   => $v->name,
+                    'sku'                    => $v->sku,
+                    'barcode'                => $v->barcode,
+                    'image_url'              => productVariantImage($v->image_url),
+                    'supplier_cost_price'    => (float) $v->supplier_cost_price,
+                    'grand_total_cost_price' => (float) $v->grand_total_cost_price,
+                    'selling_price'          => (float) $v->selling_price,
+                    'discount_selling_price' => (float) $v->discount_selling_price,
+                    'profit_per_unit'        => (float) $v->profit_per_unit,
+                    'profit_margin'          => (float) $v->profit_margin,
+                    'overal_quantity_at_hand'=> (float) $v->overal_quantity_at_hand,
+                    'weight'                 => (float) $v->weight,
+                    'weight_unit'            => $v->weight_unit,
+                    'is_active'              => (bool) $v->is_active,
+                ];
+            });
+
+        // ── Permissions ─────────────────────────────────────────────
+        $can = [
+            'can_toggle'        => $user->can('update product'),
+            'can_edit'          => $user->can('edit product'),
+            'can_delete'        => $user->can('delete product'),
+            'can_allocate'      => $user->can('update product'),
+            'can_view_variants' => $user->can('view variant'),
+        ];
+
+        // ── All tenant options (for the allocate panel) ─────────────
+        // We return ALL selectable rows so the user can check/uncheck
+        // freely. The "selected" arrays below map to what's already
+        // assigned to this product.
+        $allTaxes = \App\Models\Tax::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code'])
+            ->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'code' => $t->code])
+            ->values();
+
+        $allPromotions = \App\Models\Promotion::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn($p) => ['id' => $p->id, 'name' => $p->name])
+            ->values();
+
+        $allLocations = \App\Models\Location::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn($l) => ['id' => $l->id, 'name' => $l->name])
+            ->values();
+
+        $allDepartments = \App\Models\Department::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id'])
+            ->map(fn($d) => [
+                'id'          => $d->id,
+                'name'        => $d->name,
+                'location_id' => $d->location_id,
+            ])
+            ->values();
+
+        // ── Response ────────────────────────────────────────────────
+        return response()->json([
+            'success' => true,
+            'product' => array_merge([
+                'id'                 => $product->id,
+                'name'               => $product->name,
+                'sku'                => $product->sku,
+                'category_id'        => $product->category_id,
+                'category_name'      => $product->category?->name,
+                'type'               => $product->type,
+                'inventory_strategy' => $product->inventory_strategy,
+                'description'        => $product->description,
+                'is_active'          => (bool) $product->is_active,
+                'is_taxable'         => (bool) $product->is_taxable,
+                'variants_count'     => $product->variants_count ?? 0,
+                'creator'            => $product->productCreater ? [
+                    'name'  => $product->productCreater->name,
+                    'email' => $product->productCreater->email,
+                ] : null,
+                'created_at'         => optional($product->created_at)->format('d M Y, h:i a'),
+                'variants_url'       => route('products.show', $product->id),
+            ], $can),
+            'variants' => $variants,
+            'allocate_options' => [
+                'is_single_shop'        => tenant_is_single_shop($tenantId),
+                'is_taxable'            => (bool) $product->is_taxable,
+                'taxes'                 => $allTaxes,
+                'promotions'            => $allPromotions,
+                'locations'             => $allLocations,
+                'departments'           => $allDepartments,
+                'selected_taxes'        => $product->taxes->pluck('id')->values(),
+                'selected_promotions'   => $product->promotions->pluck('id')->values(),
+                'selected_locations'    => $product->locations->pluck('id')->values(),
+                'selected_departments'  => $product->departments->pluck('id')->values(),
+                'assign_url'            => route('assign.product', $product->id),
+            ],
+        ]);
     }
 
     /**
@@ -647,6 +816,9 @@ class ProductController extends Controller
         $tenantId = $user->tenant_id;
                 
         if (!$user->hasPermissionTo('update product')) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+            }
             abort(403, __('payments.not_authorized'));
         }
 
@@ -757,10 +929,18 @@ class ProductController extends Controller
 
             DB::commit();
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => __('auth._updated'),
+                ]);
+            }
+
             session()->flash('toast', [
                 'type' => 'success',
                 'message' => __('auth._updated'),
             ]);
+            return redirect()->back();
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -770,14 +950,20 @@ class ProductController extends Controller
                 'tenant_id' => $tenantId,
                 'error' => $e->getMessage()
             ]);
+            
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.update_failed'),
+                ], 500);
+            }
+
 
             session()->flash('toast', [
                 'type' => 'error',
                 'message' => __('auth.update_failed'),
             ]);
         }
-
-        return redirect()->back();
     }
 
     public function bulkAllocate(Request $request)

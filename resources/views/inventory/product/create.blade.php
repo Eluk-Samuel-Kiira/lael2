@@ -121,3 +121,78 @@
     </div>
 </div>  
 
+<script>
+
+    async function submitProductForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+        const form         = document.getElementById(formId);
+        const submitButton = document.getElementById(submitButtonId);
+        if (!form || !submitButton) return;
+
+        // ── 1. Collect form data ────────────────────────────────
+        const data = Object.fromEntries(new FormData(form));
+        data._method = method;
+
+        // Clean up empty values (FormData serializes "" for empty selects)
+        Object.keys(data).forEach(k => {
+            if (data[k] === '' || data[k] === 'undefined') delete data[k];
+        });
+
+        // ── 2. Loading state ────────────────────────────────────
+        setModalLoading(submitButton, true);
+
+        try {
+            // ── 3. POST (always POST — _method spoofs PUT/PATCH) ──
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'Accept':       'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: new URLSearchParams(data),
+            });
+
+            const json = await res.json().catch(() => ({}));
+
+            // ── 4. Handle validation errors (Laravel 422) ────────
+            if (res.status === 422) {
+                clearFormErrors(form);
+
+                if (json.errors) {
+                    Object.entries(json.errors).forEach(([field, messages]) => {
+                        showFieldError(form, field, messages[0]);
+                    });
+                }
+
+                window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+                return;
+            }
+
+            if (!res.ok || json.success === false) {
+                throw new Error(json.message || 'Request failed');
+            }
+
+            // ── 5. Success ──────────────────────────────────────
+            window.toastr?.success?.(json.message || 'Product saved.');
+
+            bootstrap.Modal.getOrCreateInstance(form.closest('.modal')).hide();
+            form.reset();
+            clearFormErrors(form);
+
+            // Refresh whichever listing is on screen
+            window.ProductList?.reload?.();
+
+            // If the response asks for redirect
+            if (json.redirect) {
+                // Optional: soft redirect after a tick
+                // setTimeout(() => window.location.href = json.redirect, 500);
+            }
+        } catch (err) {
+            console.error('[submitProductForm] failed:', err);
+            window.toastr?.error?.(err.message || 'Something went wrong.');
+        } finally {
+            setModalLoading(submitButton, false);
+        }
+    }
+
+</script>

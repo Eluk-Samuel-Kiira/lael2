@@ -976,289 +976,9 @@
 </script>
 
 
-<!-- Product Catalog -->
- {{-- ── JAVASCRIPT ──────────────────────────────────────────────────────────── --}}
-<script>
-    {{-- Expose translations to JS --}}
-    window._importLang = {
-        selectFile      : '{{ __('pagination.import_js_select_file') }}',
-        invalidType     : '{{ __('pagination.import_js_invalid_type') }}',
-        networkError    : '{{ __('pagination.import_js_network_error') }}',
-        importFailed    : '{{ __('pagination.import_js_import_failed') }}',
-        filePrefix      : '{{ __('pagination.import_js_file_prefix') }}',
-        statCreated     : '{{ __('pagination.import_js_created') }}',
-        statSkipped     : '{{ __('pagination.import_js_skipped') }}',
-        statErrors      : '{{ __('pagination.import_js_errors') }}',
-        issuesSuffix    : '{{ __('pagination.import_js_issues_suffix') }}',
-        sections: {
-            categories    : '{{ __('pagination.import_section_categories') }}',
-            sub_categories: '{{ __('pagination.import_section_sub_categories') }}',
-            products      : '{{ __('pagination.import_section_products') }}',
-            variants      : '{{ __('pagination.import_section_variants') }}',
-        },
-    };
-
-    (function () {
-        'use strict';
-
-        const lang = window._importLang;
-
-        /* ── File preview ─────────────────────────────────────────────────────── */
-        window.previewImportFile = function (input) {
-            const file = input.files[0];
-            if (!file) return;
-            showImportFileName(file.name);
-        };
-
-        window.handleImportDrop = function (event) {
-            event.preventDefault();
-            const zone = document.getElementById('importDropZone');
-            zone.classList.remove('border-primary', 'bg-light-primary');
-
-            const file = event.dataTransfer.files[0];
-            if (!file) return;
-
-            const input = document.getElementById('importFileInput');
-            const dt    = new DataTransfer();
-            dt.items.add(file);
-            input.files = dt.files;
-
-            showImportFileName(file.name);
-        };
-
-        function showImportFileName (name) {
-            const label = document.getElementById('importFileName');
-            label.textContent = lang.filePrefix + ' ' + name;
-            label.classList.remove('d-none');
-            hideError();
-            resetResultPanel();
-        }
-
-        /* ── Submit ───────────────────────────────────────────────────────────── */
-        window.submitCatalogImport = async function () {
-            const input = document.getElementById('importFileInput');
-            if (!input.files.length) {
-                showError(lang.selectFile);
-                return;
-            }
-
-            const ext = input.files[0].name.split('.').pop().toLowerCase();
-            if (!['xlsx', 'xls'].includes(ext)) {
-                showError(lang.invalidType);
-                return;
-            }
-
-            setLoading(true);
-            resetResultPanel();
-
-            const form     = document.getElementById('importCatalogForm');
-            const formData = new FormData(form);
-
-            try {
-                animateProgress();
-
-                const response = await fetch('{{ route('catalog.import.store') }}', {
-                    method : 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept'      : 'application/json',
-                    },
-                    body: formData,
-                });
-
-                const data = await response.json();
-                stopProgress();
-
-                if (data.success) {
-                    renderReport(data.report, data.message);
-                } else {
-                    renderError(data.message || lang.importFailed);
-                }
-            } catch (err) {
-                stopProgress();
-                renderError(lang.networkError + ': ' + err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        /* ── Progress animation ───────────────────────────────────────────────── */
-        let _progressInterval = null;
-        let _progress = 0;
-
-        function animateProgress () {
-            _progress = 0;
-            document.getElementById('importProgress').classList.remove('d-none');
-            _progressInterval = setInterval(() => {
-                _progress = Math.min(_progress + Math.random() * 8, 88);
-                setProgressBar(_progress);
-            }, 300);
-        }
-
-        function stopProgress () {
-            clearInterval(_progressInterval);
-            setProgressBar(100);
-            setTimeout(() => {
-                document.getElementById('importProgress').classList.add('d-none');
-                setProgressBar(0);
-            }, 600);
-        }
-
-        function setProgressBar (val) {
-            const pct = Math.round(val);
-            document.getElementById('importProgressBar').style.width = pct + '%';
-            document.getElementById('importProgressPct').textContent  = pct + '%';
-        }
-
-        /* ── Report renderer ──────────────────────────────────────────────────── */
-        function renderReport (report, message) {
-            const panel   = document.getElementById('importResultPanel');
-            const content = document.getElementById('importResultContent');
-
-            let html = `<div class="alert alert-success d-flex align-items-center mb-4">
-                <i class="ki-duotone ki-check-circle fs-2x text-success me-3">
-                    <span class="path1"></span><span class="path2"></span>
-                </i>
-                <div class="fw-semibold">${escHtml(message)}</div>
-            </div>`;
-
-            const sections = [
-                { key: 'categories',     color: 'primary' },
-                { key: 'sub_categories', color: 'success' },
-                { key: 'products',       color: 'warning' },
-                { key: 'variants',       color: 'info'    },
-            ];
-
-            html += '<div class="row g-3 mb-4">';
-            sections.forEach(s => {
-                const stat  = report[s.key] || { created: 0, skipped: 0, errors: [] };
-                const label = lang.sections[s.key] || s.key;
-                html += `
-                <div class="col-sm-6 col-xl-3">
-                    <div class="card border h-100">
-                        <div class="card-body p-4">
-                            <div class="fw-bold text-gray-700 mb-2 fs-7">${escHtml(label)}</div>
-                            <div class="d-flex gap-4">
-                                <div>
-                                    <div class="fw-bolder fs-2 text-success">${stat.created}</div>
-                                    <div class="text-muted fs-8">${escHtml(lang.statCreated)}</div>
-                                </div>
-                                <div>
-                                    <div class="fw-bolder fs-2 text-warning">${stat.skipped}</div>
-                                    <div class="text-muted fs-8">${escHtml(lang.statSkipped)}</div>
-                                </div>
-                                <div>
-                                    <div class="fw-bolder fs-2 text-danger">${stat.errors.length}</div>
-                                    <div class="text-muted fs-8">${escHtml(lang.statErrors)}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            html += '</div>';
-
-            sections.forEach(s => {
-                const errors = (report[s.key] || {}).errors || [];
-                if (!errors.length) return;
-                const label = lang.sections[s.key] || s.key;
-                html += `
-                <div class="mb-3">
-                    <div class="fw-bold text-danger mb-2">⚠ ${escHtml(label)} — ${errors.length} ${escHtml(lang.issuesSuffix)}</div>
-                    <ul class="text-danger fs-7 mb-0 ps-4">
-                        ${errors.map(e => `<li>${escHtml(e)}</li>`).join('')}
-                    </ul>
-                </div>`;
-            });
-
-            content.innerHTML = html;
-            panel.classList.remove('d-none');
-
-            const totalCreated = Object.values(report).reduce((sum, s) => sum + (s.created || 0), 0);
-            if (totalCreated > 0) {
-                setTimeout(() => {
-                    reloadComponent('reloadProductComponent', '{{ route('products.index') }}');
-                }, 1500);
-            }
-        }
-
-        function renderError (msg) {
-            const panel   = document.getElementById('importResultPanel');
-            const content = document.getElementById('importResultContent');
-            content.innerHTML = `
-                <div class="alert alert-danger d-flex align-items-center">
-                    <i class="ki-duotone ki-cross-circle fs-2x text-danger me-3">
-                        <span class="path1"></span><span class="path2"></span>
-                    </i>
-                    <div class="fw-semibold">${escHtml(msg)}</div>
-                </div>`;
-            panel.classList.remove('d-none');
-        }
-
-        /* ── Helpers ──────────────────────────────────────────────────────────── */
-        function setLoading (loading) {
-            document.getElementById('importBtnLabel').classList.toggle('d-none',  loading);
-            document.getElementById('importBtnSpinner').classList.toggle('d-none', !loading);
-            document.getElementById('importSubmitBtn').disabled = loading;
-            document.getElementById('importCancelBtn').disabled = loading;
-        }
-
-        function showError (msg) {
-            const el = document.getElementById('importFileError');
-            el.textContent = msg;
-            el.classList.remove('d-none');
-        }
-
-        function hideError () {
-            document.getElementById('importFileError').classList.add('d-none');
-        }
-
-        function resetResultPanel () {
-            document.getElementById('importResultPanel').classList.add('d-none');
-            document.getElementById('importResultContent').innerHTML = '';
-        }
-
-        function escHtml (str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-        }
-
-        document.getElementById('kt_modal_catalog_import')
-                .addEventListener('hidden.bs.modal', function () {
-                    document.getElementById('importCatalogForm').reset();
-                    document.getElementById('importFileName').classList.add('d-none');
-                    resetResultPanel();
-                    hideError();
-                    setLoading(false);
-                });
-    })();
-</script>
 
 
 <script>
-    function submitProductForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
 
     function editProductVariantInstanceLoop(uniqueId) {
         const submitButton = document.getElementById('editUOMButton' + uniqueId);
@@ -1313,31 +1033,6 @@
         LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
     }
     
-    function editProductInstanceLoop(uniqueId) {
-        
-        const submitButton = document.getElementById('editProductButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_modal_product_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('products.update', ['product' => ':id']) }}'.replace(':id', uniqueId);
-        
-        // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
-    }
-
-    function updateProductStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/product-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
 
     function updateProductTaxStatus(productId, status) {
         // Update label instantly
@@ -1376,150 +1071,42 @@
         window.LiveBlade.toggleButtonLoading(button, isLoading);
     }
 
-</script>
+    // ── Clear previous validation errors ─────────────────────
+    function clearFormErrors(form) {
+        if (!form) return;
 
-
-
- <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const modal = document.getElementById('kt_modal_bulk_allocate');
-    if (!modal) return;
-
-    const productSearch     = modal.querySelector('#batch_product_search');
-    const deptSearch        = modal.querySelector('#batch_department_search');
-    const selectAllProducts = modal.querySelector('#select_all_products');
-    const summary           = modal.querySelector('#batch_summary');
-    const submitBtn         = modal.querySelector('#batchSubmitButton');
-    const form              = modal.querySelector('#kt_modal_bulk_allocate_form');
-    const productIdsInput   = modal.querySelector('#bulkProductIds');
-
-    function updateSummary() {
-        const pCount = modal.querySelectorAll('.product-checkbox:checked').length;
-        const dCount = modal.querySelectorAll('.dept-checkbox:checked').length;
-        summary.textContent = `${pCount} {{ __('pagination.products') }} × ${dCount} {{ __('auth._department') }} = ${pCount * dCount} {{ __('pagination.assignments') }}`;
-        submitBtn.disabled = (pCount === 0 || dCount === 0);
-        
-        // Update selected count badge
-        const countBadge = document.getElementById('selectedProductsCount');
-        if (countBadge) {
-            countBadge.textContent = pCount;
-        }
-        
-        // Update hidden input
-        const productIds = Array.from(modal.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
-        if (productIdsInput) {
-            productIdsInput.value = productIds.join(',');
-        }
+        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        form.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
     }
 
-    modal.addEventListener('change', function (e) {
-        if (e.target.classList.contains('product-checkbox') || e.target.classList.contains('dept-checkbox')) {
-            updateSummary();
+    // ── Show a single field error ────────────────────────────
+    function showFieldError(form, fieldName, message) {
+        if (!form) return;
+
+        const field = form.querySelector(`[name="${fieldName}"]`);
+        if (!field) return;
+
+        field.classList.add('is-invalid');
+
+        // Try to find the existing `<div id="fieldName"></div>` error holder
+        let holder = form.querySelector(`#${fieldName}`);
+
+        // If not found (or the field name isn't a valid id), create one after the field
+        if (!holder) {
+            holder = document.createElement('div');
+            holder.id = fieldName;
+            field.parentNode.appendChild(holder);
         }
 
-        if (e.target.classList.contains('select-location')) {
-            const locId = e.target.dataset.location;
-            modal.querySelectorAll(`.dept-row[data-location="${locId}"]`).forEach(row => {
-                if (row.style.display !== 'none') {
-                    row.querySelector('.dept-checkbox').checked = e.target.checked;
-                }
-            });
-            updateSummary();
-        }
-    });
+        holder.classList.add('invalid-feedback', 'd-block');
+        holder.textContent = message;
+    }
 
-    selectAllProducts.addEventListener('change', function () {
-        modal.querySelectorAll('.product-row').forEach(row => {
-            if (row.style.display !== 'none') {
-                row.querySelector('.product-checkbox').checked = selectAllProducts.checked;
-            }
-        });
-        updateSummary();
-    });
-
-    productSearch.addEventListener('input', function () {
-        const term = this.value.toLowerCase();
-        modal.querySelectorAll('.product-row').forEach(row => {
-            row.style.display = row.dataset.search.includes(term) ? '' : 'none';
-        });
-    });
-
-    deptSearch.addEventListener('input', function () {
-        const term = this.value.toLowerCase();
-        modal.querySelectorAll('.dept-row').forEach(row => {
-            row.style.display = row.dataset.search.includes(term) ? '' : 'none';
-        });
-    });
-
-    // ── Form Submit ────────────────────────────────────────────
-    submitBtn.addEventListener('click', function () {
-        const productIds = Array.from(modal.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
-        const departmentIds = Array.from(modal.querySelectorAll('.dept-checkbox:checked')).map(cb => cb.value);
-
-        if (!productIds.length || !departmentIds.length) return;
-
-        const label    = submitBtn.querySelector('.indicator-label');
-        const progress = submitBtn.querySelector('.indicator-progress');
-
-        submitBtn.disabled = true;
-        if (label) label.style.display = 'none';
-        if (progress) progress.style.display = 'inline-flex';
-
-        fetch(form.action, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-            },
-            body: JSON.stringify({ 
-                product_ids: productIds, 
-                departments: departmentIds 
-            }),
-        })
-        .then(res => res.json())
-        .then(data => {
-            submitBtn.disabled = false;
-            if (label) label.style.display = 'inline-flex';
-            if (progress) progress.style.display = 'none';
-
-            if (data.success) {
-                const modalInstance = bootstrap.Modal.getInstance(modal);
-                if (modalInstance) modalInstance.hide();
-
-                if (typeof toastr !== 'undefined') {
-                    toastr.success(data.message);
-                } else {
-                    alert(data.message);
-                }
-
-                if (data.componentId && typeof LiveBlade !== 'undefined') {
-                    LiveBlade.reloadComponent(data.componentId);
-                } else {
-                    location.reload();
-                }
-            } else {
-                if (typeof toastr !== 'undefined') {
-                    toastr.error(data.message);
-                } else {
-                    alert(data.message);
-                }
-            }
-        })
-        .catch(() => {
-            submitBtn.disabled = false;
-            if (label) label.style.display = 'inline-flex';
-            if (progress) progress.style.display = 'none';
-            
-            if (typeof toastr !== 'undefined') {
-                toastr.error('{{ __("pagination.bulk_allocation_failed") }}');
-            } else {
-                alert('{{ __("pagination.bulk_allocation_failed") }}');
-            }
-        });
-    });
-});
 </script>
+
+
+
+
 
 
 

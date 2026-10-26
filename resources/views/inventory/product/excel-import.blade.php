@@ -5,9 +5,7 @@
 
 @can('create product')
 
-{{-- ── TRIGGER BUTTON (drop this wherever you need it in the toolbar) ────────
-     Already wired into product-index — copy the snippet below to other pages
-     ─────────────────────────────────────────────────────────────────────────
+{{-- ── TRIGGER BUTTON ────────────────────────────────────────────────────────
      <button type="button"
              class="btn btn-light-success flex-shrink-0"
              data-bs-toggle="modal"
@@ -32,12 +30,13 @@
                     {{ __('pagination.import_modal_title') }}
                 </h3>
                 <button type="button"
-                        class="btn-close btn-close-white d-none"
+                        id="importCloseBtn"
+                        class="btn-close btn-close-white"
                         data-bs-dismiss="modal"
                         aria-label="Close"></button>
             </div>
 
-            {{-- Body --}}
+            {{-- Body — unchanged from your original --}}
             <div class="modal-body px-8 py-6">
 
                 {{-- Step indicator --}}
@@ -90,7 +89,6 @@
                             {{ __('pagination.import_step3_label') }}
                         </label>
 
-                        {{-- Drop-zone --}}
                         <div id="importDropZone"
                              class="border border-2 border-dashed border-gray-300 rounded p-6 text-center cursor-pointer position-relative"
                              onclick="document.getElementById('importFileInput').click()"
@@ -118,7 +116,6 @@
                         <div class="text-danger fs-8 mt-1 d-none" id="importFileError"></div>
                     </div>
 
-                    {{-- Progress bar (hidden until upload starts) --}}
                     <div id="importProgress" class="d-none mb-4">
                         <div class="d-flex justify-content-between mb-1">
                             <span class="text-muted fs-7">{{ __('pagination.import_processing') }}</span>
@@ -132,14 +129,12 @@
                     </div>
                 </form>
 
-                {{-- Result panel (hidden until response arrives) --}}
                 <div id="importResultPanel" class="d-none">
                     <div class="separator my-4"></div>
                     <h5 class="fw-bold text-gray-800 mb-4">{{ __('pagination.import_report_heading') }}</h5>
                     <div id="importResultContent"></div>
                 </div>
-
-            </div>{{-- /modal-body --}}
+            </div>
 
             {{-- Footer --}}
             <div class="modal-footer py-4">
@@ -166,8 +161,257 @@
                 </button>
             </div>
 
-        </div>{{-- /modal-content --}}
+        </div>
     </div>
 </div>
 
+{{-- ── JAVASCRIPT ─────────────────────────────────────────────────────────── --}}
+<script>
+    window._importLang = {
+        selectFile      : '{{ __('pagination.import_js_select_file') }}',
+        invalidType     : '{{ __('pagination.import_js_invalid_type') }}',
+        networkError    : '{{ __('pagination.import_js_network_error') }}',
+        importFailed    : '{{ __('pagination.import_js_import_failed') }}',
+        filePrefix      : '{{ __('pagination.import_js_file_prefix') }}',
+        statCreated     : '{{ __('pagination.import_js_created') }}',
+        statSkipped     : '{{ __('pagination.import_js_skipped') }}',
+        statErrors      : '{{ __('pagination.import_js_errors') }}',
+        issuesSuffix    : '{{ __('pagination.import_js_issues_suffix') }}',
+        sections: {
+            categories    : '{{ __('pagination.import_section_categories') }}',
+            sub_categories: '{{ __('pagination.import_section_sub_categories') }}',
+            products      : '{{ __('pagination.import_section_products') }}',
+            variants      : '{{ __('pagination.import_section_variants') }}',
+        },
+    };
+
+    (function () {
+        'use strict';
+
+        const lang = window._importLang;
+
+        window.previewImportFile = function (input) {
+            const file = input.files[0];
+            if (!file) return;
+            showImportFileName(file.name);
+        };
+
+        window.handleImportDrop = function (event) {
+            event.preventDefault();
+            const zone = document.getElementById('importDropZone');
+            zone.classList.remove('border-primary', 'bg-light-primary');
+
+            const file = event.dataTransfer.files[0];
+            if (!file) return;
+
+            const input = document.getElementById('importFileInput');
+            const dt    = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+
+            showImportFileName(file.name);
+        };
+
+        function showImportFileName (name) {
+            const label = document.getElementById('importFileName');
+            label.textContent = lang.filePrefix + ' ' + name;
+            label.classList.remove('d-none');
+            hideError();
+            resetResultPanel();
+        }
+
+        window.submitCatalogImport = async function () {
+            const input = document.getElementById('importFileInput');
+            if (!input.files.length) { showError(lang.selectFile); return; }
+
+            const ext = input.files[0].name.split('.').pop().toLowerCase();
+            if (!['xlsx', 'xls'].includes(ext)) { showError(lang.invalidType); return; }
+
+            setLoading(true);
+            resetResultPanel();
+
+            const form     = document.getElementById('importCatalogForm');
+            const formData = new FormData(form);
+
+            try {
+                animateProgress();
+
+                const response = await fetch('{{ route('catalog.import.store') }}', {
+                    method : 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept'      : 'application/json',
+                    },
+                    body: formData,
+                });
+
+                const data = await response.json();
+                stopProgress();
+
+                if (data.success) {
+                    renderReport(data.report, data.message);
+                } else {
+                    renderError(data.message || lang.importFailed);
+                }
+            } catch (err) {
+                stopProgress();
+                renderError(lang.networkError + ': ' + err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        let _progressInterval = null;
+        let _progress = 0;
+
+        function animateProgress () {
+            _progress = 0;
+            document.getElementById('importProgress').classList.remove('d-none');
+            _progressInterval = setInterval(() => {
+                _progress = Math.min(_progress + Math.random() * 8, 88);
+                setProgressBar(_progress);
+            }, 300);
+        }
+
+        function stopProgress () {
+            clearInterval(_progressInterval);
+            setProgressBar(100);
+            setTimeout(() => {
+                document.getElementById('importProgress').classList.add('d-none');
+                setProgressBar(0);
+            }, 600);
+        }
+
+        function setProgressBar (val) {
+            const pct = Math.round(val);
+            document.getElementById('importProgressBar').style.width = pct + '%';
+            document.getElementById('importProgressPct').textContent  = pct + '%';
+        }
+
+        function renderReport (report, message) {
+            const panel   = document.getElementById('importResultPanel');
+            const content = document.getElementById('importResultContent');
+
+            let html = `<div class="alert alert-success d-flex align-items-center mb-4">
+                <i class="ki-duotone ki-check-circle fs-2x text-success me-3">
+                    <span class="path1"></span><span class="path2"></span>
+                </i>
+                <div class="fw-semibold">${escHtml(message)}</div>
+            </div>`;
+
+            const sections = [
+                { key: 'categories',     color: 'primary' },
+                { key: 'sub_categories', color: 'success' },
+                { key: 'products',       color: 'warning' },
+                { key: 'variants',       color: 'info'    },
+            ];
+
+            html += '<div class="row g-3 mb-4">';
+            sections.forEach(s => {
+                const stat  = report[s.key] || { created: 0, skipped: 0, errors: [] };
+                const label = lang.sections[s.key] || s.key;
+                html += `
+                <div class="col-sm-6 col-xl-3">
+                    <div class="card border h-100">
+                        <div class="card-body p-4">
+                            <div class="fw-bold text-gray-700 mb-2 fs-7">${escHtml(label)}</div>
+                            <div class="d-flex gap-4">
+                                <div>
+                                    <div class="fw-bolder fs-2 text-success">${stat.created}</div>
+                                    <div class="text-muted fs-8">${escHtml(lang.statCreated)}</div>
+                                </div>
+                                <div>
+                                    <div class="fw-bolder fs-2 text-warning">${stat.skipped}</div>
+                                    <div class="text-muted fs-8">${escHtml(lang.statSkipped)}</div>
+                                </div>
+                                <div>
+                                    <div class="fw-bolder fs-2 text-danger">${stat.errors.length}</div>
+                                    <div class="text-muted fs-8">${escHtml(lang.statErrors)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+
+            sections.forEach(s => {
+                const errors = (report[s.key] || {}).errors || [];
+                if (!errors.length) return;
+                const label = lang.sections[s.key] || s.key;
+                html += `
+                <div class="mb-3">
+                    <div class="fw-bold text-danger mb-2">⚠ ${escHtml(label)} — ${errors.length} ${escHtml(lang.issuesSuffix)}</div>
+                    <ul class="text-danger fs-7 mb-0 ps-4">
+                        ${errors.map(e => `<li>${escHtml(e)}</li>`).join('')}
+                    </ul>
+                </div>`;
+            });
+
+            content.innerHTML = html;
+            panel.classList.remove('d-none');
+
+            const totalCreated = Object.values(report).reduce((sum, s) => sum + (s.created || 0), 0);
+            if (totalCreated > 0) {
+                setTimeout(() => {
+                    window.ProductList?.reload?.();
+                    bootstrap.Modal.getInstance(document.getElementById('kt_modal_catalog_import'))?.hide();
+                }, 1500);
+            }
+        }
+
+        function renderError (msg) {
+            const panel   = document.getElementById('importResultPanel');
+            const content = document.getElementById('importResultContent');
+            content.innerHTML = `
+                <div class="alert alert-danger d-flex align-items-center">
+                    <i class="ki-duotone ki-cross-circle fs-2x text-danger me-3">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
+                    <div class="fw-semibold">${escHtml(msg)}</div>
+                </div>`;
+            panel.classList.remove('d-none');
+        }
+
+        function setLoading (loading) {
+            document.getElementById('importBtnLabel').classList.toggle('d-none',  loading);
+            document.getElementById('importBtnSpinner').classList.toggle('d-none', !loading);
+            document.getElementById('importSubmitBtn').disabled = loading;
+            document.getElementById('importCancelBtn').disabled = loading;
+            document.getElementById('importCloseBtn').disabled   = loading;
+        }
+
+        function showError (msg) {
+            const el = document.getElementById('importFileError');
+            el.textContent = msg;
+            el.classList.remove('d-none');
+        }
+
+        function hideError () {
+            document.getElementById('importFileError').classList.add('d-none');
+        }
+
+        function resetResultPanel () {
+            document.getElementById('importResultPanel').classList.add('d-none');
+            document.getElementById('importResultContent').innerHTML = '';
+        }
+
+        function escHtml (str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        document.getElementById('kt_modal_catalog_import')
+                .addEventListener('hidden.bs.modal', function () {
+                    document.getElementById('importCatalogForm').reset();
+                    document.getElementById('importFileName').classList.add('d-none');
+                    resetResultPanel();
+                    hideError();
+                    setLoading(false);
+                });
+    })();
+</script>
 @endcan
