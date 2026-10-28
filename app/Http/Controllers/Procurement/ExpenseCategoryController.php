@@ -17,63 +17,132 @@ class ExpenseCategoryController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view category-expense')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('procurement.expense-category-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view category-expense')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationships
-        $query = ExpenseCategory::with('tenant');
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = ExpenseCategory::where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('code', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%");
             });
         }
-        
-        // Paginate with dynamic per_page
-        $categories = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $categories->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadExpenseCategoryComponent') {
-            return view('procurement.expense-category.category-component', [
-                'expense_categories' => $categories,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('is_active', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('procurement.expense-category-index', [
-            'expense_categories' => $categories,
+
+        // Summary over the filtered set
+        $all = (clone $query)->get(['id', 'is_active']);
+
+        $summary = [
+            'total'    => $all->count(),
+            'active'   => $all->where('is_active', 1)->count(),
+            'inactive' => $all->where('is_active', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(ExpenseCategory $c) => [
+            'id'                => $c->id,
+            'name'              => $c->name,
+            'code'              => $c->code,
+            'description'       => $c->description,
+            'gl_account_id'     => $c->gl_account_id,
+            'is_active'         => (bool) $c->is_active,
+            'requires_receipt'  => (bool) $c->requires_receipt,
+            'requires_approval' => (bool) $c->requires_approval,
+            'budget_monthly'    => (float) $c->budget_monthly,
+            'budget_annual'     => (float) $c->budget_annual,
+            'created_at'        => optional($c->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view category-expense')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $category = ExpenseCategory::where('tenant_id', $tenantId)->find($id);
+
+        if (!$category) {
+            return response()->json(['success' => false, 'message' => __('auth.category_not_found')], 404);
+        }
+
+        // How many expenses reference this category
+        $expenseCount = Expense::where('category_id', $category->id)
+            ->where('tenant_id', $tenantId)
+            ->count();
+
+        $can = [
+            'can_edit'   => $user->can('edit category-expense'),
+            'can_delete' => $user->can('delete category-expense'),
+            'can_toggle' => $user->can('update category-expense'),
+        ];
+
+        return response()->json([
+            'success'  => true,
+            'category' => array_merge([
+                'id'                => $category->id,
+                'name'              => $category->name,
+                'code'              => $category->code,
+                'description'       => $category->description,
+                'gl_account_id'     => $category->gl_account_id,
+                'is_active'         => (bool) $category->is_active,
+                'requires_receipt'  => (bool) $category->requires_receipt,
+                'requires_approval' => (bool) $category->requires_approval,
+                'budget_monthly'    => (float) $category->budget_monthly,
+                'budget_annual'     => (float) $category->budget_annual,
+                'expense_count'     => $expenseCount,
+                'created_at'        => optional($category->created_at)->format('d M Y, H:i'),
+                'updated_at'        => optional($category->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 
@@ -326,5 +395,29 @@ class ExpenseCategoryController extends Controller
         ]);
     }
 
-    
+    public function updateStatus(Request $request, $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('update category-expense')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $validated = $request->validate(['status' => 'required|in:1,0']);
+
+        $category = ExpenseCategory::where('tenant_id', $tenantId)->find($id);
+        if (!$category) {
+            return response()->json(['success' => false, 'message' => __('auth.category_not_found')], 404);
+        }
+
+        $category->is_active = (int) $validated['status'];
+        $category->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => __('auth._updated'),
+        ]);
+    }
+
 }

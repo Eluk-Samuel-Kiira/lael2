@@ -157,3 +157,115 @@
         </div>
     </div>
 </div>
+
+<script>
+async function submitExpenseCategoryForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form         = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+    if (!form || !submitButton) return;
+
+    // ── Collect form data ─────────────────────────────────
+    const data = Object.fromEntries(new FormData(form));
+    data._method = method;
+
+    // Checkboxes: explicitly send 0/1 for booleans
+    data.requires_receipt  = form.querySelector('[name="requires_receipt"]')?.checked ? 1 : 0;
+    data.requires_approval = form.querySelector('[name="requires_approval"]')?.checked ? 1 : 0;
+    data.is_active         = form.querySelector('[name="is_active"]')?.value ?? '1';
+
+    // Drop empty values so nullable rules apply
+    Object.keys(data).forEach(k => {
+        if (data[k] === '' || data[k] === 'undefined') delete data[k];
+    });
+
+    // ── Loading state ────────────────────────────────────
+    setButtonLoading(submitButton, true);
+    clearExpCatFormErrors(form);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'Accept':           'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams(data),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        // ── Validation errors (422) ──────────────────────
+        if (res.status === 422) {
+            if (json.errors) {
+                Object.entries(json.errors).forEach(([field, messages]) => {
+                    const input  = form.querySelector(`[name="${field}"]`);
+                    const holder = form.querySelector(`#${CSS.escape(field)}`);
+                    if (input)  input.classList.add('is-invalid');
+                    if (holder) {
+                        holder.classList.add('invalid-feedback', 'd-block');
+                        holder.textContent = messages[0];
+                    }
+                });
+            }
+            window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+            return;
+        }
+
+        if (!res.ok || json.success === false) {
+            throw new Error(json.message || 'Request failed');
+        }
+
+        // ── Success ──────────────────────────────────────
+        window.toastr?.success?.(json.message || 'Category created.');
+
+        // Hide the modal — spinner keeps running until fully closed
+        bootstrap.Modal.getOrCreateInstance(form.closest('.modal'))?.hide();
+
+        form.reset();
+        clearExpCatFormErrors(form);
+
+        // Refresh the list
+        window.ExpCatList?.reload?.();
+
+        return;
+
+    } catch (err) {
+        console.error('[create-expense-category] failed:', err);
+        window.toastr?.error?.(err.message || 'Something went wrong.');
+    } finally {
+        // Restore only if the modal is still open (not on the success path)
+        if (document.getElementById('kt_modal_add_expense_category')?.classList.contains('show')) {
+            setButtonLoading(submitButton, false);
+        }
+    }
+}
+
+// ── Button loading — inline style, wins against any theme CSS ──
+function setButtonLoading(button, isLoading) {
+    if (!button) return;
+
+    const label    = button.querySelector('.indicator-label');
+    const progress = button.querySelector('.indicator-progress');
+
+    if (isLoading) {
+        button.disabled = true;
+        if (label)    label.style.display    = 'none';
+        if (progress) progress.style.display = 'inline';
+    } else {
+        button.disabled = false;
+        if (label)    label.style.display    = 'inline';
+        if (progress) progress.style.display = 'none';
+    }
+}
+
+// ── Clear all field-level errors ──────────────────────────
+function clearExpCatFormErrors(form) {
+    if (!form) return;
+    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    form.querySelectorAll('.invalid-feedback.d-block').forEach(el => {
+        el.textContent = '';
+        el.classList.remove('d-block');
+    });
+}
+</script>

@@ -369,6 +369,108 @@ class ExpenseController extends Controller
         ]);
     }
 
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (! $user->hasPermissionTo('view expense')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $expense = Expense::with([
+                'category:id,name',
+                'supplier:id,name',
+                'employee:id,first_name,last_name',
+                'location:id,name',
+                'department:id,name',
+                'paymentMethod:id,name,type,is_default',
+                'creator:id,name,email',
+                'approver:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->first();
+
+        if (! $expense) {
+            return response()->json(['success' => false, 'message' => __('auth.expense_not_found')], 404);
+        }
+
+        // Tax breakdown
+        $taxBreakdown = $expense->tax_breakdown;
+        if (is_string($taxBreakdown)) $taxBreakdown = json_decode($taxBreakdown, true);
+        if (! is_array($taxBreakdown)) $taxBreakdown = [];
+
+        // ── Permissions ──
+        $can = [
+            'can_edit'   => $user->can('edit expense')
+                            && (! $expense->approved_at || $user->can('edit approved expense')),
+            'can_delete' => $user->can('delete expense')
+                            && (! $expense->approved_at || $user->can('delete approved expense')),
+            'can_approve' => $user->can('approve expense') && ! $expense->approved_at,
+            'can_update_status' => $user->can('update expense'),
+            'can_upload'        => $user->can('upload expense'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'expense' => array_merge([
+                'id'             => $expense->id,
+                'expense_number' => $expense->expense_number,
+                'description'    => $expense->description,
+                'vendor_name'    => $expense->vendor_name,
+                'date'           => optional($expense->date)->format('Y-m-d'),
+                'date_formatted' => optional($expense->date)->format('d M Y'),
+                'paid_date'      => optional($expense->paid_date)->format('Y-m-d'),
+                'paid_date_formatted' => optional($expense->paid_date)->format('d M Y'),
+
+                'gross_amount'   => (float) $expense->gross_amount,
+                'tax_amount'     => (float) $expense->tax_amount,
+                'net_amount'     => (float) $expense->net_amount,
+                'total_amount'   => (float) $expense->total_amount,
+
+                'payment_status' => $expense->payment_status,
+
+                'category'       => $expense->category ? ['id' => $expense->category->id, 'name' => $expense->category->name] : null,
+                'supplier'       => $expense->supplier ? ['id' => $expense->supplier->id, 'name' => $expense->supplier->name] : null,
+                'employee'       => $expense->employee ? [
+                    'id'   => $expense->employee->id,
+                    'name' => trim(($expense->employee->first_name ?? '') . ' ' . ($expense->employee->last_name ?? '')),
+                ] : null,
+                'location'       => $expense->location ? ['id' => $expense->location->id, 'name' => $expense->location->name] : null,
+                'department'     => $expense->department ? ['id' => $expense->department->id, 'name' => $expense->department->name] : null,
+                'payment_method' => $expense->paymentMethod ? [
+                    'id'         => $expense->paymentMethod->id,
+                    'name'       => $expense->paymentMethod->name,
+                    'type'       => $expense->paymentMethod->type,
+                    'is_default' => (bool) $expense->paymentMethod->is_default,
+                ] : null,
+
+                'approved_at'      => optional($expense->approved_at)->format('d M Y, H:i'),
+                'approved_by_name' => $expense->approver?->name,
+
+                'receipt_url' => $expense->receipt_url,
+                'notes'       => $expense->notes,
+
+                'creator'     => $expense->creator ? [
+                    'name'  => $expense->creator->name,
+                    'email' => $expense->creator->email,
+                ] : null,
+                'created_at'  => optional($expense->created_at)->format('d M Y, H:i'),
+                'updated_at'  => optional($expense->updated_at)->format('d M Y, H:i'),
+
+                'tax_breakdown' => array_map(fn($t) => [
+                    'tax_name'            => $t['tax_name']            ?? 'Tax',
+                    'tax_code'            => $t['tax_code']            ?? null,
+                    'rate'                => (float) ($t['rate']        ?? 0),
+                    'type'                => $t['type']                 ?? 'percentage',
+                    'amount'              => (float) ($t['amount']      ?? 0),
+                    'is_withholding_tax'  => (bool) ($t['is_withholding_tax'] ?? false),
+                ], $taxBreakdown),
+            ], $can),
+        ]);
+    }
+
     /**
      * Sentence fragment: "Fred (fred@shop.com)".
      */

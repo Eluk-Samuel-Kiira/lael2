@@ -1919,52 +1919,6 @@
 </script>
 
 
-<!-- Unit Of Measure -->
-<script> 
-    function submitFormUOM(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-    function editInstanceLoopUOM(uniqueId) {
-        
-        const submitButton = document.getElementById('editUOMButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-        
-        var form = document.getElementById('kt_modal_edit_uom_form' + uniqueId);
-        var formData = new FormData(form);
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        var updateUrl = '{{ route('uom.update', ['uom' => ':id']) }}'.replace(':id', uniqueId);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-
-    function updateStatusUOM(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/uom-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-</script>
-
 
 <!-- Department -->
 <script>

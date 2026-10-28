@@ -23,6 +23,198 @@ class ProductVariantController extends Controller
     }
 
     /**
+     * JSON list of variants for the given product (paginated).
+     * GET /variants/data?product_id=…
+     */
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view variant')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $productId = (int) $request->get('product_id');
+        $search    = trim((string) $request->get('search', ''));
+        $perPage   = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $product = Product::where('tenant_id', $tenantId)->find($productId);
+        if (!$product) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $query = ProductVariant::with(['variantCreater:id,name'])
+            ->where('product_id', $productId)
+            ->where('tenant_id', $tenantId);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('sku', 'like', "%{$search}%")
+                ->orWhere('barcode', 'like', "%{$search}%")
+                ->orWhereHas('variantCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(ProductVariant $v) => [
+            'id'                     => $v->id,
+            'name'                   => $v->name,
+            'sku'                    => $v->sku,
+            'barcode'                => $v->barcode,
+            'image_url'              => productVariantImage($v->image_url),
+            'overall_quantity'       => (float) $v->overal_quantity_at_hand,
+            'selling_price'          => (float) $v->selling_price,
+            'discount_selling_price' => (float) ($v->discount_selling_price ?? $v->selling_price),
+            'grand_total_cost_price' => (float) $v->grand_total_cost_price,
+            'supplier_cost_price'    => (float) $v->supplier_cost_price,
+            'markup_percentage'      => (float) $v->markup_percentage,
+            'discount_percentage'    => (float) $v->discount_percentage,
+            'is_active'              => (bool) $v->is_active,
+            'is_taxable'             => (bool) $v->is_taxable,
+            'creator_name'           => $v->variantCreater?->name,
+            'created_at'             => optional($v->created_at)->format('d M Y, h:i a'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+            ],
+        ]);
+    }
+
+    /**
+     * JSON payload for the drawer — everything the panels need.
+     * GET /variants/{variant}/drawer-data
+     */
+    public function drawerData(Request $request, $variantId)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view variant')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $variant = ProductVariant::with([
+            'product:id,name,sku,inventory_strategy',
+            'unitMeasure:id,name',
+            'variantCreater:id,name,email',
+            'variantTaxes:id,name,code',
+            'variantPromotions:id,name',
+            'serialNumbers',
+        ])
+        ->withCount('serialNumbers')
+        ->where('tenant_id', $tenantId)
+        ->where('id', $variantId)
+        ->first();
+
+        if (!$variant) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        // ── Tenant-wide options for assign panel ──────────────────
+        $allTaxes = Tax::where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'name', 'code'])
+            ->map(fn($t) => ['id' => $t->id, 'name' => $t->name, 'code' => $t->code])->values();
+
+        $allPromotions = Promotion::where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'name'])
+            ->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values();
+
+        $allUoms = UnitOfMeasure::where(function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            })->where('isActive', 1)->orderBy('name')->get(['id', 'name'])->values();
+
+        // ── Serial summary (only if this product uses serial strategy) ──
+        $serialSummary = null;
+        if (($variant->product->inventory_strategy ?? null) === 'serial') {
+            $serials = $variant->serialNumbers;
+            $serialSummary = [
+                'total'     => $serials->count(),
+                'available' => $serials->where('status', SerialNumber::STATUS_AVAILABLE)->count(),
+                'sold'      => $serials->where('status', SerialNumber::STATUS_SOLD)->count(),
+                'reserved'  => $serials->where('status', SerialNumber::STATUS_RESERVED)->count(),
+            ];
+        }
+
+        // ── Recipe presence ──────────────────────────────────────
+        $hasRecipe = ($variant->product->inventory_strategy ?? null) === 'recipe'
+            || ($variant->product && $variant->product->recipe()->exists());
+
+        $can = [
+            'can_view_variants'          => $user->can('view variant'),
+            'can_edit'                   => $user->can('edit variant'),
+            'can_delete'                 => $user->can('delete variant'),
+            'can_toggle'                 => $user->can('update variant'),
+            'can_toggle_tax'             => $user->can('update variant tax-promotion'),
+            'can_assign'                 => $user->can('update variant tax-promotion'),
+            'can_manage_recipe'          => $user->can('edit variant'),
+            'can_manage_serials'         => $user->can('edit variant'),
+            'can_upload_image'           => $user->can('upload variant image'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'variant' => array_merge([
+                'id'                     => $variant->id,
+                'product_id'             => $variant->product_id,
+                'product_name'           => $variant->product?->name,
+                'product_sku'            => $variant->product?->sku,
+                'product_strategy'       => $variant->product?->inventory_strategy,
+
+                'name'                   => $variant->name,
+                'sku'                    => $variant->sku,
+                'barcode'                => $variant->barcode,
+                'image_url'              => productVariantImage($variant->image_url),
+
+                'overall_quantity'       => (float) $variant->overal_quantity_at_hand,
+                'selling_price'          => (float) $variant->selling_price,
+                'discount_selling_price' => (float) ($variant->discount_selling_price ?? $variant->selling_price),
+                'grand_total_cost_price' => (float) $variant->grand_total_cost_price,
+                'supplier_cost_price'    => (float) $variant->supplier_cost_price,
+                'total_shipping_cost'    => (float) $variant->total_shipping_cost,
+                'ura_taxes_applied'      => (float) $variant->ura_taxes_applied,
+                'additional_expenses'    => (float) $variant->additional_expenses,
+                'discount_percentage'    => (float) $variant->discount_percentage,
+                'markup_percentage'      => (float) $variant->markup_percentage,
+                'weight'                 => (float) $variant->weight,
+                'weight_unit_id'         => $variant->weight_unit,
+                'weight_unit_name'       => $variant->unitMeasure?->name,
+
+                'is_active'              => (bool) $variant->is_active,
+                'is_taxable'             => (bool) $variant->is_taxable,
+
+                'creator'                => $variant->variantCreater ? [
+                    'name'  => $variant->variantCreater->name,
+                    'email' => $variant->variantCreater->email,
+                ] : null,
+                'created_at'             => optional($variant->created_at)->format('d M Y, h:i a'),
+
+                'has_recipe'             => $hasRecipe,
+                'serial_summary'         => $serialSummary,
+                'serials_count'          => $variant->serial_numbers_count ?? 0,
+            ], $can),
+            'assign_options' => [
+                'taxes'                => $allTaxes,
+                'promotions'           => $allPromotions,
+                'uoms'                 => $allUoms,
+                'selected_taxes'       => $variant->variantTaxes->pluck('id')->values(),
+                'selected_promotions'  => $variant->variantPromotions->pluck('id')->values(),
+                'assign_url'           => route('assign.variant', $variant->id),
+            ],
+        ]);
+    }
+
+    /**
      * Show the form for creating a new resource.
      */
     public function create()
@@ -770,23 +962,25 @@ class ProductVariantController extends Controller
      */
     public function updateVariantAssignments(Request $request, $id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('update variant tax-promotion')) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+            }
             abort(403, __('payments.not_authorized'));
         }
 
         try {
             $variant = ProductVariant::where('id', $id)
-                                    ->where('tenant_id', $tenantId)
-                                    ->first();
+                ->where('tenant_id', $tenantId)
+                ->first();
 
             if (!$variant) {
-                session()->flash('toast', [
-                    'type' => 'error',
-                    'message' => __('auth._not_found'),
-                ]);
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+                }
                 return redirect()->back();
             }
 
@@ -796,85 +990,79 @@ class ProductVariantController extends Controller
                     'exists:taxes,id',
                     function ($attribute, $value, $fail) use ($tenantId) {
                         $tax = Tax::where('id', $value)
-                                ->where('tenant_id', $tenantId)
-                                ->where('is_active', 1)
-                                ->first();
-                        if (!$tax) {
-                            $fail('The selected tax is invalid or inactive.');
-                        }
-                    }
+                            ->where('tenant_id', $tenantId)
+                            ->where('is_active', 1)
+                            ->first();
+                        if (!$tax) $fail('The selected tax is invalid or inactive.');
+                    },
                 ],
                 'promotions' => ['nullable', 'array'],
                 'promotions.*' => [
                     'exists:promotions,id',
                     function ($attribute, $value, $fail) use ($tenantId) {
                         $promotion = Promotion::where('id', $value)
-                                            ->where('tenant_id', $tenantId)
-                                            ->where('is_active', 1)
-                                            ->first();
-                        if (!$promotion) {
-                            $fail('The selected promotion is invalid or inactive.');
-                        }
-                    }
+                            ->where('tenant_id', $tenantId)
+                            ->where('is_active', 1)
+                            ->first();
+                        if (!$promotion) $fail('The selected promotion is invalid or inactive.');
+                    },
                 ],
             ]);
 
             DB::beginTransaction();
 
-            // Sync promotions
             $variant->Variantpromotions()->sync($validated['promotions'] ?? []);
 
-            // Handle taxes based on taxable status
             if ($variant->is_taxable == 1) {
                 $pivotData = [];
-                if (!empty($validated['taxes'])) {
-                    foreach ($validated['taxes'] as $taxId) {
-                        $pivotData[$taxId] = [
-                            'created_by' => $user->id,
-                            'tenant_id' => $tenantId,
-                        ];
-                    }
+                foreach ($validated['taxes'] ?? [] as $taxId) {
+                    $pivotData[$taxId] = [
+                        'created_by' => $user->id,
+                        'tenant_id'  => $tenantId,
+                    ];
                 }
                 $variant->variantTaxes()->sync($pivotData);
             } else {
                 $variant->variantTaxes()->sync([]);
-                
-                session()->flash('toast', [
-                    'type' => 'warning',
-                    'message' => __('pagination.variant_not_taxable_now'),
-                ]);
             }
 
             DB::commit();
 
-            session()->flash('toast', [
-                'type' => 'success',
-                'message' => __('auth._updated'),
-            ]);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => __('auth._updated'),
+                ]);
+            }
+
+            session()->flash('toast', ['type' => 'success', 'message' => __('auth._updated')]);
+            return redirect()->back();
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
-            Log::error('Validation failed for variant assignments', [
-                'variant_id' => $id,
-                'tenant_id' => $tenantId,
-                'errors' => $e->errors()
-            ]);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors'  => $e->errors(),
+                ], 422);
+            }
             return redirect()->back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to update variant assignments', [
+            Log::error('Variant assignments failed', [
                 'variant_id' => $id,
-                'tenant_id' => $tenantId,
-                'error' => $e->getMessage()
+                'error'      => $e->getMessage(),
             ]);
-            session()->flash('toast', [
-                'type' => 'error',
-                'message' => __('auth.update_failed') . ': ' . $e->getMessage(),
-            ]);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.update_failed'),
+                ], 500);
+            }
+            session()->flash('toast', ['type' => 'error', 'message' => __('auth.update_failed')]);
             return redirect()->back()->withInput();
         }
-
-        return redirect()->back();
     }
 
 
@@ -937,14 +1125,16 @@ class ProductVariantController extends Controller
         $availableVariants = ProductVariant::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->where('id', '!=', $variantId)
-            ->with(['product'])
+            ->with(['product', 'unitMeasure:id,name'])
             ->get()
             ->map(function($v) {
                 return [
-                    'id' => $v->id,
-                    'name' => $v->name,
-                    'sku' => $v->sku,
-                    'product_name' => $v->product->name ?? '',
+                    'id'               => $v->id,
+                    'name'             => $v->name,
+                    'sku'              => $v->sku,
+                    'product_name'     => $v->product->name ?? '',
+                    'weight_unit'      => $v->weight_unit,          
+                    'weight_unit_name' => $v->unitMeasure?->name,
                 ];
             });
 
@@ -972,7 +1162,7 @@ class ProductVariantController extends Controller
             'ingredients' => 'required|array|min:1',
             'ingredients.*.ingredient_variant_id' => 'required|exists:product_variants,id',
             'ingredients.*.quantity_required'     => 'required|numeric|min:0.0001',
-            'ingredients.*.unit_id'               => 'nullable|exists:unit_of_measures,id',
+            'ingredients.*.unit_id'               => 'required|exists:unit_of_measures,id',
         ]);
 
         // ★ Reject duplicate ingredient variants in the same payload

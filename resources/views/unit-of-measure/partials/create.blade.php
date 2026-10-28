@@ -1,8 +1,8 @@
  
-<div class="modal fade" id="kt_modal_add_department" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="kt_modal_add_uom" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header" id="kt_modal_add_department">
+            <div class="modal-header" id="kt_modal_add_uom">
                 <h2 class="fw-bold">{{__('auth._create')}} {{__('auth._uoms')}}</h2>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
                     <i class="ki-duotone ki-cross fs-1">
@@ -41,7 +41,7 @@
                             id="submitUOMButton" 
                             type="button" 
                             class="btn btn-primary"
-                            onclick="submitFormUOM('kt_modal_add_uom_form', 'submitUOMButton', '{{ route('uom.store') }}', 'POST', 'discardButton')">
+                            onclick="submitUomForm('kt_modal_add_uom_form', 'submitUOMButton', '{{ route('uom.store') }}', 'POST', 'discardButton')">
                             
                             <span class="indicator-label">{{__('auth.submit')}}</span>
                             <span class="indicator-progress">{{__('auth.please_wait')}}
@@ -55,4 +55,68 @@
     </div>
 </div>  
 
+<script>
+async function submitUomForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form         = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+    if (!form || !submitButton) return;
+
+    const data = Object.fromEntries(new FormData(form));
+    data._method = method;
+
+    Object.keys(data).forEach(k => {
+        if (data[k] === '' || data[k] === 'undefined') delete data[k];
+    });
+
+    setButtonLoading(submitButton, true);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'Accept':           'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams(data),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (res.status === 422) {
+            if (json.errors) {
+                Object.entries(json.errors).forEach(([field, messages]) => {
+                    const input  = form.querySelector(`[name="${field}"]`);
+                    const holder = form.querySelector(`#${CSS.escape(field)}`);
+                    if (input)  input.classList.add('is-invalid');
+                    if (holder) {
+                        holder.classList.add('invalid-feedback', 'd-block');
+                        holder.textContent = messages[0];
+                    }
+                });
+            }
+            window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+            setButtonLoading(submitButton, false);
+            return;
+        }
+
+        if (!res.ok || json.success === false) {
+            throw new Error(json.message || 'Request failed');
+        }
+
+        window.toastr?.success?.(json.message || 'UOM created.');
+        setButtonLoading(submitButton, false);
+
+        bootstrap.Modal.getOrCreateInstance(form.closest('.modal'))?.hide();
+        form.reset();
+
+        window.UOMList?.reload?.();
+
+    } catch (err) {
+        console.error('[create-uom] failed:', err);
+        window.toastr?.error?.(err.message || 'Something went wrong.');
+        setButtonLoading(submitButton, false);
+    }
+}
+</script>
 

@@ -236,7 +236,6 @@
                                         <th>{{ __('passwords.location') }}</th>
                                         <th>{{ __('pagination.approve') }}</th>
                                         <th>{{ __('pagination.payment_status') }}</th>
-                                        <th class="text-end">{{ __('auth._actions') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="expensesTableBody"></tbody>
@@ -263,12 +262,13 @@
 
     {{-- Single generic upload receipt modal, populated by JS --}}
     @include('procurement.expense.upload-receipt')
+    @include('procurement.expense.drawer')
 
     @endsection
 
     
 
-    @push('scripts')
+@push('scripts')
 <script>
     window.ExpenseConfig = {
         urls: {
@@ -303,6 +303,7 @@
     };
 </script>
 
+@include('procurement.expense.drawer-scripts')
 <script>
 (function () {
     'use strict';
@@ -482,52 +483,7 @@
         return `<span class="badge badge-light-${color}">${star}${esc(pm.name)}</span>`;
     }
 
-    function cellApproval(e) {
-        if (e.approved_at) {
-            return `<span class="badge badge-success">
-                        <i class="bi bi-check-circle-fill me-1"></i> ${esc(CFG.t.approved)}
-                    </span>`;
-        }
-        return `<button type="button" class="btn btn-sm btn-light-success"
-                        onclick="ExpenseActions.approve(${Number(e.id)}, true)">
-                    <i class="bi bi-check-circle"></i> ${esc(CFG.t.approve)}
-                </button>`;
-    }
-
-    function cellStatus(e) {
-        const status = e.payment_status;
-        const paidDisabled = (!e.approved_at && status !== 'paid') ? 'disabled' : '';
-        return `
-            <select class="form-select form-select-sm form-select-solid"
-                    onchange="ExpenseActions.updateStatus(${Number(e.id)}, this.value)">
-                <option value="pending"    ${status === 'pending'    ? 'selected' : ''}>${esc(CFG.t.pending)}</option>
-                <option value="paid"       ${status === 'paid'       ? 'selected' : ''} ${paidDisabled}>${esc(CFG.t.paid)}</option>
-                <option value="reimbursed" ${status === 'reimbursed' ? 'selected' : ''}>${esc(CFG.t.reimbursed)}</option>
-            </select>`;
-    }
-
-    function cellActions(e) {
-        const editBtn = `
-            <button type="button" class="btn btn-sm btn-light me-1"
-                    onclick="ExpenseActions.edit(${Number(e.id)})" title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </button>`;
-
-        const uploadBtn = `
-            <button type="button" class="btn btn-sm btn-light me-1"
-                    onclick="ExpenseActions.uploadReceipt(${Number(e.id)})" title="Upload receipt">
-                <i class="bi bi-upload"></i>
-            </button>`;
-
-        const deleteBtn = (e.payment_status !== 'paid')
-            ? `<button type="button" class="btn btn-sm btn-light-danger"
-                    onclick="ExpenseActions.destroy(${Number(e.id)})" title="Delete">
-                <i class="bi bi-trash"></i>
-            </button>`
-            : '';
-
-        return `<div class="d-flex justify-content-end gap-1">${editBtn}${uploadBtn}${deleteBtn}</div>`;
-    }
+    
 
     // ─────────────────────────────────────────────────────────
     // Table
@@ -548,7 +504,7 @@
         empty.classList.add('d-none');
 
         tbody.innerHTML = rows.map(e => `
-            <tr>
+            <tr data-expense-id="${e.id}" style="cursor:pointer;">
                 <td>
                     <div class="fw-bold text-gray-800">${esc(e.description)}</div>
                     <small class="text-muted">${esc(e.expense_number)}</small>
@@ -564,9 +520,16 @@
                 <td>
                     <span class="badge badge-light-primary">${esc(e.location?.name || 'N/A')}</span>
                 </td>
-                <td>${cellApproval(e)}</td>
-                <td>${cellStatus(e)}</td>
-                <td class="text-end">${cellActions(e)}</td>
+                <td>
+                    ${e.approved_at
+                        ? `<span class="badge badge-success"><i class="bi bi-check-circle-fill me-1"></i> ${esc(CFG.t.approved)}</span>`
+                        : `<span class="badge badge-light-warning">Pending</span>`}
+                </td>
+                <td>
+                    <span class="badge badge-light-${e.payment_status === 'paid' ? 'success' : e.payment_status === 'reimbursed' ? 'info' : 'warning'}">
+                        ${esc(e.payment_status)}
+                    </span>
+                </td>
             </tr>
         `).join('');
 
@@ -775,45 +738,24 @@
         return parseJson(res);
     }
 
+    function setButtonLoading(button, isLoading) {
+        if (!button) return;
+
+        const label    = button.querySelector('.indicator-label');
+        const progress = button.querySelector('.indicator-progress');
+
+        if (isLoading) {
+            button.disabled = true;
+            if (label)    label.style.display    = 'none';
+            if (progress) progress.style.display = 'inline';
+        } else {
+            button.disabled = false;
+            if (label)    label.style.display    = 'inline';
+            if (progress) progress.style.display = 'none';
+        }
+    }
+
     const Actions = {
-        async approve(id, checked = true) {
-            try {
-                const data = await postJson(CFG.urls.approve(id), 'POST', { approved: checked ? 1 : 0 });
-                toast(data.success ? 'success' : 'error', data.message || (data.success ? CFG.t.updated : CFG.t.errorOccurred));
-            } catch (e) {
-                console.error(e);
-                toast('error', e.message || CFG.t.errorOccurred);
-            }
-            reload();
-        },
-
-        async updateStatus(id, status) {
-            try {
-                const data = await postJson(CFG.urls.updateStatus(id), 'POST', { status });
-                toast(data.success ? 'success' : 'error', data.message || (data.success ? CFG.t.updated : CFG.t.errorOccurred));
-            } catch (e) {
-                console.error(e);
-                toast('error', e.message || CFG.t.errorOccurred);
-            }
-            reload();
-        },
-
-        async destroy(id) {
-            if (!confirm(CFG.t.confirm)) return;
-            try {
-                const data = await postJson(CFG.urls.destroy(id), 'DELETE');
-                if (data.success) {
-                    toast('success', data.message || CFG.t.deleted);
-                    reload();
-                } else {
-                    toast('error', data.message || CFG.t.errorOccurred);
-                }
-            } catch (e) {
-                console.error(e);
-                toast('error', e.message || CFG.t.errorOccurred);
-            }
-        },
-
         // ─────────────────────────────────────────────────────
         // Edit — fetch the expense, populate the modal, show it
         // ─────────────────────────────────────────────────────
@@ -892,18 +834,15 @@
                 $id('uploadExpenseId').value            = e.id;
                 $id('uploadExpenseNumber').textContent  = e.expense_number || '';
 
-                // Show the existing receipt link if there is one
                 const currentBox  = $id('uploadReceiptCurrent');
                 const currentLink = $id('uploadReceiptCurrentLink');
                 if (e.receipt_url) {
-                    // Adjust the URL if you store on a different disk
                     currentLink.href = `/storage/${e.receipt_url}`;
                     currentBox.classList.remove('d-none');
                 } else {
                     currentBox.classList.add('d-none');
                 }
 
-                // Reset the form fields (but keep the hidden id)
                 const form = $id('expenseUploadReceiptForm');
                 form.querySelector('input[type="file"]').value = '';
                 form.querySelector('textarea[name="description"]').value = '';
@@ -924,18 +863,27 @@
     window.resetExpenseFilters = resetFilters;
     window.applyQuickRange     = applyQuickRange;
     window.reloadExpenseList   = reload;
+    window.ExpenseList         = { reload };
 
     // ─────────────────────────────────────────────────────────
     // Boot — works whether DOMContentLoaded has fired or not
     // ─────────────────────────────────────────────────────────
     function boot() {
-        console.log('[expenses] boot');
+        // console.log('[expenses] boot');
 
         if (!$id('expensesLoading') || !$id('expensesTableBody')) {
             // Page markup isn't there (e.g. tenant_can('expenses') was false)
             console.warn('[expenses] list markup not found; skipping boot');
             return;
         }
+
+        document.getElementById('expensesTableBody')?.addEventListener('click', (ev) => {
+            const row = ev.target.closest('tr[data-expense-id]');
+            if (!row) return;
+            if (ev.target.closest('button, a, select, input')) return;
+            const id = parseInt(row.dataset.expenseId, 10);
+            if (id && window.ExpenseDrawer) window.ExpenseDrawer.open(id);
+        });
 
         State.syncFromUrl();
         State.writeToInputs();
@@ -965,13 +913,11 @@
         document.getElementById('expenseEditForm')?.addEventListener('submit', async function (ev) {
             ev.preventDefault();
 
-            const btn = document.getElementById('editExpenseSubmit');
-            const label = btn.querySelector('.indicator-label');
-            const prog  = btn.querySelector('.indicator-progress');
-            label.classList.add('d-none');
-            prog.classList.remove('d-none');
+            const btn  = document.getElementById('editExpenseSubmit');
+            const form = this;
+            const id   = document.getElementById('editExpenseId').value;
 
-            const id = document.getElementById('editExpenseId').value;
+            setButtonLoading(btn, true);
 
             try {
                 const res = await fetch(`/expense/${id}`, {
@@ -981,23 +927,35 @@
                         'Accept':       'application/json',
                     },
                     credentials: 'same-origin',
-                    body: new FormData(this),
+                    body: new FormData(form),
                 });
 
                 const data = await parseJson(res);
+
                 if (data.success) {
-                    bootstrap.Modal.getInstance(document.getElementById('expenseEditModal'))?.hide();
                     toast('success', data.message || CFG.t.updated);
-                    reload();
-                } else {
-                    toast('error', data.message || CFG.t.errorOccurred);
+
+                    // Hide the modal — spinner keeps spinning through the fade-out
+                    bootstrap.Modal.getInstance(document.getElementById('expenseEditModal'))?.hide();
+
+                    reload();                                              // table
+                    if (window.ExpenseDrawer?.isOpenFor?.(id)) {           // drawer
+                        window.ExpenseDrawer.reload(id);
+                    }
+
+                    // Do NOT restore the button here — the modal is closing.
+                    return;
                 }
+
+                toast('error', data.message || CFG.t.errorOccurred);
             } catch (err) {
                 console.error(err);
                 toast('error', err.message || CFG.t.errorOccurred);
             } finally {
-                label.classList.remove('d-none');
-                prog.classList.add('d-none');
+                // Only restore the button if we're NOT on the success path (modal still open)
+                if (document.getElementById('expenseEditModal')?.classList.contains('show')) {
+                    setButtonLoading(btn, false);
+                }
             }
         });
 
@@ -1030,6 +988,9 @@
                         bootstrap.Modal.getInstance(document.getElementById('expenseUploadReceiptModal'))?.hide();
                         toast('success', data.message || CFG.t.updated);
                         reload();
+                        if (window.ExpenseDrawer?.isOpenFor?.(id)) {
+                            window.ExpenseDrawer.reload(id);
+                        }
                     } else {
                         toast('error', data.message || CFG.t.errorOccurred);
                     }
@@ -1038,6 +999,9 @@
                     bootstrap.Modal.getInstance(document.getElementById('expenseUploadReceiptModal'))?.hide();
                     toast('success', CFG.t.updated);
                     reload();
+                    if (window.ExpenseDrawer?.isOpenFor?.(id)) {
+                        window.ExpenseDrawer.reload(id);
+                    }
                 }
             } catch (err) {
                 console.error(err);

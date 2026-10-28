@@ -39,6 +39,8 @@ return [
     'add_payment' => 'Add Payment',
     'payment_type' => 'Payment Type',
     'totals' => 'Totals',
+    'no_variants_found' => 'No Variants Found',
+    'reset_filters' => 'Reset Filters',
     'send' => 'Send',
     'stock_in'         => 'Stock in',
     'stock_out'        => 'Stock out',

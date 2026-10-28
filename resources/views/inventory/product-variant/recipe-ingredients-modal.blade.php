@@ -2,14 +2,21 @@
 <div class="modal fade" id="recipeIngredientsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="fw-bold">
-                    <i class="bi bi-journal-bookmark-fill me-2 text-warning"></i>
-                    {{ __('pagination.recipe_ingredients') }}
-                    <span id="recipeProductName" class="fs-6 text-muted ms-2"></span>
-                </h2>
-                <button type="button" class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <i class="ki-duotone ki-cross fs-1"></i>
+           <div class="modal-header bg-warning py-4">
+                <div class="d-flex align-items-center gap-3">
+                    <i class="ki-duotone ki-book fs-2 text-white">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
+                    <h2 class="modal-title text-white fw-bold mb-0">
+                        {{ __('pagination.recipe_ingredients') }}
+                        <span id="recipeProductName" class="fs-6 text-white opacity-75 ms-2"></span>
+                    </h2>
+                </div>
+                <button type="button" class="btn btn-icon btn-sm btn-active-icon-white"
+                        data-bs-dismiss="modal" aria-label="Close">
+                    <i class="ki-duotone ki-cross fs-1 text-white">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
                 </button>
             </div>
             <div class="modal-body px-5 my-7">
@@ -46,7 +53,7 @@
                         <button type="button" class="btn btn-light me-3" data-bs-dismiss="modal">
                             {{ __('auth._discard') }}
                         </button>
-                        <button type="button" id="saveRecipeIngredientsBtn" class="btn btn-primary">
+                        <button type="button" id="saveRecipeIngredientsBtn" class="btn btn-warning">
                             <span class="indicator-label">{{ __('auth.save') }}</span>
                             <span class="indicator-progress" style="display: none;">
                                 {{ __('auth.please_wait') }}
@@ -103,6 +110,13 @@
      * Open the recipe ingredients modal
      */
     function openRecipeIngredientsModal(variantId, variantName) {
+        const modalEl = document.getElementById('recipeIngredientsModal');
+        if (!modalEl) {
+            window.toastr?.error?.('Recipe modal missing.');
+            return;
+        }
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
         // Set the variant name in the modal header
         document.getElementById('recipeProductName').textContent = '- ' + variantName;
         document.getElementById('recipeVariantId').value = variantId;
@@ -187,6 +201,33 @@
     }
 
     /**
+    * Match a variant's weight_unit to the same row's unit dropdown.
+    */
+    function syncUnitForVariantRow(row) {
+        const variantSelect = row.querySelector('.ingredient-variant-select');
+        const unitSelect    = row.querySelector('.unit-select');
+        if (!variantSelect || !unitSelect) return;
+
+        const variant = availableVariants.find(v => String(v.id) === String(variantSelect.value));
+        if (!variant || !variant.weight_unit) return;
+
+        const unitId   = String(variant.weight_unit);
+        const unitName = variant.weight_unit_name || ('#' + unitId);
+
+        // Make sure the option exists (value = id, text = name)
+        let opt = Array.from(unitSelect.options).find(o => String(o.value) === unitId);
+        if (!opt) {
+            opt = new Option(unitName, unitId, false, false);
+            unitSelect.appendChild(opt);
+        }
+
+        unitSelect.value = unitId;
+
+        // Refresh Select2's display
+        if (window.jQuery) window.jQuery(unitSelect).trigger('change');
+    }
+
+    /**
      * Add an ingredient row
      */
     function addIngredientRow(existingData = null, index = null) {
@@ -212,7 +253,7 @@
                 const option = document.createElement('option');
                 option.value = variant.id;
                 option.textContent = `${variant.name} (${variant.sku})`;
-                if (variant.id === existingData.ingredient_variant_id) {
+                if (String(variant.id) === String(existingData.ingredient_variant_id)) {
                     option.selected = true;
                 }
                 variantSelect.appendChild(option);
@@ -266,13 +307,17 @@
         }
 
         container.appendChild(row);
-        
-        // Reinitialize Select2 for the new select elements
+
         if (typeof $ !== 'undefined' && $.fn.select2) {
             $(row).find('.ingredient-variant-select, .unit-select').select2({
                 dropdownParent: $('#recipeIngredientsModal')
             });
         }
+
+        // jQuery handler, so it catches Select2's change events
+        $(row).find('.ingredient-variant-select').on('change', function () {
+            syncUnitForVariantRow(row);
+        });
     }
 
     /**
@@ -404,6 +449,11 @@
             if (data.success) {
                 toastr.success(data.message || '{{ __("pagination.recipe_ingredients_saved") }}');
                 
+                window.RecipeList?.reload?.();                              // refresh tree
+                const openId = window.RecipeVariantDrawer?.getCurrent?.().id;
+                if (openId && window.RecipeVariantDrawer?.isOpenFor?.(openId)) {
+                    window.RecipeVariantDrawer.reload(openId);              // refresh drawer
+                }
                 // Close modal after short delay
                 setTimeout(() => {
                     const modal = bootstrap.Modal.getInstance(document.getElementById('recipeIngredientsModal'));

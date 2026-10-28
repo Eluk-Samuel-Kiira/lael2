@@ -420,40 +420,56 @@ window.ProductDrawer = (function () {
             return `<div class="alert alert-light-info">No variants created for this product yet.</div>`;
         }
 
-        const rows = variants.map(v => `
-            <tr>
-                <td>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="symbol symbol-35px">
-                            <img src="${esc(v.image_url || '')}" class="symbol-label" style="object-fit:cover;">
+        const isSingleShop = !!currentPayload?.product?.is_single_shop;
+
+        const rows = variants.map(v => {
+            // Unit profit: explicitly selling_price minus grand_total_cost_price.
+            // We deliberately do NOT use v.profit_per_unit (which prefers discount price).
+            const unitProfit = Number(v.selling_price || 0) - Number(v.grand_total_cost_price || 0);
+            const qty        = Number(v.overal_quantity_at_hand || 0);
+            const totalProfit = unitProfit * qty;
+            const unitProfitColor  = unitProfit  >= 0 ? 'success' : 'danger';
+            const totalProfitColor = totalProfit >= 0 ? 'success' : 'danger';
+
+            return `
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="symbol symbol-35px">
+                                <img src="${esc(v.image_url || '')}" class="symbol-label" style="object-fit:cover;">
+                            </div>
+                            <div>
+                                <div class="fw-bold text-gray-800">${esc(v.name)}</div>
+                                <small class="text-muted">${esc(v.sku || '—')}</small>
+                            </div>
                         </div>
-                        <div>
-                            <div class="fw-bold text-gray-800">${esc(v.name)}</div>
-                            <small class="text-muted">${esc(v.sku || '—')}</small>
-                        </div>
-                    </div>
-                </td>
-                <td><code class="text-muted">${esc(v.barcode || '—')}</code></td>
-                <td class="text-end">${money(v.supplier_cost_price)}</td>
-                <td class="text-end">${money(v.grand_total_cost_price)}</td>
-                <td class="text-end">${money(v.selling_price)}</td>
-                <td class="text-end text-success">${money(v.discount_selling_price)}</td>
-                <td class="text-end fw-bold ${v.profit_per_unit >= 0 ? 'text-success' : 'text-danger'}">
-                    ${money(v.profit_per_unit)}
-                    <small class="d-block text-muted fs-8">${fmtNum(v.profit_margin, 1)}%</small>
-                </td>
-                <td class="text-center">
-                    <span class="badge badge-light-${v.overal_quantity_at_hand > 0 ? 'primary' : 'secondary'}">
-                        ${fmtNum(v.overal_quantity_at_hand, 0)}
-                    </span>
-                </td>
-                <td class="text-center">
-                    <span class="badge badge-light-${v.is_active ? 'success' : 'warning'}">
-                        ${v.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                </td>
-            </tr>
-        `).join('');
+                    </td>
+                    <td><code class="text-muted">${esc(v.barcode || '—')}</code></td>
+                    <td class="text-end">${money(v.supplier_cost_price)}</td>
+                    <td class="text-end">${money(v.grand_total_cost_price)}</td>
+                    <td class="text-end">${money(v.selling_price)}</td>
+                    <td class="text-end text-success">${money(v.discount_selling_price)}</td>
+                    <td class="text-end fw-bold text-${unitProfitColor}">
+                        ${money(unitProfit)}
+                    </td>
+                    ${isSingleShop ? `
+                    <td class="text-end fw-bold text-${totalProfitColor}">
+                        ${money(totalProfit)}
+                    </td>
+                    ` : ''}
+                    <td class="text-center">
+                        <span class="badge badge-light-${qty > 0 ? 'primary' : 'secondary'}">
+                            ${fmtNum(qty, 0)}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge badge-light-${v.is_active ? 'success' : 'warning'}">
+                            ${v.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
 
         return `
             <h6 class="fw-bold text-gray-800 mb-3 mt-4">
@@ -469,7 +485,8 @@ window.ProductDrawer = (function () {
                             <th class="text-end">Total Cost</th>
                             <th class="text-end">Selling</th>
                             <th class="text-end">Discount</th>
-                            <th class="text-end">Profit</th>
+                            <th class="text-end">Unit Profit</th>
+                            ${isSingleShop ? `<th class="text-end">Total Profit</th>` : ''}
                             <th class="text-center">Stock</th>
                             <th class="text-center">Status</th>
                         </tr>

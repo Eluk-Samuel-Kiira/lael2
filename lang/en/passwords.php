@@ -33,6 +33,7 @@ return [
     'estimated_total_note'                          => 'Estimated Total Note',
     'sell_per'                          => 'Sell Per',
     'customer'                       => 'Customer',
+    'expense_category'                       => 'Expense Category',
     'trading_name'                       => 'Trading Name',
     'order_receipt_intro'            => 'Thank you for your order. Please find your receipt for order :number attached to this email.',
     'order_receipt_attached_note'    => 'Your full receipt is attached as a PDF to this email.',
