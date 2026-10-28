@@ -137,7 +137,7 @@
                     </button>
                     <button type="submit" class="btn btn-primary" id="editExpenseSubmit">
                         <span class="indicator-label">{{ __('auth._update') }}</span>
-                        <span class="indicator-progress d-none">
+                        <span class="indicator-progress">
                             {{ __('auth.please_wait') }}
                             <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                         </span>

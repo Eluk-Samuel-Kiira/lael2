@@ -18,60 +18,121 @@ class UnitOfMeasureController extends Controller
         $user = Auth::user();
 
         if (!$user->hasPermissionTo('view uom')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('unit-of-measure.index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view uom')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationship
-        $query = UnitOfMeasure::with('UOMCreater');
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = UnitOfMeasure::where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('symbol', 'like', "%{$search}%")
                 ->orWhereHas('UOMCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $uoms = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $uoms->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'uomIndexTable') {
-            return view('unit-of-measure.partials.uom-component', [
-                'all_uoms' => $uoms,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('isActive', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('unit-of-measure.index', [
-            'all_uoms' => $uoms,
+
+        // Summary over the filtered set
+        $all = (clone $query)->get(['id', 'isActive']);
+
+        $summary = [
+            'total'    => $all->count(),
+            'active'   => $all->where('isActive', 1)->count(),
+            'inactive' => $all->where('isActive', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(UnitOfMeasure $u) => [
+            'id'         => $u->id,
+            'name'       => $u->name,
+            'symbol'     => $u->symbol,
+            'is_active'  => (bool) $u->isActive,
+            'creator'    => $u->UOMCreater?->name,
+            'created_at' => optional($u->created_at)->format('d M Y, H:i'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view uom')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $uom = UnitOfMeasure::with('UOMCreater:id,name,email')
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$uom) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        // How many variants use this UOM
+        $variantCount = ProductVariant::where('weight_unit', $uom->id)->count();
+
+        $can = [
+            'can_edit'   => $user->can('edit uom'),
+            'can_delete' => $user->can('delete uom'),
+            'can_toggle' => $user->can('update uom'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'uom'     => array_merge([
+                'id'             => $uom->id,
+                'name'           => $uom->name,
+                'symbol'         => $uom->symbol,
+                'is_active'      => (bool) $uom->isActive,
+                'variant_count'  => $variantCount,
+                'creator_name'   => $uom->UOMCreater?->name,
+                'creator_email'  => $uom->UOMCreater?->email,
+                'created_at'     => optional($uom->created_at)->format('d M Y, H:i'),
+                'updated_at'     => optional($uom->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 

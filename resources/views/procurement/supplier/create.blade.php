@@ -438,6 +438,120 @@
     </div>
 </div>
 
+<script>
+async function submitSupplierForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form         = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+    if (!form || !submitButton) return;
 
+    // ── Collect form data ─────────────────────────────────
+    const data = Object.fromEntries(new FormData(form));
+    data._method = method;
+
+    // ── Normalize checkbox presence ───────────────────────
+    // FormData only includes checked checkboxes; unchecked ones
+    // are simply absent. The controller checks `$request->has()`.
+    // That's fine — no changes needed here.
+
+    // Drop empty values so Laravel's nullable rules apply
+    Object.keys(data).forEach(k => {
+        if (data[k] === '' || data[k] === 'undefined') delete data[k];
+    });
+
+    // ── Loading state ────────────────────────────────────
+    setSupplierLoading(submitButton, true);
+    clearSupplierFormErrors(form);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'Accept':           'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams(data),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        // ── Validation errors (422) ──────────────────────
+        if (res.status === 422) {
+            if (json.errors) {
+                Object.entries(json.errors).forEach(([field, messages]) => {
+                    showSupplierFieldError(form, field, messages[0]);
+                });
+            }
+            window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+            return;
+        }
+
+        // ── Permission or other non-success ──────────────
+        if (!res.ok || json.success === false) {
+            throw new Error(json.message || 'Request failed');
+        }
+
+        // ── Success ──────────────────────────────────────
+        window.toastr?.success?.(json.message || 'Supplier created.');
+
+        // Close the modal
+        bootstrap.Modal.getOrCreateInstance(form.closest('.modal'))?.hide();
+
+        // Reset form and re-enable
+        form.reset();
+        clearSupplierFormErrors(form);
+
+        // Refresh the list
+        window.SupplierList?.reload?.();
+
+    } catch (err) {
+        console.error('[create-supplier] failed:', err);
+        window.toastr?.error?.(err.message || 'Something went wrong.');
+    } finally {
+        setSupplierLoading(submitButton, false);
+    }
+}
+
+// ── Button loading ────────────────────────────────────────
+function setSupplierLoading(button, busy) {
+    if (!button) return;
+    const label    = button.querySelector('.indicator-label');
+    const progress = button.querySelector('.indicator-progress');
+    button.disabled = busy;
+    if (label)    label.style.display    = busy ? 'none' : '';
+    if (progress) progress.style.display = busy ? 'inline-flex' : 'none';
+}
+
+// ── Clear all field-level errors ──────────────────────────
+function clearSupplierFormErrors(form) {
+    if (!form) return;
+    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    form.querySelectorAll('.invalid-feedback.d-block').forEach(el => {
+        el.textContent = '';
+        el.classList.remove('d-block');
+    });
+}
+
+// ── Show one field's error under the input ────────────────
+function showSupplierFieldError(form, fieldName, message) {
+    if (!form) return;
+
+    // Match the input's name; some fields use bracket notation
+    const input = form.querySelector(`[name="${fieldName}"]`);
+    if (!input) return;
+
+    input.classList.add('is-invalid');
+
+    // Each field has an empty <div id="fieldName"></div> right after it
+    let holder = form.querySelector(`#${CSS.escape(fieldName)}`);
+    if (!holder) {
+        holder = document.createElement('div');
+        holder.id = fieldName;
+        input.parentNode.appendChild(holder);
+    }
+    holder.classList.add('invalid-feedback', 'd-block');
+    holder.textContent = message;
+}
+</script>
 
 

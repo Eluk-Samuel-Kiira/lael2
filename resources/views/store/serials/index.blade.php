@@ -7,12 +7,11 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
 
-            {{-- ─── Toolbar ─────────────────────────────────────── --}}
-            <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-                <div id="kt_app_toolbar_container"
-                     class="app-container container-fluid d-flex flex-stack">
-                    <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                        <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+            {{-- Toolbar --}}
+            <div class="app-toolbar py-3 py-lg-6">
+                <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 w-100">
+                    <div class="page-title d-flex flex-column">
+                        <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
                             {{ __('passwords.serial_numbers') }}
                         </h1>
                         <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
@@ -22,405 +21,409 @@
                                 </a>
                             </li>
                             <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
-                            <li class="breadcrumb-item text-muted">{{ __('pagination.store_inventory') }}</li>
-                            <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                             <li class="breadcrumb-item text-muted">{{ __('passwords.serial_numbers') }}</li>
                         </ul>
                     </div>
+                </div>
+            </div>
 
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge badge-light-primary fs-7 py-2 px-3">
-                            {{ $displayTree->count() }} {{ __('pagination.products') }}
-                        </span>
+            {{-- Stat cards --}}
+            <div class="row g-4 mb-6">
+                <div class="col-6 col-md-3 col-xl">
+                    <div class="card bg-light-primary">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Products</span>
+                            <span class="fs-2x fw-bold text-primary" id="statProducts">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 col-xl">
+                    <div class="card bg-light-info">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Total Serials</span>
+                            <span class="fs-2x fw-bold text-info" id="statTotal">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 col-xl">
+                    <div class="card bg-light-success">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Available</span>
+                            <span class="fs-2x fw-bold text-success" id="statAvailable">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 col-xl">
+                    <div class="card bg-light-warning">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Reserved</span>
+                            <span class="fs-2x fw-bold text-warning" id="statReserved">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3 col-xl">
+                    <div class="card bg-light-danger">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Sold</span>
+                            <span class="fs-2x fw-bold text-danger" id="statSold">—</span>
+                            <span class="text-muted fs-8 d-block" id="statSoldValue"></span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {{-- ─── Filters ─────────────────────────────────────── --}}
+            {{-- Filters --}}
             <div class="card mb-6">
-                <div class="card-header border-0 pt-5">
-                    <h3 class="card-title">
-                        <span class="card-label fw-bold fs-3">{{ __('auth._filter') }}</span>
-                    </h3>
-                </div>
-                <div class="card-body pt-0">
-                    <form method="GET" action="{{ route('serials.index') }}" id="serialsFilterForm">
-                        <div class="row g-3 align-items-end">
-
-                            {{-- Search --}}
-                            <div class="col-md-3">
-                                <label class="form-label fw-semibold fs-7">{{ __('auth._search') }}</label>
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text">
-                                        <i class="ki-duotone ki-magnifier fs-4">
-                                            <span class="path1"></span><span class="path2"></span>
-                                        </i>
-                                    </span>
-                                    <input type="text" name="search" value="{{ $search }}"
-                                           class="form-control form-control-solid"
-                                           placeholder="{{ __('pagination.search_serials_placeholder') }}">
-                                </div>
-                            </div>
-
-                            {{-- Product --}}
-                            <div class="col-md-2">
-                                <label class="form-label fw-semibold fs-7">{{ __('pagination.product') }}</label>
-                                <select name="product_id"
-                                        class="form-select form-select-sm form-select-solid"
-                                        data-control="select2"
-                                        data-placeholder="{{ __('pagination.all_products') }}">
-                                    <option value="">{{ __('pagination.all_products') }}</option>
-                                    @foreach($filterProducts as $product)
-                                        <option value="{{ $product->id }}" @selected($productId == $product->id)>
-                                            {{ $product->name }} ({{ $product->sku }})
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- Status --}}
-                            <div class="col-md-2">
-                                <label class="form-label fw-semibold fs-7">{{ __('pagination.status') }}</label>
-                                <select name="status" class="form-select form-select-sm form-select-solid">
-                                    @foreach($statuses as $s)
-                                        <option value="{{ $s['value'] }}" @selected($status === $s['value'])>
-                                            {{ $s['label'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- Location + Department (multi-shop only) --}}
-                            @if(! $isSingleShop)
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold fs-7">{{ __('pagination._location') }}</label>
-                                    <select name="location_id"
-                                            id="serialsLocationSelect"
-                                            class="form-select form-select-sm form-select-solid">
-                                        <option value="">{{ __('pagination.all_locations') }}</option>
-                                        @foreach($locations as $location)
-                                            <option value="{{ $location->id }}" @selected($locationId == $location->id)>
-                                                {{ $location->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-
-                                <div class="col-md-2">
-                                    <label class="form-label fw-semibold fs-7">{{ __('auth._department') }}</label>
-                                    <select name="department_id"
-                                            id="serialsDepartmentSelect"
-                                            class="form-select form-select-sm form-select-solid"
-                                            @if(! $locationId) disabled @endif>
-                                        <option value="">{{ __('pagination.all_departments') }}</option>
-                                        @foreach($departments as $department)
-                                            <option value="{{ $department->id }}" @selected($departmentId == $department->id)>
-                                                {{ $department->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endif
-
-                            {{-- Actions --}}
-                            <div class="{{ $isSingleShop ? 'col-md-2' : 'col-md-1' }} d-flex align-items-end gap-2">
-                                <button type="submit"
-                                        class="btn btn-sm btn-primary flex-grow-1 d-flex align-items-center justify-content-center">
-                                    <i class="ki-duotone ki-filter fs-3 me-1">
-                                        <span class="path1"></span><span class="path2"></span>
-                                    </i>
-                                    {{ __('auth._filter') }}
-                                </button>
-                                <a href="{{ route('serials.index') }}"
-                                   class="btn btn-sm btn-light d-flex align-items-center justify-content-center"
-                                   style="width: 34px; min-width: 34px;"
-                                   title="{{ __('pagination.clear') }}">
-                                    <i class="ki-duotone ki-cross fs-3">
-                                        <span class="path1"></span><span class="path2"></span>
-                                    </i>
-                                </a>
+                <div class="card-body py-4">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold fs-7">{{ __('auth._search') }}</label>
+                            <div class="position-relative">
+                                <input type="text" id="serialsSearchInput"
+                                       class="form-control form-control-solid pe-10"
+                                       placeholder="{{ __('pagination.search_serials_placeholder') }}">
+                                <i class="bi bi-search fs-4 position-absolute end-0 me-3 top-50 translate-middle-y text-muted"></i>
                             </div>
                         </div>
-                    </form>
+
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold fs-7">{{ __('pagination.product') }}</label>
+                            <select id="serialsProductFilter" class="form-select form-select-solid">
+                                <option value="">{{ __('pagination.all_products') }}</option>
+                                @foreach($filterProducts as $product)
+                                    <option value="{{ $product->id }}">
+                                        {{ $product->name }} — {{ $product->sku }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold fs-7">{{ __('pagination.status') }}</label>
+                            <select id="serialsStatusFilter" class="form-select form-select-solid">
+                                @foreach($statuses as $s)
+                                    <option value="{{ $s['value'] }}">{{ $s['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        @if(! $isSingleShop)
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold fs-7">{{ __('pagination._location') }}</label>
+                                <select id="serialsLocationSelect" class="form-select form-select-solid">
+                                    <option value="">{{ __('pagination.all_locations') }}</option>
+                                    @foreach($locations as $location)
+                                        <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold fs-7">{{ __('auth._department') }}</label>
+                                <select id="serialsDepartmentSelect" class="form-select form-select-solid" disabled>
+                                    <option value="">{{ __('pagination.all_departments') }}</option>
+                                </select>
+                            </div>
+                        @endif
+                    </div>
                 </div>
             </div>
 
-            {{-- ─── Product → Variant → Serials ─────────────────── --}}
-            @forelse($displayTree as $node)
-                @php $product = $node->product; @endphp
+            {{-- Tree --}}
+            <div id="serialsLoading" class="text-center py-10 d-none">
+                <div class="spinner-border text-primary"></div>
+            </div>
 
-                <div class="card mb-6">
-                    <div class="card-header border-0 pt-5">
-                        <div class="d-flex align-items-center flex-grow-1">
+            <div id="serialsTreeContainer"></div>
 
-                            {{-- Toggle button — clickable area that controls the collapse --}}
-                            <button type="button"
-                                    class="btn btn-icon btn-sm btn-active-light-primary me-3"
-                                    data-bs-toggle="collapse"
-                                    data-bs-target="#serialProductBlock{{ $product->id }}"
-                                    aria-expanded="false"
-                                    aria-controls="serialProductBlock{{ $product->id }}">
-                                <i class="ki-duotone ki-down fs-4 product-toggle-icon">
-                                    <span class="path1"></span><span class="path2"></span>
-                                </i>
-                            </button>
-
-                            <div class="d-flex flex-column">
-                                <span class="fw-bold fs-3 text-gray-900">{{ $product->name }}</span>
-                                <span class="text-muted fs-8">
-                                    {{ $product->sku }}
-                                    · {{ $node->variants->count() }} {{ __('pagination.variants') }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="card-toolbar">
-                            <a href="{{ route('products.show', $product->id) }}"
-                            target="_blank"
-                            class="btn btn-sm btn-light btn-active-color-primary">
-                                <i class="ki-duotone ki-pencil fs-4"></i>
-                                {{ __('auth._edit') }}
-                            </a>
-                        </div>
-                    </div>
-
-                    <div class="collapse" id="serialProductBlock{{ $product->id }}">
-                        <div class="card-body pt-0">
-
-                            @foreach($node->variants as $variantNode)
-                                @php
-                                    $variant  = $variantNode->variant;
-                                    $serials  = $variantNode->serials;
-                                @endphp
-
-                                <div class="border border-gray-200 rounded p-5 mb-5">
-
-                                    {{-- Variant header with summary --}}
-                                    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
-                                        <div class="d-flex flex-column">
-                                            <span class="fw-bold fs-4 text-gray-800">{{ $variant->name }}</span>
-                                            <span class="text-muted fs-8">
-                                                {{ $variant->sku }}
-                                                · {{ __('passwords.cost_price') }}:
-                                                <span class="fw-bold">
-                                                    {{ currency_symbol() }}{{ number_format($variantNode->effective_cost, 2) }}
-                                                </span>
-                                                · {{ __('passwords.selling_price') }}:
-                                                <span class="text-primary fw-bold">
-                                                    {{ currency_symbol() }}{{ number_format($variantNode->effective_sell, 2) }}
-                                                </span>
-                                            </span>
-                                        </div>
-
-                                        <div class="d-flex flex-wrap align-items-center gap-2">
-                                            @if($variantNode->has_custom_pricing)
-                                                <span class="badge badge-light-warning fs-8">
-                                                    <i class="bi bi-pencil-square me-1"></i>
-                                                    {{ __('passwords.custom_pricing') }}
-                                                </span>
-                                            @else
-                                                <span class="badge badge-light-secondary fs-8">
-                                                    {{ __('passwords.variant_pricing') }}
-                                                </span>
-                                            @endif
-
-                                            <span class="badge badge-light-primary fs-8">
-                                                {{ $variantNode->total }} {{ __('pagination.total') }}
-                                            </span>
-                                            @if($variantNode->available > 0)
-                                                <span class="badge badge-light-success fs-8">
-                                                    {{ $variantNode->available }} {{ __('passwords.available') }}
-                                                </span>
-                                            @endif
-                                            @if($variantNode->reserved > 0)
-                                                <span class="badge badge-light-warning fs-8">
-                                                    {{ $variantNode->reserved }} {{ __('passwords.reserved') }}
-                                                </span>
-                                            @endif
-                                            @if($variantNode->sold > 0)
-                                                <span class="badge badge-light-danger fs-8">
-                                                    {{ $variantNode->sold }} {{ __('passwords.sold') }}
-                                                </span>
-                                            @endif
-                                            @if($variantNode->returned > 0)
-                                                <span class="badge badge-light-info fs-8">
-                                                    {{ $variantNode->returned }} {{ __('passwords.returned') }}
-                                                </span>
-                                            @endif
-                                            @if($variantNode->lost > 0)
-                                                <span class="badge badge-light-dark fs-8">
-                                                    {{ $variantNode->lost }} {{ __('passwords.lost') }}
-                                                </span>
-                                            @endif
-                                            @if($variantNode->damaged > 0)
-                                                <span class="badge badge-light-dark fs-8">
-                                                    {{ $variantNode->damaged }} {{ __('passwords.damaged') }}
-                                                </span>
-                                            @endif
-                                        </div>
-                                    </div>
-
-                                    {{-- Serials table --}}
-                                    @if($serials->isEmpty())
-                                        <div class="alert alert-light-warning border border-warning border-dashed d-flex align-items-center p-4 mb-0">
-                                            <i class="ki-duotone ki-information-5 fs-2hx text-warning me-3"></i>
-                                            <div class="fs-7">{{ __('pagination.no_serials_found') }}</div>
-                                        </div>
-                                    @else
-                                        <div class="table-responsive">
-                                            <table class="table table-sm table-row-dashed fs-7 gy-3 mb-0">
-                                                <thead>
-                                                    <tr class="text-start text-muted fw-bold fs-8 text-uppercase gs-0">
-                                                        <th class="min-w-200px">{{ __('passwords.serial_number') }}</th>
-                                                        <th class="min-w-100px text-center">{{ __('passwords.status') }}</th>
-                                                        <th class="min-w-150px">{{ __('passwords.location') }}</th>
-                                                        <th class="min-w-150px">{{ __('passwords.department') }}</th>
-                                                        <th class="min-w-120px text-end">{{ __('passwords.sold_price') }}</th>
-                                                        <th class="min-w-150px">{{ __('passwords.order') }}</th>
-                                                        <th class="min-w-120px">{{ __('auth.created_at') }}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="text-gray-600 fw-semibold">
-                                                    @foreach($serials as $serial)
-                                                        <tr>
-                                                            <td>
-                                                                <span class="fw-bold text-gray-800">
-                                                                    {{ $serial->serial_number }}
-                                                                </span>
-                                                            </td>
-                                                            <td class="text-center">
-                                                                <span class="badge badge-light-{{ $serial->status_color }} fs-8">
-                                                                    {{ $serial->status_label }}
-                                                                </span>
-                                                            </td>
-                                                            <td class="text-gray-700">
-                                                                {{ $serial->location->name ?? '—' }}
-                                                            </td>
-                                                            <td class="text-gray-700">
-                                                                {{ $serial->department->name ?? '—' }}
-                                                            </td>
-                                                            <td class="text-end">
-                                                                @if($serial->sold_unit_price !== null)
-                                                                    <span class="fw-bold text-success">
-                                                                        {{ currency_symbol() }}{{ number_format($serial->sold_unit_price, 2) }}
-                                                                    </span>
-                                                                @else
-                                                                    <span class="text-muted">—</span>
-                                                                @endif
-                                                            </td>
-                                                            <td>
-                                                                @if($serial->order_id)
-                                                                    <span class="badge badge-light-info fs-8">
-                                                                        #{{ $serial->order->order_number ?? $serial->order_id }}
-                                                                    </span>
-                                                                @else
-                                                                    <span class="text-muted">—</span>
-                                                                @endif
-                                                            </td>
-                                                            <td class="text-muted fs-8">
-                                                                {{ $serial->created_at?->format('d M Y, H:i') ?? '—' }}
-                                                            </td>
-                                                        </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    @endif
-                                </div>
-                            @endforeach
-
-                        </div>
+            <div id="serialsEmpty" class="card d-none">
+                <div class="card-body text-center py-15">
+                    <i class="bi bi-file-earmark fs-5tx text-muted mb-4 d-block"></i>
+                    <div class="fs-5 fw-semibold text-gray-800">
+                        {{ __('pagination.no_serials_found') }}
                     </div>
                 </div>
-            @empty
-                <div class="card">
-                    <div class="card-body text-center py-15">
-                        <i class="ki-duotone ki-file-deleted fs-3x text-gray-400 mb-5">
-                            <span class="path1"></span><span class="path2"></span>
-                        </i>
-                        <div class="fs-5 fw-semibold text-gray-800 mb-2">
-                            {{ __('pagination.no_serials_found') }}
-                        </div>
-                        <div class="fs-7 text-muted">
-                            {{ __('pagination.serials_are_created_from_variant_page') }}
-                        </div>
-                    </div>
-                </div>
-            @endforelse
-
+            </div>
         </div>
     </div>
 </div>
+
+@include('inventory.product-variant.serials-modal')
+@include('store.serials.drawer')
 @endsection
 
 @push('scripts')
+@include('store.serials.drawer-scripts')
 <script>
-(function () {
+window.SerialList = (function () {
     'use strict';
 
-    // ── Location → Department cascade ────────────────────────
-    const DEPT_URL_TEMPLATE = @json(route('get.departments.by.location', ['locationId' => '__LOC__']));
+    const URL_DATA = @json(route('serials.data'));
+    const DEPT_URL = @json(route('get.departments.by.location', ['locationId' => '__LOC__']));
+    const CURRENCY = @json(currency_symbol());
+
+    const state = {
+        search:       '',
+        productId:    '',
+        status:       '',
+        locationId:   '',
+        departmentId: '',
+    };
+
+    let debounce, inFlight = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        bind();
+        load();
+    });
+
+    function bind() {
+        document.getElementById('serialsSearchInput')?.addEventListener('input', function () {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => {
+                state.search = this.value.trim();
+                load();
+            }, 400);
+        });
+
+        document.getElementById('serialsProductFilter')?.addEventListener('change', function () {
+            state.productId = this.value;
+            load();
+        });
+
+        document.getElementById('serialsStatusFilter')?.addEventListener('change', function () {
+            state.status = this.value;
+            load();
+        });
+
+        document.getElementById('serialsLocationSelect')?.addEventListener('change', async function () {
+            state.locationId   = this.value;
+            state.departmentId = '';
+            await loadDepartments(this.value);
+            load();
+        });
+
+        document.getElementById('serialsDepartmentSelect')?.addEventListener('change', function () {
+            state.departmentId = this.value;
+            load();
+        });
+
+        // Row/card click delegates to drawer
+        document.getElementById('serialsTreeContainer')?.addEventListener('click', (e) => {
+            const trigger = e.target.closest('[data-serial-variant-open]');
+            if (!trigger) return;
+            if (e.target.closest('button, a, input, select')) return;
+            const id = parseInt(trigger.dataset.serialVariantOpen, 10);
+            if (id && window.SerialVariantDrawer) window.SerialVariantDrawer.open(id);
+        });
+    }
 
     async function loadDepartments(locationId) {
-        const deptSelect = document.getElementById('serialsDepartmentSelect');
-        if (!deptSelect) return;
+        const dept = document.getElementById('serialsDepartmentSelect');
+        if (!dept) return;
 
-        deptSelect.innerHTML = `<option value="">{{ __('pagination.all_departments') }}</option>`;
-        deptSelect.disabled  = true;
+        dept.innerHTML = `<option value="">{{ __('pagination.all_departments') }}</option>`;
+        dept.disabled  = true;
         if (!locationId) return;
 
         try {
-            const res = await fetch(DEPT_URL_TEMPLATE.replace('__LOC__', encodeURIComponent(locationId)), {
-                credentials: 'same-origin',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                },
+            const res = await fetch(DEPT_URL.replace('__LOC__', encodeURIComponent(locationId)), {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
-
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.departments ?? []);
-
             list.forEach(d => {
                 const opt = document.createElement('option');
                 opt.value = d.id;
                 opt.textContent = d.name;
-                deptSelect.appendChild(opt);
+                dept.appendChild(opt);
             });
-
-            deptSelect.disabled = list.length === 0;
+            dept.disabled = list.length === 0;
         } catch (err) {
             console.error('[serials] dept fetch failed:', err);
-            deptSelect.disabled = false;
+            dept.disabled = false;
         }
     }
 
-    document.addEventListener('change', function (e) {
-        if (e.target && e.target.id === 'serialsLocationSelect') {
-            loadDepartments(e.target.value);
+    async function load() {
+        if (inFlight) return;
+        inFlight = true;
+
+        document.getElementById('serialsLoading')?.classList.remove('d-none');
+        document.getElementById('serialsTreeContainer').innerHTML = '';
+        document.getElementById('serialsEmpty')?.classList.add('d-none');
+
+        const params = new URLSearchParams();
+        if (state.search)       params.set('search',        state.search);
+        if (state.productId)    params.set('product_id',    state.productId);
+        if (state.status)       params.set('status',        state.status);
+        if (state.locationId)   params.set('location_id',   state.locationId);
+        if (state.departmentId) params.set('department_id', state.departmentId);
+
+        try {
+            const res = await fetch(`${URL_DATA}?${params}`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'Failed');
+
+            renderStats(json.stats);
+            renderTree(json.tree);
+
+        } catch (err) {
+            console.error('[serials] load failed:', err);
+            window.toastr?.error?.('Failed to load serials.');
+            document.getElementById('serialsEmpty')?.classList.remove('d-none');
+        } finally {
+            document.getElementById('serialsLoading')?.classList.add('d-none');
+            inFlight = false;
         }
-    });
+    }
 
-    // ── Product block toggle ─────────────────────────────────
-    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function (trigger) {
-        const targetId = trigger.getAttribute('data-bs-target');
-        const target   = document.querySelector(targetId);
-        const icon     = trigger.querySelector('.product-toggle-icon');
-        if (!target) return;
+    function renderStats(s) {
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('statProducts',   s.products  ?? 0);
+        set('statTotal',      s.total     ?? 0);
+        set('statAvailable',  s.available ?? 0);
+        set('statReserved',   s.reserved  ?? 0);
+        set('statSold',       s.sold      ?? 0);
+        set('statSoldValue',  s.sold_value > 0 ? money(s.sold_value) + ' in sales' : '');
+    }
 
-        target.addEventListener('show.bs.collapse', function () {
-            if (icon) icon.classList.add('rotate-180');
-        });
-        target.addEventListener('hide.bs.collapse', function () {
-            if (icon) icon.classList.remove('rotate-180');
-        });
-    });
+    function renderTree(tree) {
+        const container = document.getElementById('serialsTreeContainer');
+
+        if (!tree || tree.length === 0) {
+            document.getElementById('serialsEmpty')?.classList.remove('d-none');
+            return;
+        }
+
+        container.innerHTML = tree.map(node => renderProductCard(node)).join('');
+    }
+
+    function renderProductCard(node) {
+        const p = node.product;
+
+        return `
+            <div class="card mb-4">
+                <div class="card-header border-0 py-4">
+                    <div class="d-flex align-items-center flex-grow-1 gap-3">
+                        <div class="d-flex flex-column">
+                            <span class="fw-bold fs-4 text-gray-900">${esc(p.name)}</span>
+                            <span class="text-muted fs-8">
+                                ${esc(p.sku)} · ${p.variants_count} variants
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-toolbar">
+                        <a href="/products/${p.id}" target="_blank"
+                        class="btn btn-sm btn-light btn-active-color-primary">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>
+                            Edit Product
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="row g-3">
+                        ${node.variants.map(vn => renderVariantBlock(vn)).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderVariantBlock(vn) {
+        const v = vn.variant;
+        const c = vn.counts || {};
+
+        const badges = [];
+        if (c.total > 0)     badges.push(`<span class="badge badge-light-primary fs-8">${c.total} total</span>`);
+        if (c.available > 0) badges.push(`<span class="badge badge-light-success fs-8">${c.available} available</span>`);
+        if (c.reserved > 0)  badges.push(`<span class="badge badge-light-warning fs-8">${c.reserved} reserved</span>`);
+        if (c.sold > 0)      badges.push(`<span class="badge badge-light-danger  fs-8">${c.sold} sold</span>`);
+
+        return `
+            <div class="col-md-6 col-xl-4">
+                <div class="border border-gray-300 border-dashed rounded-3 p-4 h-100"
+                    style="cursor:pointer; transition: all .15s ease;"
+                    data-serial-variant-open="${v.id}"
+                    onmouseover="this.classList.add('bg-light')"
+                    onmouseout="this.classList.remove('bg-light')">
+                    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                        <div class="d-flex flex-column min-w-0">
+                            <span class="fw-bold text-gray-800 text-truncate">${esc(v.name)}</span>
+                            <code class="text-muted fs-8 text-truncate">${esc(v.sku)}</code>
+                        </div>
+                        ${v.has_custom_pricing
+                            ? `<span class="badge badge-light-warning fs-8">Custom</span>`
+                            : `<span class="badge badge-light-secondary fs-8">Variant</span>`}
+                    </div>
+                    <div class="text-muted fs-8 mb-2">
+                        <span>Cost:</span>
+                        <span class="fw-bold text-gray-800">${money(v.effective_cost)}</span>
+                        <span class="mx-2">·</span>
+                        <span>Sell:</span>
+                        <span class="text-primary fw-bold">${money(v.effective_sell)}</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 fs-8">
+                        ${badges.length ? badges.join('') : `<span class="text-muted">No serials</span>`}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderSerialsTable(serials) {
+        return `
+            <div class="table-responsive">
+                <table class="table table-row-dashed align-middle fs-7 gy-3 mb-0">
+                    <thead>
+                        <tr class="text-start text-muted fw-bold fs-8 text-uppercase gs-0">
+                            <th>Serial Number</th>
+                            <th class="text-center">Status</th>
+                            <th>Location</th>
+                            <th>Department</th>
+                            <th class="text-end">Sold Price</th>
+                            <th>Order</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${serials.map(s => `
+                            <tr>
+                                <td class="fw-bold">${esc(s.serial_number)}</td>
+                                <td class="text-center">
+                                    <span class="badge badge-light-${s.status_color} fs-8">
+                                        ${esc(s.status_label)}
+                                    </span>
+                                </td>
+                                <td>${esc(s.location_name   || '—')}</td>
+                                <td>${esc(s.department_name || '—')}</td>
+                                <td class="text-end">
+                                    ${s.sold_unit_price !== null
+                                        ? `<span class="fw-bold text-success">${money(s.sold_unit_price)}</span>`
+                                        : `<span class="text-muted">—</span>`}
+                                </td>
+                                <td>
+                                    ${s.order_number
+                                        ? `<span class="badge badge-light-info">#${esc(s.order_number)}</span>`
+                                        : `<span class="text-muted">—</span>`}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function esc(t) { if (t == null) return ''; const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; }
+    function money(n) { return CURRENCY + Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+
+    window.SerialList = { load, reload: load };
+    return window.SerialList;
 })();
 </script>
-
-<style>
-    .product-toggle-icon { transition: transform 0.15s ease; }
-    .product-toggle-icon.rotate-180 { transform: rotate(180deg); }
-</style>
 @endpush

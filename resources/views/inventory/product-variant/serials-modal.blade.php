@@ -4,19 +4,33 @@
      - Per-serial pricing: view + edit
      - Search + status filter + per-page + pagination
      ============================================================ --}}
+<style>
+    .modal-header.modal-header-purple {
+        background-color: #7239ea !important;   /* Metronic purple-500 */
+        color: #ffffff;
+    }
+</style>
+
 
 {{-- ─── Serial Management Modal ───────────────────────────── --}}
 <div class="modal fade" id="serialManagementModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="fw-bold">
-                    <i class="bi bi-upc-scan me-2 text-primary"></i>
-                    {{ __('pagination.serial_numbers') }}
-                    <span id="serialVariantName" class="fs-6 text-muted ms-2"></span>
-                </h2>
-                <button type="button" class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <i class="ki-duotone ki-cross fs-1"></i>
+            <div class="modal-header modal-header-purple py-4">
+                <div class="d-flex align-items-center gap-3">
+                    <i class="ki-duotone ki-upc-scan fs-2 text-white">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
+                    <h2 class="modal-title text-white fw-bold mb-0">
+                        {{ __('pagination.serial_numbers') }}
+                        <span id="serialVariantName" class="fs-6 text-white opacity-75 ms-2"></span>
+                    </h2>
+                </div>
+                <button type="button" class="btn btn-icon btn-sm btn-active-icon-white"
+                        data-bs-dismiss="modal" aria-label="Close">
+                    <i class="ki-duotone ki-cross fs-1 text-white">
+                        <span class="path1"></span><span class="path2"></span>
+                    </i>
                 </button>
             </div>
 
@@ -225,6 +239,13 @@
                     <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
                         <thead>
                             <tr class="fw-bold fs-7 text-gray-500 border-bottom-0">
+                                <th class="min-w-40px" style="width: 40px;">
+                                    <input type="checkbox"
+                                        class="form-check-input form-check-input-lg"
+                                        id="serialSelectAllHeader"
+                                        onchange="SerialModal.toggleAllSerials(this.checked)"
+                                        title="{{ __('passwords.select_all') }}">
+                                </th>
                                 <th class="min-w-50px">#</th>
                                 <th class="min-w-140px">{{ __('passwords.serial_number') }}</th>
                                 <th class="min-w-100px">{{ __('passwords.status') }}</th>
@@ -612,10 +633,6 @@
 
             if (serial.status === 'available') {
                 actions.push(`
-                    <input type="checkbox" class="form-check-input serial-checkbox"
-                           value="${serial.id}"
-                           onchange="SerialModal.updateSelectedCount()">`);
-                actions.push(`
                     <button class="btn btn-sm btn-icon btn-light-primary"
                             onclick="SerialModal.updateStatus(${serial.id}, 'sold')"
                             title="{{ __('passwords.mark_sold') }}">
@@ -655,6 +672,14 @@
 
             return `
                 <tr>
+                    <td class="text-center">
+                        ${serial.status === 'available'
+                            ? `<input type="checkbox"
+                                    class="form-check-input form-check-input-lg serial-checkbox"
+                                    value="${serial.id}"
+                                    onchange="SerialModal.updateSelectedCount()">`
+                            : ''}
+                    </td>
                     <td>${index + 1}</td>
                     <td>
                         <span class="fw-bold">${escapeHtml(serial.serial_number)}</span>

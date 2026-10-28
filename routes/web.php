@@ -158,8 +158,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/favicon-upload', [SettingsController::class, 'uploadFavicon'])->name('favicon.upload');
 
         // Units of measure
+        Route::get('/uom/data',              [UnitOfMeasureController::class, 'data'])->name('uom.data');
+        Route::get('/uom/{id}/drawer-data',  [UnitOfMeasureController::class, 'drawerData'])->name('uom.drawer-data');
+        Route::post('/uom-status/{id}',      [UnitOfMeasureController::class, 'changeUOMStatus'])->name('uom.status');
         Route::resource('uom', UnitOfMeasureController::class);
-        Route::post('/uom-status/{id}', [UnitOfMeasureController::class, 'changeUOMStatus'])->name('uom.status');
 
         // Currency
         Route::resource('currency', CurrencyController::class);
@@ -269,6 +271,8 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/product-status/{id}', [ProductController::class, 'changeProductStatus'])->name('product.status');
         Route::post('/product-tax-status/{id}', [ProductController::class, 'changeProductTaxStatus'])->name('product.taxable');
 
+        Route::get('variants/data',                    [ProductVariantController::class, 'data'])->name('variants.data');
+        Route::get('variants/{variant}/drawer-data',   [ProductVariantController::class, 'drawerData'])->name('variants.drawer-data');
         Route::resource('variants', ProductVariantController::class);
         Route::post('/variant-status/{id}', [ProductVariantController::class, 'changeVariantStatus'])->name('variant.status');
         Route::post('/variant-tax-status/{id}', [ProductVariantController::class, 'changeProductVariantTaxStatus'])->name('product.taxable');
@@ -308,9 +312,12 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::get ('items/{id}/pricing', [InventoryItemController::class, 'getPricing'])
             ->name('items.pricing.get');
         
-        Route::get('/recipes', [RecipeController::class, 'index'])->name('recipes.index');
+        Route::get('/recipes/data', [RecipeController::class, 'data'])->name('recipes.data');
+        Route::get('/recipes/variant/{variant}/drawer-data',[RecipeController::class, 'variantDrawerData'])->name('recipes.variant.drawer-data');
+        Route::get('/recipes',      [RecipeController::class, 'index'])->name('recipes.index');        
         Route::get('/serials', [SerialController::class, 'index'])->name('serials.index');
-
+        Route::get('/serials/variant/{variant}/drawer-data',[SerialController::class, 'variantDrawerData'])->name('serials.variant.drawer-data');
+        Route::get('/serials/data', [SerialController::class, 'data'])->name('serials.data');
         Route::put ('items/{id}/pricing', [InventoryItemController::class, 'updatePricing'])
             ->name('items.pricing.update');
 
@@ -400,8 +407,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         // Suppliers & Purchasing
+        Route::get('/suppliers/data',                    [SupplierController::class, 'data'])->name('suppliers.data');
+        Route::get('/suppliers/{id}/drawer-data',        [SupplierController::class, 'drawerData'])->name('suppliers.drawer-data');
         Route::resource('suppliers', SupplierController::class);
-        Route::post('/supplier-status/{id}', [SupplierController::class, 'updateSupplierStatus']);
+        Route::post('/supplier-status/{id}', [SupplierController::class, 'updateSupplierStatus'])->name('updateSupplierStatus');
         
         
         Route::get('/purchase-order', [PurchaseOrderController::class, 'index'])->name('purchase_order.index');
@@ -421,11 +430,15 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::post('/orders/{id}/send', [OrderController::class, 'send'])->name('orders.send');
 
         // Expenses
+        Route::get('/expense-category/data',                [ExpenseCategoryController::class, 'data'])->name('expense-category.data');
+        Route::get('/expense-category/{id}/drawer-data',    [ExpenseCategoryController::class, 'drawerData'])->name('expense-category.drawer-data');
+        Route::post('/expense-category-status/{id}',        [ExpenseCategoryController::class, 'updateStatus'])->name('expense-category.status');
         Route::resource('expense-category', ExpenseCategoryController::class);
 
         
         // ── Specific routes FIRST (before the resource) ──
         Route::get('/expense/data',              [ExpenseController::class, 'data'])->name('expense.data');
+        Route::get('/expense/{id}/drawer-data',  [ExpenseController::class, 'drawerData'])->name('expense.drawer-data');
         Route::post('/expense-status/{id}',      [ExpenseController::class, 'updateExpenseStatus'])->name('updateExpenseStatus');
         Route::post('/expense/{id}/approve',     [ExpenseController::class, 'approve'])->name('expense.approve');
         Route::put('/expenses/{id}/receipt',     [ExpenseController::class, 'updateReceipt'])->name('expenses.update-receipt');

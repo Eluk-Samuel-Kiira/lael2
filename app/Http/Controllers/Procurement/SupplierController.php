@@ -17,38 +17,39 @@ class SupplierController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        
+
         if (!$user->hasPermissionTo('view supplier')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('procurement.supplier-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view supplier')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationships
-        $query = Supplier::with('createdBy');
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', current_tenant_id());
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Supplier::with('createdBy:id,name')
+            ->where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('contact_person', 'like', "%{$search}%")
                 ->orWhere('email', 'like', "%{$search}%")
@@ -57,25 +58,136 @@ class SupplierController extends Controller
                 ->orWhereHas('createdBy', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $suppliers = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $suppliers->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadSupplierComponent') {
-            return view('procurement.supplier.component', [
-                'all_suppliers' => $suppliers,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('is_active', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('procurement.supplier-index', [
-            'all_suppliers' => $suppliers,
+
+        if ($request->filled('supplier_type')) {
+            $query->where('supplier_type', $request->input('supplier_type'));
+        }
+
+        // Summary — over the full filtered set
+        $all = (clone $query)->get(['id', 'is_active', 'withholding_tax_applicable']);
+
+        $summary = [
+            'total'       => $all->count(),
+            'active'      => $all->where('is_active', 1)->count(),
+            'inactive'    => $all->where('is_active', 0)->count(),
+            'wht'         => $all->where('withholding_tax_applicable', 1)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Supplier $s) => [
+            'id'             => $s->id,
+            'name'           => $s->name,
+            'trading_name'   => $s->trading_name,
+            'supplier_type'  => $s->supplier_type,
+            'supplier_code'  => $s->supplier_code,
+            'contact_person' => $s->contact_person,
+            'email'          => $s->email,
+            'phone'          => $s->phone,
+            'city'           => $s->city,
+            'country_code'   => $s->country_code,
+            'is_active'      => (bool) $s->is_active,
+            'is_vat_registered' => (bool) $s->is_vat_registered,
+            'withholding_tax_applicable' => (bool) $s->withholding_tax_applicable,
+            'creator_name'   => $s->createdBy?->name,
+            'created_at'     => optional($s->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view supplier')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $supplier = Supplier::with('createdBy:id,name')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $id)
+            ->first();
+
+        if (!$supplier) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $can = [
+            'can_edit'   => $user->can('edit supplier'),
+            'can_delete' => $user->can('delete supplier'),
+            'can_toggle' => $user->can('update supplier'),
+        ];
+
+        return response()->json([
+            'success'  => true,
+            'supplier' => array_merge([
+                'id'             => $supplier->id,
+                'name'           => $supplier->name,
+                'trading_name'   => $supplier->trading_name,
+                'supplier_type'  => $supplier->supplier_type,
+                'supplier_code'  => $supplier->supplier_code,
+                'is_active'      => (bool) $supplier->is_active,
+
+                'contact_person' => $supplier->contact_person,
+                'email'          => $supplier->email,
+                'phone'          => $supplier->phone,
+                'phone_secondary'=> $supplier->phone_secondary,
+                'website'        => $supplier->website,
+
+                'address'        => $supplier->address,
+                'city'           => $supplier->city,
+                'state'          => $supplier->state,
+                'postal_code'    => $supplier->postal_code,
+                'country_code'   => $supplier->country_code,
+
+                'tax_number'     => $supplier->tax_number,
+                'is_vat_registered' => (bool) $supplier->is_vat_registered,
+                'vat_number'     => $supplier->vat_number,
+                'withholding_tax_applicable' => (bool) $supplier->withholding_tax_applicable,
+                'withholding_tax_rate' => (float) $supplier->withholding_tax_rate,
+                'withholding_tax_exemption_ref' => $supplier->withholding_tax_exemption_ref,
+
+                'bank_name'      => $supplier->bank_name,
+                'bank_branch'    => $supplier->bank_branch,
+                'bank_account_name'   => $supplier->bank_account_name,
+                'bank_account_number' => $supplier->bank_account_number,
+                'bank_swift_code'     => $supplier->bank_swift_code,
+                'mobile_money_number' => $supplier->mobile_money_number,
+                'mobile_money_provider' => $supplier->mobile_money_provider,
+
+                'payment_terms_days' => $supplier->payment_terms_days,
+                'payment_terms_type' => $supplier->payment_terms_type,
+                'preferred_payment_method' => $supplier->preferred_payment_method,
+                'credit_limit'   => (float) $supplier->credit_limit,
+
+                'category'       => $supplier->category,
+                'risk_level'     => $supplier->risk_level,
+                'currency_code'  => $supplier->currency_code,
+
+                'notes'          => $supplier->notes,
+                'creator_name'   => $supplier->createdBy?->name,
+                'created_at'     => optional($supplier->created_at)->format('d M Y, H:i'),
+                'updated_at'     => optional($supplier->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 

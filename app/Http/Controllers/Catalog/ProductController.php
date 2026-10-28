@@ -152,14 +152,14 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('create product')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
-            ]);
+            ], 403);
         }
 
         $data = $request->validate([
@@ -169,8 +169,8 @@ class ProductController extends Controller
                 function ($attribute, $value, $fail) use ($tenantId) {
                     if ($value) {
                         $category = ProductCategory::where('id', $value)
-                                                ->where('tenant_id', $tenantId)
-                                                ->first();
+                            ->where('tenant_id', $tenantId)
+                            ->first();
                         if (!$category) {
                             $fail('The selected category is invalid.');
                         }
@@ -178,7 +178,7 @@ class ProductController extends Controller
                 }
             ],
             'sku' => [
-                'required',
+                'nullable',
                 'string',
                 'max:50',
                 Rule::unique('products')->where(function ($query) use ($tenantId) {
@@ -197,101 +197,97 @@ class ProductController extends Controller
             'type' => 'required|in:physical,digital,service,composite',
             'inventory_strategy' => 'required|in:quantity,batch,serial,recipe',
             'is_taxable' => 'boolean',
-            'is_active' => 'boolean',
+            'is_active'  => 'boolean',
         ]);
 
-        $data['slug'] = Str::slug($data['name']);
-        $data['created_by'] = $user->id;
-        $data['tenant_id'] = $tenantId;
+        // ── Auto-generate SKU when blank ───────────────────────
+        if (empty($data['sku'])) {
+            $data['sku'] = $this->generateUniqueProductSku($tenantId);
+        }
 
-        // Create the product
+        $data['slug']       = Str::slug($data['name']);
+        $data['created_by'] = $user->id;
+        $data['tenant_id']  = $tenantId;
+
         $product = Product::create($data);
 
-        // ── Create recipe record if inventory_strategy is 'recipe' ──
         if ($product->inventory_strategy === 'recipe') {
             $this->createRecipeIfNotExists($product->id);
         }
 
         return response()->json([
-            'success' => true,
-            'reload' => true,
+            'success'     => true,
+            'reload'      => true,
             'componentId' => 'reloadProductComponent',
-            'refresh' => false,
-            'message' => __('auth._created'),
-            'redirect' => route('products.index'),
+            'refresh'     => false,
+            'message'     => __('auth._created'),
+            'redirect'    => route('products.index'),
         ]);
     }
 
+    /**
+     * Generate a unique SKU scoped per tenant.
+     * Format: PRD-XXXXXX  (6 random alphanumerics).
+     */
+    private function generateUniqueProductSku(int $tenantId): string
+    {
+        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no I/O/0/1 to avoid visual confusion
+        $prefix   = 'PRD-';
+
+        do {
+            $random = '';
+            for ($i = 0; $i < 6; $i++) {
+                $random .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+            $sku = $prefix . $random;
+
+            $exists = Product::where('tenant_id', $tenantId)
+                ->where('sku', $sku)
+                ->exists();
+        } while ($exists);
+
+        return $sku;
+    }
 
     /**
      * Display the specified resource.
      */
     public function show(Request $request, string $id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-                
+
         if (!$user->hasPermissionTo('view variant')) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
                     'message' => __('payments.not_authorized'),
-                ]);
+                ], 403);
             }
             abort(403);
         }
 
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
-        }
-        
-        // Get the parent product first
-        $product = Product::where('id', $id);
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $product->where('tenant_id', $tenantId);
-        }
-        
-        $product_variants = $product->firstOrFail();
-        
-        // Build query for variants with relationships
-        $query = ProductVariant::with(['variantCreater', 'unitMeasure'])
-            ->where('product_id', $id);
-        
-        // Apply search if provided
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                ->orWhere('sku', 'like', "%{$search}%")
-                ->orWhere('barcode', 'like', "%{$search}%")
-                ->orWhereHas('variantCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
-            });
-        }
-        
-        // Paginate with dynamic per_page
-        $variants = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $variants->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        // Attach variants to product object
-        $product_variants->setRelation('variants', $variants);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadVariantComponent') {
-            return view('inventory.product-variant.component', compact('product_variants'));
-        }
-        
-        return view('inventory.product-variant.index', compact('product_variants'));
+        $product = Product::where('id', $id)
+            ->where('tenant_id', $tenantId)
+            ->firstOrFail();
+
+        $uoms = \App\Models\UnitOfMeasure::where(function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            })
+            ->where('isActive', 1)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('inventory.product-variant.index', [
+            'product'        => $product,
+            'uoms'           => $uoms,
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                ? (int) $request->get('per_page', 15)
+                                : 15,
+            ],
+        ]);
     }
 
     /**
@@ -404,6 +400,7 @@ class ProductController extends Controller
                 'id'                 => $product->id,
                 'name'               => $product->name,
                 'sku'                => $product->sku,
+                'is_single_shop'     => tenant_is_single_shop($tenantId),
                 'category_id'        => $product->category_id,
                 'category_name'      => $product->category?->name,
                 'type'               => $product->type,
