@@ -42,7 +42,7 @@
                 onclick="fillDemoCredentials()" 
                 class="btn btn-outline-primary btn-sm fw-semibold px-4 py-2 rounded-pill shadow-sm d-inline-flex align-items-center gap-2">
                 <i class="fas fa-magic"></i>
-                <span>{{ __('auth.click_to_fill') }}<strong>trialuser@gmail.com / password@123</strong></span>
+                <span>{{ __('auth.click_to_fill') }}<strong>stardenasuite@gmail.com / password@123</strong></span>
             </button>
             <p class="text-muted fs-7 mt-2">{{ __('auth.tap_to_fill') }}</p>
         </div>
@@ -51,7 +51,7 @@
 
     <script>
         function fillDemoCredentials() {
-            document.getElementById('emailField').value = 'trialuser@gmail.com';
+            document.getElementById('emailField').value = 'stardenasuite@gmail.com';
             document.getElementById('passwordField').value = 'password@123';
         }
     </script>
