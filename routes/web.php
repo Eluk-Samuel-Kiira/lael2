@@ -164,47 +164,47 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         Route::resource('uom', UnitOfMeasureController::class);
 
         // Currency
+        Route::get('/currency/data',              [CurrencyController::class, 'data'])->name('currency.data');
+        Route::get('/currency/{id}/drawer-data',  [CurrencyController::class, 'drawerData'])->name('currency.drawer-data');
+        Route::post('/currency-status/{id}',      [CurrencyController::class, 'changeCurrencyStatus'])->name('currency.status');
         Route::resource('currency', CurrencyController::class);
-        Route::post('/currency-status/{id}', [CurrencyController::class, 'changeCurrencyStatus'])->name('currency.status');
 
         // Department
+        Route::get('/department/data',              [DepartmentController::class, 'data'])->name('department.data');
+        Route::get('/department/{id}/drawer-data',  [DepartmentController::class, 'drawerData'])->name('department.drawer-data');
+        Route::post('/department-status/{id}',      [DepartmentController::class, 'changeDepartmentStatus'])->name('department.status');
         Route::resource('department', DepartmentController::class);
-        Route::post('/department-status/{id}', [DepartmentController::class, 'changeDepartmentStatus'])->name('currency.status');
-
 
         // Users/Employees
-        Route::resource('employee', UserController::class);
-        Route::post('/employee-status/{id}', [UserController::class, 'changeEmployeeStatus'])->name('employee.status');
-        Route::put('/employees/{id}/departments', [UserController::class, 'updateDepartments'])
-            ->name('employees.updateDepartments');
+        Route::get('/user-data',        [UserController::class, 'data'])->name('user.data');
+        Route::get('/user/{id}/drawer', [UserController::class, 'drawerData'])->name('user.drawer-data');
+        Route::post('/user-status/{id}', [UserController::class, 'changeEmployeeStatus'])->name('user.status');
+        Route::put('/users/{id}/departments', [UserController::class, 'updateDepartments'])
+            ->name('users.updateDepartments');
+
+        // Resource LAST
+        Route::resource('user', UserController::class);
+        // Generates: user.index, user.store, user.show, 
 
             
         Route::post('/employee/documents/upload', [EmployeeDocumentController::class, 'upload'])->name('employee.documents.upload');
         Route::post('/employee/documents/delete', [EmployeeDocumentController::class, 'delete'])->name('employee.documents.delete');
-        Route::get('/employee/{employeeId}/documents', [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
-
-        // New: stream instead of relying on the public symlink
+        Route::get('/employee/{employeeId}/documents',              [EmployeeDocumentController::class, 'index'])->name('employee.documents.index');
         Route::get('/employee/{employeeId}/documents/{index}/view', [EmployeeDocumentController::class, 'view'])->name('employee.documents.view');
         Route::get('/employee/{employeeId}/documents/{index}/download', [EmployeeDocumentController::class, 'download'])->name('employee.documents.download');
 
 
-
-        Route::resource('employee-advance', EmployeeAdvanceController::class);
-        // Get active advances for payment form
-        Route::get('/employee-advances/{employeeId}/active', [EmployeeAdvanceController::class, 'getActiveAdvances'])
+        // Custom routes BEFORE the resource
+        Route::get('/employee-advance-data',         [EmployeeAdvanceController::class, 'data'])->name('employee-advance.data');
+        Route::get('/employee-advance/{id}/drawer',  [EmployeeAdvanceController::class, 'drawerData'])->name('employee-advance.drawer-data');
+        Route::post('/employee-advance/{id}/approve',[EmployeeAdvanceController::class, 'approve'])->name('employee-advance.approve');
+        Route::post('/employee-advance/{id}/reject', [EmployeeAdvanceController::class, 'reject'])->name('employee-advance.reject');
+        Route::post('/employee-advance/{id}/cancel', [EmployeeAdvanceController::class, 'cancel'])->name('employee-advance.cancel');
+        Route::get('/employee-advances/{employeeId}/active',
+            [EmployeeAdvanceController::class, 'getActiveAdvances'])
             ->name('employee.advances.active');
-        
-        // Approve advance
-        Route::post('/employee-advances/{id}/approve', [EmployeeAdvanceController::class, 'approve'])
-            ->name('employee.advances.approve');
-        
-        // Reject advance
-        Route::post('/employee-advances/{id}/reject', [EmployeeAdvanceController::class, 'reject'])
-            ->name('employee.advances.reject');
-        
-        // Cancel advance
-        Route::post('/employee-advances/{id}/cancel', [EmployeeAdvanceController::class, 'cancel'])
-            ->name('employee.advances.cancel');
+        // Resource LAST
+        Route::resource('employee-advance', EmployeeAdvanceController::class);
         
         // Get advance statistics
         Route::get('/employee-advances/statistics', [EmployeeAdvanceController::class, 'getStatistics'])
@@ -215,21 +215,39 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
             ->name('employee.advances.export');
 
 
-        Route::resource('leave', LeaveController::class);
+        // Leave — custom routes before the resource
+        Route::get('/leave-data',        [LeaveController::class, 'data'])->name('leave.data');
+        Route::get('/leave/{id}/drawer', [LeaveController::class, 'drawerData'])->name('leave.drawer-data');
+        Route::get('/leave-meta',        [LeaveController::class, 'meta'])->name('leave.meta');
         Route::get('/leave/calendar/events', [LeaveController::class, 'getCalendarEvents'])->name('leave.calendar.events');
-        Route::post('/leave/{id}/approve', [LeaveController::class, 'approve'])->name('leave.approve');
-        Route::post('/leave/{id}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
-        Route::post('/leave/{id}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+        Route::post('/leave/{id}/approve',   [LeaveController::class, 'approve'])->name('leave.approve');
+        Route::post('/leave/{id}/reject',    [LeaveController::class, 'reject'])->name('leave.reject');
+        Route::post('/leave/{id}/cancel',    [LeaveController::class, 'cancel'])->name('leave.cancel');
+
+        Route::resource('leave', LeaveController::class);
 
 
-        Route::resource('user', EmployeeController::class);
-        Route::post('/user-status/{id}', [EmployeeController::class, 'changeUserStatus']);
+        Route::get('/employee-data',        [EmployeeController::class, 'data'])->name('employee.data');
+        Route::get('/employee/{id}/drawer', [EmployeeController::class, 'drawerData'])->name('employee.drawer-data');
+        Route::post('/employee-status/{id}', [EmployeeController::class, 'changeUserStatus'])->name('employee.status');
         Route::post('/sync-users-to-employees', [EmployeeController::class, 'syncUsersToEmployees'])
             ->name('sync.users.to.employees');
 
-        Route::resource('payment', EmployeePaymentController::class);
-        Route::post('/payment-status/{id}', [EmployeePaymentController::class, 'updatePaymentStatus']);
+        // Resource LAST
+        Route::resource('employee', EmployeeController::class);
 
+
+        Route::get('/payment-data',        [EmployeePaymentController::class, 'data'])->name('payment.data');
+        Route::get('/payment/{id}/drawer', [EmployeePaymentController::class, 'drawerData'])->name('payment.drawer-data');
+        Route::get('/payment-meta',        [EmployeePaymentController::class, 'meta'])->name('payment.meta');
+        Route::post('/payment-status/{id}',[EmployeePaymentController::class, 'updatePaymentStatus'])->name('payment.status');
+        Route::post('/payment-tax-preview',[EmployeePaymentController::class, 'calculateTaxPreview'])->name('payment.calculate-tax-preview');
+
+        Route::resource('payment', EmployeePaymentController::class);
+
+        Route::get('/paymentmethod/data',              [PaymentMethodController::class, 'data'])->name('paymentmethod.data');
+        Route::get('/paymentmethod/{id}/drawer-data',  [PaymentMethodController::class, 'drawerData'])->name('paymentmethod.drawer-data');
+        Route::post('/paymentmethod-status/{id}',      [PaymentMethodController::class, 'changePaymentMethodStatus'])->name('paymentmethod.status');
         Route::resource('paymentmethod', PaymentMethodController::class);
         Route::post('/payment-methods-status/{id}', [PaymentMethodController::class, 'changePaymentMethodStatus'])->name('payment-methods.status');
         Route::prefix('payment-methods')->middleware(['auth'])->group(function () {
@@ -239,10 +257,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
             Route::post('/transfer', [PaymentMethodController::class, 'transfer'])
                 ->name('paymentmethod.transfer');
+                
         });
 
-        Route::post('payments/calculate-tax-preview', [EmployeePaymentController::class, 'calculateTaxPreview'])
-            ->name('payment.calculate-tax-preview');
+        
 
         // Roles n Permissions
         Route::get('/role-index', [RoleController::class, 'index'])->name('role.index');
@@ -356,9 +374,11 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         });
 
         // Location
+        Route::get('/locations/data',              [LocationController::class, 'data'])->name('locations.data');
+        Route::get('/locations/{id}/drawer-data',  [LocationController::class, 'drawerData'])->name('locations.drawer-data');
+        Route::post('/location-primary-status/{id}', [LocationController::class, 'updatePrimaryStatus'])->name('locations.primary-status');
+        Route::post('/location-status/{id}',         [LocationController::class, 'updateLocationStatus'])->name('locations.status');
         Route::resource('locations', LocationController::class);
-        Route::post('/location-primary/{id}', [LocationController::class, 'updatePrimaryStatus']);
-        Route::post('/location-status/{id}', [LocationController::class, 'updateLocationStatus']);
 
 
         
@@ -392,8 +412,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         // Taxes and Promotions
+        Route::get('/tax/data',              [TaxController::class, 'data'])->name('tax.data');
+        Route::get('/tax/{id}/drawer-data',  [TaxController::class, 'drawerData'])->name('tax.drawer-data');
+        Route::post('/tax-status/{id}',      [TaxController::class, 'updateTaxStatus'])->name('tax.status');
         Route::resource('tax', TaxController::class);
-        Route::post('/tax-status/{id}', [TaxController::class, 'updateTaxStatus']);
 
         Route::prefix('tax')->name('tax.')->group(function () {
             Route::get('/liabilities', [TaxLiabilityController::class, 'index'])->name('liabilities.index');
@@ -402,8 +424,10 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         });
 
 
+        Route::get('/promotion/data',              [PromotionController::class, 'data'])->name('promotion.data');
+        Route::get('/promotion/{id}/drawer-data',  [PromotionController::class, 'drawerData'])->name('promotion.drawer-data');
+        Route::post('/promotion-status/{id}',      [PromotionController::class, 'updatePromotionStatus'])->name('promotion.status');
         Route::resource('promotion', PromotionController::class);
-        Route::post('/promotion-status/{id}', [PromotionController::class, 'updatePromotionStatus']);
 
 
         // Suppliers & Purchasing
@@ -508,16 +532,46 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
 
 
         Route::prefix('reports/expenses')->name('reports.expenses.')->group(function () {
+            
+            Route::get('summary/data', [ExpenseReportsController::class, 'summaryData'])->name('summary-data');
+            Route::get('summary/meta', [ExpenseReportsController::class, 'summaryMeta'])->name('summary-meta');
             Route::get('summary', [ExpenseReportsController::class, 'summary'])->name('summary');
+
             Route::get('by-category', [ExpenseReportsController::class, 'byCategory'])->name('by-category');
+            Route::get('by-category/data', [ExpenseReportsController::class, 'byCategoryData'])->name('by-category-data');
+            Route::get('by-category/meta', [ExpenseReportsController::class, 'byCategoryMeta'])->name('by-category-meta');
+
             Route::get('by-vendor', [ExpenseReportsController::class, 'byVendor'])->name('by-vendor');
+            Route::get('by-vendor/data', [ExpenseReportsController::class, 'byVendorData'])->name('by-vendor-data');
+            Route::get('by-vendor/meta', [ExpenseReportsController::class, 'byVendorMeta'])->name('by-vendor-meta');
+
             Route::get('by-employee', [ExpenseReportsController::class, 'byEmployee'])->name('by-employee');
+            Route::get('by-employee/data', [ExpenseReportsController::class, 'byEmployeeData'])->name('by-employee-data');
+            Route::get('by-employee/meta', [ExpenseReportsController::class, 'byEmployeeMeta'])->name('by-employee-meta');
+
             Route::get('by-payment-method', [ExpenseReportsController::class, 'byPaymentMethod'])->name('by-payment-method');
+            Route::get('by-payment-method/data', [ExpenseReportsController::class, 'byPaymentMethodData'])->name('by-payment-method-data');
+            Route::get('by-payment-method/meta', [ExpenseReportsController::class, 'byPaymentMethodMeta'])->name('by-payment-method-meta');
+
             Route::get('recurring', [ExpenseReportsController::class, 'recurring'])->name('recurring');
+            Route::get('recurring/data', [ExpenseReportsController::class, 'recurringData'])->name('recurring-data');
+            Route::get('recurring/meta', [ExpenseReportsController::class, 'recurringMeta'])->name('recurring-meta');
+
             Route::get('budget-vs-actual', [ExpenseReportsController::class, 'budgetVsActual'])->name('budget-vs-actual');
+            Route::get('budget-vs-actual/data', [ExpenseReportsController::class, 'budgetVsActualData'])->name('budget-vs-actual-data');
+            Route::get('budget-vs-actual/meta', [ExpenseReportsController::class, 'budgetVsActualMeta'])->name('budget-vs-actual-meta');
+
             Route::get('trends', [ExpenseReportsController::class, 'trends'])->name('trends');
+            Route::get('trends/data', [ExpenseReportsController::class, 'trendsData'])->name('trends-data');
+            Route::get('trends/meta', [ExpenseReportsController::class, 'trendsMeta'])->name('trends-meta');
+
             Route::get('tax-report', [ExpenseReportsController::class, 'taxReport'])->name('tax-report');
+            Route::get('tax-report/data', [ExpenseReportsController::class, 'taxReportData'])->name('tax-report-data');
+            Route::get('tax-report/meta', [ExpenseReportsController::class, 'taxReportMeta'])->name('tax-report-meta');
+
             Route::get('audit', [ExpenseReportsController::class, 'audit'])->name('audit');
+            Route::get('audit/data', [ExpenseReportsController::class, 'auditData'])->name('audit-data');
+            Route::get('audit/meta', [ExpenseReportsController::class, 'auditMeta'])->name('audit-meta');
             
             // Export routes
             Route::get('export/summary', [ExpenseReportsController::class, 'exportSummary'])->name('export.summary');
@@ -606,17 +660,58 @@ use App\Http\Controllers\Reports\{ ExpenseReportsController, OrderReportsControl
         // Product Reports Routes
         Route::prefix('reports/products')->name('reports.products.')->group(function () {
             Route::get('summary', [ProductsController::class, 'summary'])->name('summary');
+            Route::get('summary/data', [ProductsController::class, 'summaryData'])->name('summary-data');
+            Route::get('summary/meta', [ProductsController::class, 'summaryMeta'])->name('summary-meta');
+            Route::get('{id}/drawer', [ProductsController::class, 'productDrawer'])->name('product-drawer');
+
+
+            Route::get('variants/data',         [ProductsController::class, 'variantsData'])->name('variants-data');
+            Route::get('variants/{id}/drawer',  [ProductsController::class, 'variantDrawer'])->name('variant-drawer');
+
+
             Route::get('performance', [ProductsController::class, 'performance'])->name('performance');
+            Route::get('performance/data', [ProductsController::class, 'performanceData'])->name('performance-data');
+            Route::get('performance/meta', [ProductsController::class, 'performanceMeta'])->name('performance-meta');
+
             Route::get('inventory', [ProductsController::class, 'inventory'])->name('inventory');
+            Route::get('inventory/data', [ProductsController::class, 'inventoryData'])->name('inventory-data');
+            Route::get('inventory/meta', [ProductsController::class, 'inventoryMeta'])->name('inventory-meta');
+
             Route::get('stock-movement', [ProductsController::class, 'stockMovement'])->name('stock-movement');
-            Route::get('margin', [ProductsController::class, 'margin'])->name('margin');
+            Route::get('stock-movement/data', [ProductsController::class, 'stockMovementData'])->name('stock-movement-data');
+            Route::get('stock-movement/meta', [ProductsController::class, 'stockMovementMeta'])->name('stock-movement-meta');
+
+            // ── Margin (migrated to vanilla JS) ─────────────────────
+            Route::get('margin',      [ProductsController::class, 'margin'])->name('margin');
+            Route::get('margin/data', [ProductsController::class, 'marginData'])->name('margin-data');
+            Route::get('margin/meta', [ProductsController::class, 'marginMeta'])->name('margin-meta');
+
+
             Route::get('by-category', [ProductsController::class, 'byCategory'])->name('by-category');
+            Route::get('by-category',      [ProductsController::class, 'byCategory'])->name('by-category');
+            Route::get('by-category/data', [ProductsController::class, 'byCategoryData'])->name('by-category-data');
+            Route::get('by-category/meta', [ProductsController::class, 'byCategoryMeta'])->name('by-category-meta');
+            Route::get('category/{id}/drawer', [ProductsController::class, 'categoryDrawer'])->name('category-drawer');
         });
 
         Route::prefix('reports/products')->name('reports.products.')->group(function () {
-            Route::get('/strategy', [InventoryStrategyReportController::class, 'index'])->name('strategy');
-            Route::get('/strategy/detail/{productId}', [InventoryStrategyReportController::class, 'detail'])->name('strategy.detail');
-            Route::get('/strategy/recipe-detail/{productId}', [InventoryStrategyReportController::class, 'recipeDetail'])->name('strategy.recipe-detail');
+            // View shell
+            Route::get('/strategy', [InventoryStrategyReportController::class, 'index'])
+                ->name('strategy');
+
+            // JSON endpoints for the vanilla-JS report
+            Route::get('/strategy/data', [InventoryStrategyReportController::class, 'indexData'])
+                ->name('strategy.data');
+
+            Route::get('/strategy/meta', [InventoryStrategyReportController::class, 'meta'])
+                ->name('strategy.meta');
+
+            // Drawer / drill-down endpoints (product detail + recipe breakdown)
+            Route::get('/strategy/detail/{productId}', [InventoryStrategyReportController::class, 'detail'])
+                ->name('strategy.detail');
+
+            Route::get('/strategy/recipe-detail/{productId}', [InventoryStrategyReportController::class, 'recipeDetail'])
+                ->name('strategy.recipe-detail');
         });
 
         Route::prefix('reports/production')->name('reports.production.')->group(function () {

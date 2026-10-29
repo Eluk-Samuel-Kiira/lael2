@@ -17,38 +17,39 @@ class TaxController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        
+
         if (!$user->hasPermissionTo('view tax')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('promotion.tax-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view tax')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build the query with relationships
-        $query = Tax::with('taxCreater');
-        
-        // If user is NOT super_admin, filter by tenant
-        if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $user->tenant_id);
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Tax::with('taxCreater:id,name')
+            ->where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('code', 'like', "%{$search}%")
                 ->orWhere('rate', 'like', "%{$search}%")
@@ -56,25 +57,101 @@ class TaxController extends Controller
                 ->orWhereHas('taxCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $taxes = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $taxes->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadTaxComponent') {
-            return view('promotion.tax.component', [
-                'all_taxes' => $taxes,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('is_active', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('promotion.tax-index', [
-            'all_taxes' => $taxes,
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        $all = (clone $query)->get(['id', 'is_active', 'is_withholding_tax']);
+
+        $summary = [
+            'total'       => $all->count(),
+            'active'      => $all->where('is_active', 1)->count(),
+            'inactive'    => $all->where('is_active', 0)->count(),
+            'withholding' => $all->where('is_withholding_tax', 1)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Tax $t) => [
+            'id'                 => $t->id,
+            'name'               => $t->name,
+            'code'               => $t->code,
+            'rate'               => (float) $t->rate,
+            'type'               => $t->type,
+            'is_active'          => (bool) $t->is_active,
+            'is_withholding_tax' => (bool) $t->is_withholding_tax,
+            'creator_name'       => $t->taxCreater?->name,
+            'created_at'         => optional($t->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view tax')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $tax = Tax::with('taxCreater:id,name,email')
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$tax) {
+            return response()->json(['success' => false, 'message' => __('auth.tax_not_found')], 404);
+        }
+
+        // Usage counts
+        $productCount = DB::table('tax_product')->where('tax_id', $tax->id)->count();
+        $variantCount = DB::table('variant_taxes')->where('tax_id', $tax->id)->count();
+
+        $can = [
+            'can_edit'   => $user->can('edit tax'),
+            'can_delete' => $user->can('delete tax'),
+            'can_toggle' => $user->can('update tax'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'tax'     => array_merge([
+                'id'                 => $tax->id,
+                'name'               => $tax->name,
+                'code'               => $tax->code,
+                'rate'               => (float) $tax->rate,
+                'type'               => $tax->type,
+                'is_active'          => (bool) $tax->is_active,
+                'is_withholding_tax' => (bool) $tax->is_withholding_tax,
+
+                'product_count'      => $productCount,
+                'variant_count'      => $variantCount,
+                'usage_count'        => $productCount + $variantCount,
+
+                'creator_name'       => $tax->taxCreater?->name,
+                'creator_email'      => $tax->taxCreater?->email,
+                'created_at'         => optional($tax->created_at)->format('d M Y, H:i'),
+                'updated_at'         => optional($tax->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 

@@ -1,69 +1,194 @@
 <x-app-layout>
     @section('title', __('auth._department_index'))
     @section('content')
-    
-    <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
-            <!-- Left side - Title and Breadcrumb -->
+
+    <div class="app-toolbar py-3 py-lg-6">
+        <div class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 w-100">
             <div class="page-title d-flex flex-column">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
-                    {{__('auth._department_table')}}
+                <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
+                    {{ __('auth._department_table') }}
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        @php
-                            $previousUrl = url()->previous();
-                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
-                                : __('auth._back');
-                        @endphp
-                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
-                            {{ $formattedRouteName }}
+                        <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
+                            {{ __('pagination.dashboard') }}
                         </a>
                     </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
-                    <li class="breadcrumb-item text-muted">{{__('auth._department_index')}}</li>
+                    <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
+                    <li class="breadcrumb-item text-muted">{{ __('auth._department_index') }}</li>
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
-            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
-                <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
-                        id="departmentSearchInput"
-                        componentId="departmentIndexTable"
-                        route="{{ route('department.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('auth._department')}}"
-                    />
+            <div class="d-flex align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
+                <div class="flex-grow-1 flex-sm-grow-0" style="min-width: 240px; max-width: 320px;">
+                    <div class="d-flex align-items-center position-relative w-100">
+                        <input type="text" id="deptSearchInput"
+                               class="form-control form-control-solid w-100 pe-10"
+                               placeholder="{{ __('auth._search') }} {{ __('auth._department') }}">
+                        <i class="bi bi-search fs-4 position-absolute end-0 me-3 top-50 translate-middle-y text-muted"></i>
+                    </div>
                 </div>
 
                 @can('create department')
-                    <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_department">
-                        <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                        <span class="d-none d-sm-inline">{{__('auth._department_new')}}</span>
-                        <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
+                    <button type="button" class="btn btn-primary flex-shrink-0"
+                            data-bs-toggle="modal" data-bs-target="#kt_modal_add_department">
+                        <i class="ki-duotone ki-plus fs-2 me-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('auth._department_new') }}</span>
                     </button>
                 @endcan
-
-                @include('department.partials.create-department')
             </div>
         </div>
     </div>
-    
-    <div class="d-flex flex-column flex-column-fluid">
-        <div id="kt_app_content" class="app-content flex-column-fluid">
-            <div id="kt_app_content_container" class="app-container container-xxl">
-                <div id="status"></div>
-                <div class="card">
-                    @include('department.partials.department-component')
+
+    <div class="app-content flex-column-fluid">
+        <div class="app-container container-xxl">
+
+            {{-- Stat cards --}}
+            <div class="row g-4 mb-6">
+                <div class="col-6 col-md-4">
+                    <div class="card bg-light-primary">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Total Departments</span>
+                            <span class="fs-2x fw-bold text-primary" id="statTotal">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4">
+                    <div class="card bg-light-success">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Active</span>
+                            <span class="fs-2x fw-bold text-success" id="statActive">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4">
+                    <div class="card bg-light-warning">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Inactive</span>
+                            <span class="fs-2x fw-bold text-warning" id="statInactive">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Filters --}}
+            <div class="card mb-6">
+                <div class="card-body py-4">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold fs-7">{{ __('auth._search') }}</label>
+                            <div class="position-relative">
+                                <input type="text" id="deptSearchTop" class="form-control form-control-solid pe-10"
+                                       placeholder="{{ __('auth._search') }}…">
+                                <i class="bi bi-search fs-4 position-absolute end-0 me-3 top-50 translate-middle-y text-muted"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold fs-7">{{ __('auth._status') }}</label>
+                            <select id="deptStatusFilter" class="form-select form-select-solid">
+                                <option value="">All statuses</option>
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold fs-7">Per page</label>
+                            <select id="deptPerPage" class="form-select form-select-solid">
+                                <option value="15">15 / page</option>
+                                <option value="25">25 / page</option>
+                                <option value="50">50 / page</option>
+                                <option value="100">100 / page</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Table --}}
+            <div class="card card-flush">
+                <div class="card-body pt-0">
+                    <div id="deptLoading" class="text-center py-10 d-none">
+                        <div class="spinner-border text-primary"></div>
+                    </div>
+
+                    <div id="deptWrapper" class="d-none">
+                        <div class="table-responsive">
+                            <table class="table align-middle table-row-dashed fs-6 gy-5 mb-0">
+                                <thead>
+                                    <tr class="text-start text-muted fw-bold fs-7 text-uppercase">
+                                        <th class="min-w-150px">Name</th>
+                                        <th class="min-w-150px">Location</th>
+                                        <th class="min-w-120px">Manager</th>
+                                        <th class="min-w-100px">Type</th>
+                                        <th class="min-w-100px">Strategy</th>
+                                        <th class="min-w-120px">Creator</th>
+                                        <th class="min-w-100px">Status</th>
+                                        <th class="min-w-40px text-end"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deptTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <div class="text-muted fs-7" id="deptPageInfo"></div>
+                            <ul class="pagination m-0" id="deptPagination"></ul>
+                        </div>
+                    </div>
+
+                    <div id="deptEmpty" class="text-center py-15 d-none">
+                        <i class="bi bi-file-earmark fs-5tx text-muted mb-4 d-block"></i>
+                        <h4 class="fw-bold text-gray-800 mb-2">No departments found</h4>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>  
-        
+    </div>
+
+    @include('department.partials.create-department')
+    @include('department.partials.edit-department-shared')
+    @include('department.partials.drawer')
     @endsection
+
+    @push('scripts')
+    <script>
+        function setButtonLoading(button, isLoading) {
+            if (!button) return;
+            const label    = button.querySelector('.indicator-label');
+            const progress = button.querySelector('.indicator-progress');
+
+            if (isLoading) {
+                button.disabled = true;
+                if (label)    label.style.display    = 'none';
+                if (progress) progress.style.display = 'inline';
+            } else {
+                button.disabled = false;
+                if (label)    label.style.display    = 'inline';
+                if (progress) progress.style.display = 'none';
+            }
+        }
+
+        function clearFormErrors(form) {
+            if (!form) return;
+            form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            form.querySelectorAll('.invalid-feedback.d-block').forEach(el => {
+                el.textContent = '';
+                el.classList.remove('d-block');
+            });
+        }
+
+        window.DEPT_ROUTES = {
+            data:        '{{ route('department.data') }}',
+            drawer_data: '{{ route('department.drawer-data', ['id' => '__ID__']) }}',
+            status:      '{{ route('department.status', ['id' => '__ID__']) }}',
+            update:      '{{ route('department.update', ['department' => '__ID__']) }}',
+            destroy:     '{{ route('department.destroy', ['department' => '__ID__']) }}',
+        };
+        window.DEPT_BOOTSTRAP = {
+            search:  @json($initialFilters['search'] ?? ''),
+            perPage: @json($initialFilters['per_page'] ?? 15),
+        };
+    </script>
+    @include('department.partials.list-scripts')
+    @include('department.partials.drawer-scripts')
+    @endpush
 </x-app-layout>

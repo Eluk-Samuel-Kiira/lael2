@@ -18,63 +18,139 @@ class DepartmentController extends Controller
         $user = Auth::user();
 
         if (!$user->hasPermissionTo('view department')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('department.department-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view department')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build query with relationships
-        $query = Department::with('location', 'departmentCreater', 'departmentManager');
-        
-        // Apply tenant filter based on role
-        if ($user->hasRole('super_admin')) {
-            $query->with('departmentTenant');
-        } else {
-            $query->where('tenant_id', $user->tenant_id);
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Department::with(['location:id,name', 'departmentCreater:id,name', 'departmentManager:id,name'])
+            ->where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                ->orWhereHas('location', fn($loc) => $loc->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('location', fn($l) => $l->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('departmentCreater', fn($c) => $c->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('departmentManager', fn($m) => $m->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $departments = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $departments->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'departmentIndexTable') {
-            return view('department.partials.department-component', [
-                'all_departments' => $departments,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('isActive', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('department.department-index', [
-            'all_departments' => $departments,
+
+        if ($request->filled('location_id')) {
+            $query->where('location_id', (int) $request->input('location_id'));
+        }
+
+        $all = (clone $query)->get(['id', 'isActive']);
+
+        $summary = [
+            'total'    => $all->count(),
+            'active'   => $all->where('isActive', 1)->count(),
+            'inactive' => $all->where('isActive', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Department $d) => [
+            'id'                   => $d->id,
+            'name'                 => $d->name,
+            'location_id'          => $d->location_id,
+            'location_name'        => $d->location?->name,
+            'manager_name'         => $d->departmentManager?->name,
+            'creator_name'         => $d->departmentCreater?->name,
+            'department_type'      => $d->department_type,
+            'default_inventory_strategy' => $d->default_inventory_strategy,
+            'is_active'            => (bool) $d->isActive,
+            'created_at'           => optional($d->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view department')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $department = Department::with([
+                'location:id,name',
+                'departmentCreater:id,name,email',
+                'departmentManager:id,name,email',
+                'users:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$department) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $can = [
+            'can_edit'   => $user->can('edit department'),
+            'can_delete' => $user->can('delete department'),
+            'can_toggle' => $user->can('update department'),
+        ];
+
+        return response()->json([
+            'success'    => true,
+            'department' => array_merge([
+                'id'                  => $department->id,
+                'name'                => $department->name,
+                'location_id'         => $department->location_id,
+                'location_name'       => $department->location?->name,
+                'manager_id'          => $department->manager_id,
+                'manager_name'        => $department->departmentManager?->name,
+                'manager_email'       => $department->departmentManager?->email,
+                'creator_name'        => $department->departmentCreater?->name,
+                'creator_email'       => $department->departmentCreater?->email,
+                'department_type'     => $department->department_type,
+                'default_inventory_strategy' => $department->default_inventory_strategy,
+                'is_active'           => (bool) $department->isActive,
+                'users_count'         => $department->users->count(),
+                'users'               => $department->users->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->values(),
+                'created_at'          => optional($department->created_at)->format('d M Y, H:i'),
+                'updated_at'          => optional($department->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 

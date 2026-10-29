@@ -71,14 +71,13 @@
         white-space: nowrap;
     }
 
-    /* ── Page blur overlay — covers kt_app_main only ── */
+    /* ── Page blur overlay ── */
     #spa-blur-overlay {
         position: fixed;
         inset: 0;
         z-index: 999997;
         display: none;
         cursor: not-allowed;
-        /* subtle dark tint so user notices the lock */
         background: rgba(15, 23, 42, 0.08);
     }
     #spa-blur-overlay.active {
@@ -97,7 +96,7 @@
     }
 </style>
 
-<!-- Loaders — outside #kt_app_main so SPA swaps never touch them -->
+<!-- Loaders -->
 <div id="spa-topbar"></div>
 <div id="spa-circular">
     <div class="spa-spinner"></div>
@@ -186,148 +185,60 @@
         if (circular) circular.classList.remove('active');
     }
 
-    // ── Everything below is YOUR exact original code, word for word ──
+    /**
+     * Highlights the sidebar link for the current page (reads the real href).
+     * Exact match wins; otherwise the longest parent-path match wins, so
+     * /products/create or /products/5/edit still highlight "Products".
+     */
+    function updateActiveMenuLink(url = window.location.href) {
+        const norm = u => new URL(u, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+        const current = norm(url);
+        const root = document.querySelector('.app-sidebar-menu');
+        if (!root) return;
 
-    function navigateToAppPages(url) {
-        showLoaderApp();
+        // Reset
+        root.querySelectorAll('.menu-link.active').forEach(l => l.classList.remove('active'));
+        root.querySelectorAll('.menu-item.show, .menu-item.here').forEach(i => i.classList.remove('show', 'here'));
 
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.text();
-            })
-            .then(data => {
-                history.pushState({ url: url }, null, url);
+        // Find best match
+        let best = null, bestScore = -1;
+        root.querySelectorAll('a.menu-link[href]').forEach(a => {
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('javascript') || href === '#') return;
 
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data, 'text/html');
-                const ktAppMain = doc.getElementById('kt_app_main');
+            const p = norm(a.href);
+            let score = -1;
+            if (p === current) score = Infinity;
+            else if (p !== '/' && current.startsWith(p + '/')) score = p.length;
 
-                if (ktAppMain) {
-                    const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-                    document.title = titleMatch ? titleMatch[1] : 'Default Title';
-                    document.getElementById('kt_app_main').innerHTML = ktAppMain.innerHTML;
-                    updateActiveMenuLink(url);
+            if (score > bestScore) { best = a; bestScore = score; }
+        });
 
-                    
-                    // console.log('Auu Falls here');
-                    if (typeof window.LiveBladeRefresh === 'function') {
-                        window.LiveBladeRefresh();
-                    }
+        if (!best) return;
 
-                } else {
-                    console.error('Error: #kt_app_main not found in the fetched content.');
-                }
+        best.classList.add('active');
 
-                hideLoaderApp();
-            })
-            .catch(error => {
-                console.error('Error fetching content:', error);
-                document.getElementById('kt_app_main').innerHTML = '404 Page Not Found.';
-                hideLoaderApp();
-            });
-    }
-
-    function renderAppPage(url) {
-        const pageContent = document.getElementById('kt_app_main');
-        if (!pageContent) {
-            console.error('Error: Element #kt_app_main not found.');
-            return;
+        // Open and mark every parent accordion
+        let item = best.closest('.menu-item')?.parentElement?.closest('.menu-item');
+        while (item) {
+            item.classList.add('show', 'here');
+            item = item.parentElement?.closest('.menu-item');
         }
-
-        showLoaderApp();
-
-        fetch(url)
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.text();
-            })
-            .then(data => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data, 'text/html');
-                const ktAppMain = doc.getElementById('kt_app_main');
-                if (ktAppMain) {
-                    const titleMatch = data.match(/<title>(.*?)<\/title>/i);
-                    document.title = titleMatch ? titleMatch[1] : 'Default Title';
-                    pageContent.innerHTML = ktAppMain.innerHTML;
-                    updateActiveMenuLink(url); // ← was missing here
-                }
-                hideLoaderApp();
-            })
-            .catch(error => {
-                console.error('Error fetching content:', error);
-                pageContent.innerHTML = '404 Page Not Found.';
-                hideLoaderApp();
-            });
     }
 
-    window.addEventListener('popstate', (event) => {
-        if (event.state && event.state.url) {
-            renderAppPage(event.state.url);
-        } else {
-            renderAppPage(window.location.pathname);
-        }
+    // Show the loader when a sidebar link is clicked (normal navigation follows)
+    document.addEventListener('click', e => {
+        const a = e.target.closest('.app-sidebar-menu a.menu-link[href]');
+        if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0 || a.target === '_blank') return;
+        const href = a.getAttribute('href');
+        if (href && !href.startsWith('javascript') && href !== '#') showLoaderApp();
     });
 
-    function reloadToApp(url) {
-        window.location.href = url;
-    }
+    // Back/forward cache restores the page with the loader still showing
+    window.addEventListener('pageshow', e => { if (e.persisted) hideLoaderApp(); });
 
-    function updateActiveMenuLink(url) {
-        // Remove all active states first
-        document.querySelectorAll('.menu-link').forEach(link => {
-            link.classList.remove('active');
-        });
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.classList.remove('show');
-        });
-
-        // Normalize URL for comparison (strip trailing slash, query params)
-        const normalizeUrl = (u) => u.split('?')[0].replace(/\/$/, '');
-        const currentUrl = normalizeUrl(url);
-
-        document.querySelectorAll('.menu-link[onclick]').forEach(link => {
-            const onclick = link.getAttribute('onclick');
-
-            // Extract URL from onclick="navigateToAppPages('...')" or reloadToApp('...')
-            const match = onclick.match(/(?:navigateToAppPages|reloadToApp)\(['"]([^'"]+)['"]\)/);
-            if (!match) return;
-
-            const linkUrl = normalizeUrl(match[1]);
-
-            if (linkUrl === currentUrl) {
-                link.classList.add('active');
-
-                // Walk up the DOM and open all parent accordion menu-items
-                let parent = link.closest('.menu-item');
-                while (parent) {
-                    parent.classList.add('show');
-
-                    // Also mark the direct parent menu-link (accordion trigger) as active-parent
-                    const parentLink = parent.querySelector(':scope > .menu-link');
-                    if (parentLink && !parentLink.getAttribute('onclick')) {
-                        parentLink.classList.add('active');
-                    }
-
-                    // Move up to the next ancestor menu-item
-                    parent = parent.parentElement?.closest('.menu-item');
-                }
-            }
-        });
-    }
-
-
-    
-    document.addEventListener('DOMContentLoaded', () => {
-        history.replaceState({ url: window.location.pathname }, null, window.location.pathname);
-        updateActiveMenuLink(window.location.href); // use full href to match query params too
-    });
-
-    window.addEventListener('load', () => {
-        updateActiveMenuLink(window.location.href);
-    });
+    document.addEventListener('DOMContentLoaded', () => updateActiveMenuLink(window.location.href));
+    window.addEventListener('load', () => updateActiveMenuLink(window.location.href));
 </script>
 
 
@@ -372,119 +283,8 @@
 
 
 
-<!-- Taxes and Promotions -->
-<script>
-
-    function editPromotionInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('editPromotionButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_modal_promotion_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('promotion.update', ['promotion' => ':id']) }}'.replace(':id', uniqueId);
-        
-        // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
-    }
-
-    function updatePromotionStatus(uniqueId, selectedStatus) {
-        // Update text instantly
-        const label = document.getElementById('promotion-label-' + uniqueId);
-        if (label) {
-            label.innerText = selectedStatus == 1 ? 'Active' : 'Inactive';
-        }
-
-        // console.log(selectedStatus)
-        // Send update to backend
-        const updateRoute = '/promotion-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
 
 
-    function submitPromotionForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-    function editTaxInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('editTaxButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Select the form and create FormData from it
-        var form = document.getElementById('kt_modal_tax_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('tax.update', ['tax' => ':id']) }}'.replace(':id', uniqueId);
-        
-        // Submit form data asynchronously
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-
-    }
-
-    
-    function submitTaxForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-
-    function updateTaxesStatus(uniqueId, selectedStatus) {
-        // Update label instantly
-        const label = document.getElementById('tax-label-' + uniqueId);
-        if (label) {
-            label.innerText = selectedStatus == 1 ? '{{ __("auth._active") }}' : '{{ __("auth._inactive") }}';
-        }
-
-        // Send update to backend
-        const updateRoute = '/tax-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-
-</script>
 
 
 
@@ -970,8 +770,7 @@
                 window.invPricingSave();
             }
         });
-
-        console.log('[pricing] wired');
+        
     }
 </script>
 
@@ -1165,73 +964,9 @@
 
 
 <!-- Human Resource -->
-<script>
-    
-    function editUserInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('submitEmplButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        var form = document.getElementById('edit_user_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-        var updateUrl = '{{ route('user.update', ['user' => ':id']) }}'.replace(':id', uniqueId);
-
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-    function updateUserStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/user-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-</script>
 
 
 <script>
-
-    function submitEmployeeForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-    function editEmployeeInstanceLoop(uniqueId) {
-        const submitButton = document.getElementById('submitEmplButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        var form = document.getElementById('edit_user_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-        var updateUrl = '{{ route('employee.update', ['employee' => ':id']) }}'.replace(':id', uniqueId);
-
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-    function updateEmployeeStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/employee-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
     
     function syncUserToEmployee() {
         Swal.fire({
@@ -1419,270 +1154,7 @@
     
 </script>
 
-<script>
 
-    
-    function editInstanceLoopAdvance(uniqueId) {
-        const submitButton = document.getElementById('editAdvanceButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        var form = document.getElementById('editAdvanceForm' + uniqueId);
-        var formData = new FormData(form);
-
-        // Ensure _method is set
-        formData.set('_method', 'PUT');
-        
-        // Handle checkboxes
-        const checkedTypes = [];
-        document.querySelectorAll(`#editAdvanceForm${uniqueId} input[name="applicable_salary_types[]"]:checked`)
-            .forEach(cb => {
-                formData.append('applicable_salary_types[]', cb.value);
-                checkedTypes.push(cb.value);
-            });
-
-        // Convert FormData to object with proper array handling
-        var data = {};
-        for (let [key, value] of formData.entries()) {
-            if (key.endsWith('[]')) {
-                const arrayKey = key.slice(0, -2);
-                if (!data[arrayKey]) {
-                    data[arrayKey] = [];
-                }
-                data[arrayKey].push(value);
-            } else {
-                data[key] = value;
-            }
-        }
-
-        // Ensure applicable_salary_types exists
-        if (!data.applicable_salary_types) {
-            data.applicable_salary_types = [];
-        }
-
-        // console.log('Data being sent:', data);
-
-        var updateUrl = '{{ route("employee-advance.update", ["employee_advance" => ":id"]) }}'.replace(':id', uniqueId);
-
-        
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-
-    // Approve advance with payment method
-    function confirmApproveAdvance(id) {
-        const paymentMethodId = document.getElementById('approve_payment_method_' + id).value;
-        const errorElement = document.getElementById('payment_method_error_' + id);
-        
-        // Validate payment method
-        if (!paymentMethodId) {
-            errorElement.textContent = '{{ __("payments.payment_method_required") }}';
-            errorElement.classList.remove('d-none');
-            return;
-        } else {
-            errorElement.classList.add('d-none');
-        }
-        
-        const button = document.getElementById('approveAdvanceButton' + id);
-        
-        button.disabled = true;
-        button.querySelector('.indicator-label').style.display = 'none';
-        button.querySelector('.indicator-progress').style.display = 'inline-block';
-        
-        fetch('/employee-advances/' + id + '/approve', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                payment_method_id: paymentMethodId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#approveAdvanceModal' + id).modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success',
-                    text: data.message,
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'An error occurred', 'error');
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.querySelector('.indicator-label').style.display = 'inline-block';
-            button.querySelector('.indicator-progress').style.display = 'none';
-        });
-    }
-
-    // Reject advance
-    function confirmRejectAdvance(id) {
-        const reason = document.getElementById('rejection_reason_' + id).value;
-        if (!reason) {
-            Swal.fire('Error', 'Please provide a rejection reason', 'error');
-            return;
-        }
-        
-        const button = document.getElementById('rejectAdvanceButton' + id);
-        
-        button.disabled = true;
-        button.querySelector('.indicator-label').style.display = 'none';
-        button.querySelector('.indicator-progress').style.display = 'inline-block';
-        
-        fetch('/employee-advances/' + id + '/reject', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ rejection_reason: reason })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#rejectAdvanceModal' + id).modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success',
-                    text: data.message,
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'An error occurred', 'error');
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.querySelector('.indicator-label').style.display = 'inline-block';
-            button.querySelector('.indicator-progress').style.display = 'none';
-        });
-    }
-
-    // Cancel advance
-    function confirmCancelAdvance(id) {
-        const button = document.getElementById('cancelAdvanceButton' + id);
-        
-        button.disabled = true;
-        button.querySelector('.indicator-label').style.display = 'none';
-        button.querySelector('.indicator-progress').style.display = 'inline-block';
-        
-        fetch('/employee-advances/' + id + '/cancel', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#cancelAdvanceModal' + id).modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success',
-                    text: data.message,
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'An error occurred', 'error');
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.querySelector('.indicator-label').style.display = 'inline-block';
-            button.querySelector('.indicator-progress').style.display = 'none';
-        });
-    }
-
-    // Delete advance - Alternative with POST + _method
-    function confirmDeleteAdvance(id) {
-        const button = document.getElementById('deleteAdvanceButton' + id);
-        
-        button.disabled = true;
-        button.querySelector('.indicator-label').style.display = 'none';
-        button.querySelector('.indicator-progress').style.display = 'inline-block';
-        
-        // Create form data for method spoofing
-        const formData = new FormData();
-        formData.append('_method', 'DELETE');
-        formData.append('_token', document.querySelector('meta[name="csrf-token"]').content);
-        
-        var deleteUrl = '{{ route("employee-advance.destroy", ["employee_advance" => ":id"]) }}'.replace(':id', id);
-        
-        fetch(deleteUrl, {
-            method: 'POST', // Use POST
-            headers: {
-                'Accept': 'application/json'
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#deleteAdvanceModal' + id).modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success',
-                    text: data.message,
-                    timer: 1500,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                Swal.fire('Error', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'An error occurred', 'error');
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.querySelector('.indicator-label').style.display = 'inline-block';
-            button.querySelector('.indicator-progress').style.display = 'none';
-        });
-    }
-
-    // Toggle installment fields based on frequency selection
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('[id^="deduction_frequency"]').forEach(select => {
-            select.addEventListener('change', function() {
-                const id = this.id.replace('deduction_frequency', '');
-                const installmentsField = document.querySelector('.installments-field-' + id);
-                const deductionDayField = document.querySelector('.deduction-day-field-' + id);
-                
-                if (this.value === 'weekly' || this.value === 'monthly' || this.value === 'yearly') {
-                    if (installmentsField) installmentsField.style.display = 'block';
-                    if (deductionDayField) deductionDayField.style.display = 'block';
-                } else {
-                    if (installmentsField) installmentsField.style.display = 'none';
-                    if (deductionDayField) deductionDayField.style.display = 'none';
-                }
-            });
-        });
-    });
-</script>
 
 
 
@@ -1740,102 +1212,6 @@
 </script>
 
 
-<!-- Currency -->
-<script>
-
-    function updateStatusCurrency(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/currency-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-    function editInstanceLoopCurrency(uniqueId) {
-        const submitButton = document.getElementById('editCurrencyButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        var form = document.getElementById('kt_modal_edit_currency_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-        var updateUrl = '{{ route('currency.update', ['currency' => ':id']) }}'.replace(':id', uniqueId);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-    function submitCurrencyForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-</script>
-
-
-<!-- Location -->
-<script>
-
-    function updatePrimaryStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/location-primary/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-    function updateLocationStatus(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/location-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-    function editInstanceLoopLocation(uniqueId) {
-        const submitButton = document.getElementById('editLocationButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        var form = document.getElementById('kt_modal_edit_location_form' + uniqueId);
-        var formData = new FormData(form);
-
-        var data = Object.fromEntries(formData.entries());
-        // console.log(data);
-        var updateUrl = '{{ route('locations.update', ['location' => ':id']) }}'.replace(':id', uniqueId);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-    function submitLocationForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-</script>
 
 
 <!-- Settings -->
@@ -1920,51 +1296,6 @@
 
 
 
-<!-- Department -->
-<script>
-    
-    function submitFormDept(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
-        const form = document.getElementById(formId);
-        const submitButton = document.getElementById(submitButtonId);
-
-        if (!form || !submitButton) {
-            console.error('Form or button not found:', formId, submitButtonId);
-            return;
-        }
-
-        // Collect form data
-        const formData = Object.fromEntries(new FormData(form));
-        formData._method = method;
-        formData.routeName = url;
-
-        // Start loading
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        // Pass handling + data to reusable handler
-        handleFormSubmission(formData, submitButton, discardButtonId);
-    }
-
-    function editInstanceLoopDept(uniqueId) {
-        const submitButton = document.getElementById('editDepartmentButton' + uniqueId);
-        LiveBlade.toggleButtonLoading(submitButton, true);
-
-        const form = document.getElementById('kt_modal_edit_department_form' + uniqueId);
-        const formData = new FormData(form);
-        const data = Object.fromEntries(formData.entries());
-        // console.log(data)
-
-        // Set up the URL dynamically
-        var updateUrl = '{{ route('department.update', ['department' => ':id']) }}'.replace(':id', uniqueId);
-        handleEditResponse(data, updateUrl, uniqueId, submitButton);
-    }
-
-    function updateStatusDept(uniqueId, selectedStatus) {
-        // console.log(" ID:", uniqueId, "Selected status:", selectedStatus);
-        const updateRoute = '/department-status/' + uniqueId;
-        LiveBlade.loopUpdateStatus(updateRoute, selectedStatus);
-    }
-
-</script>
 
 
 <!-- General Reusable Functions -->

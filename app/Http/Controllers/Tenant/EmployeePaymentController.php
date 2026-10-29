@@ -21,92 +21,223 @@ class EmployeePaymentController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view employee payment')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Build the query with filters
-        $query = EmployeePayment::with(['employee', 'tenant', 'paymentMethod'])
+
+        return view('department.employee-payment-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view employee payment')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = EmployeePayment::with(['employee:id,first_name,last_name', 'paymentMethod:id,name,type,is_default'])
             ->where('tenant_id', $tenantId);
 
-        // Apply filters
-        if ($request->has('status') && !empty($request->status)) {
-            $query->where('status', $request->status);
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->whereHas('employee', fn($e) => $e->where('first_name', 'like', "%{$s}%")
+                                                    ->orWhere('last_name', 'like', "%{$s}%"))
+                ->orWhere('description', 'like', "%{$s}%")
+                ->orWhere('reference_number', 'like', "%{$s}%");
+            });
         }
 
-        if ($request->has('payment_type') && !empty($request->payment_type)) {
-            $query->where('payment_type', $request->payment_type);
+        foreach (['status', 'payment_type'] as $f) {
+            if ($request->filled($f)) $query->where($f, $request->$f);
+        }
+        foreach (['employee_id', 'payment_method_id'] as $f) {
+            if ($request->filled($f)) $query->where($f, (int) $request->$f);
+        }
+        if ($request->filled('date_from')) $query->whereDate('payment_date', '>=', $request->date_from);
+        if ($request->filled('date_to'))   $query->whereDate('payment_date', '<=', $request->date_to);
+        if ($request->filled('min_amount')) $query->where('gross_amount', '>=', to_base_currency($request->min_amount));
+        if ($request->filled('max_amount')) $query->where('gross_amount', '<=', to_base_currency($request->max_amount));
+
+        // Summary over filtered set
+        $all = (clone $query)->get(['id', 'status', 'amount', 'gross_amount', 'total_tax_amount', 'total_advance_deduction', 'payment_date']);
+        $monthStart = now()->startOfMonth();
+        $monthEnd   = now()->endOfMonth();
+
+        $summary = [
+            'total_payments'    => $all->count(),
+            'total_amount'      => from_base_currency($all->sum('amount')),
+            'total_gross'       => from_base_currency($all->sum('gross_amount')),
+            'total_tax'         => from_base_currency($all->sum('total_tax_amount')),
+            'total_advance_deductions' => from_base_currency($all->sum('total_advance_deduction')),
+            'pending_count'     => $all->where('status', 'pending')->count(),
+            'completed_count'   => $all->where('status', 'completed')->count(),
+            'failed_count'      => $all->where('status', 'failed')->count(),
+            'cancelled_count'   => $all->where('status', 'cancelled')->count(),
+            'this_month_count'  => $all->whereBetween('payment_date', [$monthStart, $monthEnd])->count(),
+            'this_month_amount' => from_base_currency($all->whereBetween('payment_date', [$monthStart, $monthEnd])->sum('amount')),
+            'avg_payment'       => from_base_currency($all->avg('amount')),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(EmployeePayment $p) => [
+            'id'                 => $p->id,
+            'employee_name'      => trim(($p->employee->first_name ?? '') . ' ' . ($p->employee->last_name ?? '')),
+            'payment_type'       => $p->payment_type,
+            'payment_type_label' => ucfirst(str_replace('_', ' ', $p->payment_type)),
+            'payment_method_name'=> $p->paymentMethod?->name ?? '—',
+            'payment_method_type'=> $p->paymentMethod?->type ?? 'other',
+            'payment_method_default' => (bool) ($p->paymentMethod?->is_default ?? false),
+            'gross_amount'       => (float) $p->gross_amount,
+            'net_amount'         => (float) $p->net_amount,
+            'total_tax_amount'   => (float) $p->total_tax_amount,
+            'total_advance_deduction' => (float) $p->total_advance_deduction,
+            'currency_symbol'    => currency_symbol(),
+            'payment_date'       => optional($p->payment_date)->format('d M Y'),
+            'status'             => $p->status,
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view employee payment')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        if ($request->has('employee_id') && !empty($request->employee_id)) {
-            $query->where('employee_id', $request->employee_id);
+        $payment = EmployeePayment::with(['employee:id,first_name,last_name,email', 'paymentMethod:id,name,type,is_default,currency_id', 'paymentMethod.currency:id,code'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$payment) {
+            return response()->json(['success' => false, 'message' => __('auth.payment_not_found')], 404);
         }
 
-        if ($request->has('payment_method_id') && !empty($request->payment_method_id)) {
-            $query->where('payment_method_id', $request->payment_method_id);
+        // Safely decode JSON columns
+        $appliedTaxes = $payment->applied_taxes;
+        if (is_string($appliedTaxes)) $appliedTaxes = json_decode($appliedTaxes, true);
+        $appliedTaxes = is_array($appliedTaxes) ? $appliedTaxes : [];
+
+        $advanceDeductions = $payment->advance_deductions;
+        if (is_string($advanceDeductions)) $advanceDeductions = json_decode($advanceDeductions, true);
+        $advanceDeductions = is_array($advanceDeductions) ? $advanceDeductions : [];
+
+        $can = [
+            'can_edit'   => $user->can('edit employee payment')   && $payment->status !== 'completed',
+            'can_delete' => $user->can('delete employee payment')
+                && !($payment->status === 'completed' && !$user->can('delete completed payment')),
+            'can_toggle_status' => $user->can('update employee payment') && $payment->status !== 'completed',
+        ];
+
+        return response()->json([
+            'success' => true,
+            'payment' => array_merge([
+                'id'                 => $payment->id,
+                'employee_id'        => $payment->employee_id,
+                'employee_name'      => trim(($payment->employee->first_name ?? '') . ' ' . ($payment->employee->last_name ?? '')),
+                'employee_email'     => $payment->employee->email ?? '—',
+                'payment_type'       => $payment->payment_type,
+                'payment_type_label' => ucfirst(str_replace('_', ' ', $payment->payment_type)),
+                'description'        => $payment->description,
+                'payment_date'       => optional($payment->payment_date)->format('Y-m-d'),
+                'payment_date_label' => optional($payment->payment_date)->format('d M Y'),
+                'pay_period_start'   => optional($payment->pay_period_start)->format('Y-m-d'),
+                'pay_period_end'     => optional($payment->pay_period_end)->format('Y-m-d'),
+
+                'payment_method_id'  => $payment->payment_method_id,
+                'payment_method_name'=> $payment->paymentMethod?->name ?? '—',
+                'payment_method_type'=> $payment->paymentMethod?->type ?? 'other',
+
+                'gross_amount'       => (float) $payment->gross_amount,
+                'total_tax_amount'   => (float) $payment->total_tax_amount,
+                'total_advance_deduction' => (float) $payment->total_advance_deduction,
+                'net_amount'         => (float) $payment->net_amount,
+                'amount'             => (float) $payment->amount,
+                'currency_symbol'    => currency_symbol(),
+
+                'hours_worked'       => $payment->hours_worked !== null ? (float) $payment->hours_worked : null,
+                'hourly_rate'        => $payment->hourly_rate !== null ? (float) $payment->hourly_rate : null,
+                'reference_number'   => $payment->reference_number,
+                'notes'              => $payment->notes,
+                'status'             => $payment->status,
+
+                'applied_taxes'      => $appliedTaxes,
+                'advance_deductions' => $advanceDeductions,
+
+                'breakdown'          => is_array($payment->breakdown) ? $payment->breakdown : (json_decode($payment->breakdown ?? '[]', true) ?: []),
+
+                'completed_at'       => optional($payment->completed_at)->format('d M Y, H:i'),
+                'failed_at'          => optional($payment->failed_at)->format('d M Y, H:i'),
+                'cancelled_at'       => optional($payment->cancelled_at)->format('d M Y, H:i'),
+                'created_at'         => optional($payment->created_at)->format('d M Y, H:i'),
+                'updated_at'         => optional($payment->updated_at)->format('d M Y, H:i'),
+            ], $can),
+        ]);
+    }
+
+    /**
+     * Meta endpoint — feeds the create + edit modals with employees, methods, taxes.
+     * Call once per page (cached client-side). Replaces the server-injected view vars.
+     */
+    public function meta(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view employee payment')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        if ($request->has('date_from') && !empty($request->date_from)) {
-            $query->whereDate('payment_date', '>=', $request->date_from);
-        }
-
-        if ($request->has('date_to') && !empty($request->date_to)) {
-            $query->whereDate('payment_date', '<=', $request->date_to);
-        }
-
-        if ($request->has('min_amount') && !empty($request->min_amount)) {
-            $query->where('gross_amount', '>=', to_base_currency($request->min_amount));
-        }
-
-        if ($request->has('max_amount') && !empty($request->max_amount)) {
-            $query->where('gross_amount', '<=', to_base_currency($request->max_amount));
-        }
-
-        // Get filtered payments with pagination
-        $payments = $query->latest()->paginate($request->get('per_page', 15));
-        
-        // Calculate statistics
-        $statistics = $this->getPaymentStatistics($tenantId, $request);
-        
-        // Get data for filters
         $employees = Employee::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->orderBy('first_name')
-            ->get(['id', 'first_name', 'last_name']);
-        
+            ->get(['id', 'first_name', 'last_name'])
+            ->map(fn($e) => ['id' => $e->id, 'name' => trim($e->first_name . ' ' . $e->last_name)]);
+
         $paymentMethods = PaymentMethod::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->get(['id', 'name', 'type']);
-        
-        $taxService = app(TaxCalculationService::class);
-        $availableTaxes = $taxService->getAvailableTaxes($tenantId);
+            ->get(['id', 'name', 'type', 'is_default']);
 
-        $bladeToReload = $request->query('bladeFileToReload');
-        switch ($bladeToReload) {
-            case 'reloadPaymentComponent':
-                return view('department.employee-payment.component', [
-                    'payments' => $payments,
-                    'taxes' => $availableTaxes,
-                    'statistics' => $statistics,
-                    'employees' => $employees,
-                    'paymentMethods' => $paymentMethods,
-                    'filters' => $request->all(),
-                ]);
-            default:
-                return view('department.employee-payment-index', [
-                    'payments' => $payments,
-                    'taxes' => $availableTaxes,
-                    'statistics' => $statistics,
-                    'employees' => $employees,
-                    'paymentMethods' => $paymentMethods,
-                    'filters' => $request->all(),
-                ]);
-        }
+        $taxes = app(\App\Services\TaxCalculationService::class)->getAvailableTaxes($tenantId);
+
+        return response()->json([
+            'success'         => true,
+            'employees'       => $employees,
+            'payment_methods' => $paymentMethods,
+            'taxes'           => $taxes,
+            'currency_symbol' => currency_symbol(),
+        ]);
     }
 
     /**
@@ -198,6 +329,12 @@ class EmployeePaymentController extends Controller
             'selected_taxes' => 'nullable|array',
             'selected_taxes.*' => 'exists:taxes,id',
         ]);
+
+        // If not overtime, force-clear hours/rate so they don't leak into the row
+        if (($validated['payment_type'] ?? '') !== 'overtime') {
+            $validated['hours_worked'] = null;
+            $validated['hourly_rate']  = null;
+        }
 
         // Check if employee belongs to tenant
         $employee = Employee::where('id', $validated['employee_id'])
@@ -393,9 +530,8 @@ class EmployeePaymentController extends Controller
             'selected_taxes.*' => 'nullable|exists:taxes,id',
         ]);
 
-        \Log::info('Validated data:', $validated);
-        \Log::info('Selected taxes after validation:', $validated['selected_taxes'] ?? []);
 
+        
         // Check if employee belongs to tenant
         $employee = Employee::where('id', $validated['employee_id'])
             ->where('tenant_id', $tenantId)
@@ -416,9 +552,9 @@ class EmployeePaymentController extends Controller
             
             if ($hoursWorked > 0 && $hourlyRate > 0) {
                 $validated['gross_amount'] = $hoursWorked * $hourlyRate;
-                \Log::info('Recalculated gross for overtime: ' . $validated['gross_amount']);
+                // \Log::info('Recalculated gross for overtime: ' . $validated['gross_amount']);
             } else {
-                \Log::info('Overtime but hours/rate are zero or not provided, keeping submitted gross_amount: ' . $validated['gross_amount']);
+                // \Log::info('Overtime but hours/rate are zero or not provided, keeping submitted gross_amount: ' . $validated['gross_amount']);
             }
         }
 
@@ -495,13 +631,49 @@ class EmployeePaymentController extends Controller
             $breakdown['net_amount'] = $netAmount;
         }
 
-        // \Log::info('Final values to save:', [
-        //     'gross_amount' => $validated['gross_amount'],
-        //     'net_amount' => $netAmount,
-        //     'total_tax_amount' => $totalTaxAmount,
-        //     'applied_taxes' => json_encode($appliedTaxes),
-        //     'is_tax_computed' => $isTaxComputed
-        // ]);
+        // Recompute advances from the request, and store them
+        $advanceDeductionsTotal = 0;
+        $advanceData = [];
+
+        $rawAdv = $request->input('advance_deductions');
+        if (!empty($rawAdv)) {
+            $parsed = is_string($rawAdv) ? json_decode($rawAdv, true) : $rawAdv;
+            if (is_array($parsed)) {
+                foreach ($parsed as $item) {
+                    $advance = EmployeeAdvance::where('id', $item['advance_id'] ?? null)
+                        ->where('tenant_id', $tenantId)
+                        ->where('employee_id', $validated['employee_id'])
+                        ->active()
+                        ->first();
+
+                    if (!$advance) continue;
+
+                    // Skip if the advance doesn't apply to this payment type
+                    if (method_exists($advance, 'appliesToSalaryType')
+                        && !$advance->appliesToSalaryType($validated['payment_type'])) {
+                        continue;
+                    }
+
+                    $amount = min(
+                        (float) ($item['deduction_amount'] ?? 0),
+                        (float) $advance->remaining_amount
+                    );
+                    if ($amount <= 0) continue;
+
+                    $advanceData[] = [
+                        'advance_id'       => $advance->id,
+                        'deduction_amount' => $amount,
+                        'remaining_before' => (float) $advance->remaining_amount,
+                    ];
+                    $advanceDeductionsTotal += $amount;
+                }
+            }
+        }
+
+        // Final net = net after taxes, minus advance deductions (clamped to >= 0)
+        $finalNet = max(0, $netAmount - $advanceDeductionsTotal);
+
+        
 
         $payment->update([
             'employee_id' => $validated['employee_id'],
@@ -523,6 +695,10 @@ class EmployeePaymentController extends Controller
             'hourly_rate' => $validated['hourly_rate'] ?? null,
             'breakdown' => $breakdown,
             'notes' => $validated['notes'] ?? null,
+            'net_amount'              => $finalNet,
+            'amount'                  => $finalNet,
+            'total_advance_deduction' => $advanceDeductionsTotal,
+            'advance_deductions'      => !empty($advanceData) ? $advanceData : null,
         ]);
 
         session()->flash('toast', [
@@ -626,25 +802,34 @@ class EmployeePaymentController extends Controller
         ]);
     }
 
+    private function actorLabel(?\App\Models\User $user): string
+    {
+        if (!$user) return 'System';
+        return $user->name ?: "User #{$user->id}";
+    }
 
+    private function paymentTypeLabel(string $type): string
+    {
+        return ucfirst(str_replace('_', ' ', $type));
+    }
 
     public function updatePaymentStatus(Request $request, $id)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('update employee payment')) {
             return response()->json([
                 'success' => false,
                 'message' => __('payments.not_authorized'),
-            ]);
+            ], 403);
         }
 
         $request->validate([
             'status' => 'required|in:pending,completed,failed,cancelled',
         ]);
 
-        $payment = EmployeePayment::with(['employee', 'paymentMethod'])
+        $payment = EmployeePayment::with(['employee', 'paymentMethod.currency'])
             ->where('id', $id)
             ->where('tenant_id', $tenantId)
             ->first();
@@ -653,233 +838,299 @@ class EmployeePaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('auth.payment_not_found'),
-            ]);
+            ], 404);
         }
 
-        // Prevent changing from completed to any other status
+        // ── State machine guards ─────────────────────────────────
         if ($payment->status === 'completed') {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.cannot_change_completed_payment'),
-            ]);
+            ], 409);
         }
 
-        // Prevent changing from failed/cancelled to pending
-        if ($request->status === 'pending' && in_array($payment->status, ['failed', 'cancelled'])) {
+        if ($request->status === 'pending' && in_array($payment->status, ['failed', 'cancelled'], true)) {
             return response()->json([
                 'success' => false,
                 'message' => __('auth.cannot_revert_failed_payment'),
-            ]);
+            ], 409);
         }
 
         DB::beginTransaction();
         try {
             $updateData = [
-                'status' => $request->status,
+                'status'     => $request->status,
                 'updated_at' => now(),
             ];
 
+            // ── Shared references for narrative building ─────────
+            $actorName    = $this->actorLabel($user);
+            $employeeName = trim(($payment->employee->first_name ?? '') . ' ' . ($payment->employee->last_name ?? ''));
+            $typeLabel    = ucfirst(str_replace('_', ' ', (string) $payment->payment_type));
+            $grossStr     = number_format((float) $payment->gross_amount, 2);
+            $netStr       = number_format((float) $payment->amount, 2);
+            $taxStr       = number_format((float) $payment->total_tax_amount, 2);
+            $advanceStr   = number_format((float) ($payment->total_advance_deduction ?? 0), 2);
+            $payDateStr   = $payment->payment_date?->format('d M Y') ?? '—';
+
+            $netTransaction = null;
+            $repaymentTransaction = null;
+            $advanceDeductionsProcessed = [];
+
+            // ═══════════════════════════════════════════════════════
+            // COMPLETED → record withdrawal + tax liabilities + deposit
+            // ═══════════════════════════════════════════════════════
             if ($request->status === 'completed') {
-                // Validate payment method exists
                 if (!$payment->payment_method_id) {
                     throw new \Exception(__('auth.no_payment_method_for_employee_payment'));
                 }
 
                 $paymentMethod = PaymentMethod::findForTenant($payment->payment_method_id, $tenantId);
-                
                 if (!$paymentMethod) {
                     throw new \Exception(__('pagination.payment_method_not_found'));
                 }
-                
-                // Validate the payment method can handle this transaction
-                $validation = $paymentMethod->validateTransaction($payment->amount);
+
+                $validation = $paymentMethod->validateTransaction((float) $payment->amount);
                 if (!$validation['success']) {
                     throw new \Exception($validation['message']);
                 }
 
-                // Map payment_type to transaction category
-                $categoryMap = [
-                    'salary' => 'SALARY',
-                    'allowance' => 'ALLOWANCE', 
-                    'bonus' => 'BONUS',
-                    'overtime' => 'OVERTIME',
-                    'advance' => 'ADVANCE',
-                    'other' => 'OTHER'
-                ];
-                $paymentType = strtolower($payment->payment_type);
-                $transactionCategory = $categoryMap[$paymentType] ?? 'OTHER';
+                $methodName = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
+                $currency   = optional($paymentMethod->currency)->code ?? 'UGX';
+                $currencyId = $paymentMethod->currency_id ?? \App\Models\Currency::default()->id;
 
-                // ============================================
-                // STEP 1: Process Advance Deductions FIRST
-                // ============================================
-                $advanceDeductionsProcessed = [];
-                
+                $categoryMap = [
+                    'salary'    => 'SALARY',
+                    'allowance' => 'ALLOWANCE',
+                    'bonus'     => 'BONUS',
+                    'overtime'  => 'OVERTIME',
+                    'advance'   => 'ADVANCE',
+                    'other'     => 'OTHER',
+                ];
+                $transactionCategory = $categoryMap[strtolower((string) $payment->payment_type)] ?? 'OTHER';
+
+                // ── STEP 1: process advance deductions first ─────
                 if ($payment->advance_deductions) {
-                    $deductions = is_string($payment->advance_deductions) 
-                        ? json_decode($payment->advance_deductions, true) 
-                        : $payment->advance_deductions;
-                    
-                    foreach ($deductions as $deduction) {
-                        $advance = EmployeeAdvance::where('id', $deduction['advance_id'])
+                    $deductions = $payment->advance_deductions;
+                    if (is_string($deductions)) {
+                        $deductions = json_decode($deductions, true) ?: [];
+                    }
+                    if (!is_array($deductions)) {
+                        $deductions = [];
+                    }
+
+                    foreach ($deductions as $d) {
+                        $advance = EmployeeAdvance::where('id', $d['advance_id'] ?? null)
                             ->where('tenant_id', $tenantId)
                             ->first();
-                        
-                        if ($advance && $advance->canBeDeducted()) {
-                            // Record the deduction against the advance
-                            $advance->recordDeduction($deduction['deduction_amount'], $payment);
-                            
-                            $advanceDeductionsProcessed[] = [
-                                'advance_id' => $advance->id,
-                                'deduction_amount' => $deduction['deduction_amount'],
-                                'remaining_after' => $advance->remaining_amount,
-                            ];
-                            
-                            \Log::info('Advance deduction recorded', [
-                                'advance_id' => $advance->id,
+
+                        if (!$advance || !$advance->canBeDeducted()) {
+                            \Log::warning('Advance not deductible at completion', [
+                                'advance_id' => $d['advance_id'] ?? null,
                                 'payment_id' => $payment->id,
-                                'amount' => $deduction['deduction_amount'],
-                                'remaining' => $advance->remaining_amount,
                             ]);
+                            continue;
                         }
+
+                        $deductAmount = min(
+                            (float) ($d['deduction_amount'] ?? 0),
+                            (float) $advance->remaining_amount
+                        );
+                        if ($deductAmount <= 0) continue;
+
+                        $advance->recordDeduction($deductAmount, $payment);
+
+                        $advanceDeductionsProcessed[] = [
+                            'advance_id'       => $advance->id,
+                            'deduction_amount' => $deductAmount,
+                            'remaining_after'  => (float) $advance->fresh()->remaining_amount,
+                        ];
+
+                        \Log::info('Advance deduction applied', [
+                            'advance_id' => $advance->id,
+                            'payment_id' => $payment->id,
+                            'amount'     => $deductAmount,
+                            'remaining'  => (float) $advance->fresh()->remaining_amount,
+                        ]);
                     }
                 }
 
-                // ============================================
-                // TRANSACTION 1: Record NET PAYMENT to employee (WITHDRAWAL)
-                // ============================================
+                // ── STEP 2: net payment to employee (WITHDRAWAL) ─
+                $periodStr = ($payment->pay_period_start && $payment->pay_period_end)
+                    ? ' for the period '
+                        . $payment->pay_period_start->format('d M Y') . ' – '
+                        . $payment->pay_period_end->format('d M Y')
+                    : '';
+
+                $deductionsParts = [];
+                if ((float) $payment->total_tax_amount > 0) {
+                    $deductionsParts[] = "{$taxStr} {$currency} in taxes";
+                }
+                if ((float) ($payment->total_advance_deduction ?? 0) > 0) {
+                    $deductionsParts[] = "{$advanceStr} {$currency} toward salary advance recovery";
+                }
+                $deductionsText = $deductionsParts
+                    ? ' Net pay arrived after deducting ' . implode(' and ', $deductionsParts) . '.'
+                    : '';
+
+                $netNarrative = "{$actorName} processed a {$typeLabel} payment of "
+                    . "{$grossStr} {$currency} to {$employeeName}{$periodStr} from {$methodName}. "
+                    . "The net disbursed was {$netStr} {$currency}.{$deductionsText} "
+                    . "Reference: " . ($payment->reference_number ?: 'none') . ".";
+
                 $netTransactionData = [
-                    'user_id' => $user->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'tenant_id' => $tenantId,
-                    'transaction_type' => 'WITHDRAWAL', // Money going OUT
+                    'user_id'              => $user->id,
+                    'payment_method_id'    => $paymentMethod->id,
+                    'tenant_id'            => $tenantId,
+                    'transaction_type'     => 'WITHDRAWAL',
                     'transaction_category' => $transactionCategory,
-                    'amount' => $payment->amount, // Net amount after all deductions
-                    'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                    'reference_table' => 'employee_payments',
-                    'reference_id' => $payment->id,
-                    'description' => ucfirst($payment->payment_type) . ' Payment - ' . $payment->description,
-                    'notes' => 'Net payment to ' . ($payment->employee->first_name ?? 'employee'),
+                    'amount'               => (float) $payment->amount,
+                    'currency_id'          => $currencyId,
+                    'reference_table'      => 'employee_payments',
+                    'reference_id'         => $payment->id,
+                    'description'          => $netNarrative,
+                    'notes'                => "Net pay to {$employeeName} — {$methodName}",
                     'metadata' => [
-                        'employee_id' => $payment->employee_id,
-                        'employee_name' => $payment->employee->first_name . ' ' . $payment->employee->last_name,
-                        'payment_type' => $payment->payment_type,
-                        'payment_date' => $payment->payment_date,
-                        'reference_number' => $payment->reference_number,
-                        'pay_period_start' => $payment->pay_period_start,
-                        'pay_period_end' => $payment->pay_period_end,
-                        'hours_worked' => $payment->hours_worked,
-                        'hourly_rate' => $payment->hourly_rate,
-                        'processed_by_id' => $user->id,
-                        'processed_by_name' => $user->name,
-                        'transaction_nature' => 'EMPLOYEE_PAYMENT_NET',
-                        'gross_amount' => $payment->gross_amount,
-                        'net_amount' => $payment->amount,
-                        'total_tax' => $payment->total_tax_amount,
-                        'total_advance_deduction' => $payment->total_advance_deduction ?? 0,
+                        'employee_id'            => $payment->employee_id,
+                        'employee_name'          => $employeeName,
+                        'payment_type'           => $payment->payment_type,
+                        'payment_date'           => $payment->payment_date?->format('Y-m-d'),
+                        'reference_number'       => $payment->reference_number,
+                        'pay_period_start'       => $payment->pay_period_start?->format('Y-m-d'),
+                        'pay_period_end'         => $payment->pay_period_end?->format('Y-m-d'),
+                        'hours_worked'           => $payment->hours_worked,
+                        'hourly_rate'            => $payment->hourly_rate,
+                        'processed_by_id'        => $user->id,
+                        'processed_by_name'      => $user->name,
+                        'transaction_nature'     => 'EMPLOYEE_PAYMENT_NET',
+                        'gross_amount'           => (float) $payment->gross_amount,
+                        'net_amount'             => (float) $payment->amount,
+                        'total_tax'              => (float) $payment->total_tax_amount,
+                        'total_advance_deduction'=> (float) ($payment->total_advance_deduction ?? 0),
+                        'narrative'              => $netNarrative,
                     ],
                 ];
 
                 $netTransaction = app('payment-transaction')->recordTransaction($netTransactionData);
 
-                // ============================================
-                // STEP 2: Create TAX LIABILITIES (if applicable)
-                // ============================================
-                if ($payment->is_tax_computed && $payment->total_tax_amount > 0 && $payment->applied_taxes) {
-                    $taxes = is_string($payment->applied_taxes) 
-                        ? json_decode($payment->applied_taxes, true) 
-                        : $payment->applied_taxes;
-                    
-                    foreach ($taxes as $tax) {
+                // ── STEP 3: tax liabilities ───────────────────────
+                if ($payment->is_tax_computed
+                    && (float) $payment->total_tax_amount > 0
+                    && $payment->applied_taxes) {
+
+                    $taxes = $payment->applied_taxes;
+                    if (is_string($taxes)) {
+                        $taxes = json_decode($taxes, true) ?: [];
+                    }
+
+                    foreach ((array) $taxes as $tax) {
+                        $taxName   = $tax['tax_name'] ?? $tax['name'] ?? 'Tax';
+                        $taxAmount = (float) ($tax['amount'] ?? 0);
+
                         TaxLiability::create([
-                            'tenant_id' => $tenantId,
-                            'employee_id' => $payment->employee_id,
+                            'tenant_id'           => $tenantId,
+                            'employee_id'         => $payment->employee_id,
                             'employee_payment_id' => $payment->id,
-                            'tax_id' => $tax['tax_id'] ?? null,
-                            'amount' => $tax['amount'] ?? 0,
-                            'tax_name' => $tax['tax_name'] ?? $tax['name'] ?? 'Tax',
-                            'rate' => $tax['rate'] ?? 0,
-                            'tax_code' => $tax['code'] ?? null,
-                            'tax_type' => $tax['type'] ?? 'percentage',
-                            'status' => 'pending',
-                            'due_date' => $this->calculateTaxDueDate($payment->payment_date),
-                            'tax_year' => $payment->payment_date->year,
-                            'tax_month' => $payment->payment_date->month,
-                            'tax_quarter' => ceil($payment->payment_date->month / 3),
+                            'tax_id'              => $tax['tax_id'] ?? null,
+                            'amount'              => $taxAmount,
+                            'tax_name'            => $taxName,
+                            'rate'                => $tax['rate'] ?? 0,
+                            'tax_code'            => $tax['code'] ?? $tax['tax_code'] ?? null,
+                            'tax_type'            => $tax['type'] ?? 'percentage',
+                            'status'              => 'pending',
+                            'due_date'            => $this->calculateTaxDueDate($payment->payment_date),
+                            'tax_year'            => $payment->payment_date?->year,
+                            'tax_month'           => $payment->payment_date?->month,
+                            'tax_quarter'         => $payment->payment_date
+                                                        ? (int) ceil($payment->payment_date->month / 3)
+                                                        : null,
                             'metadata' => [
-                                'payment_date' => $payment->payment_date,
+                                'payment_date' => $payment->payment_date?->format('Y-m-d'),
                                 'payment_type' => $payment->payment_type,
-                                'gross_amount' => $payment->gross_amount,
-                                'net_amount' => $payment->amount,
+                                'gross_amount' => (float) $payment->gross_amount,
+                                'net_amount'   => (float) $payment->amount,
+                                'narrative'    => "{$actorName} recorded a {$taxName} liability of "
+                                                . number_format($taxAmount, 2) . " {$currency} against the "
+                                                . "{$typeLabel} payment to {$employeeName} on {$payDateStr}.",
                             ],
                         ]);
                     }
-                    
+
                     \Log::info('Tax liabilities created', [
                         'payment_id' => $payment->id,
-                        'count' => count($taxes),
-                        'total' => $payment->total_tax_amount,
+                        'count'      => count((array) $taxes),
+                        'total'      => (float) $payment->total_tax_amount,
                     ]);
                 }
 
-                // ============================================
-                // TRANSACTION 3: Record ADVANCE REPAYMENT (DEPOSIT - money coming BACK in)
-                // ============================================
-                if ($payment->total_advance_deduction > 0 && !empty($advanceDeductionsProcessed)) {
-                    // This is the key! Advance repayment is a DEPOSIT to the company
-                    // because the employee is paying back the advance
-                    
+                // ── STEP 4: advance repayment (DEPOSIT) ─────────
+                if ((float) ($payment->total_advance_deduction ?? 0) > 0 && !empty($advanceDeductionsProcessed)) {
+                    $advanceDetails = collect($advanceDeductionsProcessed)->map(function ($d) use ($currency) {
+                        $adv = EmployeeAdvance::find($d['advance_id']);
+                        $advDate = $adv?->advance_date?->format('d M Y') ?? '—';
+                        return "#{$d['advance_id']} (advance dated {$advDate}, "
+                            . number_format((float) $d['deduction_amount'], 2) . " {$currency} recovered, "
+                            . 'remaining ' . number_format((float) $d['remaining_after'], 2) . ')';
+                    })->implode('; ');
+
+                    $repaymentNarrative = "{$actorName} recorded an advance repayment of "
+                        . "{$advanceStr} {$currency} from {$employeeName} against the "
+                        . "{$typeLabel} payment processed on {$payDateStr}. "
+                        . "Advances covered: {$advanceDetails}. "
+                        . "Funds were retained from the gross {$grossStr} {$currency} before net disbursement.";
+
                     $repaymentTransactionData = [
-                        'user_id' => $user->id,
-                        'payment_method_id' => $paymentMethod->id, // Using same payment method for simplicity
-                        'tenant_id' => $tenantId,
-                        'transaction_type' => 'DEPOSIT', // Money coming IN (repayment)
+                        'user_id'              => $user->id,
+                        'payment_method_id'    => $paymentMethod->id,
+                        'tenant_id'            => $tenantId,
+                        'transaction_type'     => 'DEPOSIT',
                         'transaction_category' => 'ADVANCE_REPAYMENT',
-                        'amount' => $payment->total_advance_deduction,
-                        'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                        'reference_table' => 'employee_payments',
-                        'reference_id' => $payment->id,
-                        'description' => 'Advance repayment from ' . $payment->employee->first_name . ' ' . $payment->employee->last_name,
-                        'notes' => 'Recovery of salary advance',
+                        'amount'               => (float) $payment->total_advance_deduction,
+                        'currency_id'          => $currencyId,
+                        'reference_table'      => 'employee_payments',
+                        'reference_id'         => $payment->id,
+                        'description'          => $repaymentNarrative,
+                        'notes'                => "Advance recovery from {$employeeName}",
                         'metadata' => [
-                            'employee_id' => $payment->employee_id,
-                            'employee_name' => $payment->employee->first_name . ' ' . $payment->employee->last_name,
-                            'advance_deductions' => $advanceDeductionsProcessed,
-                            'payment_id' => $payment->id,
-                            'transaction_nature' => 'ADVANCE_REPAYMENT',
+                            'employee_id'         => $payment->employee_id,
+                            'employee_name'       => $employeeName,
+                            'advance_deductions'  => $advanceDeductionsProcessed,
+                            'payment_id'          => $payment->id,
+                            'transaction_nature'  => 'ADVANCE_REPAYMENT',
+                            'narrative'           => $repaymentNarrative,
                         ],
                     ];
-                    
+
                     $repaymentTransaction = app('payment-transaction')->recordTransaction($repaymentTransactionData);
-                    
-                    // Link each advance to this repayment transaction
-                    foreach ($advanceDeductionsProcessed as $deduction) {
-                        $advance = EmployeeAdvance::find($deduction['advance_id']);
-                        if ($advance) {
-                            $advance->update([
-                                'repayment_transaction_ref' => $repaymentTransaction->transaction_ref,
-                            ]);
-                        }
+
+                    foreach ($advanceDeductionsProcessed as $d) {
+                        EmployeeAdvance::where('id', $d['advance_id'])
+                            ->where('tenant_id', $tenantId)
+                            ->update(['repayment_transaction_ref' => $repaymentTransaction->transaction_ref]);
                     }
-                } else {
-                    \Log::info('No deposit');
                 }
 
-                // Update payment with transaction refs
+                // ── STEP 5: link transaction refs to payment ────
                 $payment->update([
                     'net_payment_transaction_ref' => $netTransaction->transaction_ref,
-                    'completed_at' => now(),
+                    'completed_at'                => now(),
                 ]);
             }
 
-            // ✅ PROCESS FAILED OR CANCELLED STATUS
-            elseif (in_array($request->status, ['failed', 'cancelled']) && $payment->status === 'pending') {
+            // ═══════════════════════════════════════════════════════
+            // FAILED / CANCELLED → timestamp only, no money moved
+            // ═══════════════════════════════════════════════════════
+            elseif (in_array($request->status, ['failed', 'cancelled'], true)
+                && $payment->status === 'pending') {
+
                 $timestampField = $request->status === 'failed' ? 'failed_at' : 'cancelled_at';
                 $updateData[$timestampField] = now();
-                
-                \Log::info('Employee payment ' . $request->status, [
-                    'payment_id' => $payment->id,
-                    'amount' => $payment->amount,
+
+                \Log::info('Employee payment status changed without disbursement', [
+                    'payment_id'      => $payment->id,
+                    'amount'          => (float) $payment->amount,
                     'previous_status' => $payment->status,
+                    'new_status'      => $request->status,
                 ]);
             }
 
@@ -889,33 +1140,45 @@ class EmployeePaymentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'reload' => true,
+                'reload'  => true,
                 'componentId' => 'reloadPaymentComponent',
                 'refresh' => false,
                 'message' => __('auth.status_updated'),
-                'redirect' => route('payment.index'),
+                'redirect'=> route('payment.index'),
                 'transaction_info' => [
-                    'transaction_ref' => $netTransaction->transaction_ref ?? null,
-                    'amount' => $payment->amount,
-                    'payment_method' => $paymentMethod->name ?? null,
-                    'payment_type' => $payment->payment_type,
-                    'advance_deductions' => count($advanceDeductionsProcessed ?? []),
-                    'total_advance_deducted' => array_sum(array_column($advanceDeductionsProcessed ?? [], 'deduction_amount')),
+                    'transaction_ref'          => $netTransaction->transaction_ref ?? null,
+                    'amount'                   => (float) $payment->amount,
+                    'payment_method'           => $paymentMethod->name ?? null,
+                    'payment_type'             => $payment->payment_type,
+                    'advance_deductions'       => count($advanceDeductionsProcessed),
+                    'total_advance_deducted'   => array_sum(array_column($advanceDeductionsProcessed, 'deduction_amount')),
+                    'tax_liabilities_created'  => (float) $payment->total_tax_amount > 0
+                                                    ? count((array) ($payment->applied_taxes ?? []))
+                                                    : 0,
                 ],
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors'  => $e->errors(),
+            ], 422);
+
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Error updating payment status: ' . $e->getMessage(), [
+            \Log::error('Error updating payment status', [
                 'payment_id' => $id,
-                'status' => $request->status,
-                'trace' => $e->getTraceAsString()
+                'status'     => $request->status,
+                'error'      => $e->getMessage(),
+                'trace'      => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => __('auth.error_updating_status') . ': ' . $e->getMessage(),
-            ]);
+            ], 500);
         }
     }
 

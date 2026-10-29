@@ -48,23 +48,27 @@
                                 <option value="unpaid">{{ __('payments.unpaid') }}</option>
                                 <option value="other">{{ __('payments.other') }}</option>
                             </select>
+                            <div id="leave_type"></div>
                         </div>
 
                         <!-- Custom Type (for 'other') -->
                         <div class="col-md-6 fv-row mb-7" id="custom_type_field" style="display: none;">
                             <label class="required fw-semibold fs-6 mb-2">{{ __('payments.custom_type') }}</label>
                             <input type="text" name="custom_type" class="form-control form-control-solid" placeholder="e.g., Sabbatical">
+                            <div id="custom_type"></div>
                         </div>
 
                         <!-- Date Range -->
                         <div class="col-md-6 fv-row mb-7">
                             <label class="required fw-semibold fs-6 mb-2">{{ __('payments.start_date') }}</label>
                             <input type="date" name="start_date" class="form-control form-control-solid" id="start_date" required>
+                            <div id="start_date"></div>
                         </div>
 
                         <div class="col-md-6 fv-row mb-7">
                             <label class="required fw-semibold fs-6 mb-2">{{ __('payments.end_date') }}</label>
                             <input type="date" name="end_date" class="form-control form-control-solid" id="end_date" required>
+                            <div id="end_date"></div>
                         </div>
 
                         <!-- Days Preview -->
@@ -74,6 +78,7 @@
                                 <span class="fw-bold fs-2 text-info" id="total_days_preview">0</span>
                                 <span class="text-gray-600">days</span>
                             </div>
+                            <div id="total_days_preview"></div>
                         </div>
 
                         <!-- Paid/Unpaid -->
@@ -84,12 +89,14 @@
                                     {{ __('payments.paid_leave') }}
                                 </label>
                             </div>
+                            <div id="is_paid"></div>
                         </div>
 
                         <!-- Contact Info -->
                         <div class="col-md-6 fv-row mb-7">
                             <label class="fw-semibold fs-6 mb-2">{{ __('payments.alternate_contact') }}</label>
                             <input type="text" name="alternate_contact" class="form-control form-control-solid" placeholder="Phone number during leave">
+                            <div id="alternate_contact"></div>
                         </div>
 
                         <div class="col-md-6 fv-row mb-7">
@@ -135,7 +142,7 @@
 
                     <div class="text-center pt-10">
                         <button type="reset" class="btn btn-light me-3" data-bs-dismiss="modal">{{ __('auth._discard') }}</button>
-                        <button type="button" class="btn btn-primary" onclick="submitLeaveRequest()">
+                        <button type="button" class="btn btn-primary">
                             <span class="indicator-label">{{ __('payments.submit_request') }}</span>
                             <span class="indicator-progress" style="display: none;">
                                 {{ __('auth.please_wait') }}
@@ -148,83 +155,3 @@
         </div>
     </div>
 </div>
-
-<script>
-    // Show/hide custom type field
-    document.getElementById('leave_type').addEventListener('change', function() {
-        const customField = document.getElementById('custom_type_field');
-        if (this.value === 'other') {
-            customField.style.display = 'block';
-            document.querySelector('[name="custom_type"]').setAttribute('required', 'required');
-        } else {
-            customField.style.display = 'none';
-            document.querySelector('[name="custom_type"]').removeAttribute('required');
-        }
-    });
-
-    // Calculate total days
-    function calculateDays() {
-        const start = document.getElementById('start_date').value;
-        const end = document.getElementById('end_date').value;
-        
-        if (start && end) {
-            const startDate = new Date(start);
-            const endDate = new Date(end);
-            const diffTime = Math.abs(endDate - startDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-            document.getElementById('total_days_preview').textContent = diffDays;
-        }
-    }
-
-    document.getElementById('start_date').addEventListener('change', calculateDays);
-    document.getElementById('end_date').addEventListener('change', calculateDays);
-
-    function submitLeaveRequest() {
-        const form = document.getElementById('kt_modal_add_leave_form');
-        const formData = new FormData(form);
-        const button = document.querySelector('#kt_modal_add_leave .btn-primary');
-        
-        button.disabled = true;
-        button.querySelector('.indicator-label').style.display = 'none';
-        button.querySelector('.indicator-progress').style.display = 'inline-block';
-
-        fetch('{{ route("leave.store") }}', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json'
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#kt_modal_add_leave').modal('hide');
-                Swal.fire('Success', data.message, 'success').then(() => location.reload());
-            } else {
-                if (data.errors) {
-                    Object.keys(data.errors).forEach(key => {
-                        const input = document.querySelector(`[name="${key}"]`);
-                        if (input) {
-                            input.classList.add('is-invalid');
-                            const feedback = document.createElement('div');
-                            feedback.className = 'invalid-feedback';
-                            feedback.textContent = data.errors[key][0];
-                            input.parentNode.appendChild(feedback);
-                        }
-                    });
-                }
-                Swal.fire('Error', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'An error occurred', 'error');
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.querySelector('.indicator-label').style.display = 'inline-block';
-            button.querySelector('.indicator-progress').style.display = 'none';
-        });
-    }
-</script>

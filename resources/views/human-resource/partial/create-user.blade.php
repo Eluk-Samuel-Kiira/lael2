@@ -1,104 +1,84 @@
- 
 <div class="modal fade" id="kt_modal_add_employee" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered mw-650px">
         <div class="modal-content">
             <div class="modal-header" id="kt_modal_add_user_header">
-                <h2 class="fw-bold">{{__('auth._create')}}</h2>
+                <h2 class="fw-bold">{{ __('auth._create') }}</h2>
                 <div class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal">
-                    <i class="ki-duotone ki-cross fs-1">
-                        <span class="path1"></span>
-                        <span class="path2"></span>
-                    </i>
+                    <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
                 </div>
             </div>
             <div class="modal-body px-5 my-7">
                 <form id="kt_modal_add_user_form" class="form">
                     @csrf
-                    <div class="text-center pt-10">
-                        <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('auth.first_name')}}</span>
-                                </label>
-                                <input type="text" id="first_name" class="form-control form-control-solid" name="first_name" />
-                                <div id="first_name"></div>
-                            </div>
 
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                    <span class="required">{{__('auth.last_name')}}</span>
-                                </label>
-                                <input type="text" id="last_name" class="form-control form-control-solid" name="last_name" />
-                                <div id="last_name"></div>
-                            </div>
+                    <div class="row g-5 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth.first_name') }}</label>
+                            <input type="text" name="first_name" class="form-control form-control-solid">
+                            <div id="first_name"></div>
                         </div>
-
-                        <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                        <span class="required">{{__('auth._email')}}</span>
-                                </label>
-                                <input type="email" id="email" class="form-control form-control-solid" name="email" />
-                                <div id="email"></div>
-                            </div>
-
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                        <span class="required">{{__('auth._phone')}}</span>
-                                </label>
-                                <input type="tel" id="telephone_number" class="form-control form-control-solid" name="telephone_number" />
-                                <div id="telephone_number"></div>
-                            </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth.last_name') }}</label>
+                            <input type="text" name="last_name" class="form-control form-control-solid">
+                            <div id="last_name"></div>
                         </div>
-                        
-                        <div class="row g-9 mb-8">
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                        <span class="required">{{__('auth.job_title')}}</span>
-                                </label>
-                                <input type="text" id="job_title" class="form-control form-control-solid" name="job_title" />
-                                <div id="job_title"></div>
-                            </div>
-                            <div class="d-flex flex-column mb-8 fv-row col-md-6">
-                                <label class="d-flex align-items-center fs-6 fw-semibold mb-2">
-                                        <span class="required">{{__('auth._role')}}</span>
-                                </label>
-                                <select name="role_id" class="form-select">
-                                    <option></option>
-                                    @foreach ($roles as $role)
-                                        <option value="{{ $role->id }}">{{ ucwords(str_replace('_', ' ', $role->name)) }}</option>
-                                    @endforeach
-                                </select>
-                                <div id="role_id"></div>
-                            </div>
-                        </div>
+                    </div>
 
-                        <div class="row g-9 mb-8">
-                            <x-liveblade-dependent-dropdown 
-                                id="location_department"
-                                parentName="location_id"
-                                childName="department_id"
-                                parentLabel="pagination._location"
-                                childLabel="auth._department"
-                                :parentOptions="$locations"
-                                :childOptions="$departments"
-                                route="{{ route('get.departments') }}"
-                            />
-                            <div id="location_id"></div>
-                            <div id="department_id"></div>
+                    <div class="row g-5 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth._email') }}</label>
+                            <input type="email" name="email" class="form-control form-control-solid">
+                            <div id="email"></div>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth._phone') }}</label>
+                            <input type="tel" name="telephone_number" class="form-control form-control-solid">
+                            <div id="telephone_number"></div>
+                        </div>
+                    </div>
 
-                        <button type="reset" class="btn btn-light me-3" id="discardButton" data-bs-dismiss="modal">{{__('auth._discard')}}</button>
-                        
-                        <button 
-                            id="submitEmplButton" 
-                            type="button" 
-                            class="btn btn-primary"
-                            onclick="submitEmployeeForm('kt_modal_add_user_form', 'submitEmplButton', '{{ route('employee.store') }}', 'POST', 'discardButton')">
-                            
-                            <span class="indicator-label">{{__('auth.submit')}}</span>
-                            <span class="indicator-progress">{{__('auth.please_wait')}}
-                                <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                    <div class="row g-5 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth.job_title') }}</label>
+                            <input type="text" name="job_title" class="form-control form-control-solid">
+                            <div id="job_title"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">{{ __('auth._role') }}</label>
+                            <select name="role_id" class="form-select form-select-solid">
+                                <option value="">— Select —</option>
+                                @foreach ($roles as $role)
+                                    <option value="{{ $role->id }}">{{ ucwords(str_replace('_', ' ', $role->name)) }}</option>
+                                @endforeach
+                            </select>
+                            <div id="role_id"></div>
+                        </div>
+                    </div>
+
+                    <div class="row g-5 mb-4">
+                        <x-liveblade-dependent-dropdown
+                            id="location_department"
+                            parentName="location_id"
+                            childName="department_id"
+                            parentLabel="pagination._location"
+                            childLabel="auth._department"
+                            :parentOptions="$locations"
+                            :childOptions="$departments"
+                            route="{{ route('get.departments') }}"
+                        />
+                        <div id="location_id"></div>
+                        <div id="department_id"></div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-5">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                            {{ __('auth._discard') }}
+                        </button>
+                        <button type="button" id="submitUserCreate" class="btn btn-primary" style="min-width: 130px;">
+                            <span class="indicator-label">{{ __('auth.submit') }}</span>
+                            <span class="indicator-progress" style="display: none;">
+                                {{ __('auth.please_wait') }}
+                                <span class="spinner-border spinner-border-sm ms-2"></span>
                             </span>
                         </button>
                     </div>
@@ -106,47 +86,108 @@
             </div>
         </div>
     </div>
-</div>  
-
+</div>
 
 
 <script>
-    const submitFormEntities = (formId, submitButtonId, url, method = 'POST') => {
-        document.getElementById(formId).addEventListener('submit', function(e) {
-            e.preventDefault();
+(() => {
+    'use strict';
 
-            // Collect form data and add additional fields
-            const formData = Object.fromEntries(new FormData(this));
-            formData._method = method;
-            formData.routeName = url;
+    // Local helpers — scoped to this modal, no globals, no cross-module deps
+    const setBtnLoading = (btn, isLoading) => {
+        if (!btn) return;
+        const label    = btn.querySelector('.indicator-label');
+        const progress = btn.querySelector('.indicator-progress');
+        if (isLoading) {
+            btn.disabled = true;
+            if (label)    label.style.display    = 'none';
+            if (progress) progress.style.display = 'inline';
+        } else {
+            btn.disabled = false;
+            if (label)    label.style.display    = 'inline';
+            if (progress) progress.style.display = 'none';
+        }
+    };
 
-            // Reference the submit button and reloading
-            const submitButton = document.getElementById(submitButtonId);
-            LiveBlade.toggleButtonLoading(submitButton, true);
-
-            // Submit form data asynchronously
-            LiveBlade.submitFormItems(formData)
-                .then(noErrors => {
-                    console.log(noErrors);
-                    
-                    if (noErrors) {
-                        // Close the modal if no errors
-                        const closeModal = () => {
-                            document.getElementById('discardButton').click();
-                        };
-                        closeModal();
-                    }
-                })
-                .catch(error => {
-                    console.error('An unexpected error occurred:', error);
-                })
-                .finally(() => {
-                    LiveBlade.toggleButtonLoading(submitButton, false);
-                });
-
-                
+    const clearErrors = (form) => {
+        form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        form.querySelectorAll('.invalid-feedback.d-block').forEach(el => {
+            el.textContent = '';
+            el.classList.remove('d-block');
         });
     };
 
-    submitFormEntities('kt_modal_add_user_form', 'submitButton', '{{ route('employee.store') }}');
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('kt_modal_add_user_form');
+        const btn  = document.getElementById('submitUserCreate');
+        if (!form || !btn) return;
+
+        const url = '{{ route('user.store') }}';   // ← User module owns /user
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        // Reset the modal state whenever it's opened
+        document.getElementById('kt_modal_add_employee')?.addEventListener('show.bs.modal', () => {
+            form.reset();
+            clearErrors(form);
+            setBtnLoading(btn, false);
+        });
+
+        btn.addEventListener('click', async () => {
+            clearErrors(form);
+
+            const data = Object.fromEntries(new FormData(form));
+            data._method = 'POST';
+            Object.keys(data).forEach(k => {
+                if (data[k] === '' || data[k] === 'undefined') delete data[k];
+            });
+
+            setBtnLoading(btn, true);
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrf,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: new URLSearchParams(data),
+                });
+                const json = await res.json().catch(() => ({}));
+
+                if (res.status === 422) {
+                    Object.entries(json.errors || {}).forEach(([field, msgs]) => {
+                        const input  = form.querySelector(`[name="${field}"]`);
+                        const holder = form.querySelector(`#${CSS.escape(field)}`);
+                        if (input)  input.classList.add('is-invalid');
+                        if (holder) {
+                            holder.classList.add('invalid-feedback', 'd-block');
+                            holder.textContent = msgs[0];
+                        }
+                    });
+                    window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+                    setBtnLoading(btn, false);
+                    return;
+                }
+                if (!res.ok || json.success === false) {
+                    throw new Error(json.message || 'Create failed');
+                }
+
+                window.toastr?.success?.(json.message || 'User created.');
+                setBtnLoading(btn, false);
+
+                bootstrap.Modal.getInstance(form.closest('.modal'))?.hide();
+                form.reset();
+                clearErrors(form);
+
+                // Refresh the User module table (NOT the Employee module)
+                window.UserList?.reload?.();
+            } catch (err) {
+                console.error('[create-user] failed:', err);
+                window.toastr?.error?.(err.message || 'Something went wrong.');
+                setBtnLoading(btn, false);
+            }
+        });
+    });
+})();
 </script>

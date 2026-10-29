@@ -41,7 +41,7 @@ class EmployeePayment extends Model
         'cancelled_at',
     ];
 
-protected $casts = [
+    protected $casts = [
         'payment_date' => 'date',
         'pay_period_start' => 'date',
         'pay_period_end' => 'date',

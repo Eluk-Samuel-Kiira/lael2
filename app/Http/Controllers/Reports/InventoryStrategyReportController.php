@@ -211,10 +211,32 @@ class InventoryStrategyReportController extends Controller
         );
     }
 
+
     /**
-     * Main Inventory Strategy Report
+     * Inventory Strategy Report — view shell.
      */
     public function index(Request $request)
+    {
+        $tenantId = $this->getTenantId();
+
+        return view('reports.products.strategy', [
+            'initialFilters' => [
+                'strategy'      => $request->get('strategy', 'all'),
+                'category_id'   => $request->get('category_id', ''),
+                'search'        => $request->get('search', ''),
+                'location_id'   => $request->get('location_id', ''),
+                'department_id' => $request->get('department_id', ''),
+                'per_page'      => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                                    ? (int) $request->get('per_page', 15) : 15,
+                'page'          => max(1, (int) $request->get('page', 1)),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /reports/products/strategy/data
+     */
+    public function indexData(Request $request)
     {
         $tenantId     = $this->getTenantId();
         $isSingleShop = tenant_is_single_shop($tenantId);
@@ -225,8 +247,10 @@ class InventoryStrategyReportController extends Controller
         $locationId   = $request->get('location_id');
         $departmentId = $request->get('department_id');
         $perPage      = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+        $page         = max(1, (int) $request->get('page', 1));
 
-        // Pre-load custom-priced inventory for every variant in scope
+        // Preload custom pricing
         $variantIds = Product::where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->with('variants:id,product_id')
@@ -236,96 +260,115 @@ class InventoryStrategyReportController extends Controller
 
         $pricingMap = $this->preloadCustomPricing($variantIds, $tenantId);
 
-        $query = Product::with(['category', 'variants'])
+        $query = Product::with(['category:id,name', 'variants'])
             ->where('tenant_id', $tenantId)
             ->where('is_active', true);
 
-        if ($strategy && $strategy !== 'all') {
-            $query->where('inventory_strategy', $strategy);
-        }
-
-        if ($categoryId) {
-            $query->where('category_id', $categoryId);
-        }
-
+        if ($strategy && $strategy !== 'all') $query->where('inventory_strategy', $strategy);
+        if ($categoryId && is_numeric($categoryId)) $query->where('category_id', (int) $categoryId);
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
-                ->orWhere('sku', 'LIKE', "%{$search}%")
+                ->orWhere('sku',  'LIKE', "%{$search}%")
                 ->orWhere('description', 'LIKE', "%{$search}%");
             });
         }
 
         $products = $query->get();
 
-        $strategyData = collect();
-
-        foreach ($products as $product) {
+        $rows = $products->map(function (Product $product) use (
+            $tenantId, $isSingleShop, $pricingMap, $locationId, $departmentId
+        ) {
             $productStrategy = $product->inventory_strategy ?? 'quantity';
 
             $stockData = $this->getStockDataByStrategy(
-                $product,
-                $tenantId,
-                $isSingleShop,
-                $pricingMap,
-                $locationId,
-                $departmentId
+                $product, $tenantId, $isSingleShop, $pricingMap,
+                $locationId ? (int) $locationId : null,
+                $departmentId ? (int) $departmentId : null
             );
 
-            $strategyData->push((object) [
-                'product'        => $product,
+            return [
                 'product_id'     => $product->id,
+                'product_name'   => $product->name,
+                'product_sku'    => $product->sku,
+                'image_url'      => $product->image_url ? asset($product->image_url) : null,
+                'category_name'  => $product->category?->name,
                 'strategy'       => $productStrategy,
                 'strategy_label' => $this->getStrategyLabel($productStrategy),
                 'strategy_color' => $this->getStrategyColor($productStrategy),
                 'strategy_icon'  => $this->getStrategyIcon($productStrategy),
-                'stock_data'     => $stockData,
                 'variant_count'  => $product->variants->count(),
                 'total_stock'    => $stockData['total_stock']  ?? 0,
                 'total_value'    => $stockData['total_value']  ?? 0,
                 'status'         => $stockData['status']       ?? 'unknown',
                 'status_color'   => $stockData['status_color'] ?? 'secondary',
                 'status_label'   => $stockData['status_label'] ?? __('pagination.unknown'),
-            ]);
-        }
+            ];
+        });
 
-        $paginatedData = $this->paginateCollection($strategyData, $perPage, 'page');
+        $paginator = $this->paginateCollection($rows, $perPage, 'page');
 
+        // Summary over the full filtered set
         $summary = [
             'total_products'    => $products->count(),
             'quantity_strategy' => $products->where('inventory_strategy', 'quantity')->count(),
             'batch_strategy'    => $products->where('inventory_strategy', 'batch')->count(),
             'serial_strategy'   => $products->where('inventory_strategy', 'serial')->count(),
             'recipe_strategy'   => $products->where('inventory_strategy', 'recipe')->count(),
-            'total_stock'       => $strategyData->sum('total_stock'),
-            'total_value'       => $strategyData->sum('total_value'),
-            'in_stock'          => $strategyData->where('status', 'in_stock')->count(),
-            'low_stock'         => $strategyData->where('status', 'low_stock')->count(),
-            'out_of_stock'      => $strategyData->where('status', 'out_of_stock')->count(),
+            'total_stock'       => $rows->sum('total_stock'),
+            'total_value'       => $rows->sum('total_value'),
+            'in_stock'          => $rows->where('status', 'in_stock')->count(),
+            'low_stock'         => $rows->where('status', 'low_stock')->count(),
+            'out_of_stock'      => $rows->where('status', 'out_of_stock')->count(),
         ];
+
+        return response()->json([
+            'success'    => true,
+            'currency'   => currency_symbol(),
+            'is_single_shop' => $isSingleShop,
+            'products'   => collect($paginator->items())->values(),
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /reports/products/strategy/meta
+     */
+    public function meta(Request $request)
+    {
+        $tenantId = $this->getTenantId();
 
         $categories = ProductCategory::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name']);
+            ->where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
-        $strategies = [
-            ['value' => 'all',      'label' => __('pagination.all_strategies')],
-            ['value' => 'quantity', 'label' => __('pagination.quantity_tracking')],
-            ['value' => 'batch',    'label' => __('pagination.batch_tracking')],
-            ['value' => 'serial',   'label' => __('pagination.serial_tracking')],
-            ['value' => 'recipe',   'label' => __('pagination.recipe_product')],
-        ];
+        $locations   = Location::where('tenant_id', $tenantId)->where('is_active', 1)
+            ->orderBy('name')->get(['id', 'name']);
+        $departments = Department::where('tenant_id', $tenantId)->where('isActive', 1)
+            ->orderBy('name')->get(['id', 'name']);
 
-        $locations   = Location::where('tenant_id', $tenantId)->where('is_active', 1)->orderBy('name')->get(['id', 'name']);
-        $departments = Department::where('tenant_id', $tenantId)->where('isActive', 1)->orderBy('name')->get(['id', 'name']);
-
-        return view('reports.products.strategy', compact(
-            'paginatedData', 'strategyData', 'summary',
-            'categories', 'strategies', 'strategy', 'categoryId', 'search',
-            'perPage', 'isSingleShop',
-            'locations', 'departments', 'locationId', 'departmentId'
-        ));
+        return response()->json([
+            'success'    => true,
+            'currency'   => currency_symbol(),
+            'categories' => $categories,
+            'locations'  => $locations,
+            'departments'=> $departments,
+            'strategies' => [
+                ['value' => 'all',      'label' => __('pagination.all_strategies')],
+                ['value' => 'quantity', 'label' => __('pagination.quantity_tracking')],
+                ['value' => 'batch',    'label' => __('pagination.batch_tracking')],
+                ['value' => 'serial',   'label' => __('pagination.serial_tracking')],
+                ['value' => 'recipe',   'label' => __('pagination.recipe_product')],
+            ],
+        ]);
     }
 
     /**

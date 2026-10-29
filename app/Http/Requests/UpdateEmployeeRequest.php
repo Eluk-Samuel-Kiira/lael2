@@ -39,22 +39,25 @@ class UpdateEmployeeRequest extends FormRequest
      */
     public function rules(): array
     {
-        $userId = $this->route('employee');
-        
-        // Log::info('🔍 UpdateEmployeeRequest - Building rules for user:', [
-        //     'userId' => $userId,
-        // ]);
-        
+
+        // Match the resource route's parameter name: {user}
+        $userId = $this->route('user');
+
+        // Fallback for legacy /employee/{employee} callers, if any
+        if (!$userId) {
+            $userId = $this->route('employee') ?? $this->route('id');
+        }
+
         $rules = [
             'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'last_name'  => 'required|string|max:255',
             'email' => [
                 'required',
                 'email',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
-            'department_id' => 'required|integer|exists:departments,id',
-            'location_id' => 'required|integer|exists:locations,id',
+            'department_id' => 'nullable|integer|exists:departments,id',
+            'location_id'   => 'nullable|integer|exists:locations,id',
             'telephone_number' => [
                 'required',
                 'string',
@@ -65,19 +68,12 @@ class UpdateEmployeeRequest extends FormRequest
             'job_title' => 'nullable|string|max:255',
         ];
 
-        $user = Auth::user();
+        $user    = Auth::user();
         $isAdmin = $user && $user->hasRole('admin');
-        
-        // Log::info('🔍 UpdateEmployeeRequest - User role check:', [
-        //     'user_id' => $user->id,
-        //     'isAdmin' => $isAdmin,
-        // ]);
-        
-        if ($isAdmin) {
-            $rules['role_id'] = 'nullable|exists:roles,id';
-        } else {
-            $rules['role_id'] = 'sometimes|exists:roles,id';
-        }
+
+        $rules['role_id'] = $isAdmin
+            ? 'nullable|exists:roles,id'
+            : 'sometimes|exists:roles,id';
 
         return $rules;
     }

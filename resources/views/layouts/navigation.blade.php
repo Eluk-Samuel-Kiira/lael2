@@ -1,11 +1,10 @@
-
 <style>
     /* Ensure menu title and menu link have larger fonts */
     .menu-item .menu-link .menu-title-list {
         font-size: 1.1rem; /* Increased font size for the menu title */
         font-weight: bold; /* Bold the menu title */
         font-family: 'Verdana', sans-serif; /* Set a distinct font for menu title */
-        color: #dde9e1 !important;
+        color: #dde1e9 !important;
     }
 
     /* Increase font size of the menu link text */
@@ -25,15 +24,25 @@
         font-size: 1.5rem; /* Increase the size of the menu arrow */
     }
 
+    /* Top-level menu titles (Dashboard, Point Of Sale, etc.) */
+    .menu-item .menu-link .menu-title {
+        color: #ffffff !important;
+    }
+
+    /* Optional: make the dropdown arrows white too */
+    .menu-item .menu-link .menu-arrow:after {
+        filter: brightness(0) invert(1);
+    }
+
 </style>
 
 <div class="app-sidebar-menu overflow-hidden flex-column-fluid">
     <div id="kt_app_sidebar_menu_wrapper" class="app-sidebar-wrapper">
         <div id="kt_app_sidebar_menu_scroll" class="scroll-y my-5 mx-3" data-kt-scroll="true" data-kt-scroll-activate="true" data-kt-scroll-height="auto" data-kt-scroll-dependencies="#kt_app_sidebar_logo, #kt_app_sidebar_footer" data-kt-scroll-wrappers="#kt_app_sidebar_menu" data-kt-scroll-offset="5px">
-            <div class="menu menu-column menu-rounded menu-sub-indention px-3" id="#kt_app_sidebar_menu" data-kt-menu="true" data-kt-menu-expand="false">
+            <div class="menu menu-column menu-rounded menu-sub-indention px-3" id="kt_app_sidebar_menu" data-kt-menu="true" data-kt-menu-expand="false">
 
                 @if (tenant_can('dashboard'))
-                <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-building-dash fs-2">
@@ -51,7 +60,7 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('dashboard') }}')">
+                            <a class="menu-link" data-link href="{{ route('dashboard') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -60,7 +69,7 @@
                         </div>
                         @can('view financial dashboard')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('overview') }}')">
+                            <a class="menu-link" data-link href="{{ route('overview') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -75,7 +84,7 @@
                 <!-- POS -->
                 @if (tenant_can('pos'))
                 @canany(['view order', 'view pos', 'view invoices', 'customer', 'view customer-group'])
-                <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-shop fs-2">
@@ -91,10 +100,9 @@
                         <span class="menu-arrow"></span>
                     </span>
 
-                    
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('pos.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('pos.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -102,10 +110,10 @@
                             </a>
                         </div>
                     </div>
-                    
+
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('orders.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('orders.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -116,7 +124,7 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('invoices.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('invoices.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -125,26 +133,27 @@
                         </div>
                     </div>
 
-                    @can('view customer')
-                    <div class="menu-sub menu-sub-accordion">
-                        <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('customer.index') }}')">
-                                <span class="menu-bullet">
-                                    <span class="bullet bullet-dot"></span>
-                                </span>
-                                <span class="menu-title-list">{{ __('passwords.customer_index') }}</span>
-                            </a>
-                        </div>
-                    </div>
-                    @endcan
                     @can('view customer-group')
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('customer-group.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('customer-group.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title-list">{{ __('passwords.customer_group_index') }}</span>
+                            </a>
+                        </div>
+                    </div>
+                    @endcan
+
+                    @can('view customer')
+                    <div class="menu-sub menu-sub-accordion">
+                        <div class="menu-item">
+                            <a class="menu-link" data-link href="{{ route('customer.index') }}">
+                                <span class="menu-bullet">
+                                    <span class="bullet bullet-dot"></span>
+                                </span>
+                                <span class="menu-title-list">{{ __('passwords.customer_index') }}</span>
                             </a>
                         </div>
                     </div>
@@ -156,7 +165,7 @@
                 <!-- Product Catalog -->
                 @if (tenant_can('product_catalog'))
                 @canany(['view category', 'view subcategory', 'view product'])
-                <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-basket3-fill fs-2">
@@ -175,7 +184,7 @@
                     <div class="menu-sub menu-sub-accordion">
                         @can('view category')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('category.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('category.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -185,7 +194,7 @@
                         @endcan
                         @can('view subcategory')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('product-category.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('product-category.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -195,7 +204,7 @@
                         @endcan
                         @can('view product')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('products.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('products.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -208,12 +217,12 @@
                 </div>
                 @endcanany
                 @endif
-                
+
 
                 <!-- Inventory Items -->
                 @if (tenant_can('inventory'))
                 @canany(['view inventory', 'view production_orders'])
-                <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-luggage fs-2">
@@ -231,12 +240,10 @@
 
                     <div class="menu-sub menu-sub-accordion">
 
-                        {{-- ═══════════════════════════════════════════════════════
-                            Multi-shop only entries
-                            ═══════════════════════════════════════════════════════ --}}
+                        {{-- Multi-shop only entries --}}
                         @if(auth()->check() && !tenant_is_single_shop(auth()->user()->tenant_id))
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('items.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('items.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -245,7 +252,7 @@
                         </div>
 
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('stocks.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('stocks.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -254,11 +261,9 @@
                         </div>
                         @endif
 
-                        {{-- ═══════════════════════════════════════════════════════
-                            Batches
-                            ═══════════════════════════════════════════════════════ --}}
+                        {{-- Batches --}}
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('batches.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('batches.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -266,47 +271,35 @@
                             </a>
                         </div>
 
-                        {{-- ═══════════════════════════════════════════════════════
-                            ★ NEW — Serials
-                            ═══════════════════════════════════════════════════════ --}}
+                        {{-- Serials --}}
                         @if (Route::has('serials.index'))
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('serials.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('serials.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title-list">
-                                    <!-- <i class="bi bi-upc-scan fs-4 me-2 text-primary"></i> -->
-                                    {{ __('passwords.serial_numbers') }}
-                                </span>
+                                <span class="menu-title-list">{{ __('passwords.serial_numbers') }}</span>
                             </a>
                         </div>
                         @endif
 
-                        {{-- ═══════════════════════════════════════════════════════
-                            ★ NEW — Recipes
-                            ═══════════════════════════════════════════════════════ --}}
+                        {{-- Recipes --}}
                         @if (Route::has('recipes.index'))
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('recipes.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('recipes.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
-                                <span class="menu-title-list">
-                                    <!-- <i class="bi bi-journal-bookmark-fill fs-4 me-2 text-warning"></i> -->
-                                    {{ __('passwords.recipes') }}
-                                </span>
+                                <span class="menu-title-list">{{ __('passwords.recipes') }}</span>
                             </a>
                         </div>
                         @endif
 
-                        {{-- ═══════════════════════════════════════════════════════
-                            Production Orders
-                            ═══════════════════════════════════════════════════════ --}}
+                        {{-- Production Orders --}}
                         @if (tenant_can('production_orders'))
                         @can('view production_orders')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('production-orders.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('production-orders.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -331,7 +324,7 @@
 
                 <!-- Suppliers & Purchasing -->
                 @canany(['view supplier', 'view purchase_orders', 'view category-expense', 'view expense'])
-                <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-truck fs-2">
@@ -350,7 +343,7 @@
                     <div class="menu-sub menu-sub-accordion">
                         @can('view supplier')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('suppliers.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('suppliers.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -359,11 +352,10 @@
                         </div>
                         @endcan
 
-                        
                         @if (tenant_can('procurement'))
                         @can('view purchase_orders')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('purchase_order.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('purchase_order.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -373,11 +365,10 @@
                         @endcan
                         @endif
 
-                        
                         @if (tenant_can('expenses'))
                         @can('view category-expense')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('expense-category.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('expense-category.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -388,7 +379,7 @@
 
                         @can('view expense')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('expense.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('expense.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -402,11 +393,11 @@
                 </div>
                 @endcanany
 
-                
-                <!-- Human Reource -->
+
+                <!-- Human Resource -->
                 @if (tenant_can('users'))
                 @canany(['view user', 'view employee', 'view employee advance', 'view employee payment', 'view leave', 'admin only'])
-                <div data-kt-menu-trigger="click" class="menu-item here menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-people-fill fs-2">
@@ -424,7 +415,7 @@
 
                     <div class="menu-sub menu-sub-accordion">
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('employee.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('user.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -432,11 +423,10 @@
                             </a>
                         </div>
 
-                        
                         @if (tenant_can('hr_payroll'))
                         @can('view employee')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('user.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('employee.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -447,7 +437,7 @@
 
                         @can('view employee advance')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('employee-advance.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('employee-advance.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -458,7 +448,7 @@
 
                         @can('view employee payment')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('payment.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('payment.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -469,7 +459,7 @@
 
                         @can('view leave')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('leave.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('leave.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -481,16 +471,16 @@
 
                         @can('admin only')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('role.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('role.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
                                 <span class="menu-title-list">{{ __('auth._roles') }}</span>
                             </a>
                         </div>
-                        
+
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('permission.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('permission.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -499,16 +489,15 @@
                         </div>
                         @endcan
 
-
                     </div>
                 </div>
                 @endcanany
                 @endif
 
 
-                <!-- Updated Reports Menu -->
+                <!-- Reports Menu -->
                 @canany(['view reports', 'invoice reports', 'view production_orders reports', 'purchasing reports', 'inventory reports', 'product reports', 'order reports', 'expense reports', 'financial reports'])
-                <div data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-placement="right-start" class="menu-item here menu-lg-down-accordion">
+                <div data-kt-menu-trigger="{default:'click', lg: 'hover'}" data-kt-menu-placement="right-start" class="menu-item menu-lg-down-accordion">
                     <!--begin:Menu link-->
                     <span class="menu-link">
                         <span class="menu-icon">
@@ -524,10 +513,10 @@
                         <span class="menu-arrow"></span>
                     </span>
                     <!--end:Menu link-->
-                    
+
                     <!--begin:Menu sub-->
                     <div class="menu-sub menu-sub-lg-down-accordion menu-sub-lg-dropdown menu-active-bg px-lg-2 py-lg-4 w-lg-300px">
-                        
+
                         <!-- Financial Reports Section -->
                         @if (tenant_can('financial_reports'))
                         @can('financial reports')
@@ -544,97 +533,97 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Payment Methods -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.payment-methods.index') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.payment-methods.index') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.payment_methods') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Account Balances -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.account-balances') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.account-balances') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.account_balances') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Transaction Ledger -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.transaction-ledger') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.transaction-ledger') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.transaction_ledger') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Income Statement -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.income-statement') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.income-statement') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.income_statement') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Cash Flow -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.cash-flow') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.cash-flow') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.cash_flow') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Transaction Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.transaction-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.transaction-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.transaction_analysis') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Expense Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.expense-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.expense-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.expense_analysis') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Payment Method Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.payment-method-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.payment-method-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.payment_method_analysis') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Daily Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.daily-summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.daily-summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.daily_summary') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Monthly Report -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.monthly-report') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.monthly-report') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -644,7 +633,7 @@
 
                                 <!-- Weekly Report -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.weekly-report') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.weekly-report') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -654,17 +643,17 @@
 
                                 <!-- User Performance Report -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.user-performance-report') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.user-performance-report') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('accounting.user_performance_report') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Reconciliation -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('accounting.reconciliation') }}')">
+                                    <a class="menu-link" data-link href="{{ route('accounting.reconciliation') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -676,7 +665,7 @@
                         </div>
                         @endcan
                         @endif
-                        
+
                         <!-- Expense Reports Section -->
                         @if (tenant_can('expense_reports'))
                         @can('expense reports')
@@ -693,97 +682,97 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Expense Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.expense_summary')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Category Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.by-category') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.by-category') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.by_category')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Vendor Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.by-vendor') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.by-vendor') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.by_vendor')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Employee Expense -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.by-employee') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.by-employee') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.employee_expense')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Payment Method -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.by-payment-method') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.by-payment-method') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.by_payment_method')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Recurring Expenses -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.recurring') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.recurring') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.recurring_expense')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Budget vs Actual -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.budget-vs-actual') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.budget-vs-actual') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.budget_vs_actual')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Expense Trends -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.trends') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.trends') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.expense_trends')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Tax Report -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.tax-report') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.tax-report') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.expense_tax_report')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Expense Audit -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.expenses.audit') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.expenses.audit') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -793,7 +782,8 @@
                             </div>
                         </div>
                         @endcan
-                        
+                        @endif {{-- closes expense_reports (was missing in the original) --}}
+
                         <!-- Order Reports Section -->
                         @if (tenant_can('order_reports'))
                         @can('order reports')
@@ -810,107 +800,107 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Order Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.order_summary')}}</span>
                                     </a>
                                 </div>
-                                
-                                <!-- Sales by Customer -->
+
+                                <!-- Profit Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.profit-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.profit-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.profit_analysis')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Sales by Customer -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.by-customer') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.by-customer') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.sales_by_customer')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Sales by Product -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.by-product') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.by-product') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.sales_by_product')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Payment Method Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.by-payment-method') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.by-payment-method') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('accounting.payment_method_analysis')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Employee Performance -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.by-employee') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.by-employee') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.employee_performance')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Time Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.time-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.time-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.time_analysis')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Returns & Refunds -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.returns-refunds') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.returns-refunds') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.returns_refunds')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Discount Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.discount-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.discount-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.discount_analysis')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Sales Forecast -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.sales-forecast') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.sales-forecast') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{__('auth.sales_forecast')}}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Inventory Sales (Sold vs Unsold) -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.orders.inventory-sales') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.orders.inventory-sales') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -936,7 +926,7 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Invoice Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.invoices.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -946,7 +936,7 @@
 
                                 <!-- Outstanding / Aging -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.outstanding') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.invoices.outstanding') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -956,7 +946,7 @@
 
                                 <!-- Invoice Payments -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.payments') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.invoices.payments') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -966,7 +956,7 @@
 
                                 <!-- Delivery / Send Status -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.delivery') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.invoices.delivery') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -976,7 +966,7 @@
 
                                 <!-- Status Trends -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.invoices.status-trends') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.invoices.status-trends') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -986,7 +976,7 @@
                             </div>
                         </div>
                         @endcan
-                        @endif
+                        @endif {{-- closes order_reports --}}
 
                         <!-- Product Reports Section -->
                         @if (tenant_can('product_reports'))
@@ -1004,57 +994,67 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Product Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('auth.product_summary') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Product Performance -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.performance') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.performance') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('auth.product_performance') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Inventory Valuation -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.inventory') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.inventory') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('auth.inventory_valuation') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Stock Movement -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.stock-movement') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.stock-movement') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('auth.stock_movement') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Product Margin -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.strategy') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.margin') }}">
+                                        <span class="menu-bullet">
+                                            <span class="bullet bullet-dot"></span>
+                                        </span>
+                                        <span class="menu-title-list">{{ __('pagination.margin') }}</span>
+                                    </a>
+                                </div>
+
+                                <!-- Inventory Strategy -->
+                                <div class="menu-item">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.strategy') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_strategy') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- By Category -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.products.by-category') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.products.by-category') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -1082,105 +1082,107 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Inventory Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_summary') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Inventory Turnover -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.turnover') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.turnover') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_turnover') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Stock Aging -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.stock-aging') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.stock-aging') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.stock_aging') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Low Stock Alerts -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.low-stock-alerts') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.low-stock-alerts') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.low_stock_alerts') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Inventory Transactions -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.transactions') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.transactions') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_transactions') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Inventory Adjustments -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.adjustments') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.adjustments') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_adjustments') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- ABC Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.abc-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.abc-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.abc_analysis') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Fast/Slow Moving Items -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.movement-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.movement-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.movement_analysis') }}</span>
                                     </a>
                                 </div>
-                                
-                                <!-- Additional Reports (Optional) -->
+
+                                <!-- Inventory Valuation -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.valuation') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.valuation') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.inventory_valuation') }}</span>
                                     </a>
                                 </div>
-                                
+
+                                <!-- Dead Stock -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.dead-stock') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.dead-stock') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.dead_stock') }}</span>
                                     </a>
                                 </div>
-                                
+
+                                <!-- Excess Stock -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.inventory.excess-stock') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.inventory.excess-stock') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -1191,7 +1193,7 @@
                         </div>
                         @endcan
                         @endif
-                        
+
                         <!-- Purchasing Reports Section -->
                         @if (tenant_can('purchasing_reports'))
                         @can('purchasing reports')
@@ -1208,97 +1210,97 @@
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Purchase Order Summary -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.purchase-order-summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.purchase-order-summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.purchase_order_summary') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Supplier Performance -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.supplier-performance') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.supplier-performance') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.supplier_performance') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Purchase Order Status -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.purchase-order-status') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.purchase-order-status') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.purchase_order_status') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Purchase Receipts -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.purchase-receipts') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.purchase-receipts') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.purchase_receipts') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Supplier Spend Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.supplier-spend-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.supplier-spend-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.supplier_spend_analysis') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Purchase Order Items -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.purchase-order-items') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.purchase-order-items') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.purchase_order_items') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Payment Status -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.payment-status') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.payment-status') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.payment_status') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Received Inventory -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.received-inventory') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.received-inventory') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.received_inventory') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Supplier Risk Assessment -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.supplier-risk-assessment') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.supplier-risk-assessment') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.supplier_risk_assessment') }}</span>
                                     </a>
                                 </div>
-                                
+
                                 <!-- Purchase Cost Analysis -->
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.purchasing.purchase-cost-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.purchasing.purchase-cost-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
@@ -1325,119 +1327,99 @@
                             </span>
                             <div class="menu-sub menu-sub-accordion">
                                 <!-- Production Order Report -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.index') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.index') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_order_report') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Summary -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.summary') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.summary') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_summary') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Cost Analysis -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.cost-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.cost-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_cost_analysis') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Efficiency -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.efficiency') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.efficiency') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_efficiency') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Inventory Impact -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.inventory-impact') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.inventory-impact') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_inventory_impact') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Quality Analysis -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.quality-analysis') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.quality-analysis') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_quality_analysis') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Input vs Output -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.input-output') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.input-output') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_input_output') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Waste Report -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.waste') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.waste') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_waste_report') }}</span>
                                     </a>
                                 </div>
-                                @endcan
-                                
+
                                 <!-- Production Batch Tracking -->
-                                @can('view production_orders reports')
                                 <div class="menu-item">
-                                    <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('reports.production.batch-tracking') }}')">
+                                    <a class="menu-link" data-link href="{{ route('reports.production.batch-tracking') }}">
                                         <span class="menu-bullet">
                                             <span class="bullet bullet-dot"></span>
                                         </span>
                                         <span class="menu-title-list">{{ __('pagination.production_batch_tracking') }}</span>
                                     </a>
                                 </div>
-                                @endcan
                             </div>
                         </div>
                         @endcan
                         @endif
 
-                        @endif
-                        
                     </div>
                     <!--end:Menu sub-->
                 </div>
@@ -1446,7 +1428,7 @@
                 <!-- Settings -->
                 @if (tenant_can('settings'))
                 @canany(['update settings', 'view uom', 'view currency', 'view payment method', 'view location', 'view department', 'view tax', 'view promotion'])
-                <div data-kt-menu-trigger="click" class="menu-item here {{ is_tab_show([]) }} menu-accordion">
+                <div data-kt-menu-trigger="click" class="menu-item {{ is_tab_show([]) }} menu-accordion">
                     <span class="menu-link">
                         <span class="menu-icon">
                             <i class="bi bi-gear-wide-connected fs-2">
@@ -1463,10 +1445,10 @@
                     </span>
 
                     <div class="menu-sub menu-sub-accordion">
-                        
+
                         @can('update settings')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('settings.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('settings.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1477,7 +1459,7 @@
 
                         @can('view uom')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('uom.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('uom.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1485,12 +1467,11 @@
                             </a>
                         </div>
                         @endcan
-                        
-                        
+
                         @if (tenant_can('multicurrency'))
                         @can('view currency')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('currency.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('currency.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1499,10 +1480,10 @@
                         </div>
                         @endcan
                         @endif
-                        
+
                         @can('view payment method')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('paymentmethod.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('paymentmethod.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1513,7 +1494,7 @@
 
                         @can('view location')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('locations.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('locations.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1524,7 +1505,7 @@
 
                         @can('view department')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('department.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('department.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1535,7 +1516,7 @@
 
                         @can('view tax')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('tax.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('tax.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1546,7 +1527,7 @@
 
                         @can('view promotion')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="navigateToAppPages('{{ route('promotion.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('promotion.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1557,7 +1538,7 @@
 
                         @role('super_admin')
                         <div class="menu-item">
-                            <a class="menu-link" data-link href="javascript:void(0);" onclick="reloadToApp('{{ route('tenant.index') }}')">
+                            <a class="menu-link" data-link href="{{ route('tenant.index') }}">
                                 <span class="menu-bullet">
                                     <span class="bullet bullet-dot"></span>
                                 </span>
@@ -1570,8 +1551,6 @@
                 </div>
                 @endcanany
                 @endif
-
-
 
             </div>
         </div>

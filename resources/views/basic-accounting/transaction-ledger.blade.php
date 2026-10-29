@@ -157,7 +157,6 @@
                                         <th class="min-w-100px text-end">{{ __('accounting.amount') }}</th>
                                         <th class="min-w-100px text-end">{{ __('accounting.balance_after') }}</th>
                                         <th class="min-w-100px text-center">{{ __('accounting.status') }}</th>
-                                        <th class="min-w-100px text-center">{{ __('accounting.actions') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="txBody" class="text-gray-600 fw-semibold"></tbody>
@@ -175,7 +174,7 @@
         </div>
     </div>
     
-    @include('basic-accounting.partials.transaction-modal')
+    @include('basic-accounting.partials.transaction-drawer')
 
     @push('styles')
     <style>
@@ -189,6 +188,7 @@
     @endpush
 
     @push('scripts')
+    @include('basic-accounting.partials.transaction-drawer-scripts')
     <script>
         window.TransactionLedgerList = (function () {
             'use strict';
@@ -272,7 +272,7 @@
                     const sColor = statusColors[row.status] || 'secondary';
 
                     return `
-                        <tr>
+                        <tr onclick="window.TransactionLedgerList.openDetails(${row.id})">
                             <td>
                                 <span class="fs-7 fw-bold text-gray-800">${esc(row.date)}</span>
                                 <span class="fs-8 text-gray-500 d-block">${esc(row.time)}</span>
@@ -295,11 +295,7 @@
                             <td class="text-end"><span class="fs-6 fw-bold ${aClass}">${fmt(row.amount)}</span></td>
                             <td class="text-end"><span class="fs-7 text-gray-800 fw-bold">${fmt(row.balance_after)}</span></td>
                             <td class="text-center"><span class="badge badge-light-${sColor} py-2 px-3">${esc(row.status)}</span></td>
-                            <td class="text-center">
-                                <button type="button" class="btn btn-sm btn-light btn-active-light-primary" onclick="window.TransactionLedgerList.openDetails(${row.id})">
-                                    <i class="ki-duotone ki-eye fs-2 me-1"><span class="path1"></span><span class="path2"></span></i> View
-                                </button>
-                            </td>
+                            
                         </tr>
                     `;
                 }).join('');
@@ -343,19 +339,7 @@
 
             // Details Modal
             async function openDetails(id) {
-                const modalEl = document.getElementById('transactionModal');
-                bootstrap.Modal.getOrCreateInstance(modalEl).show();
-                document.getElementById('modalTransactionRef').textContent = 'Loading...';
-                
-                try {
-                    const res = await fetch(`/accounting/transaction-ledger/details/${id}`);
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const data = await res.json();
-                    populateModal(data);
-                } catch (err) {
-                    document.getElementById('modalTransactionRef').textContent = 'Error';
-                    console.error('[ledger] details failed:', err);
-                }
+                if (window.TransactionDrawer) window.TransactionDrawer.open(id);
             }
 
             function populateModal(data) {

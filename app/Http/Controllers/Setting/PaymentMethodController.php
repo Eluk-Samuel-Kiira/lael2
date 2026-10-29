@@ -16,36 +16,48 @@ class PaymentMethodController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view payment method')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        $locations = Location::where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('settings.payment-method-index', [
+            'locations'      => $locations,
+            'initialFilters' => [
+                'search'      => (string) $request->get('search', ''),
+                'location_id' => (string) $request->get('location_id', ''),
+                'per_page'    => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view payment method')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build query with relationships
-        $query = PaymentMethod::with('creator')
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = PaymentMethod::with('creator:id,name')
             ->where('tenant_id', $tenantId);
-        
-        // Apply search if provided
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('type', 'like', "%{$search}%")
                 ->orWhere('provider', 'like', "%{$search}%")
@@ -53,39 +65,135 @@ class PaymentMethodController extends Controller
                 ->orWhereHas('creator', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Filter by location if provided
+
         if ($request->filled('location_id')) {
             $locationId = $request->location_id;
-            $query->where(function($q) use ($locationId) {
-                $q->whereRaw('JSON_CONTAINS(location_id, ?)', [json_encode($locationId)])
-                  ->orWhereNull('location_id');
+            $query->where(function ($q) use ($locationId) {
+                $q->whereRaw('JSON_CONTAINS(location_id, ?)', [json_encode((int) $locationId)])
+                ->orWhereNull('location_id');
             });
         }
-        
-        // Paginate with dynamic per_page
-        $paymentMethods = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $paymentMethods->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        // Get locations for the filter dropdown
-        $locations = Location::where('tenant_id', $tenantId)->get();
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'paymentMethodIndexTable') {
-            return view('settings.payment-method.component', [
-                'all_payment_methods' => $paymentMethods,
-                'locations' => $locations,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('is_active', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('settings.payment-method-index', [
-            'all_payment_methods' => $paymentMethods,
-            'locations' => $locations,
+
+        $all = (clone $query)->get(['id', 'is_active', 'is_default', 'current_balance']);
+
+        $summary = [
+            'total'         => $all->count(),
+            'active'        => $all->where('is_active', 1)->count(),
+            'inactive'      => $all->where('is_active', 0)->count(),
+            'total_balance' => (float) $all->sum('current_balance'),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(PaymentMethod $pm) => [
+            'id'                => $pm->id,
+            'name'              => $pm->name,
+            'code'              => $pm->code,
+            'type'              => $pm->type,
+            'type_label'        => ucwords(str_replace('_', ' ', $pm->type)),
+            'provider'          => $pm->provider,
+            'account_number'    => $pm->account_number,
+            'current_balance'   => (float) $pm->current_balance,
+            'is_active'         => (bool) $pm->is_active,
+            'is_default'        => (bool) $pm->is_default,
+            'location_ids'      => $pm->location_id ?? [],
+            'creator_name'      => $pm->creator?->name,
+            'created_at'        => optional($pm->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view payment method')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $pm = PaymentMethod::with(['creator:id,name,email', 'currency:id,code,symbol,name'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$pm) {
+            return response()->json(['success' => false, 'message' => __('payments._not_found')], 404);
+        }
+
+        // Resolve location names
+        $locations = collect();
+        if (!empty($pm->location_id)) {
+            $locations = Location::where('tenant_id', $tenantId)
+                ->whereIn('id', $pm->location_id)
+                ->get(['id', 'name']);
+        }
+
+        // Transfer options (other active methods)
+        $transferTo = PaymentMethod::where('tenant_id', $tenantId)
+            ->where('id', '!=', $pm->id)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name', 'current_balance', 'currency_id']);
+
+        $can = [
+            'can_edit'   => $user->can('edit payment method'),
+            'can_delete' => $user->can('delete payment method'),
+            'can_toggle' => $user->can('update payment method'),
+            'can_transfer' => $user->can('transfer between payment methods'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'payment_method' => array_merge([
+                'id'                => $pm->id,
+                'name'              => $pm->name,
+                'code'              => $pm->code,
+                'type'              => $pm->type,
+                'type_label'        => ucwords(str_replace('_', ' ', $pm->type)),
+                'description'       => $pm->description,
+                'provider'          => $pm->provider,
+                'account_name'      => $pm->account_name,
+                'account_number'    => $pm->account_number,
+                'current_balance'   => (float) $pm->current_balance,
+                'transaction_fee_percentage' => (float) $pm->transaction_fee_percentage,
+                'transaction_fee_fixed'      => (float) $pm->transaction_fee_fixed,
+                'min_transaction_amount'     => (float) $pm->min_transaction_amount,
+                'max_transaction_amount'     => (float) $pm->max_transaction_amount,
+                'is_active'         => (bool) $pm->is_active,
+                'is_default'        => (bool) $pm->is_default,
+                'is_online'         => (bool) $pm->is_online,
+                'is_verified'       => (bool) $pm->is_verified,
+                'currency_code'     => $pm->currency?->code,
+                'currency_symbol'   => $pm->currency?->symbol,
+                'locations'         => $locations->map(fn($l) => ['id' => $l->id, 'name' => $l->name])->values(),
+                'creator_name'      => $pm->creator?->name,
+                'creator_email'     => $pm->creator?->email,
+                'created_at'        => optional($pm->created_at)->format('d M Y, H:i'),
+                'updated_at'        => optional($pm->updated_at)->format('d M Y, H:i'),
+                'transfer_options'  => $transferTo->map(fn($p) => [
+                    'id'      => $p->id,
+                    'name'    => $p->name,
+                    'balance' => (float) $p->current_balance,
+                ])->values(),
+            ], $can),
         ]);
     }
 

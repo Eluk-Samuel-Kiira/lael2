@@ -20,62 +20,204 @@ class LeaveController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!$user->hasPermissionTo('view leave')) abort(403, __('payments.not_authorized'));
+
+        $tenantId = $user->tenant_id;
+
+        return view('department.leave-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+            'employees' => \App\Models\Employee::where('tenant_id', $tenantId)
+                ->where('is_active', true)
+                ->orderBy('first_name')
+                ->get(['id', 'first_name', 'last_name']),
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view leave')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('payments.not_authorized'),
-            ]);
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        $query = Leave::with(['employee', 'approver'])
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Leave::with(['employee:id,first_name,last_name,department_id', 'employee.department:id,name', 'approver:id,name'])
             ->where('tenant_id', $tenantId);
 
-        // Filters
-        if ($request->has('status') && !empty($request->status)) {
-            $query->where('status', $request->status);
+        if ($request->filled('status'))      $query->where('status', $request->status);
+        if ($request->filled('leave_type'))  $query->where('leave_type', $request->leave_type);
+        if ($request->filled('employee_id')) $query->where('employee_id', (int) $request->employee_id);
+        if ($request->filled('date_from'))   $query->whereDate('start_date', '>=', $request->date_from);
+        if ($request->filled('date_to'))     $query->whereDate('end_date', '<=', $request->date_to);
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->whereHas('employee', fn($e) => $e->where('first_name', 'like', "%{$s}%")
+                                                    ->orWhere('last_name', 'like', "%{$s}%"))
+                ->orWhere('reason', 'like', "%{$s}%");
+            });
         }
 
-        if ($request->has('employee_id') && !empty($request->employee_id)) {
-            $query->where('employee_id', $request->employee_id);
+        $summary = $this->getStatistics($tenantId);
+
+        $paginator = $query->orderByDesc('created_at')->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Leave $l) => [
+            'id'               => $l->id,
+            'employee_name'    => trim(($l->employee->first_name ?? '') . ' ' . ($l->employee->last_name ?? '')),
+            'employee_initials'=> strtoupper(substr($l->employee->first_name ?? '', 0, 1) . substr($l->employee->last_name ?? '', 0, 1)),
+            'department_name'  => $l->employee->department?->name ?? '—',
+            'leave_type'       => $l->leave_type,
+            'leave_type_label' => $l->leave_type_label,
+            'start_date'       => optional($l->start_date)->format('d M Y'),
+            'end_date'         => optional($l->end_date)->format('d M Y'),
+            'total_days'       => (float) ($l->total_days ?? 0),
+            'status'           => $l->status,
+            'is_paid'          => (bool) $l->is_paid,
+            'applied_at'       => optional($l->applied_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view leave')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        if ($request->has('leave_type') && !empty($request->leave_type)) {
-            $query->where('leave_type', $request->leave_type);
+        $leave = Leave::with(['employee:id,first_name,last_name,email,department_id', 'employee.department:id,name', 'approver:id,name', 'rejector:id,name'])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$leave) {
+            return response()->json(['success' => false, 'message' => __('payments.not_found')], 404);
         }
 
-        if ($request->has('date_from') && !empty($request->date_from)) {
-            $query->where('start_date', '>=', $request->date_from);
+        // Normalise JSON columns
+        $attachments = $leave->attachments;
+        if (is_string($attachments)) $attachments = json_decode($attachments, true);
+        $attachments = is_array($attachments) ? $attachments : [];
+
+        $handoverTo = $leave->handover_to;
+        if (is_string($handoverTo)) $handoverTo = json_decode($handoverTo, true);
+        $handoverToIds = is_array($handoverTo) ? array_map('intval', $handoverTo) : [];
+
+        $handoverEmployees = $handoverToIds
+            ? Employee::where('tenant_id', $tenantId)->whereIn('id', $handoverToIds)
+                ->get(['id', 'first_name', 'last_name', 'job_title'])
+                ->map(fn($e) => [
+                    'id'         => $e->id,
+                    'name'       => trim($e->first_name . ' ' . $e->last_name),
+                    'initials'   => strtoupper(substr($e->first_name, 0, 1) . substr($e->last_name, 0, 1)),
+                    'job_title'  => $e->job_title,
+                ])->values()
+            : collect();
+
+        $can = [
+            'can_edit'   => $user->can('edit leave')   && $leave->status === 'pending',
+            'can_approve'=> $user->can('approve leave')&& $leave->status === 'pending',
+            'can_reject' => $user->can('reject leave') && $leave->status === 'pending',
+            'can_cancel' => $user->can('cancel leave')
+                            && in_array($leave->status, ['pending', 'approved'], true)
+                            && ($leave->status !== 'approved' || optional($leave->start_date)->gt(now())),
+            'can_delete' => $user->can('delete leave') && $leave->status === 'pending',
+        ];
+
+        return response()->json([
+            'success' => true,
+            'leave'   => array_merge([
+                'id'                => $leave->id,
+                'employee_id'       => $leave->employee_id,
+                'employee_name'     => trim(($leave->employee->first_name ?? '') . ' ' . ($leave->employee->last_name ?? '')),
+                'employee_initials' => strtoupper(substr($leave->employee->first_name ?? '', 0, 1) . substr($leave->employee->last_name ?? '', 0, 1)),
+                'employee_email'    => $leave->employee->email ?? '—',
+                'department_name'   => $leave->employee->department?->name ?? '—',
+
+                'leave_type'        => $leave->leave_type,
+                'leave_type_label'  => $leave->leave_type_label,
+                'custom_type'       => $leave->custom_type,
+                'start_date'        => optional($leave->start_date)->format('Y-m-d'),
+                'end_date'          => optional($leave->end_date)->format('Y-m-d'),
+                'start_label'       => optional($leave->start_date)->format('l, d F Y'),
+                'end_label'         => optional($leave->end_date)->format('l, d F Y'),
+                'total_days'        => (float) ($leave->total_days ?? 0),
+                'progress'          => (int) ($leave->progress ?? 0),
+                'status'            => $leave->status,
+                'is_paid'           => (bool) $leave->is_paid,
+                'reason'            => $leave->reason,
+                'notes'             => $leave->notes,
+                'rejection_reason'  => $leave->rejection_reason,
+
+                'alternate_contact' => $leave->alternate_contact,
+                'emergency_contact' => $leave->emergency_contact,
+                'handover_notes'    => $leave->handover_notes,
+                'handover_employees'=> $handoverEmployees,
+                'attachments'       => collect($attachments)->map(fn($a) => [
+                    'name' => $a['name'] ?? 'File',
+                    'size' => $a['size'] ?? 0,
+                    'url'  => !empty($a['path']) ? asset('storage/' . $a['path']) : null,
+                    'type' => strtolower(pathinfo($a['name'] ?? '', PATHINFO_EXTENSION)),
+                ])->values(),
+
+                'applied_at'        => optional($leave->applied_at)->format('d M Y, H:i'),
+                'approved_at'       => optional($leave->approved_at)->format('d M Y, H:i'),
+                'approved_by'       => $leave->approver?->name,
+                'rejected_at'       => optional($leave->rejected_at)->format('d M Y, H:i'),
+                'rejected_by'       => $leave->rejector?->name,
+                'cancelled_at'      => optional($leave->cancelled_at)->format('d M Y, H:i'),
+                'created_at'        => optional($leave->created_at)->format('d M Y, H:i'),
+            ], $can),
+        ]);
+    }
+
+    public function meta(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view leave')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        if ($request->has('date_to') && !empty($request->date_to)) {
-            $query->where('end_date', '<=', $request->date_to);
-        }
-
-        $leaves = $query->orderBy('created_at', 'desc')->get();
-
-        // Get employees for filter dropdown
         $employees = Employee::where('tenant_id', $tenantId)
             ->where('is_active', true)
-            ->get(['id', 'first_name', 'last_name']);
-
-        // Get statistics
-        $statistics = $this->getStatistics($tenantId);
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'leaves' => $leaves,
-                'statistics' => $statistics,
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'job_title'])
+            ->map(fn($e) => [
+                'id'        => $e->id,
+                'name'      => trim($e->first_name . ' ' . $e->last_name),
+                'job_title' => $e->job_title,
             ]);
-        }
 
-        return view('department.leave-index', [
-            'leaves' => $leaves,
+        return response()->json([
+            'success'   => true,
             'employees' => $employees,
-            'statistics' => $statistics,
-            'filters' => $request->all(),
         ]);
     }
 
@@ -257,13 +399,12 @@ class LeaveController extends Controller
                 'errors' => $e->errors(),
                 'message' => 'Validation error',
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating leave', ['error' => $e->getMessage()]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => __('payments.error_creating') . ': ' . $e->getMessage(),
-            ], 500);
+                'errors'  => $e->errors(),
+                'message' => 'Validation error',
+            ], 422);
         }
     }
 

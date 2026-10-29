@@ -1,19 +1,17 @@
-{{-- resources/views/reports/expenses/budget-vs-actual.blade.php --}}
 @extends('layouts.app')
 
 @section('title', __('accounting.budget_vs_actual'))
 
 @section('content')
-
 @if (tenant_can('advanced_reports'))
 <div class="d-flex flex-column flex-column-fluid">
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-xxl">
             <div class="container-fluid">
-                {{-- Toolbar Section --}}
+
+                {{-- TOOLBAR --}}
                 <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
                     <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-4 gap-lg-0">
-                        <!-- Left side - Title and Breadcrumb -->
                         <div class="page-title d-flex flex-column">
                             <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-lg-1 flex-column my-0">
                                 {{ __('accounting.budget_vs_actual') }}
@@ -24,105 +22,71 @@
                                         {{ __('accounting.dashboard') }}
                                     </a>
                                 </li>
-                                <li class="breadcrumb-item">
-                                    <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                                </li>
+                                <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
                                 <li class="breadcrumb-item text-muted">{{ __('accounting.budget_analysis') }}</li>
                             </ul>
                         </div>
 
-                        <!-- Right side - Actions -->
                         <div class="d-flex align-items-stretch align-items-sm-center w-100 w-lg-auto">
-                            @if(count($budgetData) > 0)
                             <div class="dropdown w-100 w-sm-auto">
-                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="btn btn-sm btn-primary w-100 dropdown-toggle" id="expBvAExport" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="ki-duotone ki-file-down fs-2 me-1 me-sm-2"></i>
-                                    <span class="d-none d-sm-inline">{{ __('accounting.export') }}</span>
-                                    <span class="d-inline d-sm-none">{{ __('accounting.export') }}</span>
+                                    <span>{{ __('accounting.export') }}</span>
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'budgetTable', filename: 'budget_vs_actual_{{ date('Y_m_d') }}', sheetName: 'Budget vs Actual'})">
+                                        <a class="dropdown-item" href="javascript:void(0)"
+                                           data-export-table="budgetTable"
+                                           data-export-filename="budget_vs_actual"
+                                           data-export-sheet="Budget vs Actual">
                                             <i class="ki-duotone ki-file-excel fs-2 me-2 text-success"></i>
                                             {{ __('accounting.export_to_excel') }}
                                         </a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="javascript:void(0)" 
-                                        onclick="exportCurrentPage({tableId: 'budgetTable', filename: 'budget_vs_actual_{{ date('Y_m_d') }}', format: 'csv'})">
+                                        <a class="dropdown-item" href="javascript:void(0)"
+                                           data-export-table="budgetTable"
+                                           data-export-filename="budget_vs_actual"
+                                           data-export-format="csv">
                                             <i class="ki-duotone ki-file-csv fs-2 me-2 text-primary"></i>
                                             {{ __('accounting.export_to_csv') }}
                                         </a>
                                     </li>
                                 </ul>
                             </div>
-                            @endif
                         </div>
                     </div>
                 </div>
 
-                {{-- ═══════════════════════════════════════════════════════════
-                    FILTERS
-                ═══════════════════════════════════════════════════════════ --}}
+                {{-- FILTERS --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-filter-square fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
+                                        <span class="path1"></span><span class="path2"></span>
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.filter_by') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
-                                <form method="GET" action="{{ route('reports.expenses.budget-vs-actual') }}" id="filterForm">
-
-                                    {{-- Row 1: Year + Month + Location --}}
+                                <form id="expBvAFilterForm">
                                     <div class="row g-4 mb-4">
                                         <div class="col-xl-3">
                                             <label class="form-label required fw-semibold">{{ __('accounting.year') }}</label>
-                                            <div class="input-group">
-                                                <select class="form-select" name="year" data-control="select2" required>
-                                                    @foreach($years as $y)
-                                                        <option value="{{ $y }}" {{ (int) $year === (int) $y ? 'selected' : '' }}>
-                                                            {{ $y }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <select class="form-select" name="year" required></select>
                                         </div>
-
                                         <div class="col-xl-3">
                                             <label class="form-label required fw-semibold">{{ __('accounting.month') }}</label>
-                                            <div class="input-group">
-                                                <select class="form-select" name="month" data-control="select2" required>
-                                                    @foreach($months as $key => $name)
-                                                        <option value="{{ $key }}" {{ (int) $month === (int) $key ? 'selected' : '' }}>
-                                                            {{ __($name) }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <select class="form-select" name="month" required></select>
                                         </div>
-
                                         <div class="col-xl-3">
                                             <label class="form-label fw-semibold">{{ __('accounting.location') }}</label>
-                                            <div class="input-group">
-                                                <select class="form-select" name="location_id" data-control="select2">
-                                                    <option value="">{{ __('pagination.all_locations') }}</option>
-                                                    @foreach($locations as $location)
-                                                        <option value="{{ $location->id }}"
-                                                                {{ (string) $locationId === (string) $location->id ? 'selected' : '' }}>
-                                                            {{ $location->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
+                                            <select class="form-select" name="location_id">
+                                                <option value="">{{ __('pagination.all_locations') }}</option>
+                                            </select>
                                         </div>
-
                                         <div class="col-xl-3 d-flex align-items-end">
                                             <div class="d-flex flex-column flex-sm-row gap-2 w-100">
                                                 <button type="submit" class="btn btn-primary flex-grow-1">
@@ -130,195 +94,104 @@
                                                     <span class="d-none d-sm-inline">{{ __('accounting.apply_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.apply') }}</span>
                                                 </button>
-                                                <a href="{{ route('reports.expenses.budget-vs-actual') }}"
-                                                class="btn btn-light btn-active-light-primary flex-grow-1">
+                                                <button type="button" id="expBvAClear" class="btn btn-light btn-active-light-primary flex-grow-1">
                                                     <i class="ki-duotone ki-cross fs-2 me-1 me-sm-2"></i>
                                                     <span class="d-none d-sm-inline">{{ __('accounting.clear_filters') }}</span>
                                                     <span class="d-inline d-sm-none">{{ __('accounting.clear') }}</span>
-                                                </a>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
                                 </form>
 
-                                {{-- Active filter chips --}}
-                                @php
-                                    $activeFilters = array_filter([
-                                        $locationId
-                                            ? ['label' => __('accounting.location'), 'value' => $locations->firstWhere('id', $locationId)?->name]
-                                            : null,
-                                        // Year/month are required, so only show them as "active" if they differ from defaults
-                                        ((int) $year !== (int) date('Y'))
-                                            ? ['label' => __('accounting.year'), 'value' => $year]
-                                            : null,
-                                        ((int) $month !== (int) date('m'))
-                                            ? ['label' => __('accounting.month'), 'value' => __($months[$month] ?? '')]
-                                            : null,
-                                    ]);
-                                @endphp
-
-                                @if(count($activeFilters) > 0)
+                                <div id="activeFiltersBar" class="mt-4 d-none">
                                     <div class="separator separator-dashed my-4"></div>
-                                    <div class="d-flex align-items-center flex-wrap gap-2">
-                                        <span class="text-muted fw-semibold me-2">
-                                            <i class="ki-duotone ki-filter fs-5 me-1"></i>
-                                            {{ __('accounting.active_filters') }}:
-                                        </span>
-                                        @foreach($activeFilters as $filter)
-                                            <span class="badge badge-light-primary fs-7">
-                                                <strong>{{ $filter['label'] }}:</strong>&nbsp;{{ $filter['value'] }}
-                                            </span>
-                                        @endforeach
-                                        <a href="{{ route('reports.expenses.budget-vs-actual') }}"
-                                        class="text-danger fs-7 text-hover-primary ms-2 d-inline-flex align-items-center gap-1">
-                                            <i class="ki-duotone ki-cross fs-5"></i>
-                                            {{ __('accounting.clear_all') }}
-                                        </a>
-                                    </div>
-                                @endif
+                                    <div class="d-flex align-items-center flex-wrap gap-2" id="activeFiltersList"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Summary Statistics --}}
-                @if(count($budgetData) > 0)
-                <div class="row mb-6">
+                {{-- STAT CARDS --}}
+                <div class="row mb-6" id="summaryCardRow">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
+                                        <span class="path1"></span><span class="path2"></span>
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.budget_summary') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
                                 <div class="row g-6">
-                                    @if(count($budgetData) > 0)
-                                        @php
-                                            $totalVarianceMonthly     = $summary['total_budget_monthly'] - $summary['total_actual_monthly'];
-                                            $totalVarianceAnnual      = $summary['total_budget_annual'] - $summary['total_actual_annual'];
-                                            $variancePercentageMonthly = $summary['total_budget_monthly'] > 0
-                                                ? ($totalVarianceMonthly / $summary['total_budget_monthly']) * 100
-                                                : 0;
-                                            $variancePercentageAnnual  = $summary['total_budget_annual'] > 0
-                                                ? ($totalVarianceAnnual / $summary['total_budget_annual']) * 100
-                                                : 0;
-
-                                            $sym = currency_symbol();
-
-                                            $stats = [
-                                                [
-                                                    'color' => 'primary',
-                                                    'icon'  => 'ki-dollar',
-                                                    'label' => 'total_budget',
-                                                    'monthly_value' => $sym . ' ' . number_format($summary['total_budget_monthly'], 2),
-                                                    'annual_value'  => $sym . ' ' . number_format($summary['total_budget_annual'], 2),
-                                                ],
-                                                [
-                                                    'color' => 'info',
-                                                    'icon'  => 'ki-chart-simple',
-                                                    'label' => 'total_actual',
-                                                    'monthly_value' => $sym . ' ' . number_format($summary['total_actual_monthly'], 2),
-                                                    'annual_value'  => $sym . ' ' . number_format($summary['total_actual_annual'], 2),
-                                                ],
-                                                [
-                                                    'color' => $totalVarianceMonthly >= 0 ? 'success' : 'danger',
-                                                    'icon'  => 'ki-arrow-up',
-                                                    'label' => 'total_variance',
-                                                    'monthly_value' => $sym . ' ' . number_format(abs($totalVarianceMonthly), 2) . ' ' . ($totalVarianceMonthly >= 0 ? __('accounting.under_budget') : __('accounting.over_budget')),
-                                                    'annual_value'  => $sym . ' ' . number_format(abs($totalVarianceAnnual), 2) . ' ' . ($totalVarianceAnnual >= 0 ? __('accounting.under_budget') : __('accounting.over_budget')),
-                                                ],
-                                                [
-                                                    'color' => $variancePercentageMonthly >= 0 ? 'success' : 'danger',
-                                                    'icon'  => 'ki-percentage',
-                                                    'label' => 'variance_percentage',
-                                                    'monthly_value' => number_format(abs($variancePercentageMonthly), 1) . '% ' . ($variancePercentageMonthly >= 0 ? __('accounting.under') : __('accounting.over')),
-                                                    'annual_value'  => number_format(abs($variancePercentageAnnual), 1) . '% ' . ($variancePercentageAnnual >= 0 ? __('accounting.under') : __('accounting.over')),
-                                                ],
-                                                [
-                                                    'color' => 'success',
-                                                    'icon'  => 'ki-check-circle',
-                                                    'label' => 'categories_under_budget',
-                                                    'monthly_value' => $summary['under_budget_count'],
-                                                    'annual_value'  => 'N/A',
-                                                ],
-                                                [
-                                                    'color' => 'danger',
-                                                    'icon'  => 'ki-warning-circle',
-                                                    'label' => 'categories_over_budget',
-                                                    'monthly_value' => $summary['over_budget_count'],
-                                                    'annual_value'  => 'N/A',
-                                                ],
-                                            ];
-                                        @endphp
-
-                                        <div class="row mb-6">
-                                            <div class="col-12">
-                                                <div class="card">
-                                                    <div class="card-header border-0">
-                                                        <div class="card-title d-flex align-items-center">
-                                                            <i class="ki-duotone ki-chart-simple fs-2 me-2 text-primary">
-                                                                <span class="path1"></span>
-                                                                <span class="path2"></span>
-                                                            </i>
-                                                            <h3 class="fw-bold m-0">{{ __('accounting.budget_summary') }}</h3>
-                                                        </div>
-                                                    </div>
-                                                    <div class="card-body pt-0">
-                                                        <div class="row g-6">
-                                                            @foreach($stats as $stat)
-                                                                <div class="col-md-6 col-lg-2">
-                                                                    <div class="card card-flush bg-light-{{ $stat['color'] }} border border-{{ $stat['color'] }} border-dashed h-100">
-                                                                        <div class="card-body d-flex flex-column justify-content-center text-center">
-                                                                            <div class="mb-3">
-                                                                                <i class="ki-duotone {{ $stat['icon'] }} fs-2tx text-{{ $stat['color'] }}">
-                                                                                    <span class="path1"></span>
-                                                                                    <span class="path2"></span>
-                                                                                </i>
-                                                                            </div>
-                                                                            <div class="mb-2">
-                                                                                <span class="fs-2 fw-bold text-gray-800 d-block">
-                                                                                    {{ $stat['monthly_value'] }}
-                                                                                </span>
-                                                                                <small class="text-gray-600 fw-semibold d-block mt-1">
-                                                                                    {{ __('accounting.monthly') }}
-                                                                                </small>
-                                                                            </div>
-                                                                            @if($stat['annual_value'] !== 'N/A')
-                                                                                <div class="border-top border-gray-300 pt-2 mt-2">
-                                                                                    <span class="fs-4 fw-bold text-gray-700 d-block">
-                                                                                        {{ $stat['annual_value'] }}
-                                                                                    </span>
-                                                                                    <small class="text-gray-600 fw-semibold d-block mt-1">
-                                                                                        {{ __('accounting.annual') }}
-                                                                                    </small>
-                                                                                </div>
-                                                                            @endif
-                                                                            <div class="text-gray-600 fw-semibold mt-3 fs-7">
-                                                                                {{ __('accounting.' . $stat['label']) }}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            @endforeach
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush bg-light-primary border border-primary border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-dollar fs-2tx text-primary"><span class="path1"></span><span class="path2"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statTotalBudgetMonthly">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.monthly') }}</small></div>
+                                                <div class="border-top border-gray-300 pt-2 mt-2"><span class="fs-4 fw-bold text-gray-700 d-block" id="statTotalBudgetAnnual">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.annual') }}</small></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.total_budget') }}</div>
                                             </div>
                                         </div>
-                                    @endif
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush bg-light-info border border-info border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-chart-simple fs-2tx text-info"><span class="path1"></span><span class="path2"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statTotalActualMonthly">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.monthly') }}</small></div>
+                                                <div class="border-top border-gray-300 pt-2 mt-2"><span class="fs-4 fw-bold text-gray-700 d-block" id="statTotalActualAnnual">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.annual') }}</small></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.total_actual') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush border border-dashed h-100" id="statVarianceCard">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-arrow-up fs-2tx" id="statVarianceIcon"><span class="path1"></span><span class="path2"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statVarianceMonthly">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.monthly') }}</small></div>
+                                                <div class="border-top border-gray-300 pt-2 mt-2"><span class="fs-4 fw-bold text-gray-700 d-block" id="statVarianceAnnual">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.annual') }}</small></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.total_variance') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush border border-dashed h-100" id="statPctCard">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-percentage fs-2tx" id="statPctIcon"><span class="path1"></span><span class="path2"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statPctMonthly">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.monthly') }}</small></div>
+                                                <div class="border-top border-gray-300 pt-2 mt-2"><span class="fs-4 fw-bold text-gray-700 d-block" id="statPctAnnual">—</span><small class="text-gray-600 fw-semibold">{{ __('accounting.annual') }}</small></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.variance_percentage') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush bg-light-success border border-success border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-check-circle fs-2tx text-success"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statUnderBudget">—</span></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.categories_under_budget') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-4">
+                                        <div class="card card-flush bg-light-danger border border-danger border-dashed h-100">
+                                            <div class="card-body d-flex flex-column justify-content-center text-center">
+                                                <div class="mb-3"><i class="ki-duotone ki-warning-circle fs-2tx text-danger"><span class="path1"></span><span class="path2"></span></i></div>
+                                                <div class="mb-2"><span class="fs-2 fw-bold text-gray-800 d-block" id="statOverBudget">—</span></div>
+                                                <div class="text-gray-600 fw-semibold mt-3 fs-7">{{ __('accounting.categories_over_budget') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                @endif
 
-                {{-- Budget vs Actual Table --}}
+                {{-- BUDGET TABLE --}}
                 <div class="row mb-6">
                     <div class="col-12">
                         <div class="card">
@@ -326,220 +199,53 @@
                                 <div class="card-title d-flex align-items-center justify-content-between w-100">
                                     <div class="d-flex align-items-center">
                                         <i class="ki-duotone ki-tablet-text-up fs-2 me-2 text-primary">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
+                                            <span class="path1"></span><span class="path2"></span>
                                         </i>
                                         <h3 class="fw-bold m-0">{{ __('accounting.budget_vs_actual_details') }}</h3>
                                     </div>
-                                    @if(count($budgetData) > 0)
-                                    <span class="badge badge-light-primary fs-7">
-                                        {{ __('accounting.showing') }} {{ count($budgetData) }} {{ __('accounting.categories') }}
-                                    </span>
-                                    @endif
+                                    <span class="badge badge-light-primary fs-7" id="budgetCountBadge">—</span>
                                 </div>
                             </div>
-                            
-                            @if(count($budgetData) > 0)
-                                <div class="card-body p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="budgetTable">
-                                            <thead>
-                                                <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
-                                                    <th class="min-w-200px ps-4">{{ __('accounting.category') }}</th>
-                                                    <th class="min-w-120px">{{ __('accounting.budget') }}</th>
-                                                    <th class="min-w-120px">{{ __('accounting.actual') }}</th>
-                                                    <th class="min-w-120px">{{ __('accounting.variance') }}</th>
-                                                    <th class="min-w-100px">{{ __('accounting.variance_percentage') }}</th>
-                                                    <th class="min-w-120px">{{ __('accounting.status') }}</th>
-                                                    <th class="min-w-150px">{{ __('accounting.progress') }}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($budgetData as $data)
-                                                @php
-                                                    $category = $data['category'];
-                                                    $varianceMonthly = $data['variance_monthly'];
-                                                    $variancePercentageMonthly = $data['variance_percentage_monthly'];
-                                                    $isOverBudget = $varianceMonthly < 0;
-                                                    $statusColor = $varianceMonthly > 0 ? 'success' : ($varianceMonthly < 0 ? 'danger' : 'warning');
-                                                    $statusText = $varianceMonthly > 0 ? __('accounting.under_budget') : ($varianceMonthly < 0 ? __('accounting.over_budget') : __('accounting.on_budget'));
-                                                    $progressPercentage = $data['budget_monthly'] > 0 ? min(($data['actual_monthly'] / $data['budget_monthly']) * 100, 100) : 0;
-                                                @endphp
-                                                <tr>
-                                                    <td class="ps-4">
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="symbol symbol-40px symbol-circle me-3">
-                                                                <div class="symbol-label bg-light-info">
-                                                                    <i class="ki-duotone ki-category fs-2"></i>
-                                                                </div>
-                                                            </div>
-                                                            <div class="d-flex justify-content-start flex-column">
-                                                                <span class="text-gray-800 fw-bold">{{ $category->name }}</span>
-                                                                @if($category->code)
-                                                                <small class="text-muted">
-                                                                    {{ __('accounting.code') }}: {{ $category->code }}
-                                                                </small>
-                                                                @endif
-                                                                @if($category->description)
-                                                                <small class="text-muted">
-                                                                    {{ Str::limit($category->description, 50) }}
-                                                                </small>
-                                                                @endif
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-primary fw-bold">{{ currency_symbol() }} {{ number_format($data['budget_monthly'], 2) }}</span>
-                                                        <div class="mt-1">
-                                                            <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format($data['budget_annual'], 2) }}
-                                                            </small>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-info fw-bold">{{ currency_symbol() }} {{ number_format($data['actual_monthly'], 2) }}</span>
-                                                        <div class="mt-1">
-                                                            <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format($data['actual_annual'], 2) }}
-                                                            </small>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-{{ $statusColor }}">
-                                                            {{ currency_symbol() }} {{ number_format(abs($varianceMonthly), 2) }}
-                                                            @if($varianceMonthly > 0)
-                                                                <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
-                                                            @elseif($varianceMonthly < 0)
-                                                                <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
-                                                            @endif
-                                                        </span>
-                                                        <div class="mt-1">
-                                                            <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: {{ currency_symbol() }} {{ number_format(abs($data['variance_annual']), 2) }}
-                                                            </small>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="fw-bold text-{{ $statusColor }}">
-                                                            {{ number_format(abs($variancePercentageMonthly), 1) }}%
-                                                        </span>
-                                                        <div class="mt-1">
-                                                            <small class="text-gray-600">
-                                                                {{ __('accounting.annual') }}: {{ number_format(abs($data['variance_percentage_annual']), 1) }}%
-                                                            </small>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge badge-light-{{ $statusColor }} d-inline-flex align-items-center gap-1">
-                                                            <i class="ki-duotone ki-{{ $varianceMonthly > 0 ? 'check' : ($varianceMonthly < 0 ? 'warning' : 'information') }} fs-4"></i>
-                                                            {{ $statusText }}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="progress w-100 me-3" style="height: 10px;">
-                                                                <div class="progress-bar bg-{{ $progressPercentage > 100 ? 'danger' : ($progressPercentage > 80 ? 'warning' : 'success') }}" 
-                                                                    role="progressbar" 
-                                                                    style="width: {{ min($progressPercentage, 100) }}%;" 
-                                                                    aria-valuenow="{{ $progressPercentage }}" 
-                                                                    aria-valuemin="0" 
-                                                                    aria-valuemax="100">
-                                                                </div>
-                                                            </div>
-                                                            <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                                {{ number_format($progressPercentage, 1) }}%
-                                                            </span>
-                                                        </div>
-                                                        <div class="mt-1 text-center">
-                                                            <small class="text-muted">
-                                                                {{ __('accounting.utilization') }}
-                                                            </small>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                            <tfoot class="fw-bold bg-light">
-                                                <tr>
-                                                    <td class="ps-4">{{ __('accounting.total') }}</td>
-                                                    <td class="text-primary">{{ currency_symbol() }} {{ number_format($summary['total_budget_monthly'], 2) }}</td>
-                                                    <td class="text-info">{{ currency_symbol() }} {{ number_format($summary['total_actual_monthly'], 2) }}</td>
-                                                    <td class="text-{{ $totalVarianceMonthly >= 0 ? 'success' : 'danger' }}">
-                                                        {{ currency_symbol() }} {{ number_format(abs($totalVarianceMonthly), 2) }}
-                                                        @if($totalVarianceMonthly > 0)
-                                                            <i class="ki-duotone ki-arrow-down text-success fs-4 ms-1"></i>
-                                                        @elseif($totalVarianceMonthly < 0)
-                                                            <i class="ki-duotone ki-arrow-up text-danger fs-4 ms-1"></i>
-                                                        @endif
-                                                    </td>
-                                                    <td class="text-{{ $variancePercentageMonthly >= 0 ? 'success' : 'danger' }}">
-                                                        {{ number_format(abs($variancePercentageMonthly), 1) }}%
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge badge-light-{{ $totalVarianceMonthly >= 0 ? 'success' : 'danger' }}">
-                                                            {{ $totalVarianceMonthly >= 0 ? __('accounting.under_budget') : __('accounting.over_budget') }}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        @php
-                                                            $totalProgress = $summary['total_budget_monthly'] > 0 ? 
-                                                                min(($summary['total_actual_monthly'] / $summary['total_budget_monthly']) * 100, 100) : 0;
-                                                        @endphp
-                                                        <div class="d-flex align-items-center">
-                                                            <div class="progress w-100 me-3" style="height: 10px;">
-                                                                <div class="progress-bar bg-{{ $totalProgress > 100 ? 'danger' : ($totalProgress > 80 ? 'warning' : 'success') }}" 
-                                                                    role="progressbar" 
-                                                                    style="width: {{ $totalProgress }}%;" 
-                                                                    aria-valuenow="{{ $totalProgress }}" 
-                                                                    aria-valuemin="0" 
-                                                                    aria-valuemax="100">
-                                                                </div>
-                                                            </div>
-                                                            <span class="fw-bold text-gray-700 min-w-60px text-end">
-                                                                {{ number_format($totalProgress, 1) }}%
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
+                            <div class="card-body p-0">
+                                <div id="bvALoading" class="text-center py-10 d-none">
+                                    <div class="spinner-border text-primary"></div>
                                 </div>
-                            @else
-                                <div class="card-body">
-                                    <div class="text-center py-10">
-                                        <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
-                                        <p class="text-muted fs-6">{{ __('accounting.no_budget_categories_found') }}</p>
-                                        <p class="text-muted fs-7 mb-4">
-                                            {{ __('accounting.set_up_budgets_message') }}
-                                        </p>
-                                        @if(request()->hasAny(['year', 'month']))
-                                        <a href="{{ route('reports.expenses.budget-vs-actual') }}" class="btn btn-light-primary">
-                                            <i class="ki-duotone ki-cross fs-2 me-2"></i>
-                                            {{ __('accounting.clear_filters') }}
-                                        </a>
-                                        @endif
-                                    </div>
+                                <div id="bvAWrapper" class="table-responsive d-none">
+                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="budgetTable">
+                                        <thead>
+                                            <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
+                                                <th class="min-w-200px ps-4">{{ __('accounting.category') }}</th>
+                                                <th class="min-w-120px">{{ __('accounting.budget') }}</th>
+                                                <th class="min-w-120px">{{ __('accounting.actual') }}</th>
+                                                <th class="min-w-120px">{{ __('accounting.variance') }}</th>
+                                                <th class="min-w-100px">{{ __('accounting.variance_percentage') }}</th>
+                                                <th class="min-w-120px">{{ __('accounting.status') }}</th>
+                                                <th class="min-w-150px">{{ __('accounting.progress') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="bvABody"></tbody>
+                                        <tfoot class="fw-bold bg-light" id="bvAFoot"></tfoot>
+                                    </table>
                                 </div>
-                            @endif
+                                <div id="bvAEmpty" class="text-center py-10 d-none">
+                                    <i class="ki-duotone ki-document fs-4tx text-gray-400 mb-4"><span class="path1"></span><span class="path2"></span></i>
+                                    <h4 class="text-gray-600 fw-semibold mb-2">{{ __('accounting.no_data_available') }}</h4>
+                                    <p class="text-muted fs-6">{{ __('accounting.no_budget_categories_found') }}</p>
+                                    <p class="text-muted fs-7 mb-4">{{ __('accounting.set_up_budgets_message') }}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
-                {{-- Monthly Trends Chart --}}
-                @if(count($monthlyTrends) > 0)
-                <div class="row">
+
+                {{-- TREND CHART --}}
+                <div class="row" id="chartCard" style="display:none;">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-chart-line fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
+                                        <span class="path1"></span><span class="path2"></span>
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.monthly_budget_trends') }}</h3>
                                 </div>
@@ -550,23 +256,22 @@
                         </div>
                     </div>
                 </div>
-                
-                {{-- Top Categories Performance --}}
-                <div class="row mt-6">
+
+                {{-- TOP PERFORMERS --}}
+                <div class="row mt-6" id="topCard" style="display:none;">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header border-0">
                                 <div class="card-title d-flex align-items-center">
                                     <i class="ki-duotone ki-ranking fs-2 me-2 text-primary">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
+                                        <span class="path1"></span><span class="path2"></span>
                                     </i>
                                     <h3 class="fw-bold m-0">{{ __('accounting.top_performing_categories') }}</h3>
                                 </div>
                             </div>
                             <div class="card-body pt-0">
                                 <div class="table-responsive">
-                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0">
+                                    <table class="table table-row-bordered table-row-dashed gy-4 align-middle gs-0" id="topTable">
                                         <thead>
                                             <tr class="fw-bold fs-6 text-gray-800 border-bottom border-gray-200 bg-light">
                                                 <th class="ps-4">{{ __('accounting.category') }}</th>
@@ -576,232 +281,28 @@
                                                 <th>{{ __('accounting.recommendation') }}</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            @php
-                                                $sortedCategories = collect($budgetData)->sortBy('variance_percentage_monthly');
-                                            @endphp
-                                            
-                                            @foreach($sortedCategories->take(5) as $data)
-                                            @php
-                                                $category = $data['category'];
-                                                $varianceMonthly = $data['variance_monthly'];
-                                                $variancePercentageMonthly = $data['variance_percentage_monthly'];
-                                                $progressPercentage = $data['budget_monthly'] > 0 ? min(($data['actual_monthly'] / $data['budget_monthly']) * 100, 100) : 0;
-                                                $isOverBudget = $varianceMonthly < 0;
-                                                $statusColor = $varianceMonthly > 0 ? 'success' : ($varianceMonthly < 0 ? 'danger' : 'warning');
-                                            @endphp
-                                            <tr>
-                                                <td class="ps-4">
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="symbol symbol-30px symbol-circle me-3">
-                                                            <div class="symbol-label bg-light-info">
-                                                                <i class="ki-duotone ki-category fs-2"></i>
-                                                            </div>
-                                                        </div>
-                                                        <span class="text-gray-800 fw-bold">{{ $category->name }}</span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <div class="progress w-100 me-3" style="height: 8px;">
-                                                            <div class="progress-bar bg-{{ $progressPercentage > 100 ? 'danger' : ($progressPercentage > 80 ? 'warning' : 'success') }}" 
-                                                                style="width: {{ min($progressPercentage, 100) }}%;">
-                                                            </div>
-                                                        </div>
-                                                        <span class="fw-bold text-gray-700">
-                                                            {{ number_format($progressPercentage, 1) }}%
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-light-{{ $statusColor }}">
-                                                        {{ number_format(abs($variancePercentageMonthly), 1) }}%
-                                                        {{ $varianceMonthly > 0 ? __('accounting.under') : __('accounting.over') }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    @if($variancePercentageMonthly > 10)
-                                                    <span class="badge badge-light-success d-inline-flex align-items-center gap-1">
-                                                        <i class="ki-duotone ki-arrow-down fs-4"></i>
-                                                        {{ __('accounting.under_spending') }}
-                                                    </span>
-                                                    @elseif($variancePercentageMonthly < -10)
-                                                    <span class="badge badge-light-danger d-inline-flex align-items-center gap-1">
-                                                        <i class="ki-duotone ki-arrow-up fs-4"></i>
-                                                        {{ __('accounting.over_spending') }}
-                                                    </span>
-                                                    @else
-                                                    <span class="badge badge-light-warning d-inline-flex align-items-center gap-1">
-                                                        <i class="ki-duotone ki-check fs-4"></i>
-                                                        {{ __('accounting.on_track') }}
-                                                    </span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if($variancePercentageMonthly < -20)
-                                                    <span class="text-danger fw-semibold">
-                                                        {{ __('accounting.reduce_spending') }}
-                                                    </span>
-                                                    @elseif($variancePercentageMonthly > 20)
-                                                    <span class="text-success fw-semibold">
-                                                        {{ __('accounting.budget_surplus') }}
-                                                    </span>
-                                                    @else
-                                                    <span class="text-info fw-semibold">
-                                                        {{ __('accounting.maintain_current') }}
-                                                    </span>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
+                                        <tbody id="topBody"></tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                @endif
-                
             </div>
         </div>
     </div>
 </div>
 @endif
+@endsection
 
 @push('scripts')
-@if(count($monthlyTrends) > 0)
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Prepare data for top 5 categories
-        const topCategories = @json(collect($budgetData)->take(5));
-        const monthlyTrends = @json($monthlyTrends);
-        
-        // Create series for budget and actual
-        const budgetSeries = [];
-        const actualSeries = [];
-        const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        
-        // Prepare data for each top category
-        topCategories.forEach((data, index) => {
-            const category = data.category;
-            const trend = monthlyTrends[category.id];
-            
-            if (trend) {
-                const budgetData = [];
-                const actualData = [];
-                
-                for (let month = 1; month <= 12; month++) {
-                    budgetData.push(trend[month] ? trend[month].budget : 0);
-                    actualData.push(trend[month] ? trend[month].actual : 0);
-                }
-                
-                budgetSeries.push({
-                    name: `${category.name} - ${'{{ __("accounting.budget") }}'}`,
-                    data: budgetData,
-                    type: 'line',
-                    color: getCategoryColor(index)
-                });
-                
-                actualSeries.push({
-                    name: `${category.name} - ${'{{ __("accounting.actual") }}'}`,
-                    data: actualData,
-                    type: 'line',
-                    color: getCategoryColor(index, true)
-                });
-            }
-        });
-        
-        // Combine series
-        const allSeries = [...budgetSeries, ...actualSeries];
-        
-        // Initialize chart
-        const chartOptions = {
-            series: allSeries,
-            chart: {
-                type: 'line',
-                height: 400,
-                toolbar: {
-                    show: true,
-                    tools: {
-                        download: true,
-                        selection: true,
-                        zoom: true,
-                        zoomin: true,
-                        zoomout: true,
-                        pan: true,
-                        reset: true
-                    }
-                }
-            },
-            stroke: {
-                width: [3, 2, 2],
-                curve: 'smooth',
-                dashArray: [0, 5, 5] // Solid for budget, dashed for actual
-            },
-            xaxis: {
-                categories: monthLabels,
-                labels: {
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            yaxis: {
-                title: { text: '{{ __('accounting.amount') }} ({{ currency_symbol() }})' },
-                labels: {
-                    formatter: function (val) {
-                        return '{{ currency_symbol() }}' + val.toLocaleString();
-                    }
-                }
-            },
-            tooltip: {
-                y: {
-                    formatter: function (val) {
-                        return '{{ currency_symbol() }}' +
-                            val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    }
-                }
-            },
-            legend: {
-                position: 'top',
-                horizontalAlign: 'center',
-                fontSize: '12px',
-                fontFamily: 'Helvetica, Arial',
-                itemMargin: {
-                    horizontal: 10,
-                    vertical: 5
-                }
-            },
-            markers: {
-                size: 4
-            },
-            grid: {
-                borderColor: '#f1f1f1',
-            },
-            dataLabels: {
-                enabled: false
-            }
-        };
-        
-        const chart = new ApexCharts(document.querySelector("#budgetTrendsChart"), chartOptions);
-        chart.render();
-        
-        // Function to get category colors
-        function getCategoryColor(index, isActual = false) {
-            const colors = ['#3E97FF', '#50CD89', '#7239EA', '#FFC700', '#F1416C'];
-            const color = colors[index % colors.length];
-            
-            if (isActual) {
-                // Make actual lines slightly lighter or with opacity
-                return color + '80'; // Add 50% opacity
-            }
-            return color;
-        }
-    });
+    window.EXP_BVA_ROUTES = {
+        data: '{{ route('reports.expenses.budget-vs-actual-data') }}',
+        meta: '{{ route('reports.expenses.budget-vs-actual-meta') }}',
+    };
+    window.EXP_BVA_BOOTSTRAP = @json($initialFilters ?? []);
 </script>
-@endif
+@include('reports.expenses.partials.budget-vs-actual-scripts')
 @endpush
-
-@endsection
