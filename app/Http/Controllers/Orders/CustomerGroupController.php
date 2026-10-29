@@ -16,51 +16,133 @@ class CustomerGroupController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
+
+        if (!$user->hasPermissionTo('view customer-group')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
+        return view('orders.customer-group-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
         $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view customer-group')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        $perPage = $request->input('per_page', 15);
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
-        }
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
 
-        $query = CustomerGroup::with('customerGroupCreater')
+        $query = CustomerGroup::with('customerGroupCreater:id,name')
             ->withCount('customers')
             ->where('tenant_id', $tenantId);
 
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim($request->search);
             $query->where('name', 'like', "%{$search}%");
         }
 
-        $customerGroups = $query->latest()->paginate($perPage);
-
-        $customerGroups->appends([
-            'per_page' => $perPage,
-            'search'   => $request->search,
-        ]);
-
-        $bladeToReload = $request->query('bladeFileToReload');
-
-        if ($request->ajax() && $bladeToReload === 'reloadCustomerGroupComponent') {
-            return view('orders.customer-group.customer-group-component', [
-                'customerGroups' => $customerGroups,
-            ])->render();
+        if ($request->filled('is_default')) {
+            $query->where('is_default', (int) $request->input('is_default'));
         }
 
-        return view('orders.customer-group-index', [
-            'customerGroups' => $customerGroups,
+        $all = (clone $query)->withCount('customers')->get(['id', 'is_default']);
+
+        $summary = [
+            'total'         => $all->count(),
+            'default'       => $all->where('is_default', 1)->count(),
+            'with_customers'=> $all->where('customers_count', '>', 0)->count(),
+            'total_customers' => $all->sum('customers_count'),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(CustomerGroup $g) => [
+            'id'                  => $g->id,
+            'name'                => $g->name,
+            'discount_percentage' => (float) $g->discount_percentage,
+            'is_default'          => (bool) $g->is_default,
+            'customers_count'     => (int) ($g->customers_count ?? 0),
+            'creator_name'        => $g->customerGroupCreater?->name,
+            'created_at'          => optional($g->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view customer-group')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $group = CustomerGroup::with(['customerGroupCreater:id,name,email'])
+            ->withCount('customers')
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$group) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        // Sample of customers (first 10)
+        $customers = Customer::where('group_id', $group->id)
+            ->where('tenant_id', $tenantId)
+            ->orderBy('first_name')
+            ->limit(10)
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone']);
+
+        $can = [
+            'can_edit'   => $user->can('edit customer-group'),
+            'can_delete' => $user->can('delete customer-group') && !$group->is_default && $group->customers_count === 0,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'group'   => array_merge([
+                'id'                  => $group->id,
+                'name'                => $group->name,
+                'discount_percentage' => (float) $group->discount_percentage,
+                'is_default'          => (bool) $group->is_default,
+                'customers_count'     => (int) $group->customers_count,
+                'creator_name'        => $group->customerGroupCreater?->name,
+                'creator_email'       => $group->customerGroupCreater?->email,
+                'created_at'          => optional($group->created_at)->format('d M Y, H:i'),
+                'updated_at'          => optional($group->updated_at)->format('d M Y, H:i'),
+                'sample_customers'    => $customers->map(fn($c) => [
+                    'id'        => $c->id,
+                    'name'      => trim($c->first_name . ' ' . $c->last_name),
+                    'email'     => $c->email,
+                    'phone'     => $c->phone,
+                ])->values(),
+            ], $can),
         ]);
     }
 

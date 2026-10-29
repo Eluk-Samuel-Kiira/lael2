@@ -40,6 +40,8 @@ class EmployeeAdvance extends Model
         'rejection_reason',
         'deduction_schedule',
         'deduction_history',
+        'disbursement_transaction_ref',
+        'repayment_transaction_ref',
         'notes',
         'created_by',
     ];

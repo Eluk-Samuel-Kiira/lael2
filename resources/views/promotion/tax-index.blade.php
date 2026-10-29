@@ -1,68 +1,210 @@
 <x-app-layout>
     @section('title', __('pagination.tax_index'))
     @section('content')
-    
-    <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6">
-        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 gap-md-0">
-            <!-- Left side - Title and Breadcrumb -->
+
+    <div class="app-toolbar py-3 py-lg-6">
+        <div class="app-container container-fluid d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-4 w-100">
             <div class="page-title d-flex flex-column">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-2hx fs-md-1 flex-column my-0">
-                    {{__('pagination.tax_table')}}
+                <h1 class="page-heading text-gray-900 fw-bold fs-2hx my-0">
+                    {{ __('pagination.tax_table') }}
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
-                        @php
-                            $previousUrl = url()->previous();
-                            $previousRouteName = optional(app('router')->getRoutes()->match(request()->create($previousUrl)))->getName();
-                            $formattedRouteName = $previousRouteName 
-                                ? Str::of($previousRouteName)->replace('.', ' ')->title() 
-                                : __('auth._back');
-                        @endphp
-                        <a href="{{ $previousUrl }}" class="text-muted text-hover-primary">
-                            {{ $formattedRouteName }}
+                        <a href="{{ route('dashboard') }}" class="text-muted text-hover-primary">
+                            {{ __('pagination.dashboard') }}
                         </a>
                     </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
-                    <li class="breadcrumb-item text-muted">{{__('pagination.tax_index')}}</li>
+                    <li class="breadcrumb-item"><span class="bullet bg-gray-500 w-5px h-2px"></span></li>
+                    <li class="breadcrumb-item text-muted">{{ __('pagination.tax_index') }}</li>
                 </ul>
             </div>
 
-            <!-- Right side - Actions -->
-            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
-                <!-- Search Bar -->
-                <div class="w-100 w-sm-250px">
-                    <x-liveblade-search 
-                        id="taxSearchInput"
-                        componentId="reloadTaxComponent"
-                        route="{{ route('tax.index') }}"
-                        placeholder="{{__('auth._search')}} {{__('pagination._tax')}}"
-                    />
+            <div class="d-flex align-items-stretch align-items-sm-center gap-3 w-100 w-md-auto">
+                <div class="flex-grow-1 flex-sm-grow-0" style="min-width: 240px; max-width: 320px;">
+                    <div class="d-flex align-items-center position-relative w-100">
+                        <input type="text" id="taxSearchInput"
+                               class="form-control form-control-solid w-100 pe-10"
+                               placeholder="{{ __('auth._search') }} {{ __('pagination._tax') }}">
+                        <i class="bi bi-search fs-4 position-absolute end-0 me-3 top-50 translate-middle-y text-muted"></i>
+                    </div>
                 </div>
 
                 @can('create tax')
-                    <button type="button" class="btn btn-primary flex-shrink-0" data-bs-toggle="modal" data-bs-target="#kt_modal_add_tax">
-                        <i class="ki-duotone ki-plus fs-2 me-2 me-sm-3"></i>
-                        <span class="d-none d-sm-inline">{{__('pagination.new_tax')}}</span>
-                        <span class="d-inline d-sm-none">{{__('auth._add')}}</span>
+                    <button type="button" class="btn btn-primary flex-shrink-0"
+                            data-bs-toggle="modal" data-bs-target="#kt_modal_add_tax">
+                        <i class="ki-duotone ki-plus fs-2 me-2"></i>
+                        <span class="d-none d-sm-inline">{{ __('pagination.new_tax') }}</span>
                     </button>
                 @endcan
-                @include('promotion.tax.create')
             </div>
         </div>
     </div>
-    
-    <div class="d-flex flex-column flex-column-fluid">
-        <div id="kt_app_content" class="app-content flex-column-fluid">
-            <div id="kt_app_content_container" class="app-container container-xxl">
-                <div id="status"></div>
-                <div class="card">
-                    @include('promotion.tax.component')
+
+    <div class="app-content flex-column-fluid">
+        <div class="app-container container-xxl">
+
+            {{-- Stat cards --}}
+            <div class="row g-4 mb-6">
+                <div class="col-6 col-md-3">
+                    <div class="card bg-light-primary">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Total Taxes</span>
+                            <span class="fs-2x fw-bold text-primary" id="statTotal">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-light-success">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Active</span>
+                            <span class="fs-2x fw-bold text-success" id="statActive">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-light-warning">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Inactive</span>
+                            <span class="fs-2x fw-bold text-warning" id="statInactive">—</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card bg-light-info">
+                        <div class="card-body py-4">
+                            <span class="text-muted fs-8 fw-semibold text-uppercase d-block">Withholding</span>
+                            <span class="fs-2x fw-bold text-info" id="statWht">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Filters --}}
+            <div class="card mb-6">
+                <div class="card-body py-4">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold fs-7">{{ __('auth._search') }}</label>
+                            <div class="position-relative">
+                                <input type="text" id="taxSearchTop" class="form-control form-control-solid pe-10"
+                                       placeholder="{{ __('auth._search') }}…">
+                                <i class="bi bi-search fs-4 position-absolute end-0 me-3 top-50 translate-middle-y text-muted"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold fs-7">{{ __('auth._status') }}</label>
+                            <select id="taxStatusFilter" class="form-select form-select-solid">
+                                <option value="">All statuses</option>
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold fs-7">Type</label>
+                            <select id="taxTypeFilter" class="form-select form-select-solid">
+                                <option value="">All types</option>
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold fs-7">Per page</label>
+                            <select id="taxPerPage" class="form-select form-select-solid">
+                                <option value="15">15 / page</option>
+                                <option value="25">25 / page</option>
+                                <option value="50">50 / page</option>
+                                <option value="100">100 / page</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Table --}}
+            <div class="card card-flush">
+                <div class="card-body pt-0">
+                    <div id="taxLoading" class="text-center py-10 d-none">
+                        <div class="spinner-border text-primary"></div>
+                    </div>
+
+                    <div id="taxWrapper" class="d-none">
+                        <div class="table-responsive">
+                            <table class="table align-middle table-row-dashed fs-6 gy-5 mb-0">
+                                <thead>
+                                    <tr class="text-start text-muted fw-bold fs-7 text-uppercase">
+                                        <th class="min-w-150px">Name</th>
+                                        <th class="min-w-100px">Code</th>
+                                        <th class="min-w-100px text-end">Rate</th>
+                                        <th class="min-w-100px">Type</th>
+                                        <th class="min-w-100px text-center">WHT</th>
+                                        <th class="min-w-120px">Creator</th>
+                                        <th class="min-w-100px">Status</th>
+                                        <th class="min-w-40px text-end"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="taxTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <div class="text-muted fs-7" id="taxPageInfo"></div>
+                            <ul class="pagination m-0" id="taxPagination"></ul>
+                        </div>
+                    </div>
+
+                    <div id="taxEmpty" class="text-center py-15 d-none">
+                        <i class="bi bi-file-earmark fs-5tx text-muted mb-4 d-block"></i>
+                        <h4 class="fw-bold text-gray-800 mb-2">No taxes found</h4>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
- 
+
+    @include('promotion.tax.create')
+    @include('promotion.tax.edit-shared')
+    @include('promotion.tax.drawer')
     @endsection
+
+    @push('scripts')
+    <script>
+        function setButtonLoading(button, isLoading) {
+            if (!button) return;
+            const label    = button.querySelector('.indicator-label');
+            const progress = button.querySelector('.indicator-progress');
+
+            if (isLoading) {
+                button.disabled = true;
+                if (label)    label.style.display    = 'none';
+                if (progress) progress.style.display = 'inline';
+            } else {
+                button.disabled = false;
+                if (label)    label.style.display    = 'inline';
+                if (progress) progress.style.display = 'none';
+            }
+        }
+
+        function clearFormErrors(form) {
+            if (!form) return;
+            form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            form.querySelectorAll('.invalid-feedback.d-block').forEach(el => {
+                el.textContent = '';
+                el.classList.remove('d-block');
+            });
+        }
+
+        window.TAX_ROUTES = {
+            data:        '{{ route('tax.data') }}',
+            drawer_data: '{{ route('tax.drawer-data', ['id' => '__ID__']) }}',
+            status:      '{{ route('tax.status', ['id' => '__ID__']) }}',
+            update:      '{{ route('tax.update', ['tax' => '__ID__']) }}',
+            destroy:     '{{ route('tax.destroy', ['tax' => '__ID__']) }}',
+        };
+        window.TAX_BOOTSTRAP = {
+            search:  @json($initialFilters['search'] ?? ''),
+            perPage: @json($initialFilters['per_page'] ?? 15),
+        };
+    </script>
+    @include('promotion.tax.list-scripts')
+    @include('promotion.tax.drawer-scripts')
+    @endpush
 </x-app-layout>

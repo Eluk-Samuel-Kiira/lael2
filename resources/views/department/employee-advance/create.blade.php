@@ -140,19 +140,73 @@
 </div>
 
 <script>
-    $(document).ready(function() {
-        $('#deduction_frequency').on('change', function() {
-            var frequency = $(this).val();
-            
-            if (frequency === 'one_time') {
-                $('#installments_field').hide();
-                $('#deduction_day_field').hide();
-                $('input[name="installments"]').removeAttr('required');
-            } else {
-                $('#installments_field').show();
-                $('#deduction_day_field').show();
-                $('input[name="installments"]').attr('required', 'required');
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('kt_modal_add_advance_form');
+    const frequencySelect = document.getElementById('deduction_frequency');
+    const installmentsField = document.getElementById('installments_field');
+    const deductionDayField = document.getElementById('deduction_day_field');
+
+    // Toggle recurring fields
+    const toggleFrequencyFields = () => {
+        const recurring = ['weekly', 'monthly', 'yearly'].includes(frequencySelect?.value);
+        if (installmentsField) installmentsField.style.display = recurring ? '' : 'none';
+        if (deductionDayField) deductionDayField.style.display = recurring ? '' : 'none';
+    };
+    frequencySelect?.addEventListener('change', toggleFrequencyFields);
+    toggleFrequencyFields();
+
+    const btn = form?.querySelector('button[type="submit"]');
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!btn) return;
+
+        const fd = new FormData(form);
+        fd.set('_method', 'POST');
+
+        btn.disabled = true;
+        const label = btn.querySelector('.indicator-label') || btn;
+        const progress = btn.querySelector('.indicator-progress');
+        if (label && label !== btn) label.style.display = 'none';
+        if (progress) progress.style.display = 'inline';
+
+        try {
+            const res = await fetch('{{ route('employee-advance.store') }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf, 'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: fd,
+            });
+            const json = await res.json().catch(() => ({}));
+
+            if (res.status === 422) {
+                Object.entries(json.errors || {}).forEach(([field, msgs]) => {
+                    const input  = form.querySelector(`[name="${field}"]`) || form.querySelector(`[name="${field}[]"]`);
+                    const holder = form.querySelector(`#${CSS.escape(field)}`);
+                    if (input)  input.classList.add('is-invalid');
+                    if (holder) { holder.classList.add('invalid-feedback', 'd-block'); holder.textContent = msgs[0]; }
+                });
+                const firstError = Object.values(json.errors || {})[0]?.[0];
+                window.toastr?.error?.(firstError || json.message || 'Please fix the highlighted fields.');
+                return;
             }
-        });
+            if (!res.ok || json.success === false) throw new Error(json.message || 'Create failed');
+
+            window.toastr?.success?.(json.message || 'Advance request submitted.');
+            bootstrap.Modal.getInstance(form.closest('.modal'))?.hide();
+            form.reset();
+            window.AdvanceList?.reload?.();
+        } catch (err) {
+            console.error('[create-advance] failed:', err);
+            window.toastr?.error?.(err.message || 'Something went wrong.');
+        } finally {
+            btn.disabled = false;
+            if (label && label !== btn) label.style.display = 'inline';
+            if (progress) progress.style.display = 'none';
+        }
     });
+});
 </script>

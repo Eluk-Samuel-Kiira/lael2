@@ -185,3 +185,81 @@
         </div>
     </div>
 </div>
+
+
+<script>
+async function submitPaymentMethodForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form         = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+    if (!form || !submitButton) return;
+
+    const formData = new FormData(form);
+    const data     = Object.fromEntries(formData);
+
+    data._method = method;
+
+    // Checkboxes → 0/1
+    data.is_active   = form.querySelector('[name="is_active"]')?.checked   ? 1 : 0;
+    data.is_default  = form.querySelector('[name="is_default"]')?.checked  ? 1 : 0;
+    data.is_online   = form.querySelector('[name="is_online"]')?.checked   ? 1 : 0;
+    data.is_verified = form.querySelector('[name="is_verified"]')?.checked ? 1 : 0;
+
+    // Serialize arrays properly
+    const locs = formData.getAll('location_id[]');
+
+    setButtonLoading(submitButton, true);
+    clearFormErrors(form);
+
+    try {
+        const bodyParams = new URLSearchParams();
+        Object.entries(data).forEach(([k, v]) => {
+            if (v !== '' && v !== 'undefined') bodyParams.append(k, v);
+        });
+        locs.forEach(id => bodyParams.append('location_id[]', id));
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'Accept':           'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: bodyParams,
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (res.status === 422) {
+            Object.entries(json.errors || {}).forEach(([field, msgs]) => {
+                const f = field.replace(/\..*/, '');
+                const input  = form.querySelector(`[name="${f}"], [name="${f}[]"]`);
+                const holder = form.querySelector(`#${CSS.escape(f)}`);
+                if (input)  input.classList.add('is-invalid');
+                if (holder) {
+                    holder.classList.add('invalid-feedback', 'd-block');
+                    holder.textContent = msgs[0];
+                }
+            });
+            window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+            setButtonLoading(submitButton, false);
+            return;
+        }
+
+        if (!res.ok || json.success === false) throw new Error(json.message || 'Request failed');
+
+        window.toastr?.success?.(json.message || 'Payment method created.');
+        setButtonLoading(submitButton, false);
+
+        bootstrap.Modal.getOrCreateInstance(form.closest('.modal'))?.hide();
+        form.reset();
+        clearFormErrors(form);
+
+        window.PMList?.reload?.();
+
+    } catch (err) {
+        console.error('[create-payment-method] failed:', err);
+        window.toastr?.error?.(err.message || 'Something went wrong.');
+        setButtonLoading(submitButton, false);
+    }
+}
+</script>

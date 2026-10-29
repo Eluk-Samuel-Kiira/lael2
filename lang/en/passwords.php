@@ -54,6 +54,7 @@ return [
     'batch_tracking' => 'Batch',
     'select_unit'         => 'Select unit',
     'no_units_configured' => 'No units configured for this tenant',
+    'new_customer_group' => 'New Customer Group',
     'batch' => 'Batch',
     'send_via' => 'Send Via',
     'enter_supplier_email' => 'Enter Supplier Email',

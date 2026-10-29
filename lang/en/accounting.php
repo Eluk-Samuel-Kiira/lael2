@@ -15,6 +15,7 @@ return [
     'daily_summary' => 'Daily Summary',
     'monthly_report' => 'Monthly Report',
     'hour' => 'Hour',
+    'per_page' => 'Per Page',
     'reconciliation' => 'Reconciliation',
 
     'filter_transactions' => 'Filter Transactions',

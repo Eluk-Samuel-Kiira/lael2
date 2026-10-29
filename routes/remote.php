@@ -97,11 +97,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
+
+Route::get('/customer/data',              [CustomerController::class, 'data'])->name('customer.data');
+Route::get('/customer/{id}/drawer-data',  [CustomerController::class, 'drawerData'])->name('customer.drawer-data');
+Route::post('/customer-status/{id}',      [CustomerController::class, 'updateStatus'])->name('customer.status');
 Route::resource('customer', CustomerController::class);
-Route::post('/customer-status/{id}', [CustomerController::class, 'updateStatus'])
-    ->name('updateCustomerStatus');
 
 use App\Http\Controllers\Orders\CustomerGroupController;
+Route::get('/customer-group/data',              [CustomerGroupController::class, 'data'])->name('customer-group.data');
+Route::get('/customer-group/{id}/drawer-data',  [CustomerGroupController::class, 'drawerData'])->name('customer-group.drawer-data');
 Route::resource('customer-group', CustomerGroupController::class);
 
 

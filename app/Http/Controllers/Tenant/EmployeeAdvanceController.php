@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
-use App\Models\{ EmployeeAdvance, EmployeePayment, PaymentMethod };
+use App\Models\{ EmployeeAdvance, Currency, EmployeePayment, PaymentMethod, User };
 use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,86 +18,199 @@ class EmployeeAdvanceController extends Controller
      */
     public function index(Request $request)
     {
-        try {
-            $user = Auth::user();
-            $tenantId = $user->tenant_id;
+        $user = Auth::user();
 
-            if (!$user->hasPermissionTo('view employee advance')) {
-                abort(403, __('payments.not_authorized'));
-            }
-
-            $query = EmployeeAdvance::with(['employee', 'approver', 'payment'])
-                ->where('tenant_id', $tenantId);
-
-            // Filter by status
-            if ($request->has('status') && !empty($request->status)) {
-                $query->where('status', $request->status);
-            }
-
-            // Filter by employee
-            if ($request->has('employee_id') && !empty($request->employee_id)) {
-                $query->where('employee_id', $request->employee_id);
-            }
-
-            // Filter by date range
-            if ($request->has('date_from') && !empty($request->date_from)) {
-                $query->whereDate('advance_date', '>=', $request->date_from);
-            }
-            if ($request->has('date_to') && !empty($request->date_to)) {
-                $query->whereDate('advance_date', '<=', $request->date_to);
-            }
-
-            // Search
-            if ($request->has('search') && !empty($request->search)) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->whereHas('employee', function($emp) use ($search) {
-                        $emp->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%");
-                    })
-                    ->orWhere('purpose', 'like', "%{$search}%")
-                    ->orWhere('reason', 'like', "%{$search}%");
-                });
-            }
-
-            // Sorting
-            $sortField = $request->get('sort_field', 'created_at');
-            $sortDirection = $request->get('sort_direction', 'desc');
-            $query->orderBy($sortField, $sortDirection);
-
-            // Pagination
-            $perPage = $request->get('per_page', 15);
-            $advances = $query->paginate($perPage);
-
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'advances' => $advances,
-                    'filters' => $request->all(),
-                ]);
-            }
-
-            // Get statistics for the view
-            $statistics = $this->getStatisticsData($tenantId);
-
-            return view('department.employee-advance-index', [
-                'advances' => $advances,
-                'statistics' => $statistics,
-                'filters' => $request->all(),
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error fetching advances', ['error' => $e->getMessage()]);
-            
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.error_fetching_advances'),
-                ], 500);
-            }
-
-            return back()->with('error', __('payments.error_fetching_advances'));
+        if (!$user->hasPermissionTo('view employee advance')) {
+            abort(403, __('payments.not_authorized'));
         }
+
+        return view('department.employee-advance-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view employee advance')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = EmployeeAdvance::with(['employee:id,first_name,last_name,department_id', 'employee.department:id,name'])
+            ->where('tenant_id', $tenantId);
+
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->whereHas('employee', fn($e) => $e->where('first_name', 'like', "%{$s}%")
+                                                    ->orWhere('last_name', 'like', "%{$s}%"))
+                ->orWhere('purpose', 'like', "%{$s}%")
+                ->orWhere('reason', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('employee_id')) {
+            $query->where('employee_id', (int) $request->employee_id);
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('advance_date', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('advance_date', '<=', $request->date_to);
+        }
+
+        // Summary over the filtered set
+        $all = (clone $query)->get(['id', 'status', 'remaining_amount', 'advance_amount']);
+        $summary = [
+            'total'            => $all->count(),
+            'pending'          => $all->where('status', 'pending')->count(),
+            'active'           => $all->whereIn('status', ['approved', 'partially_paid'])->count(),
+            'outstanding'      => (float) $all->whereIn('status', ['approved', 'partially_paid'])->sum('remaining_amount'),
+            'total_advanced'   => (float) $all->sum('advance_amount'),
+        ];
+        $summary['recovery_rate'] = $summary['total_advanced'] > 0
+            ? round((($summary['total_advanced'] - $summary['outstanding']) / $summary['total_advanced']) * 100)
+            : 0;
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(EmployeeAdvance $a) => [
+            'id'                       => $a->id,
+            'employee_name'            => trim(($a->employee->first_name ?? '') . ' ' . ($a->employee->last_name ?? '')),
+            'employee_initials'        => strtoupper(substr($a->employee->first_name ?? '', 0, 1) . substr($a->employee->last_name ?? '', 0, 1)),
+            'department_name'          => $a->employee->department?->name ?? '—',
+            'advance_amount'           => (float) $a->advance_amount,
+            'remaining_amount'         => (float) $a->remaining_amount,
+            'currency_symbol'          => currency_symbol(),
+            'advance_date'             => optional($a->advance_date)->format('d M Y'),
+            'advance_date_human'       => optional($a->advance_date)->diffForHumans(),
+            'deduction_frequency'      => $a->deduction_frequency,
+            'deduction_frequency_label'=> $a->deduction_frequency_label ?? ucfirst(str_replace('_', ' ', $a->deduction_frequency)),
+            'deduction_day'            => $a->deduction_day,
+            'installments'             => (int) $a->installments,
+            'installments_paid'        => (int) $a->installments_paid,
+            'progress'                 => (int) ($a->progress_percentage ?? 0),
+            'status'                   => $a->status,
+            'purpose'                  => $a->purpose,
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view employee advance')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $advance = EmployeeAdvance::with([
+                'employee:id,first_name,last_name,email,department_id',
+                'employee.department:id,name',
+                'approver:id,name',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$advance) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $can = [
+            'can_edit'    => $user->can('edit employee advance')    && $advance->status === 'pending',
+            'can_approve' => $user->can('approve employee advance') && $advance->status === 'pending',
+            'can_reject'  => $user->can('reject employee advance')  && $advance->status === 'pending',
+            'can_cancel'  => $user->can('cancel employee advance')  && in_array($advance->status, ['approved', 'partially_paid']),
+            'can_delete'  => $user->can('delete employee advance')  && $advance->status === 'pending',
+        ];
+
+        return response()->json([
+            'success' => true,
+            'advance' => array_merge([
+                'id'                        => $advance->id,
+                'employee_id'               => $advance->employee_id,
+                'employee_name'             => trim(($advance->employee->first_name ?? '') . ' ' . ($advance->employee->last_name ?? '')),
+                'employee_initials'         => strtoupper(substr($advance->employee->first_name ?? '', 0, 1) . substr($advance->employee->last_name ?? '', 0, 1)),
+                'employee_email'            => $advance->employee->email ?? '—',
+                'department_name'           => $advance->employee->department?->name ?? '—',
+
+                'advance_amount'            => (float) $advance->advance_amount,
+                'remaining_amount'          => (float) $advance->remaining_amount,
+                'recovered_amount'          => (float) ($advance->advance_amount - $advance->remaining_amount),
+                'currency_symbol'           => currency_symbol(),
+
+                'advance_date'              => optional($advance->advance_date)->format('Y-m-d'),
+                'advance_date_label'        => optional($advance->advance_date)->format('d F Y'),
+                'request_date'              => optional($advance->request_date)->format('d F Y'),
+                'approval_date'             => optional($advance->approval_date)->format('d F Y'),
+
+                'deduction_frequency'       => $advance->deduction_frequency,
+                'deduction_frequency_label' => $advance->deduction_frequency_label ?? ucfirst(str_replace('_', ' ', $advance->deduction_frequency)),
+                'deduction_day'             => $advance->deduction_day,
+                'deduction_start_date'      => optional($advance->deduction_start_date)->format('Y-m-d'),
+                'installments'              => (int) $advance->installments,
+                'installments_paid'         => (int) $advance->installments_paid,
+                'installment_amount'        => $advance->installment_amount ? (float) $advance->installment_amount : null,
+                'progress'                  => (int) ($advance->progress_percentage ?? 0),
+
+                'applicable_salary_types'   => $advance->applicable_salary_types ?? [],
+                'purpose'                   => $advance->purpose,
+                'reason'                    => $advance->reason,
+                'notes'                     => $advance->notes,
+                'status'                    => $advance->status,
+
+                'approved_by_name'          => $advance->approver?->name,
+                'rejection_reason'          => $advance->rejection_reason,
+                'deduction_history'         => collect($advance->deduction_history ?? [])->map(fn($h) => [
+                    'date'            => \Carbon\Carbon::parse($h['deducted_at'])->format('d M Y'),
+                    'amount'          => (float) $h['deduction_amount'],
+                    'remaining_after' => (float) $h['remaining_after'],
+                    'payment_id'      => $h['payment_id'],
+                ])->values(),
+                'deduction_schedule'        => collect($advance->deduction_schedule ?? [])->map(fn($s) => [
+                    'installment'    => $s['installment'],
+                    'scheduled_date' => \Carbon\Carbon::parse($s['scheduled_date'])->format('d M Y'),
+                    'amount'         => (float) $s['amount'],
+                    'status'         => $s['status'],
+                ])->values(),
+
+                'created_at'                => optional($advance->created_at)->format('d M Y, H:i'),
+                'updated_at'                => optional($advance->updated_at)->format('d M Y, H:i'),
+
+                // for the edit modal
+                'payment_methods'           => PaymentMethod::where('tenant_id', $tenantId)
+                                                ->where('is_active', true)
+                                                ->get(['id', 'name', 'type', 'is_default']),
+            ], $can),
+        ]);
     }
 
     /**
@@ -350,17 +463,18 @@ class EmployeeAdvanceController extends Controller
     public function approve(Request $request, $id)
     {
         try {
-            $user = Auth::user();
+            $user     = Auth::user();
             $tenantId = $user->tenant_id;
 
             if (!$user->hasPermissionTo('approve employee advance')) {
                 return response()->json([
                     'success' => false,
                     'message' => __('payments.not_authorized'),
-                ]);
+                ], 403);
             }
 
-            $advance = EmployeeAdvance::where('id', $id)
+            $advance = EmployeeAdvance::with(['employee', 'employee.department'])
+                ->where('id', $id)
                 ->where('tenant_id', $tenantId)
                 ->firstOrFail();
 
@@ -368,10 +482,9 @@ class EmployeeAdvanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => __('payments.advance_already_processed'),
-                ]);
+                ], 409);
             }
 
-            // Validate payment method
             $request->validate([
                 'payment_method_id' => 'required|exists:payment_methods,id',
             ]);
@@ -385,92 +498,159 @@ class EmployeeAdvanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => __('payments.payment_method_not_found'),
-                ]);
+                ], 404);
             }
 
             DB::beginTransaction();
 
-            // 1. Update advance status
+            // ── 1. Flip the advance to approved ──
             $advance->update([
-                'status' => 'approved',
-                'approved_by' => $user->id,
-                'approved_at' => now(),
+                'status'        => 'approved',
+                'approved_by'   => $user->id,
+                'approved_at'   => now(),
                 'approval_date' => now(),
             ]);
 
-            // 2. RECORD WITHDRAWAL - Money LEAVES company as advance
+            // ── 2. Build the human narrative ──
+            // {actor} approved {amountStr} to {employee} as advance from {method} —
+            // {recurrence}. Reason: {reason}. Disbursement leaves {method}; recovery expected via payroll.
+            $actorName   = $this->actorLabel($user);
+            $employeeName = trim(($advance->employee->first_name ?? '') . ' ' . ($advance->employee->last_name ?? ''));
+            $deptName    = $advance->employee->department->name ?? null;
+
+            $currency    = $paymentMethod->currency->code ?? 'UGX';
+            $amountStr   = number_format((float) $advance->advance_amount, 2) . ' ' . $currency;
+            $methodName  = $paymentMethod->name ?? "Method #{$paymentMethod->id}";
+
+            $recovery = $this->advanceRecoveryLabel($advance);   // "a one-time deduction" / "5 monthly deductions of 40,000 UGX"
+            $reason   = $advance->purpose ?: ($advance->reason ?: 'no stated reason');
+
+            $narrative = "{$actorName} approved a salary advance of {$amountStr} to "
+                . "{$employeeName}"
+                . ($deptName ? " ({$deptName})" : '')
+                . " from {$methodName}. "
+                . "Disbursement leaves the company now; recovery will be via {$recovery}. "
+                . "Reason: {$reason}.";
+
+            // ── 3. Record the withdrawal (money leaves the company) ──
             $transactionData = [
-                'tenant_id' => $tenantId,
-                'user_id' => $user->id,
-                'payment_method_id' => $paymentMethod->id,
-                'transaction_type' => 'WITHDRAWAL',
+                'tenant_id'            => $tenantId,
+                'user_id'              => $user->id,
+                'payment_method_id'    => $paymentMethod->id,
+                'transaction_type'     => 'WITHDRAWAL',
                 'transaction_category' => 'ADVANCE',
-                'amount' => $advance->advance_amount,
-                'currency_id' => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
-                'reference_table' => 'employee_advances',
-                'reference_id' => $advance->id,
-                'description' => 'Salary Advance to ' . $advance->employee->first_name . ' ' . $advance->employee->last_name,
-                'notes' => 'Advance approved for: ' . ($advance->purpose ?? 'No purpose specified'),
+                'amount'               => $advance->advance_amount,
+                'currency_id'          => $paymentMethod->currency_id ?? \App\Models\Currency::default()->id,
+                'reference_table'      => 'employee_advances',
+                'reference_id'         => $advance->id,
+                'description'          => $narrative,
+                'notes'                => "Salary advance to {$employeeName} — {$methodName}",
                 'metadata' => [
-                    'employee_id' => $advance->employee_id,
-                    'employee_name' => $advance->employee->first_name . ' ' . $advance->employee->last_name,
-                    'advance_date' => $advance->advance_date->format('Y-m-d'),
-                    'purpose' => $advance->purpose,
-                    'approved_by' => $user->name,
-                    'approved_by_id' => $user->id,
-                    'transaction_nature' => 'ADVANCE_PAYMENT',
-                    'payment_method_name' => $paymentMethod->name,
-                    'payment_method_type' => $paymentMethod->type,
+                    'employee_id'          => $advance->employee_id,
+                    'employee_name'        => $employeeName,
+                    'department'           => $deptName,
+                    'advance_id'           => $advance->id,
+                    'advance_amount'       => (float) $advance->advance_amount,
+                    'advance_date'         => $advance->advance_date?->format('Y-m-d'),
+                    'deduction_frequency'  => $advance->deduction_frequency,
+                    'installments'         => (int) $advance->installments,
+                    'installment_amount'   => $advance->installment_amount ? (float) $advance->installment_amount : null,
+                    'purpose'              => $advance->purpose,
+                    'reason'               => $advance->reason,
+                    'approved_by'          => $user->name,
+                    'approved_by_id'       => $user->id,
+                    'payment_method_name'  => $methodName,
+                    'payment_method_type'  => $paymentMethod->type,
+                    'transaction_nature'   => 'ADVANCE_DISBURSEMENT',
+                    'narrative'            => $narrative,
                 ],
             ];
 
             $transactionLog = app('payment-transaction')->recordTransaction($transactionData);
 
-            // Store transaction ref on advance
-            $advance->update([
-                'disbursement_transaction_ref' => $transactionLog->transaction_ref,
-            ]);
+            // ── 4. Persist the transaction ref back on the advance ──
+            $advance->update(['disbursement_transaction_ref' => $transactionLog->transaction_ref]);
 
             DB::commit();
 
-            // Send notification to employee
             $this->sendAdvanceApprovedNotification($advance);
 
             if ($request->wantsJson()) {
                 return response()->json([
-                    'success' => true,
-                    'message' => __('payments.advance_approved'),
-                    'advance' => $advance->fresh(),
+                    'success'   => true,
+                    'message'   => __('payments.advance_approved'),
+                    'advance'   => $advance->fresh(),
+                    'narrative' => $narrative,
                     'transaction' => [
-                        'ref' => $transactionLog->transaction_ref,
-                        'amount' => $advance->advance_amount,
+                        'ref'            => $transactionLog->transaction_ref,
+                        'amount'         => $advance->advance_amount,
                         'payment_method' => $paymentMethod->name,
                     ],
                 ]);
             }
 
-            return redirect()->route('employee.advances.index')
+            return redirect()->route('employee-advance.index')
                 ->with('success', __('payments.advance_approved'));
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
-                'errors' => $e->errors(),
-            ]);
+                'errors'  => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error approving advance', [
                 'error' => $e->getMessage(),
-                'id' => $id,
-                'trace' => $e->getTraceAsString()
+                'id'    => $id,
+                'trace' => $e->getTraceAsString(),
             ]);
-            
             return response()->json([
                 'success' => false,
                 'message' => __('payments.error_approving_advance') . ': ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Human-readable label for the acting user — mirrors the pattern used in
+     * ProductionOrderController::actorLabel() so ledger narratives stay consistent
+     * across modules.
+     */
+    private function actorLabel(?User $user): string
+    {
+        if (!$user) return 'System';
+        return $user->name ?: "User #{$user->id}";
+    }
+
+    /**
+     * Describe how the advance will be recovered, in prose.
+     * e.g. "a one-time deduction"
+     *      "5 monthly deductions of 40,000 UGX"
+     *      "4 weekly deductions of 25,000 UGX, starting 15 Nov 2026"
+     */
+    private function advanceRecoveryLabel(EmployeeAdvance $advance): string
+    {
+        $freq = $advance->deduction_frequency;
+
+        if ($freq === 'one_time' || (int) $advance->installments <= 1) {
+            return 'a one-time deduction';
+        }
+
+        $currency = optional(optional(Currency::default())->code) ?: 'UGX';
+        $instAmt  = $advance->installment_amount
+            ? number_format((float) $advance->installment_amount, 2) . ' ' . $currency
+            : null;
+
+        $freqLabel = rtrim($freq, 's');   // weekly / monthly / yearly
+
+        $start = $advance->deduction_start_date
+            ? ', starting ' . $advance->deduction_start_date->format('d M Y')
+            : '';
+
+        return $instAmt
+            ? "{$advance->installments} {$freqLabel} deductions of {$instAmt}{$start}"
+            : "{$advance->installments} {$freqLabel} deductions{$start}";
     }
 
     /**
@@ -610,6 +790,7 @@ class EmployeeAdvanceController extends Controller
      */
     public function getActiveAdvances($employeeId, Request $request)
     {
+        \Log::info($employeeId);
         try {
             $user = Auth::user();
             $tenantId = $user->tenant_id;

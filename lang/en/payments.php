@@ -994,6 +994,8 @@ return [
     'confirm_reject' => 'Reject Leave?',
     'confirm_reject_message' => 'Are you sure you want to reject this leave request?',
     'confirm_cancel' => 'Cancel Leave?',
+    'confirm_advance' => 'Cancel Advance?',
+    'confirm_advance_message' => 'Are you sure you want to cancel this Advance request?',
     'confirm_cancel_message' => 'Are you sure you want to cancel this leave request?',
     'confirm_delete' => 'Delete Leave?',
     'confirm_delete_message' => 'Are you sure you want to delete this leave request?',

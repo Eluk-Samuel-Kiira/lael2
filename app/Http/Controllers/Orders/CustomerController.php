@@ -17,68 +17,176 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
+
+        if (!$user->hasPermissionTo('view customer')) {
+            abort(403, __('payments.not_authorized'));
+        }
+
+        $groups = CustomerGroup::where('tenant_id', $user->tenant_id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('orders.customer-index', [
+            'customerGroups' => $groups,
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'group_id' => (string) $request->get('group_id', ''),
+                'status'   => (string) $request->get('status', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
         $user     = Auth::user();
         $tenantId = $user->tenant_id;
 
         if (!$user->hasPermissionTo('view customer')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        $perPage = $request->input('per_page', 15);
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
-        }
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
 
-        $query = Customer::with(['group', 'customerCreater'])
+        $query = Customer::with(['group:id,name,discount_percentage', 'customerCreater:id,name'])
             ->where('tenant_id', $tenantId);
 
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim($request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%")
-                  ->orWhere('tax_number', 'like', "%{$search}%")
-                  ->orWhere('city', 'like', "%{$search}%")
-                  ->orWhereHas('group', fn($g) => $g->where('name', 'like', "%{$search}%"));
+                ->orWhere('last_name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('tax_number', 'like', "%{$search}%")
+                ->orWhere('city', 'like', "%{$search}%")
+                ->orWhereHas('group', fn($g) => $g->where('name', 'like', "%{$search}%"));
             });
         }
 
         if ($request->filled('group_id')) {
-            $query->where('group_id', $request->group_id);
+            $query->where('group_id', (int) $request->input('group_id'));
         }
 
         if ($request->filled('status')) {
-            $query->where('is_active', (int) $request->status);
+            $query->where('is_active', (int) $request->input('status'));
         }
 
-        $customers = $query->latest()->paginate($perPage);
+        $all = (clone $query)->get(['id', 'is_active']);
 
-        $customers->appends([
-            'per_page' => $perPage,
-            'search'   => $request->search,
-            'group_id' => $request->group_id,
-            'status'   => $request->status,
+        $summary = [
+            'total'       => $all->count(),
+            'active'      => $all->where('is_active', 1)->count(),
+            'inactive'    => $all->where('is_active', 0)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Customer $c) => [
+            'id'         => $c->id,
+            'first_name' => $c->first_name,
+            'last_name'  => $c->last_name,
+            'full_name'  => trim($c->first_name . ' ' . $c->last_name),
+            'email'      => $c->email,
+            'phone'      => $c->phone,
+            'city'       => $c->city,
+            'country_code' => $c->country_code,
+            'tax_number' => $c->tax_number,
+            'group_name' => $c->group?->name,
+            'group_discount' => (float) ($c->group?->discount_percentage ?? 0),
+            'is_active'  => (bool) $c->is_active,
+            'creator_name' => $c->customerCreater?->name,
+            'created_at' => optional($c->created_at)->format('d M Y'),
         ]);
 
-        $bladeToReload = $request->query('bladeFileToReload');
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
 
-        if ($request->ajax() && $bladeToReload === 'reloadCustomerComponent') {
-            return view('orders.customer.customer-component', [
-                'customers' => $customers,
-            ])->render();
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view customer')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
 
-        return view('orders.customer-index', [
-            'customers' => $customers,
+        $customer = Customer::with([
+                'group:id,name,discount_percentage',
+                'customerCreater:id,name,email',
+            ])
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$customer) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        // Order counts (if relationship exists)
+        $orderCount = 0;
+        $totalSpent = 0.0;
+        if (method_exists($customer, 'orders')) {
+            $orderCount = $customer->orders()->count();
+            $totalSpent = (float) ($customer->orders()->sum('total_amount') ?? 0);
+        }
+
+        $can = [
+            'can_edit'   => $user->can('edit customer'),
+            'can_delete' => $user->can('delete customer'),
+            'can_toggle' => $user->can('edit customer'),
+        ];
+
+        return response()->json([
+            'success'  => true,
+            'customer' => array_merge([
+                'id'         => $customer->id,
+                'first_name' => $customer->first_name,
+                'last_name'  => $customer->last_name,
+                'full_name'  => trim($customer->first_name . ' ' . $customer->last_name),
+                'email'      => $customer->email,
+                'phone'      => $customer->phone,
+                'birth_date' => optional($customer->birth_date)->format('Y-m-d'),
+                'birth_date_human' => optional($customer->birth_date)->format('d M Y'),
+                'tax_number' => $customer->tax_number,
+                'address'    => $customer->address,
+                'city'       => $customer->city,
+                'state'      => $customer->state,
+                'postal_code' => $customer->postal_code,
+                'country_code' => $customer->country_code,
+
+                'group_id'         => $customer->group_id,
+                'group_name'       => $customer->group?->name,
+                'group_discount'   => (float) ($customer->group?->discount_percentage ?? 0),
+
+                'accepts_marketing' => (bool) $customer->accepts_marketing,
+                'is_active'         => (bool) $customer->is_active,
+                'notes'             => $customer->notes,
+
+                'order_count'  => $orderCount,
+                'total_spent'  => $totalSpent,
+
+                'creator_name'  => $customer->customerCreater?->name,
+                'creator_email' => $customer->customerCreater?->email,
+                'created_at'    => optional($customer->created_at)->format('d M Y, H:i'),
+                'updated_at'    => optional($customer->updated_at)->format('d M Y, H:i'),
+            ], $can),
         ]);
     }
 

@@ -16,72 +16,135 @@ class CurrencyController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $tenantId = $user->tenant_id;
-        
+
         if (!$user->hasPermissionTo('view currency')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('settings.currency-index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view currency')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        $query = Currency::with('currencyCreater');
-        
-        // Apply tenant filtering
-        if ($user->hasRole('super_admin')) {
-            // Super admin sees all currencies
-            $query->where(function($q) use ($tenantId) {
-                $q->where('tenant_id', $tenantId)
-                ->orWhere(function($sub) use ($tenantId) {
-                    $sub->where('tenant_id', '!=', $tenantId)
-                        ->whereNotNull('tenant_id');
-                });
-            });
-        } else {
-            $query->where('tenant_id', $tenantId);
-        }
-        
-        // Apply search if provided
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = Currency::with('currencyCreater:id,name')
+            ->where('tenant_id', $tenantId);
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $search = trim($request->search);
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                 ->orWhere('code', 'like', "%{$search}%")
                 ->orWhere('symbol', 'like', "%{$search}%")
                 ->orWhereHas('currencyCreater', fn($c) => $c->where('name', 'like', "%{$search}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $currencies = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page and search in pagination links
-        $currencies->appends(['per_page' => $perPage, 'search' => $request->search]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'currencyIndexTable') {
-            return view('settings.currency.currency-component', [
-                'all_currencies' => $currencies,
-            ])->render();
+
+        if ($request->filled('status')) {
+            $query->where('is_active', (int) $request->input('status'));
         }
-        
-        // Regular page load
-        return view('settings.currency-index', [
-            'all_currencies' => $currencies,
+
+        $all = (clone $query)->get(['id', 'is_active', 'is_base_currency']);
+
+        $summary = [
+            'total'    => $all->count(),
+            'active'   => $all->where('is_active', 1)->count(),
+            'inactive' => $all->where('is_active', 0)->count(),
+            'base'     => $all->where('is_base_currency', 1)->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(Currency $c) => [
+            'id'                => $c->id,
+            'code'              => $c->code,
+            'name'              => $c->name,
+            'symbol'            => $c->symbol,
+            'symbol_position'   => $c->symbol_position,
+            'decimal_places'    => (int) $c->decimal_places,
+            'exchange_rate'     => (float) $c->exchange_rate,
+            'is_base_currency'  => (bool) $c->is_base_currency,
+            'is_active'         => (bool) $c->is_active,
+            'creator_name'      => $c->currencyCreater?->name,
+            'created_at'        => optional($c->created_at)->format('d M Y, H:i'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view currency')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $currency = Currency::with('currencyCreater:id,name,email')
+            ->where('tenant_id', $tenantId)
+            ->find($id);
+
+        if (!$currency) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        // Base currency check — must not be edited/deleted/deactivated
+        $isBase = (bool) $currency->is_base_currency;
+
+        $can = [
+            'can_edit'   => $user->can('edit currency')   && !$isBase,
+            'can_delete' => $user->can('delete currency') && !$isBase && !$currency->is_active,
+            'can_toggle' => $user->can('update currency') && !$isBase,
+        ];
+
+        return response()->json([
+            'success'  => true,
+            'currency' => array_merge([
+                'id'               => $currency->id,
+                'code'             => $currency->code,
+                'name'             => $currency->name,
+                'symbol'           => $currency->symbol,
+                'symbol_position'  => $currency->symbol_position,
+                'decimal_places'   => (int) $currency->decimal_places,
+                'exchange_rate'    => (float) $currency->exchange_rate,
+                'is_base_currency' => $isBase,
+                'is_active'        => (bool) $currency->is_active,
+                'creator_name'     => $currency->currencyCreater?->name,
+                'creator_email'    => $currency->currencyCreater?->email,
+                'created_at'       => optional($currency->created_at)->format('d M Y, H:i'),
+                'updated_at'       => optional($currency->updated_at)->format('d M Y, H:i'),
+                'tenant_currency'  => tenant_currency(),
+            ], $can),
         ]);
     }
 

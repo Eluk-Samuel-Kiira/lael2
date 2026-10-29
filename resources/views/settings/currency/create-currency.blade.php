@@ -72,3 +72,72 @@
 </div>  
 
 
+
+
+<script>
+async function submitCurrencyForm(formId, submitButtonId, url, method = 'POST', discardButtonId = 'discardButton') {
+    const form         = document.getElementById(formId);
+    const submitButton = document.getElementById(submitButtonId);
+    if (!form || !submitButton) return;
+
+    const data = Object.fromEntries(new FormData(form));
+    data._method = method;
+
+    data.is_base_currency = form.querySelector('[name="is_base_currency"]')?.checked ? 1 : 0;
+    data.is_active        = form.querySelector('[name="is_active"]')?.checked        ? 1 : 0;
+
+    Object.keys(data).forEach(k => {
+        if (data[k] === '' || data[k] === 'undefined') delete data[k];
+    });
+
+    setButtonLoading(submitButton, true);
+    clearFormErrors(form);
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN':     document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'Accept':           'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams(data),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (res.status === 422) {
+            Object.entries(json.errors || {}).forEach(([field, messages]) => {
+                const input  = form.querySelector(`[name="${field}"]`);
+                const holder = form.querySelector(`#${CSS.escape(field)}`);
+                if (input)  input.classList.add('is-invalid');
+                if (holder) {
+                    holder.classList.add('invalid-feedback', 'd-block');
+                    holder.textContent = messages[0];
+                }
+            });
+            window.toastr?.error?.(json.message || 'Please fix the highlighted fields.');
+            setButtonLoading(submitButton, false);
+            return;
+        }
+
+        if (!res.ok || json.success === false) {
+            throw new Error(json.message || 'Request failed');
+        }
+
+        window.toastr?.success?.(json.message || 'Currency created.');
+        setButtonLoading(submitButton, false);
+
+        bootstrap.Modal.getOrCreateInstance(form.closest('.modal'))?.hide();
+        form.reset();
+        clearFormErrors(form);
+
+        window.CurrencyList?.reload?.();
+
+    } catch (err) {
+        console.error('[create-currency] failed:', err);
+        window.toastr?.error?.(err.message || 'Something went wrong.');
+        setButtonLoading(submitButton, false);
+    }
+}
+</script>

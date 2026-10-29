@@ -22,71 +22,181 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        
+
         if (!$user->hasPermissionTo('view user')) {
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('payments.not_authorized'),
-                ]);
-            }
-            abort(403);
+            abort(403, __('payments.not_authorized'));
         }
-        
-        // Get per_page from request, default to 15
-        $perPage = $request->input('per_page', 15);
-        
-        // Validate per_page is in allowed values
-        $allowedPerPage = [15, 25, 50, 100];
-        if (!in_array($perPage, $allowedPerPage)) {
-            $perPage = 15;
+
+        return view('human-resource.index', [
+            'initialFilters' => [
+                'search'   => (string) $request->get('search', ''),
+                'per_page' => in_array((int) $request->get('per_page', 15), [15, 25, 50, 100], true)
+                    ? (int) $request->get('per_page', 15)
+                    : 15,
+            ],
+        ]);
+    }
+
+    public function data(Request $request)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view user')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
         }
-        
-        // Build query
-        $query = User::with(['userRole', 'userDepartment', 'userLocation']);
-        
-        // EXCLUDE super_admin users from being displayed (they are system-level)
-        $query->whereDoesntHave('roles', function($q) {
-            $q->where('name', 'super_admin');
-        });
-        
+
+        $perPage = (int) $request->get('per_page', 15);
+        if (!in_array($perPage, [15, 25, 50, 100], true)) $perPage = 15;
+
+        $query = User::with(['userRole:id,name', 'userDepartment:id,name', 'userLocation:id,name'])
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'super_admin'));
+
         if (!$user->hasRole('super_admin')) {
-            $query->where('tenant_id', $user->tenant_id);
-        } else {
-            $query->with('tenant');
+            $query->where('tenant_id', $tenantId);
         }
-        
-        // Apply search if provided
+
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                ->orWhere('last_name', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%")
-                ->orWhere('telephone_number', 'like', "%{$search}%")
-                ->orWhereHas('userRole', fn($r) => $r->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('userDepartment', fn($d) => $d->where('name', 'like', "%{$search}%"));
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->where('first_name', 'like', "%{$s}%")
+                ->orWhere('last_name', 'like', "%{$s}%")
+                ->orWhere('email', 'like', "%{$s}%")
+                ->orWhere('telephone_number', 'like', "%{$s}%")
+                ->orWhereHas('userRole', fn($r) => $r->where('name', 'like', "%{$s}%"))
+                ->orWhereHas('userDepartment', fn($d) => $d->where('name', 'like', "%{$s}%"));
             });
         }
-        
-        // Paginate with dynamic per_page
-        $employees = $query->latest()->paginate($perPage);
-        
-        // Preserve per_page in pagination links
-        $employees->appends(['per_page' => $perPage]);
-        
-        $bladeToReload = $request->query('bladeFileToReload');
-        
-        // For AJAX requests - return just the component HTML
-        if ($request->ajax() && $bladeToReload === 'reloadEmployeeComponent') {
-            return view('human-resource.partial.user-componenet', [
-                'all_employees' => $employees,
-            ])->render();
+
+        if ($request->filled('status') && in_array($request->status, ['active', 'inactive'], true)) {
+            $query->where('status', $request->status);
         }
-        
-        // Regular page load
-        return view('human-resource.index', [
-            'all_employees' => $employees,
+
+        if ($request->filled('role_id')) {
+            $query->where('role_id', (int) $request->role_id);
+        }
+
+        // Summary over filtered set
+        $all = (clone $query)->get(['id', 'status']);
+        $summary = [
+            'total'    => $all->count(),
+            'active'   => $all->where('status', 'active')->count(),
+            'inactive' => $all->where('status', 'inactive')->count(),
+        ];
+
+        $paginator = $query->latest()->paginate($perPage);
+
+        $rows = collect($paginator->items())->map(fn(User $u) => [
+            'id'               => $u->id,
+            'name'             => trim($u->first_name . ' ' . $u->last_name),
+            'email'            => $u->email,
+            'role_name'        => $u->userRole?->name ? ucwords(str_replace('_', ' ', $u->userRole->name)) : '—',
+            'department_name'  => $u->userDepartment?->name ?? '—',
+            'location_name'    => $u->userLocation?->name ?? '—',
+            'telephone_number' => $u->telephone_number ?? '—',
+            'job_title'        => $u->job_title ?? '—',
+            'profile_image'    => employeeProfileImage($u->profile_image),
+            'status'           => $u->status, // 'active' | 'inactive'
+            'created_at'       => optional($u->created_at)->format('d M Y'),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $rows,
+            'summary'    => $summary,
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
+        ]);
+    }
+
+    public function drawerData(Request $request, $id)
+    {
+        $user     = Auth::user();
+        $tenantId = $user->tenant_id;
+
+        if (!$user->hasPermissionTo('view user')) {
+            return response()->json(['success' => false, 'message' => __('payments.not_authorized')], 403);
+        }
+
+        $employee = User::with([
+                'userRole:id,name',
+                'userDepartment:id,name',
+                'userLocation:id,name',
+                'departments:id,name,location_id',
+                'locations:id,name',
+            ])
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'super_admin'))
+            ->when(!$user->hasRole('super_admin'), fn($q) => $q->where('tenant_id', $tenantId))
+            ->find($id);
+
+        if (!$employee) {
+            return response()->json(['success' => false, 'message' => __('auth._not_found')], 404);
+        }
+
+        $targetRoles   = $employee->roles->pluck('name')->toArray();
+        $isProtected   = array_intersect($targetRoles, ['super_admin', 'admin']) !== [];
+        $authRoles     = $user->roles->pluck('name')->toArray();
+        $isAuthSuper   = in_array('super_admin', $authRoles);
+        $isAuthAdmin   = in_array('admin', $authRoles);
+        $isSelf        = $user->id === $employee->id;
+
+        $can = [
+            'can_edit'        => $user->can('edit user') && !$isProtected,
+            'can_delete'      => $user->can('delete user') && !$isProtected && !$isSelf,
+            'can_toggle_status' => $user->can('update user') && !$isProtected,
+            'can_assign'      => $user->can('update user') && !$isProtected,
+            // role-select options, respecting who can assign what
+            'assignable_roles' => Role::whereNotIn('name', array_filter([
+                    $isAuthSuper ? null : 'super_admin',
+                    ($isAuthSuper || $isAuthAdmin) ? null : 'admin',
+                ]))->orderBy('name')->get(['id', 'name'])
+                ->map(fn($r) => ['id' => $r->id, 'name' => ucwords(str_replace('_', ' ', $r->name))])
+                ->values(),
+        ];
+
+        $departmentsByLocation = Department::where('tenant_id', $tenantId)
+            ->with('location:id,name')
+            ->orderBy('name')
+            ->get(['id', 'name', 'location_id'])
+            ->groupBy('location_id')
+            ->map(fn($g) => $g->map(fn($d) => ['id' => $d->id, 'name' => $d->name])->values());
+
+        return response()->json([
+            'success'  => true,
+            'employee' => array_merge([
+                'id'              => $employee->id,
+                'first_name'      => $employee->first_name,
+                'last_name'       => $employee->last_name,
+                'name'            => trim($employee->first_name . ' ' . $employee->last_name),
+                'email'           => $employee->email,
+                'telephone_number'=> $employee->telephone_number,
+                'job_title'       => $employee->job_title,
+                'profile_image'   => employeeProfileImage($employee->profile_image),
+                'status'          => $employee->status,
+                'role_id'         => $employee->role_id,
+                'role_name'       => $employee->userRole?->name
+                                        ? ucwords(str_replace('_', ' ', $employee->userRole->name)) : '—',
+                'location_id'     => $employee->location_id,
+                'location_name'   => $employee->userLocation?->name ?? '—',
+                'department_id'   => $employee->department_id,
+                'department_name' => $employee->userDepartment?->name ?? '—',
+                'created_at'      => optional($employee->created_at)->format('d M Y, H:i'),
+                'updated_at'      => optional($employee->updated_at)->format('d M Y, H:i'),
+
+                'assigned_department_ids' => $employee->departments->pluck('id')->values(),
+                'assigned_location_ids'   => $employee->locations->pluck('id')->values(),
+
+                'all_departments_by_location' => $departmentsByLocation,
+                'all_locations' => Location::where('tenant_id', $tenantId)
+                                        ->orderBy('name')->get(['id', 'name']),
+            ], $can),
         ]);
     }
 
