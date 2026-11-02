@@ -12,8 +12,12 @@ return [
     'employee' => 'Employee',
     'all_status' => 'Select All',
     'leave_requests' => 'Leave Requests',
+
+    'refund_over_cap_warning' => 'Refund total exceeds the amount that was paid for this order.',
+    'refund_over_cap_confirm' => 'Continue and withdraw the over-cap amount from the payment method?',
     'billing_settings'   => 'Billing Settings',
     'payment_type' => 'Type',
+    'refund_exceeds_cap' => 'Refund total exceeds the maximum refundable amount.',
     'description' => 'Description',
     'partial_payment_recorded' => 'Partial Payment Recorded',
     'refund_reason'                          => 'Refund Reason',
