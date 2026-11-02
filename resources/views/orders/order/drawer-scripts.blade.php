@@ -1092,14 +1092,23 @@ window.OrderDrawer = (function () {
                 window.toastr?.warning?.('{{ __("payments.refund_reason_required") ?? "Please provide a reason for the refund." }}');
                 return;
             }
-
+            
             const total = round2(selections.reduce((s, x) => s + x.amount, 0));
-            if (total > globalCap + 0.01) {
-                window.toastr?.error?.(
-                    '{{ __("payments.refund_exceeds_cap") ?? "Refund total exceeds the maximum refundable amount." }}' +
-                    ` (${fmtMoney(total)} > ${fmtMoney(globalCap)})`
+            const cap   = round2(Number(ord.refundable_cap || 0));
+
+            // Over-cap refunds are allowed, but only after an explicit confirmation
+            // so an accidental typo can't silently withdraw money that was never
+            // collected from the customer.
+            if (total > cap + 0.01) {
+                const excess = round2(total - cap);
+                const confirmed = window.confirm(
+                    `{{ __("payments.refund_over_cap_warning") ?? "Refund total exceeds the amount that was paid for this order." }}\n\n` +
+                    `Paid / refundable: ${fmtMoney(cap)}\n` +
+                    `This refund:      ${fmtMoney(total)}\n` +
+                    `Over by:          ${fmtMoney(excess)}\n\n` +
+                    `{{ __("payments.refund_over_cap_confirm") ?? "Continue and withdraw the over-cap amount from the payment method?" }}`
                 );
-                return;
+                if (!confirmed) return;
             }
 
             setLoading(btn, true);

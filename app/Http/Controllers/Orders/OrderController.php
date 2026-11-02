@@ -651,15 +651,23 @@ class OrderController extends Controller
             return response()->json(['success' => false, 'message' => 'Nothing to refund.'], 422);
         }
 
-        // ── Guard 3: money cap ────────────────────────────────────
+        // ── Guard 3: money cap — now advisory ────────────────────
+        // Refunding more than was paid is allowed when the operator
+        // explicitly requests it (the UI shows a confirmation), but it
+        // is always logged so the overage is auditable.
         $paidRemaining = round((float) $order->paid_amount, 2);
-        if ($refundTotal > $paidRemaining + 0.01) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Refund total (' . number_format($refundTotal, 2)
-                    . ') exceeds the paid amount available to refund ('
-                    . number_format($paidRemaining, 2) . ').',
-            ], 422);
+        $overCapAmount = round(max(0.0, $refundTotal - $paidRemaining), 2);
+
+        if ($overCapAmount > 0.01) {
+            Log::warning('[Order refund] Over-cap refund requested', [
+                'order_id'      => $order->id,
+                'order_number'  => $order->order_number,
+                'paid_remaining'=> $paidRemaining,
+                'refund_total'  => $refundTotal,
+                'over_cap'      => $overCapAmount,
+                'actor'         => $this->actorLabel($user),
+                'reason'        => $validated['reason'],
+            ]);
         }
 
         DB::beginTransaction();
@@ -708,10 +716,41 @@ class OrderController extends Controller
             }
 
             if ($remainingRefund > 0.01) {
-                throw new \Exception(
-                    'Could not allocate the refund across the order payments. Remaining: '
-                    . number_format($remainingRefund, 2)
-                );
+                // The refund exceeds the total still refundable across the order's
+                // payment rows. This is only reachable after the operator has
+                // explicitly confirmed an over-cap refund. Allocate the leftover
+                // to the most recently-used payment method so the cash physically
+                // leaves the account the customer last paid into.
+                $lastPayment = $order->orderPayments
+                    ->where('status', 'completed')
+                    ->sortByDesc('created_at')
+                    ->first();
+
+                $method = $lastPayment?->paymentMethod
+                    ?? $order->orderPayments->first()?->paymentMethod;
+
+                if (!$method) {
+                    throw new \Exception(
+                        'Cannot determine which payment method to withdraw the over-cap refund from. '
+                        . 'Remaining: ' . number_format($remainingRefund, 2)
+                    );
+                }
+
+                // No payment row to update — this slice never had a payment row
+                // covering it. Debit the method directly and record the ledger
+                // entry like the other allocations do.
+                if (!isset($affectedMethods[$method->id])) {
+                    $affectedMethods[$method->id] = ['method' => $method, 'amount' => 0.0];
+                }
+                $affectedMethods[$method->id]['amount'] += $remainingRefund;
+
+                $affectedPayments[] = [
+                    'payment_id' => null,
+                    'amount'     => $remainingRefund,
+                    'note'       => 'over-cap allocation',
+                ];
+
+                $remainingRefund = 0;
             }
 
             // ── 1b. Debit each method + write ONE ledger entry each ─
