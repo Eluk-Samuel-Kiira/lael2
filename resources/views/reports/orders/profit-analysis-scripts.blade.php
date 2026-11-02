@@ -338,6 +338,9 @@ window.ProfitAnalysis = (function () {
                 <td class="ps-4">
                     <span class="fw-bold">${esc(o.order_number)}</span>
                     <br><small class="text-muted">${esc(capitalize(o.order_type))}</small>
+                    ${o.has_refund ? `<span class="badge badge-light-warning fs-9 ms-1">
+                        <i class="bi bi-arrow-return-left me-1"></i>${money(o.refunded_amount)}
+                    </span>` : ''}
                 </td>
                 <td>
                     <span class="text-muted">${esc(o.created_at)}</span>
@@ -403,37 +406,94 @@ window.ProfitAnalysis = (function () {
     }
 
     function renderDrawerContent(o) {
-        const itemRows = o.item_profits.map(it => `
-            <tr>
-                <td>
-                    <span class="fw-bold">${esc(it.variant_name)}</span>
-                    <br><small class="text-muted">${esc(it.sku)}</small>
-                </td>
-                <td class="text-center">${fmtNum(it.quantity, 0)}</td>
-                <td class="text-end">${money(it.unit_cost)}</td>
-                <td class="text-end">${money(it.unit_price)}</td>
-                <td class="text-end">${money(it.total_cost)}</td>
-                <td class="text-end">${money(it.total_revenue)}</td>
-                <td class="text-end ${it.profit >= 0 ? 'text-success' : 'text-danger'} fw-bold">${money(it.profit)}</td>
-                <td class="text-end">
-                    <span class="badge badge-light-${marginColor(it.profit_margin)}">${fmtNum(it.profit_margin, 1)}%</span>
-                </td>
-                <td class="text-end">
-                    <span class="badge badge-light-secondary">${esc(it.pricing_source || '—')}</span>
-                </td>
-            </tr>
-        `).join('');
+        // ── Per-line rows ────────────────────────────────────────
+        const itemRows = o.item_profits.map(it => {
+            const refundedQty   = Number(it.refunded_qty   || 0);
+            const keptQty       = Number(it.kept_qty ?? (Number(it.quantity) - refundedQty));
+            const refundedValue = Number(it.refunded_amount || 0);
+            const hasRefund     = refundedQty > 0 || refundedValue > 0;
 
-        return `
-            <div class="d-flex align-items-center justify-content-between mb-4">
-                <div>
-                    <h4 class="fw-bold mb-1">${esc(o.order_number)}</h4>
-                    <div class="text-muted fs-7">${esc(o.customer)} · ${esc(o.location)} · ${esc(o.department)}</div>
+            const refundedCell = hasRefund
+                ? `<span class="text-warning fw-bold">${fmtNum(refundedQty, 0)}</span>
+                <div class="text-muted fs-9">${money(refundedValue)}</div>`
+                : `<span class="text-muted">—</span>`;
+
+            return `
+                <tr class="${hasRefund ? 'bg-light-warning' : ''}">
+                    <td>
+                        <span class="fw-bold">${esc(it.variant_name)}</span>
+                        <br><small class="text-muted">${esc(it.sku)}</small>
+                        ${hasRefund ? `<span class="badge badge-light-warning fs-9 ms-1">
+                            <i class="bi bi-arrow-return-left me-1"></i>Refunded
+                        </span>` : ''}
+                    </td>
+                    <td class="text-center">${fmtNum(it.quantity, 0)}</td>
+                    <td class="text-center">${refundedCell}</td>
+                    <td class="text-center">${fmtNum(keptQty, 0)}</td>
+                    <td class="text-end">${money(it.unit_cost)}</td>
+                    <td class="text-end">${money(it.unit_price)}</td>
+                    <td class="text-end">${money(it.total_cost)}</td>
+                    <td class="text-end">${money(it.total_revenue)}</td>
+                    <td class="text-end ${it.profit >= 0 ? 'text-success' : 'text-danger'} fw-bold">${money(it.profit)}</td>
+                    <td class="text-end">
+                        <span class="badge badge-light-${marginColor(it.profit_margin)}">${fmtNum(it.profit_margin, 1)}%</span>
+                    </td>
+                    <td class="text-end">
+                        <span class="badge badge-light-secondary">${esc(it.pricing_source || '—')}</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // ── Summary card row (refund-aware) ──────────────────────
+        // When the order has refunds we swap "Discount" for "Refunded"
+        // so the most important adjustment is the most visible one.
+        const hasRefund = !!o.has_refund || Number(o.refunded_amount || 0) > 0;
+
+        const summaryCards = hasRefund
+            ? `
+                <div class="col-6 col-md-3">
+                    <div class="card card-flush bg-light-primary border border-primary border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">${esc(I18N.totalRevenue)}</span>
+                            <div class="fs-4 fw-bold">${money(o.total_revenue)}</div>
+                            ${Number(o.original_revenue || 0) > Number(o.total_revenue) ?
+                                `<div class="fs-9 text-muted mt-1">
+                                    was <s>${money(o.original_revenue)}</s>
+                                </div>` : ''}
+                        </div>
+                    </div>
                 </div>
-                <span class="badge badge-light-${marginColor(o.profit_margin)} fs-6 py-2 px-3">${fmtNum(o.profit_margin, 1)}%</span>
-            </div>
-
-            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="card card-flush bg-light-warning border border-warning border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">Refunded</span>
+                            <div class="fs-4 fw-bold text-warning">${money(o.refunded_amount)}</div>
+                            <div class="fs-9 text-muted mt-1">
+                                ${fmtNum(o.refunded_units || 0, 0)} unit(s) returned
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card card-flush bg-light-danger border border-danger border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">${esc(I18N.totalCost)}</span>
+                            <div class="fs-4 fw-bold text-danger">${money(o.total_cost)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card card-flush bg-light-${o.net_profit >= 0 ? 'success' : 'danger'} border border-${o.net_profit >= 0 ? 'success' : 'danger'} border-dashed">
+                        <div class="card-body text-center py-4">
+                            <span class="text-muted fs-8">${esc(I18N.netProfit)}</span>
+                            <div class="fs-4 fw-bold text-${o.net_profit >= 0 ? 'success' : 'danger'}">${money(o.net_profit)}</div>
+                            ${o.fully_refunded ? `<div class="fs-9 text-muted mt-1">Fully refunded</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `
+            : `
                 <div class="col-6 col-md-3">
                     <div class="card card-flush bg-light-primary border border-primary border-dashed">
                         <div class="card-body text-center py-4">
@@ -466,15 +526,72 @@ window.ProfitAnalysis = (function () {
                         </div>
                     </div>
                 </div>
+            `;
+
+        // ── Refund banner ────────────────────────────────────────
+        const refundBanner = hasRefund ? `
+            <div class="alert alert-warning d-flex align-items-start mb-4">
+                <i class="bi bi-arrow-return-left fs-3 me-3 mt-1"></i>
+                <div class="fs-7">
+                    <strong>Refunds on this order</strong>
+                    <div class="mt-1">
+                        Money refunded: <strong>${money(o.refunded_amount)}</strong>
+                        ${Number(o.money_only_refund || 0) > 0
+                            ? `· cash only: ${money(o.money_only_refund)}`
+                            : ''}
+                        · units returned: <strong>${fmtNum(o.refunded_units || 0, 0)}</strong>
+                        ${o.fully_refunded
+                            ? `<span class="badge badge-light-danger ms-2">Fully refunded</span>`
+                            : ''}
+                    </div>
+                    ${Number(o.original_revenue || 0) > Number(o.total_revenue) ? `
+                        <div class="text-muted mt-1">
+                            Original revenue was <s>${money(o.original_revenue)}</s>.
+                            Recognised revenue after refund is <strong>${money(o.total_revenue)}</strong>.
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        ` : '';
+
+        // ── Totals row so the drawer matches the report ──────────
+        const totalsRow = `
+            <tfoot class="bg-light">
+                <tr>
+                    <th colspan="6" class="ps-3">Totals</th>
+                    <th class="text-end">${money(o.total_cost)}</th>
+                    <th class="text-end">${money(o.total_revenue)}</th>
+                    <th class="text-end ${o.net_profit >= 0 ? 'text-success' : 'text-danger'}">${money(o.gross_profit)}</th>
+                    <th class="text-end">${fmtNum(o.profit_margin, 1)}%</th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        `;
+
+        return `
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <div>
+                    <h4 class="fw-bold mb-1">${esc(o.order_number)}</h4>
+                    <div class="text-muted fs-7">${esc(o.customer)} · ${esc(o.location)} · ${esc(o.department)}</div>
+                </div>
+                <span class="badge badge-light-${marginColor(o.profit_margin)} fs-6 py-2 px-3">${fmtNum(o.profit_margin, 1)}%</span>
             </div>
 
-            <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-2 text-primary"></i>${esc(I18N.itemBreakdown)}</h6>
+            ${refundBanner}
+
+            <div class="row g-3 mb-4">${summaryCards}</div>
+
+            <h6 class="fw-bold mb-3">
+                <i class="bi bi-list-check me-2 text-primary"></i>${esc(I18N.itemBreakdown)}
+            </h6>
             <div class="table-responsive">
-                <table class="table table-sm table-bordered">
+                <table class="table table-sm table-bordered align-middle">
                     <thead class="bg-light">
                         <tr>
                             <th>${esc(I18N.product)}</th>
                             <th class="text-center">${esc(I18N.qty)}</th>
+                            <th class="text-center">Refunded</th>
+                            <th class="text-center">Kept</th>
                             <th class="text-end">${esc(I18N.unitCost)}</th>
                             <th class="text-end">${esc(I18N.unitPrice)}</th>
                             <th class="text-end">${esc(I18N.cost)}</th>
@@ -485,6 +602,7 @@ window.ProfitAnalysis = (function () {
                         </tr>
                     </thead>
                     <tbody>${itemRows}</tbody>
+                    ${totalsRow}
                 </table>
             </div>
         `;
