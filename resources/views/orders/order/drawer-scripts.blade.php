@@ -558,24 +558,41 @@ window.OrderDrawer = (function () {
         const items    = currentPayload.items    || [];
         const payments = currentPayload.payments || [];
 
-        // ── Currency helpers — hoisted above all template strings ──
         const SYM = '{{ currency_symbol() }}';
         const fmtMoney = (n) => SYM + Number(n || 0).toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
+        const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
-        // ── Per-item refund state ────────────────────────────────
-        const refundQty = {};
-        items.forEach(it => { refundQty[it.id] = 0; });
-
-        const maxQtyFor = (itemId) => {
-            const it = items.find(x => x.id === itemId);
+        // ── Helpers over the order ───────────────────────────────
+        const maxQtyFor = (id) => {
+            const it = items.find(x => x.id === id);
             if (!it) return 0;
-            // Prefer server-computed refundable_quantity; fall back to quantity
-            return Math.max(0, Number(it.refundable_quantity ?? it.quantity));
+            const qty        = Number(it.quantity || 0);
+            const refunded   = Number(it.refunded_quantity || 0);
+            return Math.max(0, Number(it.refundable_quantity ?? (qty - refunded)));
         };
+        const unitPriceFor = (id) => {
+            const it = items.find(x => x.id === id);
+            return it ? Number(it.unit_price || 0) : 0;
+        };
+        const lineMaxFor = (id) => round2(maxQtyFor(id) * unitPriceFor(id));
 
+        // Global cap = what has actually been paid (already net of prior refunds)
+        const globalCap = round2(Number(ord.paid_amount || 0));
+
+        // ── State ────────────────────────────────────────────────
+        //   state[id]      = { qty, amount, manualAmount }
+        //   totalOverride  = null  → total follows sum(line amounts)
+        //                    number → user pinned the grand total
+        const state = {};
+        items.forEach(it => {
+            state[it.id] = { qty: 0, amount: 0, manualAmount: false };
+        });
+        let totalOverride = null;
+
+        // ── Row markup (unchanged from prior rewrite) ────────────
         const itemRows = items.length ? items.map(it => {
             const qty        = Number(it.quantity || 0);
             const refunded   = Number(it.refunded_quantity || 0);
@@ -615,10 +632,7 @@ window.OrderDrawer = (function () {
                             <input type="number"
                                 class="form-control form-control-sm text-center fw-bold refund-qty-input flex-shrink-0"
                                 data-refund-qty="${it.id}"
-                                min="0"
-                                max="${refundable}"
-                                step="1"
-                                value="0"
+                                min="0" max="${refundable}" step="1" value="0"
                                 style="width: 56px; min-width: 56px;"
                                 ${fullyRefunded ? 'disabled' : ''}>
                             <button type="button"
@@ -630,13 +644,19 @@ window.OrderDrawer = (function () {
                             </button>
                         </div>
                     </td>
-                    <td class="pe-3 text-end fw-bold text-gray-800 refund-line-total" data-refund-line-total="${it.id}">
-                        ${fmtMoney(0)}
+                    <td class="text-center" style="width: 170px;">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text px-2">${SYM}</span>
+                            <input type="number"
+                                class="form-control form-control-sm text-end fw-bold refund-amt-input"
+                                data-refund-amt="${it.id}"
+                                min="0" step="0.01" value="0.00"
+                                ${fullyRefunded ? 'disabled' : ''}>
+                        </div>
                     </td>
                 </tr>
             `;
         }).join('') : `<tr><td colspan="6" class="text-center text-muted py-5">{{ __('passwords.no_items') ?? 'No items' }}</td></tr>`;
-
 
         const paymentRows = payments.length ? payments.map(p => `
             <tr>
@@ -645,7 +665,7 @@ window.OrderDrawer = (function () {
             </tr>
         `).join('') : '';
 
-        // ── Panel shell ─────────────────────────────────────────
+        // ── Panel shell ──────────────────────────────────────────
         const body = panelShell(
             '{{ __('payments.refund') }} — ' + esc(ord.order_number),
             `
@@ -654,7 +674,7 @@ window.OrderDrawer = (function () {
                 <div class="fs-7">
                     <strong>{{ __('payments.refund_warning_title') ?? 'Refund selected items.' }}</strong>
                     <div class="mt-2">
-                        {{ __('payments.refund_warning_body_partial') ?? 'Choose the quantity of each item to return.' }}
+                        {{ __('payments.refund_warning_body_partial') ?? 'Choose the quantity of each item to return. Amounts auto-fill from qty × unit price and can be lowered manually. You may also edit the grand total below — it will be redistributed across the selected lines.' }}
                     </div>
                 </div>
             </div>
@@ -684,7 +704,7 @@ window.OrderDrawer = (function () {
                                 <th class="text-center">{{ __('passwords.ordered_qty') ?? 'Ordered' }}</th>
                                 <th class="text-center">{{ __('payments.already_refunded') ?? 'Refunded' }}</th>
                                 <th class="text-center">{{ __('payments.refund_qty') ?? 'Refund qty' }}</th>
-                                <th class="pe-3 text-end">{{ __('payments.refund_amount') ?? 'Refund amount' }}</th>
+                                <th class="text-center" style="width: 170px;">{{ __('payments.refund_amount') ?? 'Refund amount' }}</th>
                             </tr>
                         </thead>
                         <tbody>${itemRows}</tbody>
@@ -709,9 +729,16 @@ window.OrderDrawer = (function () {
                 ` : ''}
                 <div class="separator separator-dashed my-2"></div>
 
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="fw-bold text-danger fs-6">{{ __('payments.refund_total') ?? 'This refund' }}</span>
-                    <span class="fw-bold text-danger fs-4" data-refund-total>${fmtMoney(0)}</span>
+                    <div class="input-group input-group-sm" style="max-width: 200px;">
+                        <span class="input-group-text px-2">${SYM}</span>
+                        <input type="number"
+                            class="form-control form-control-sm text-end fw-bold text-danger"
+                            data-refund-grand-total
+                            min="0" step="0.01" value="0.00"
+                            style="font-size: 16px;">
+                    </div>
                 </div>
 
                 <div class="d-flex justify-content-between fs-8 mt-2" data-refund-after-wrap>
@@ -721,8 +748,10 @@ window.OrderDrawer = (function () {
 
                 <div class="d-flex justify-content-between fs-8 mt-1">
                     <span class="text-muted">{{ __('payments.refundable_cap') ?? 'Maximum refundable' }}</span>
-                    <span class="fw-semibold text-gray-600" data-refund-cap>${fmtMoney(ord.refundable_cap || 0)}</span>
+                    <span class="fw-semibold text-gray-600">${fmtMoney(globalCap)}</span>
                 </div>
+
+                <div class="mt-2 fs-8 text-muted" data-refund-delta-note></div>
             </div>
 
             ${paymentRows ? `
@@ -758,117 +787,302 @@ window.OrderDrawer = (function () {
             </button>`
         );
 
-        // ── Recalculate summary ─────────────────────────────────
-        const totalRefundEl = body.querySelector('[data-refund-total]');
+        // ── DOM refs ─────────────────────────────────────────────
+        const grandTotalEl  = body.querySelector('[data-refund-grand-total]');
         const afterPaidEl   = body.querySelector('[data-refund-after-paid]');
         const afterWrapEl   = body.querySelector('[data-refund-after-wrap]');
         const selectedCount = body.querySelector('[data-refund-selected-count]');
+        const submitBtn     = body.querySelector('[data-refund-submit]');
+        const deltaNoteEl   = body.querySelector('[data-refund-delta-note]');
 
-        const recalc = () => {
-            let total = 0;
-            let rowsSelected = 0;
+        const qtyInputEl = (id) => body.querySelector(`[data-refund-qty="${id}"]`);
+        const amtInputEl = (id) => body.querySelector(`[data-refund-amt="${id}"]`);
 
+        // ── Per-row derivation (respects manualAmount) ──────────
+        function deriveAmount(id) {
+            const st = state[id];
+            const maxAmt = lineMaxFor(id);
+            if (!st.manualAmount) {
+                st.amount = round2(st.qty * unitPriceFor(id));
+            }
+            if (st.amount > maxAmt) st.amount = maxAmt;
+            if (st.amount < 0)      st.amount = 0;
+        }
+
+        function paintRow(id, { forceAmount = false } = {}) {
+            const st = state[id];
+            const qtyEl = qtyInputEl(id);
+            const amtEl = amtInputEl(id);
+            if (qtyEl && document.activeElement !== qtyEl) qtyEl.value = String(st.qty);
+            if (amtEl && (forceAmount || document.activeElement !== amtEl)) {
+                amtEl.value = st.amount.toFixed(2);
+            }
+        }
+
+        // ── Sum of line amounts (for when totalOverride is null) ──
+        function sumLines() {
+            return round2(items.reduce((s, it) => s + state[it.id].amount, 0));
+        }
+
+        // ── Redistribute a target grand total across active lines ──
+        // Only touches lines that already have qty > 0. If none are active,
+        // we cannot redistribute — the caller must handle that.
+        function redistribute(target) {
+            const active = items.filter(it => state[it.id].qty > 0);
+            if (!active.length) return false;
+
+            // Hard cap per line is qty × unit_price, unless we're allowed
+            // to exceed it. We do NOT exceed it during redistribution; the
+            // backend also caps per-line. If target > sum(active maxes),
+            // we clamp.
+            const activeMax = round2(active.reduce((s, it) => s + lineMaxFor(it.id), 0));
+            let t = round2(Math.max(0, Math.min(target, activeMax)));
+
+            // Proportional split with remainder fix-up to hit t exactly
+            const current = active.reduce((s, it) => s + state[it.id].amount, 0);
+            if (current <= 0) {
+                // Fall back to equal split
+                const share = round2(t / active.length);
+                active.forEach((it, i) => {
+                    const last = i === active.length - 1;
+                    const amt  = last ? round2(t - share * (active.length - 1)) : share;
+                    state[it.id].amount = Math.max(0, Math.min(amt, lineMaxFor(it.id)));
+                    state[it.id].manualAmount = true;
+                });
+            } else {
+                let assigned = 0;
+                active.forEach((it, i) => {
+                    const last = i === active.length - 1;
+                    const share = last
+                        ? round2(t - assigned)
+                        : round2(t * (state[it.id].amount / current));
+                    const clamped = Math.max(0, Math.min(share, lineMaxFor(it.id)));
+                    state[it.id].amount = clamped;
+                    state[it.id].manualAmount = true;
+                    assigned = round2(assigned + clamped);
+                });
+            }
+            active.forEach(it => paintRow(it.id, { forceAmount: true }));
+            return true;
+        }
+
+        // ── Master refresh ───────────────────────────────────────
+        function refreshSummary() {
+            // 1. Clamp qty + derive amounts for all rows
             items.forEach(it => {
-                const max = maxQtyFor(it.id);
-                const q = Math.max(0, Math.min(Number(refundQty[it.id] || 0), max));
-                refundQty[it.id] = q;
-
-                const lineEl = body.querySelector(`[data-refund-line-total="${it.id}"]`);
-                if (lineEl) {
-                    lineEl.textContent = q > 0 ? fmtMoney(q * Number(it.unit_price)) : fmtMoney(0);
-                    lineEl.classList.toggle('text-danger', q > 0);
-                }
-
-                if (q > 0) {
-                    rowsSelected++;
-                    total += q * Number(it.unit_price);
-                }
+                const st = state[it.id];
+                const maxQty = maxQtyFor(it.id);
+                if (st.qty > maxQty) st.qty = maxQty;
+                if (st.qty < 0)      st.qty = 0;
+                deriveAmount(it.id);
+                paintRow(it.id);
             });
 
-            if (totalRefundEl) totalRefundEl.textContent = fmtMoney(total);
+            // 2. Determine grand total
+            let total;
+            if (totalOverride !== null) {
+                // Clamp override to global cap
+                totalOverride = round2(Math.max(0, Math.min(totalOverride, globalCap)));
+                total = totalOverride;
+            } else {
+                total = sumLines();
+            }
 
-            const paidAfter = Math.max(0, Number(ord.paid_amount || 0) - total);
+            // 3. Write grand total input (skip if user is typing in it)
+            if (grandTotalEl && document.activeElement !== grandTotalEl) {
+                grandTotalEl.value = total.toFixed(2);
+            }
+
+            // 4. After-paid
+            const paidAfter = Math.max(0, round2(Number(ord.paid_amount || 0) - total));
             if (afterPaidEl) afterPaidEl.textContent = fmtMoney(paidAfter);
             if (afterWrapEl) afterWrapEl.classList.toggle('d-none', total === 0);
 
-            if (selectedCount) {
-                const selectable = items.filter(i => maxQtyFor(i.id) > 0).length;
-                selectedCount.textContent = `${rowsSelected} / ${selectable}`;
+            // 5. Selected count
+            const activeCount = items.filter(it => state[it.id].qty > 0).length;
+            const selectable  = items.filter(it => maxQtyFor(it.id) > 0).length;
+            if (selectedCount) selectedCount.textContent = `${activeCount} / ${selectable}`;
+
+            // 6. Delta note
+            if (deltaNoteEl) {
+                if (totalOverride !== null) {
+                    const delta = round2(totalOverride - sumLines());
+                    if (Math.abs(delta) > 0.005) {
+                        deltaNoteEl.innerHTML =
+                            `<i class="bi bi-info-circle me-1"></i>` +
+                            (delta > 0 ? 'Total increased by ' : 'Total reduced by ') +
+                            `<strong>${fmtMoney(Math.abs(delta))}</strong> — ` +
+                            `will be distributed across selected lines.`;
+                    } else {
+                        deltaNoteEl.innerHTML = '';
+                    }
+                } else {
+                    deltaNoteEl.innerHTML = '';
+                }
             }
 
-            const submitBtn = body.querySelector('[data-refund-submit]');
-            if (submitBtn) submitBtn.disabled = total <= 0;
-        };
+            // 7. Submit enabled
+            if (submitBtn) submitBtn.disabled = total <= 0 || activeCount === 0;
+        }
 
-        // ── Input wiring ────────────────────────────────────────
+        // ── Qty inputs ───────────────────────────────────────────
         body.querySelectorAll('[data-refund-qty]').forEach(input => {
             const id = Number(input.getAttribute('data-refund-qty'));
-            const max = maxQtyFor(id);
 
-            const clamp = () => {
+            input.addEventListener('input', () => {
                 let v = parseInt(input.value, 10);
-                if (isNaN(v)) v = 0;
-                if (v < 0) v = 0;
-                if (v > max) v = max;
-                input.value = v;
-                refundQty[id] = v;
-                recalc();
-            };
+                if (isNaN(v) || v < 0) v = 0;
+                const maxQty = maxQtyFor(id);
+                if (v > maxQty) v = maxQty;
+                state[id].qty = v;
+                state[id].manualAmount = false;
+                totalOverride = null;             // user edited qty → drop override
+                const amtEl = amtInputEl(id);
+                if (amtEl && document.activeElement !== amtEl) {
+                    deriveAmount(id);
+                    amtEl.value = state[id].amount.toFixed(2);
+                }
+                refreshSummary();
+            });
 
-            input.addEventListener('input', clamp);
-            input.addEventListener('blur', clamp);
+            input.addEventListener('blur', () => {
+                const maxQty = maxQtyFor(id);
+                let v = parseInt(input.value, 10);
+                if (isNaN(v) || v < 0) v = 0;
+                v = Math.min(v, maxQty);
+                state[id].qty = v;
+                state[id].manualAmount = false;
+                totalOverride = null;
+                input.value = String(v);
+                refreshSummary();
+            });
         });
 
+        // ── Qty +/- buttons ──────────────────────────────────────
         body.querySelectorAll('[data-refund-inc]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = Number(btn.getAttribute('data-refund-inc'));
-                const max = maxQtyFor(id);
-                refundQty[id] = Math.min(max, Number(refundQty[id] || 0) + 1);
-                const input = body.querySelector(`[data-refund-qty="${id}"]`);
-                if (input) input.value = refundQty[id];
-                recalc();
+                state[id].qty = Math.min(maxQtyFor(id), state[id].qty + 1);
+                state[id].manualAmount = false;
+                totalOverride = null;
+                refreshSummary();
+                paintRow(id, { forceAmount: true });
             });
         });
 
         body.querySelectorAll('[data-refund-dec]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = Number(btn.getAttribute('data-refund-dec'));
-                refundQty[id] = Math.max(0, Number(refundQty[id] || 0) - 1);
-                const input = body.querySelector(`[data-refund-qty="${id}"]`);
-                if (input) input.value = refundQty[id];
-                recalc();
+                state[id].qty = Math.max(0, state[id].qty - 1);
+                state[id].manualAmount = false;
+                totalOverride = null;
+                refreshSummary();
+                paintRow(id, { forceAmount: true });
             });
         });
 
+        // ── Per-line amount inputs ───────────────────────────────
+        body.querySelectorAll('[data-refund-amt]').forEach(input => {
+            const id = Number(input.getAttribute('data-refund-amt'));
+
+            input.addEventListener('input', () => {
+                let v = parseFloat(input.value);
+                if (isNaN(v) || v < 0) v = 0;
+                state[id].amount = round2(v);
+                state[id].manualAmount = true;
+                totalOverride = null;             // editing a line drops the override
+                const maxAmt = lineMaxFor(id);
+                if (state[id].amount > maxAmt) state[id].amount = maxAmt;
+                refreshSummary();
+            });
+
+            input.addEventListener('blur', () => {
+                const maxAmt = lineMaxFor(id);
+                let v = parseFloat(input.value);
+                if (isNaN(v) || v < 0) v = 0;
+                v = Math.min(v, maxAmt);
+                state[id].amount = round2(v);
+                state[id].manualAmount = true;
+                input.value = state[id].amount.toFixed(2);
+                refreshSummary();
+            });
+        });
+
+        // ── Grand total input ────────────────────────────────────
+        if (grandTotalEl) {
+            grandTotalEl.addEventListener('input', () => {
+                let v = parseFloat(grandTotalEl.value);
+                if (isNaN(v) || v < 0) v = 0;
+                v = Math.min(v, globalCap);
+                totalOverride = round2(v);
+                // Don't call refreshSummary here — it would rewrite this
+                // field because it has focus. Update summary bits manually.
+                const paidAfter = Math.max(0, round2(Number(ord.paid_amount || 0) - totalOverride));
+                if (afterPaidEl) afterPaidEl.textContent = fmtMoney(paidAfter);
+                if (afterWrapEl) afterWrapEl.classList.toggle('d-none', totalOverride === 0);
+                if (deltaNoteEl) {
+                    const delta = round2(totalOverride - sumLines());
+                    deltaNoteEl.innerHTML = Math.abs(delta) > 0.005
+                        ? `<i class="bi bi-info-circle me-1"></i>` +
+                        (delta > 0 ? 'Total increased by ' : 'Total reduced by ') +
+                        `<strong>${fmtMoney(Math.abs(delta))}</strong> — will be distributed on blur.`
+                        : '';
+                }
+                if (submitBtn) submitBtn.disabled = totalOverride <= 0;
+            });
+
+            grandTotalEl.addEventListener('blur', () => {
+                if (totalOverride !== null) {
+                    // Redistribute lines to match the typed total
+                    redistribute(totalOverride);
+                }
+                refreshSummary();
+            });
+        }
+
+        // ── Select all / Clear ───────────────────────────────────
         body.querySelector('[data-refund-select-all]')?.addEventListener('click', () => {
             items.forEach(it => {
-                const max = maxQtyFor(it.id);
-                refundQty[it.id] = max;
-                const input = body.querySelector(`[data-refund-qty="${it.id}"]`);
-                if (input) input.value = refundQty[it.id];
+                state[it.id].qty = maxQtyFor(it.id);
+                state[it.id].manualAmount = false;
             });
-            recalc();
+            totalOverride = null;
+            refreshSummary();
+            items.forEach(it => paintRow(it.id, { forceAmount: true }));
         });
 
         body.querySelector('[data-refund-clear-all]')?.addEventListener('click', () => {
             items.forEach(it => {
-                refundQty[it.id] = 0;
-                const input = body.querySelector(`[data-refund-qty="${it.id}"]`);
-                if (input) input.value = 0;
+                state[it.id].qty = 0;
+                state[it.id].amount = 0;
+                state[it.id].manualAmount = false;
             });
-            recalc();
+            totalOverride = null;
+            refreshSummary();
+            items.forEach(it => paintRow(it.id, { forceAmount: true }));
         });
 
-        recalc();
+        // ── Initial paint ────────────────────────────────────────
+        refreshSummary();
 
-        // ── Submit ──────────────────────────────────────────────
-        body.querySelector('[data-refund-submit]')?.addEventListener('click', async (ev) => {
+        // ── Submit ───────────────────────────────────────────────
+        submitBtn?.addEventListener('click', async (ev) => {
             const btn = ev.currentTarget;
             const reason = body.querySelector('[name="reason"]').value.trim();
 
+            // If total was overridden, make sure lines sum to it before submit
+            if (totalOverride !== null) {
+                redistribute(totalOverride);
+                refreshSummary();
+            }
+
             const selections = items
-                .map(it => ({ order_item_id: it.id, quantity: Number(refundQty[it.id] || 0) }))
-                .filter(s => s.quantity > 0);
+                .map(it => ({
+                    order_item_id: it.id,
+                    quantity:      Number(state[it.id].qty || 0),
+                    amount:        round2(Number(state[it.id].amount || 0)),
+                }))
+                .filter(s => s.quantity > 0 && s.amount > 0);
 
             if (!selections.length) {
                 window.toastr?.warning?.('{{ __("payments.select_at_least_one_item") ?? "Select at least one item to refund." }}');
@@ -876,6 +1090,15 @@ window.OrderDrawer = (function () {
             }
             if (!reason) {
                 window.toastr?.warning?.('{{ __("payments.refund_reason_required") ?? "Please provide a reason for the refund." }}');
+                return;
+            }
+
+            const total = round2(selections.reduce((s, x) => s + x.amount, 0));
+            if (total > globalCap + 0.01) {
+                window.toastr?.error?.(
+                    '{{ __("payments.refund_exceeds_cap") ?? "Refund total exceeds the maximum refundable amount." }}' +
+                    ` (${fmtMoney(total)} > ${fmtMoney(globalCap)})`
+                );
                 return;
             }
 

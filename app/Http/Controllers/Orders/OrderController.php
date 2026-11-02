@@ -528,9 +528,21 @@ class OrderController extends Controller
         ][strtolower($status)] ?? 'secondary';
     }
 
+
     // ═══════════════════════════════════════════════════════════════════
-    //  REFUND — full reversal + stock return
-    //  POST /orders/{id}/refund   { reason }
+    //  REFUND — return items to the SAME inventory they left from, then
+    //  withdraw the money from the payment method(s) that collected it.
+    //
+    //  Mirrors InvoiceController::void() for the inventory side, and
+    //  ExpenseController::processWithdrawal() for the ledger side.
+    //
+    //  Rules:
+    //   - `items` is REQUIRED and non-empty. Never "refund everything".
+    //   - Only listed order items are restocked. Others are untouched.
+    //   - Per-line amount defaults to qty × unit_price, may be lowered.
+    //   - Sum of line amounts must not exceed order.paid_amount.
+    //   - One WITHDRAWAL ledger entry per affected payment method,
+    //     sized exactly to the money leaving that method.
     // ═══════════════════════════════════════════════════════════════════
     public function refund(Request $request, $id)
     {
@@ -543,73 +555,110 @@ class OrderController extends Controller
 
         $validated = $request->validate([
             'reason'                => 'required|string|max:500',
-            'items'                 => 'nullable|array',
-            'items.*.order_item_id' => 'required_with:items|integer',
-            'items.*.quantity'      => 'required_with:items|numeric|min:0.01',
+            'items'                 => 'required|array|min:1',
+            'items.*.order_item_id' => 'required|integer',
+            'items.*.quantity'      => 'required|numeric|min:0.01',
+            'items.*.amount'        => 'nullable|numeric|min:0',
         ]);
 
-        $order = Order::with(['orderItems', 'orderPayments.paymentMethod'])
+        $order = Order::with(['orderItems.variant.product', 'orderPayments.paymentMethod'])
             ->where('tenant_id', $tenantId)
             ->findOrFail($id);
 
         if ($order->status !== 'completed') {
-            return response()->json(['success' => false, 'message' => __('payments.can_only_refund_completed_orders')], 422);
+            return response()->json([
+                'success' => false,
+                'message' => __('payments.can_only_refund_completed_orders'),
+            ], 422);
         }
 
         $itemsById  = $order->orderItems->keyBy('id');
-        $selections = collect($validated['items'] ?? []);
+        $selections = collect($validated['items']);
 
+        // ── Guard 1: never refund everything silently ───────────────
         if ($selections->isEmpty()) {
-            $selections = $order->orderItems->map(fn($it) => [
-                'order_item_id' => $it->id,
-                'quantity'      => (float) $it->quantity,
-            ])->values();
+            return response()->json([
+                'success' => false,
+                'message' => 'No items selected for refund.',
+            ], 422);
         }
 
-        // ── Validate every selection (against REMAINING refundable) ──
+        // ── Guard 2: every order_item_id belongs to this order ─────
+        foreach ($selections as $sel) {
+            if (!$itemsById->has((int) $sel['order_item_id'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Item #{$sel['order_item_id']} is not part of this order.",
+                ], 422);
+            }
+        }
+
+        // ── Per-line amounts + remaining-refundable checks ─────────
+        $refundTotal = 0.0;
+
         foreach ($selections as $sel) {
             $item = $itemsById->get((int) $sel['order_item_id']);
-            if (!$item) {
-                return response()->json(['success' => false, 'message' => "Item #{$sel['order_item_id']} is not part of this order."], 422);
-            }
-            if ((float) $sel['quantity'] <= 0) {
-                return response()->json(['success' => false, 'message' => 'Refund quantity must be greater than zero.'], 422);
+
+            $qty = (float) $sel['quantity'];
+            if ($qty <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Refund quantity must be greater than zero.',
+                ], 422);
             }
 
             $alreadyRefunded = (float) ($item->refunded_quantity ?? 0);
             $remaining       = max(0, (float) $item->quantity - $alreadyRefunded);
 
-            if ((float) $sel['quantity'] > $remaining + 0.0001) {
+            if ($qty > $remaining + 0.0001) {
                 return response()->json([
                     'success' => false,
-                    'message' => "Cannot refund {$sel['quantity']} of \"{$item->item_name}\" — only "
+                    'message' => "Cannot refund {$qty} of \"{$item->item_name}\" — only "
                         . number_format($remaining, 2) . " remain refundable (ordered "
                         . number_format((float) $item->quantity, 2)
                         . ", already refunded " . number_format($alreadyRefunded, 2) . ").",
                 ], 422);
             }
+
+            $lineMax = round($qty * (float) $item->unit_price, 2);
+
+            $lineAmount = array_key_exists('amount', $sel) && $sel['amount'] !== null
+                ? round((float) $sel['amount'], 2)
+                : $lineMax;
+
+            if ($lineAmount < 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Refund amount for \"{$item->item_name}\" cannot be negative.",
+                ], 422);
+            }
+
+            if ($lineAmount > $lineMax + 0.01) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Refund amount for \"{$item->item_name}\" ("
+                        . number_format($lineAmount, 2) . ") cannot exceed its line value ("
+                        . number_format($lineMax, 2) . ").",
+                ], 422);
+            }
+
+            $refundTotal += $lineAmount;
         }
 
-        // ── Compute total refund ──
-        $refundTotal = 0.0;
-        foreach ($selections as $sel) {
-            $item = $itemsById->get((int) $sel['order_item_id']);
-            $refundTotal += (float) $sel['quantity'] * (float) $item->unit_price;
-        }
+        $refundTotal = round($refundTotal, 2);
 
         if ($refundTotal <= 0) {
             return response()->json(['success' => false, 'message' => 'Nothing to refund.'], 422);
         }
 
-        // ── Cap against paid & not-yet-refunded ──
-        $alreadyRefundedMoney = (float) $order->orderPayments->sum('refunded_amount');
-        $refundableCap        = (float) $order->paid_amount - $alreadyRefundedMoney;
-
-        if ($refundTotal > $refundableCap + 0.01) {
+        // ── Guard 3: money cap ────────────────────────────────────
+        $paidRemaining = round((float) $order->paid_amount, 2);
+        if ($refundTotal > $paidRemaining + 0.01) {
             return response()->json([
                 'success' => false,
-                'message' => 'Refund amount (' . number_format($refundTotal, 2)
-                    . ') exceeds what has been paid and not yet refunded (' . number_format($refundableCap, 2) . ').',
+                'message' => 'Refund total (' . number_format($refundTotal, 2)
+                    . ') exceeds the paid amount available to refund ('
+                    . number_format($paidRemaining, 2) . ').',
             ], 422);
         }
 
@@ -620,34 +669,38 @@ class OrderController extends Controller
             $context      = $this->contextLabel($order);
             $reason       = $validated['reason'];
 
-            // ── 1. Reverse payments (oldest first) ──
-            $remainingRefund = $refundTotal;
+            // ── 1. Withdraw the money from the collecting accounts ──
+            //     Oldest payment first. One aggregated WITHDRAWAL per
+            //     method — the ledger shows money actually leaving.
+            $remainingRefund  = $refundTotal;
             $affectedPayments = [];
+            $affectedMethods  = []; // [method_id => ['method' => model, 'amount' => float]]
 
             foreach ($order->orderPayments->sortBy('created_at') as $payment) {
                 if ($remainingRefund <= 0) break;
                 if ($payment->status !== 'completed') continue;
 
-                $alreadyRefunded = (float) ($payment->refunded_amount ?? 0);
-                $available       = (float) $payment->amount - $alreadyRefunded;
-                if ($available <= 0) continue;
+                $alreadyRefundedOnPayment = (float) ($payment->refunded_amount ?? 0);
+                $availableOnPayment       = (float) $payment->amount - $alreadyRefundedOnPayment;
+                if ($availableOnPayment <= 0) continue;
 
-                $toRefund = min($available, $remainingRefund);
+                $toRefund = min($availableOnPayment, $remainingRefund);
 
-                $payment->refunded_amount = $alreadyRefunded + $toRefund;
-                if (abs(($alreadyRefunded + $toRefund) - (float) $payment->amount) < 0.01) {
+                $payment->refunded_amount = $alreadyRefundedOnPayment + $toRefund;
+                if (abs($payment->refunded_amount - (float) $payment->amount) < 0.01) {
                     $payment->status = 'refunded';
                 }
                 $payment->notes = trim(($payment->notes ?? '') . "\n" .
-                    "[{$actor}] Partial refund of " . number_format($toRefund, 2) . " on " . now()->format('Y-m-d H:i') .
-                    ". Reason: {$reason}");
+                    "[{$actor}] Partial refund of " . number_format($toRefund, 2)
+                    . " on " . now()->format('Y-m-d H:i') . ". Reason: {$reason}");
                 $payment->save();
 
                 $method = $payment->paymentMethod;
                 if ($method) {
-                    $method->current_balance -= $toRefund;
-                    $method->save();
-                    $this->recordOrderRefundTransaction($order, $method, $toRefund, $actor, $reason);
+                    if (!isset($affectedMethods[$method->id])) {
+                        $affectedMethods[$method->id] = ['method' => $method, 'amount' => 0.0];
+                    }
+                    $affectedMethods[$method->id]['amount'] += $toRefund;
                 }
 
                 $affectedPayments[] = ['payment_id' => $payment->id, 'amount' => $toRefund];
@@ -655,22 +708,59 @@ class OrderController extends Controller
             }
 
             if ($remainingRefund > 0.01) {
-                throw new \Exception('Could not allocate the full refund amount across the order\'s payments.');
+                throw new \Exception(
+                    'Could not allocate the refund across the order payments. Remaining: '
+                    . number_format($remainingRefund, 2)
+                );
             }
 
-            // ── 2. Return items to stock + track refunded quantity ──
-            $isSingleShop = tenant_is_single_shop($tenantId);
+            // ── 1b. Debit each method + write ONE ledger entry each ─
+            $withdrawnMethods = [];
+            foreach ($affectedMethods as $methodId => $info) {
+                $method = $info['method'];
+                $amount = round($info['amount'], 2);
+                if ($amount <= 0) continue;
+
+                $method->current_balance = round((float) $method->current_balance - $amount, 2);
+                $method->save();
+
+                $this->recordOrderRefundTransaction($order, $method, $amount, $actor, $reason, $customerName, $context);
+
+                $withdrawnMethods[] = [
+                    'payment_method_id' => $method->id,
+                    'name'              => $method->name,
+                    'amount'            => $amount,
+                ];
+            }
+
+            // ── 2. Return ONLY the selected items to the SAME place
+            //       they were drawn from, mirroring the void flow ─────
+            $isSingleShop  = tenant_is_single_shop($tenantId);
+            $stockReturned = [];
 
             foreach ($selections as $sel) {
-                $item = $itemsById->get((int) $sel['order_item_id']);
-                $variant = ProductVariant::find($item->variant_id);
-                if (!$variant) continue;
+                $item    = $itemsById->get((int) $sel['order_item_id']);
+                $variant = $item->variant ?? ProductVariant::find($item->variant_id);
+
+                if (!$variant) {
+                    Log::warning('[Order refund] Variant missing — skipping restock', [
+                        'order_id' => $order->id, 'item_id' => $item->id,
+                    ]);
+                    continue;
+                }
 
                 $product = $variant->product;
-                if (!$product) continue;
+                if (!$product) {
+                    Log::warning('[Order refund] Product missing — skipping restock', [
+                        'order_id' => $order->id, 'item_id' => $item->id,
+                    ]);
+                    continue;
+                }
 
                 $strategy = $product->resolvedInventoryStrategy();
 
+                // Build a slice carrying the refund qty + the original
+                // sale-line identifiers (batch_id, serial_id, inventory_data)
                 $slice = clone $item;
                 $slice->quantity = (float) $sel['quantity'];
 
@@ -680,38 +770,48 @@ class OrderController extends Controller
                     $this->restoreInventoryByStrategyForRefund($variant, $slice, $order, $isSingleShop);
                 }
 
-                // ✅ Accumulate refunded quantity on the line item
                 $item->refunded_quantity = (float) ($item->refunded_quantity ?? 0) + (float) $sel['quantity'];
                 $item->save();
+
+                $stockReturned[] = [
+                    'order_item_id' => $item->id,
+                    'variant_id'    => $variant->id,
+                    'strategy'      => $strategy,
+                    'quantity'      => (float) $sel['quantity'],
+                ];
             }
 
-            // ── 3. Update order ──
-            $newPaidAmount = max(0, (float) $order->paid_amount - $refundTotal);
-            $isFullRefund  = $newPaidAmount <= 0.01 && ($order->total - $refundTotal) <= 0.01;
+            // ── 3. Order header ─────────────────────────────────────
+            $newPaidAmount = max(0, round((float) $order->paid_amount - $refundTotal, 2));
+            $isFullRefund  = $newPaidAmount <= 0.01
+                && round((float) $order->total - $refundTotal, 2) <= 0.01;
 
             $order->notes = $this->appendNote(
                 $order->notes,
                 sprintf(
-                    '%s refunded %s from order %s for %s%s. Reason: %s. Items: %d, Payments reversed: %d.',
+                    '%s refunded %s from order %s for %s%s. Reason: %s. '
+                    . 'Items returned to stock: %d. Money withdrawn from: %s.',
                     $actor,
                     currency_symbol() . number_format($refundTotal, 2),
                     $order->order_number,
                     $customerName,
                     $context,
                     $reason,
-                    $selections->count(),
-                    count($affectedPayments)
+                    count($stockReturned),
+                    collect($withdrawnMethods)->map(fn($m) =>
+                        "{$m['name']} ({$m['amount']})"
+                    )->implode(', ') ?: 'none'
                 )
             );
 
             $order->update([
-                'status'       => $isFullRefund ? 'refunded' : $order->status,
-                'paid_amount'  => $newPaidAmount,
-                'balance_due'  => $isFullRefund ? 0 : $order->balance_due,
-                'notes'        => $order->notes,
+                'status'      => $isFullRefund ? 'refunded' : $order->status,
+                'paid_amount' => $newPaidAmount,
+                'balance_due' => $isFullRefund ? 0 : $order->balance_due,
+                'notes'       => $order->notes,
             ]);
 
-            // ── 4. Void the invoice on full refund ──
+            // ── 4. Void the invoice on full refund ─────────────────
             $invoiceVoided = false;
             if ($isFullRefund) {
                 $invoice = \App\Models\Invoice::where('order_id', $order->id)
@@ -735,30 +835,41 @@ class OrderController extends Controller
 
             DB::commit();
 
-            Log::info("[Order] {$actor} refunded order {$order->order_number} for {$customerName}{$context}. "
-                . "Amount: " . number_format($refundTotal, 2) . ". Reason: {$reason}. "
-                . "Full refund: " . ($isFullRefund ? 'yes' : 'no') . ".", [
-                'order_id'         => $order->id,
-                'refund_total'     => $refundTotal,
-                'selections'       => $selections->all(),
-                'affected_payments'=> $affectedPayments,
+            Log::info("[Order refund] {$actor} refunded order {$order->order_number} for {$customerName}{$context}", [
+                'order_id'          => $order->id,
+                'refund_total'      => $refundTotal,
+                'is_full_refund'    => $isFullRefund,
+                'reason'            => $reason,
+                'selections'        => $selections->all(),
+                'stock_returned'    => $stockReturned,
+                'affected_payments' => $affectedPayments,
+                'withdrawn_methods' => $withdrawnMethods,
+                'order_after'       => [
+                    'paid_amount' => (float) $order->paid_amount,
+                    'status'      => $order->status,
+                ],
             ]);
 
             return response()->json([
-                'success'          => true,
-                'message'          => $isFullRefund
-                    ? 'Order refunded in full. Stock returned and payments reversed.'
-                    : 'Partial refund processed. Selected items returned to stock.',
-                'status'           => $order->status,
-                'refunded_amount'  => $refundTotal,
-                'is_full_refund'   => $isFullRefund,
-                'invoice_voided'   => $invoiceVoided,
-                'affected_payments'=> $affectedPayments,
+                'success'           => true,
+                'message'           => $isFullRefund
+                    ? 'Order refunded in full. Stock returned and money withdrawn.'
+                    : 'Partial refund processed. Selected items returned to stock and money withdrawn.',
+                'status'            => $order->status,
+                'refunded_amount'   => $refundTotal,
+                'is_full_refund'    => $isFullRefund,
+                'invoice_voided'    => $invoiceVoided,
+                'items_returned'    => $stockReturned,
+                'withdrawn_methods' => $withdrawnMethods,
+                'affected_payments' => $affectedPayments,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Order refund failed: ' . $e->getMessage(), ['order_id' => $id, 'trace' => $e->getTraceAsString()]);
+            Log::error('[Order refund] failed: ' . $e->getMessage(), [
+                'order_id' => $id,
+                'trace'    => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Refund failed. Nothing was changed. ' . $e->getMessage(),
@@ -766,8 +877,9 @@ class OrderController extends Controller
         }
     }
 
+
     // ─────────────────────────────────────────────────────────────────
-    //  Inventory return helpers — mirror InvoiceController::void() logic
+    //  Inventory return helpers — mirror InvoiceController::void()
     // ─────────────────────────────────────────────────────────────────
 
     private function restoreInventoryByStrategyForRefund($variant, $item, $order, bool $isSingleShop): void
@@ -794,11 +906,135 @@ class OrderController extends Controller
         }
     }
 
+        /**
+     * Resolve cost + selling price to freeze onto an inventory log.
+     * Same cascade as InvoiceController::resolveLogPricing().
+     */
+    private function resolveLogPricing(
+        ?InventoryItems $inventory,
+        ProductVariant $variant,
+        ?float $frozenSellingPrice = null
+    ): array {
+        $cost   = 0.0;
+        $source = 'variant';
+
+        if ($inventory && (float) ($inventory->grand_total_cost_price ?? 0) > 0) {
+            $cost   = (float) $inventory->grand_total_cost_price;
+            $source = 'item';
+        } else {
+            $grand = (float) ($variant->grand_total_cost_price ?? 0);
+            $cost  = $grand > 0
+                ? $grand
+                : (float) ($variant->supplier_cost_price ?? 0)
+                    + (float) ($variant->total_shipping_cost ?? 0)
+                    + (float) ($variant->ura_taxes_applied   ?? 0)
+                    + (float) ($variant->additional_expenses ?? 0);
+        }
+
+        $selling = 0.0;
+        if ($frozenSellingPrice !== null && $frozenSellingPrice > 0) {
+            $selling = $frozenSellingPrice;
+        } elseif ($inventory && (float) ($inventory->selling_price ?? 0) > 0) {
+            $selling = (float) $inventory->selling_price;
+        } else {
+            $selling = (float) ($variant->selling_price ?? 0);
+        }
+
+        return ['cost' => $cost, 'selling' => $selling, 'source' => $source];
+    }
+
+    /**
+     * Safely read $item->inventory_data. Handles Eloquent's array cast,
+     * a raw JSON string, or a plain array.
+     */
+    private function extractInventoryData($item): array
+    {
+        if (is_object($item)) {
+            $raw = $item->inventory_data ?? null;
+        } elseif (is_array($item)) {
+            $raw = $item['inventory_data'] ?? null;
+        } else {
+            return [];
+        }
+
+        if (is_array($raw)) return $raw;
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
+    }
+
+    /**
+     * Human-readable narrative row for inventory logs.
+     * Mirrors InvoiceController::buildInventoryNarrative().
+     */
+    private function buildInventoryNarrative(
+        string $verb,
+        string $direction,
+        $variant,
+        $item,
+        $order,
+        $inventory = null,
+        ?int $before = null,
+        ?int $after = null
+    ): string {
+        $actor        = $this->actorLabel();
+        $customerName = $order->customer_name ?? $order->customer?->name ?? 'walk-in customer';
+
+        $location = $inventory?->itemLocation?->name
+            ?? $order->location?->name
+            ?? 'Unknown Location';
+        $department = $inventory?->departmentItem?->name
+            ?? $order->department?->name
+            ?? 'Unknown Department';
+
+        $qty   = is_object($item) ? ($item->quantity ?? 0) : ($item['quantity'] ?? 0);
+        $sku   = $variant->sku  ?? 'N/A';
+        $name  = $variant->name ?? 'Unknown Item';
+        $arrow = $direction === 'out' ? '↓' : '↑';
+
+        $stateChange = ($before !== null && $after !== null)
+            ? " Stock: {$before} → {$after} units."
+            : '';
+
+        return sprintf(
+            '%s %s %s unit(s) of "%s" (SKU: %s) %s %s (%s) for order #%s.%s',
+            $actor,
+            $arrow,
+            $qty,
+            $name,
+            $sku,
+            $direction === 'out' ? 'out of' : 'back into',
+            $location,
+            $department,
+            $order->order_number,
+            $stateChange
+        );
+    }
+
     private function restoreSingleQuantity($variant, $item, $order): void
     {
+        $qty = (float) $item->quantity;
+        if ($qty <= 0) return;
+
         $before = (int) ($variant->overal_quantity_at_hand ?? 0);
-        $after  = $before + (int) $item->quantity;
+        $after  = $before + (int) $qty;
         $variant->update(['overal_quantity_at_hand' => $after]);
+
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $pricing         = $this->resolveLogPricing(null, $variant, $frozenUnitPrice);
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — restored stock',
+            'in',
+            $variant,
+            $item,
+            $order,
+            null,
+            $before,
+            $after
+        );
 
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
@@ -807,70 +1043,129 @@ class OrderController extends Controller
             'created_by'      => auth()->id(),
             'quantity_before' => $before,
             'quantity_after'  => $after,
-            'quantity_change' => (int) $item->quantity,
+            'quantity_change' => (int) $qty,
             'reason'          => 'order_refunded',
-            'notes'           => "Returned {$item->quantity} × {$variant->name} to stock on refund of order #{$order->order_number}",
+            'notes'           => $narrative,
             'source'          => 'order',
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $qty * $pricing['cost'],
+            'total_selling_value' => $qty * $pricing['selling'],
+            'pricing_source'      => $pricing['source'],
+
+            'metadata' => ['strategy' => 'quantity'],
         ]);
     }
 
     private function restoreMultiQuantity($variant, $item, $order): void
     {
-        $inventoryId = $this->extractInventoryId($item);
+        $qty = (float) $item->quantity;
+        if ($qty <= 0) return;
+
+        // Prefer the exact inventory row the sale was drawn from
+        $inventoryData = $this->extractInventoryData($item);
+        $inventoryId   = $inventoryData['inventory_id'] ?? null;
+        $locationId    = $inventoryData['location_id'] ?? null;
+        $departmentId  = $inventoryData['department_id'] ?? null;
+
         $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
 
-        if (!$inventory) {
+        if (!$inventory && $locationId && $departmentId) {
             $inventory = InventoryItems::where('variant_id', $variant->id)
                 ->where('tenant_id', $order->tenant_id)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
                 ->first();
         }
-        if (!$inventory) return;
+        if (!$inventory) {
+            Log::warning('[Order refund] No inventory row to return to', [
+                'order_id' => $order->id, 'variant_id' => $variant->id,
+            ]);
+            return;
+        }
 
         $before = (int) $inventory->quantity_allocated;
-        $after  = $before + (int) $item->quantity;
+        $after  = $before + (int) $qty;
         $inventory->update(['quantity_allocated' => $after]);
 
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $pricing         = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — restored stock', 'in',
+            $variant, $item, $order, $inventory, $before, $after
+        );
+
         InventoryTransactions::create([
-            'quantity'       => (int) $item->quantity,
-            'reference_id'   => $order->id,
-            'reference_type' => 'order',
-            'type'           => 'return',
-            'notes'          => "Refund return — {$item->quantity} × {$variant->name}",
-            'inventory_id'   => $inventory->id,
-            'created_by'     => auth()->id(),
-            'tenant_id'      => $order->tenant_id,
+            'quantity'            => (int) $qty,
+            'reference_id'        => $order->id,
+            'reference_type'      => 'order',
+            'type'                => 'return',
+            'notes'               => $narrative,
+            'inventory_id'        => $inventory->id,
+            'created_by'          => auth()->id(),
+            'tenant_id'           => $order->tenant_id,
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $qty * $pricing['cost'],
+            'total_selling_value' => $qty * $pricing['selling'],
         ]);
 
         InventoryAdjustments::create([
-            'quantity_before' => $before,
-            'quantity_after'  => $after,
-            'reason'          => 'order_refunded',
-            'notes'           => "Refund return — {$item->quantity} × {$variant->name} on order #{$order->order_number}",
-            'inventory_id'    => $inventory->id,
-            'created_by'      => auth()->id(),
-            'tenant_id'       => $order->tenant_id,
+            'quantity_before'    => $before,
+            'quantity_after'     => $after,
+            'reason'             => 'order_refunded',
+            'notes'              => $narrative,
+            'inventory_id'       => $inventory->id,
+            'created_by'         => auth()->id(),
+            'tenant_id'          => $order->tenant_id,
+
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => $qty * $pricing['cost'],
         ]);
     }
 
     private function restoreSingleBatch($variant, $item, $order): void
     {
-        // Prefer the specific batch the item was sold from
+        $qty = (float) $item->quantity;
+        if ($qty <= 0) return;
+
         $batchId = $item->batch_id ?? null;
         if (!$batchId) {
-            // Fallback: any batch row for this variant, highest remaining
-            $batch = PurchaseReceiptItem::whereHas('purchaseOrderItem', fn($q) =>
+            $fallback = PurchaseReceiptItem::whereHas('purchaseOrderItem', fn($q) =>
                 $q->where('product_variant_id', $variant->id)
             )->orderByDesc('quantity_remaining')->first();
-            $batchId = $batch?->id;
+            $batchId = $fallback?->id;
         }
         if (!$batchId) return;
 
         $batch = PurchaseReceiptItem::where('tenant_id', $order->tenant_id)->find($batchId);
         if (!$batch) return;
 
-        $before = (float) ($batch->quantity_remaining ?? 0);
-        $after  = $before + (float) $item->quantity;
+        $before = (float) ($batch->quantity_remaining ?? $batch->quantity_received ?? 0);
+        $after  = $before + $qty;
         $batch->update(['quantity_remaining' => $after]);
+
+        // The batch's own unit_cost is authoritative for cost; the frozen
+        // sale unit_price is authoritative for selling price.
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $inventory       = null;
+        $inventoryData   = $this->extractInventoryData($item);
+        if (!empty($inventoryData['inventory_id'])) {
+            $inventory = InventoryItems::find($inventoryData['inventory_id']);
+        }
+        $pricing = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
+        $unitCost = (float) ($batch->unit_cost ?? 0);
+        if ($unitCost <= 0) $unitCost = $pricing['cost'];
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — returned to batch', 'in',
+            $variant, $item, $order, $inventory, (int) $before, (int) $after
+        );
 
         BatchLog::create([
             'batch_id'        => $batch->id,
@@ -879,34 +1174,113 @@ class OrderController extends Controller
             'variant_name'    => $variant->name,
             'variant_sku'     => $variant->sku,
             'type'            => BatchLog::TYPE_ADJUSTED,
-            'quantity_change' => (float) $item->quantity,
+            'quantity_change' => $qty,
             'quantity_before' => $before,
             'quantity_after'  => $after,
-            'unit_cost'       => $batch->unit_cost ?? 0,
-            'total_cost'      => (float) $item->quantity * (float) ($batch->unit_cost ?? 0),
-            'order_id'        => $order->id,
-            'order_number'    => $order->order_number,
-            'tenant_id'       => $order->tenant_id,
-            'location_id'     => $batch->location_id ?? $order->location_id,
-            'department_id'   => $batch->department_id ?? $order->department_id,
-            'expiry_date'     => $batch->expiry_date,
-            'event_date'      => now(),
-            'performed_by'    => auth()->id(),
-            'metadata'        => [
-                'reason'      => 'order_refunded',
-                'narrative'   => "Refund return to batch {$batch->batch_number} on order #{$order->order_number}",
+
+            'unit_cost'           => $unitCost,
+            'total_cost'          => $qty * $unitCost,
+            'unit_selling_price'  => $pricing['selling'],
+            'total_selling_value' => $qty * $pricing['selling'],
+            'gross_profit'        => $qty * ($pricing['selling'] - $unitCost),
+            'pricing_source'      => $batch->unit_cost ? 'batch' : $pricing['source'],
+
+            'order_id'      => $order->id,
+            'order_number'  => $order->order_number,
+            'tenant_id'     => $order->tenant_id,
+            'location_id'   => $batch->location_id ?? $order->location_id,
+            'department_id' => $batch->department_id ?? $order->department_id,
+            'expiry_date'   => $batch->expiry_date,
+            'event_date'    => now(),
+            'performed_by'  => auth()->id(),
+            'metadata' => [
+                'reason'    => 'order_refunded',
+                'narrative' => $narrative,
             ],
         ]);
+
+        // If this order also tracks the batch on the multi-shop inventory
+        // row, keep the two ledgers in agreement.
+        if (tenant_is_single_shop($order->tenant_id)) {
+            $this->restoreSingleQuantity($variant, $item, $order);
+        }
     }
 
     private function restoreMultiBatch($variant, $item, $order): void
     {
-        $this->restoreSingleBatch($variant, $item, $order);  
+        // The batch table is location/department aware already, so the
+        // same logic works; the ordering just follows the batch row's
+        // own location_id / department_id.
+        $this->restoreSingleBatch($variant, $item, $order);
+
+        // Also bump the multi-shop inventory_allocated for that batch's
+        // location/department so reports on the inventory tab agree.
+        $inventoryData = $this->extractInventoryData($item);
+        $inventoryId   = $inventoryData['inventory_id'] ?? null;
+        $locationId    = $inventoryData['location_id'] ?? null;
+        $departmentId  = $inventoryData['department_id'] ?? null;
+
+        $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $order->tenant_id)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+        if (!$inventory) return;
+
+        $qty    = (float) $item->quantity;
+        $before = (int) $inventory->quantity_allocated;
+        $after  = $before + (int) $qty;
+        $inventory->update(['quantity_allocated' => $after]);
+
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $pricing         = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — restored stock (batch)', 'in',
+            $variant, $item, $order, $inventory, $before, $after
+        );
+
+        InventoryTransactions::create([
+            'quantity'            => (int) $qty,
+            'reference_id'        => $order->id,
+            'reference_type'      => 'order',
+            'type'                => 'return',
+            'notes'               => $narrative,
+            'inventory_id'        => $inventory->id,
+            'created_by'          => auth()->id(),
+            'tenant_id'           => $order->tenant_id,
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $qty * $pricing['cost'],
+            'total_selling_value' => $qty * $pricing['selling'],
+        ]);
+
+        InventoryAdjustments::create([
+            'quantity_before'    => $before,
+            'quantity_after'     => $after,
+            'reason'             => 'order_refunded',
+            'notes'              => $narrative,
+            'inventory_id'       => $inventory->id,
+            'created_by'         => auth()->id(),
+            'tenant_id'          => $order->tenant_id,
+
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => $qty * $pricing['cost'],
+        ]);
     }
 
     private function restoreSingleSerial($variant, $item, $order): void
     {
+        $qty = (float) $item->quantity;
+        if ($qty <= 0) return;
+
         $serialId = $item->serial_id ?? null;
+
         if ($serialId) {
             $serial = SerialNumber::where('id', $serialId)
                 ->where('tenant_id', $order->tenant_id)
@@ -920,9 +1294,10 @@ class OrderController extends Controller
                 ]);
             }
         } else {
-            // FIFO by matching order_id
+            // FIFO: take the serials actually sold on this order/variant
             SerialNumber::where('order_id', $order->id)
                 ->where('variant_id', $variant->id)
+                ->limit((int) $qty)
                 ->update([
                     'status'   => SerialNumber::STATUS_AVAILABLE,
                     'order_id' => null,
@@ -931,10 +1306,18 @@ class OrderController extends Controller
                 ]);
         }
 
-        // Bump overall tally back
+        // Overall tally
         $before = (int) ($variant->overal_quantity_at_hand ?? 0);
-        $after  = $before + (int) $item->quantity;
+        $after  = $before + (int) $qty;
         $variant->update(['overal_quantity_at_hand' => $after]);
+
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $pricing         = $this->resolveLogPricing(null, $variant, $frozenUnitPrice);
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — serial returned to stock', 'in',
+            $variant, $item, $order, null, $before, $after
+        );
 
         SingleShopInventoryLog::create([
             'variant_id'      => $variant->id,
@@ -943,17 +1326,116 @@ class OrderController extends Controller
             'created_by'      => auth()->id(),
             'quantity_before' => $before,
             'quantity_after'  => $after,
-            'quantity_change' => (int) $item->quantity,
+            'quantity_change' => (int) $qty,
             'reason'          => 'order_refunded',
-            'notes'           => "Serial(s) returned to available — order #{$order->order_number}",
+            'notes'           => $narrative,
             'source'          => 'order',
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $qty * $pricing['cost'],
+            'total_selling_value' => $qty * $pricing['selling'],
+            'pricing_source'      => $pricing['source'],
+
+            'metadata' => [
+                'strategy' => 'serial',
+                'serial_id'=> $serialId,
+            ],
         ]);
     }
 
     private function restoreMultiSerial($variant, $item, $order): void
     {
-        $this->restoreSingleSerial($variant, $item, $order);
+        $qty = (float) $item->quantity;
+        if ($qty <= 0) return;
+
+        $serialId      = $item->serial_id ?? null;
+        $inventoryData = $this->extractInventoryData($item);
+        $inventoryId   = $inventoryData['inventory_id'] ?? null;
+        $locationId    = $inventoryData['location_id'] ?? null;
+        $departmentId  = $inventoryData['department_id'] ?? null;
+
+        if ($serialId) {
+            $serial = SerialNumber::where('id', $serialId)
+                ->where('tenant_id', $order->tenant_id)
+                ->first();
+            if ($serial) {
+                $serial->update([
+                    'status'   => SerialNumber::STATUS_AVAILABLE,
+                    'order_id' => null,
+                    'sold_at'  => null,
+                    'sold_by'  => null,
+                ]);
+            }
+        } else {
+            SerialNumber::where('order_id', $order->id)
+                ->where('variant_id', $variant->id)
+                ->when($locationId,   fn($q) => $q->where('location_id', $locationId))
+                ->when($departmentId, fn($q) => $q->where('department_id', $departmentId))
+                ->limit((int) $qty)
+                ->update([
+                    'status'   => SerialNumber::STATUS_AVAILABLE,
+                    'order_id' => null,
+                    'sold_at'  => null,
+                    'sold_by'  => null,
+                ]);
+        }
+
+        // Bump the inventory row so the stock tab matches the serial table
+        $inventory = $inventoryId ? InventoryItems::find($inventoryId) : null;
+        if (!$inventory && $locationId && $departmentId) {
+            $inventory = InventoryItems::where('variant_id', $variant->id)
+                ->where('tenant_id', $order->tenant_id)
+                ->where('location_id', $locationId)
+                ->where('department_id', $departmentId)
+                ->first();
+        }
+        if (!$inventory) return;
+
+        $before = (int) $inventory->quantity_allocated;
+        $after  = $before + (int) $qty;
+        $inventory->update(['quantity_allocated' => $after]);
+
+        $frozenUnitPrice = (float) ($item->unit_price ?? 0);
+        $pricing         = $this->resolveLogPricing($inventory, $variant, $frozenUnitPrice);
+
+        $narrative = $this->buildInventoryNarrative(
+            'refunded order — serial returned to stock', 'in',
+            $variant, $item, $order, $inventory, $before, $after
+        );
+
+        InventoryTransactions::create([
+            'quantity'            => (int) $qty,
+            'reference_id'        => $order->id,
+            'reference_type'      => 'order',
+            'type'                => 'return',
+            'notes'               => $narrative,
+            'inventory_id'        => $inventory->id,
+            'created_by'          => auth()->id(),
+            'tenant_id'           => $order->tenant_id,
+
+            'unit_cost_price'     => $pricing['cost'],
+            'unit_selling_price'  => $pricing['selling'],
+            'total_cost_value'    => $qty * $pricing['cost'],
+            'total_selling_value' => $qty * $pricing['selling'],
+        ]);
+
+        InventoryAdjustments::create([
+            'quantity_before'    => $before,
+            'quantity_after'     => $after,
+            'reason'             => 'order_refunded',
+            'notes'              => $narrative,
+            'inventory_id'       => $inventory->id,
+            'created_by'         => auth()->id(),
+            'tenant_id'          => $order->tenant_id,
+
+            'unit_cost_price'    => $pricing['cost'],
+            'unit_selling_price' => $pricing['selling'],
+            'total_value_change' => $qty * $pricing['cost'],
+        ]);
     }
+
+    
 
     private function restoreRecipeIngredientsForRefund($variant, $item, $order): void
     {
@@ -981,9 +1463,23 @@ class OrderController extends Controller
         }
     }
 
-    private function recordOrderRefundTransaction($order, $method, float $amount, string $actor, string $reason): void
-    {
+    private function recordOrderRefundTransaction(
+        $order,
+        $method,
+        float $amount,
+        string $actor,
+        string $reason,
+        string $customerName = '',
+        string $context = ''
+    ): void {
         try {
+            $currency = Currency::default();
+
+            $narrative = "{$actor} refunded "
+                . currency_symbol() . number_format($amount, 2)
+                . " to {$customerName}{$context} from order {$order->order_number} "
+                . "via {$method->name}. Reason: {$reason}.";
+
             app('payment-transaction')->recordTransaction([
                 'tenant_id'            => $order->tenant_id,
                 'user_id'              => auth()->id(),
@@ -991,17 +1487,18 @@ class OrderController extends Controller
                 'transaction_type'     => 'WITHDRAWAL',
                 'transaction_category' => 'REFUND',
                 'amount'               => $amount,
-                'currency_id'          => $method->currency_id ?? Currency::default()->id,
+                'currency_id'          => $method->currency_id ?? $currency->id,
                 'reference_table'      => 'orders',
                 'reference_id'         => $order->id,
-                'description'          => "{$actor} refunded " . currency_symbol() . number_format($amount, 2)
-                                        . " for order {$order->order_number}. Reason: {$reason}",
-                'notes'                => "Refund from {$method->name}",
-                'metadata'             => [
-                    'order_number'  => $order->order_number,
-                    'order_id'      => $order->id,
-                    'reason'        => $reason,
+                'description'          => $narrative,
+                'notes'                => "Refund out of {$method->name}",
+                'metadata' => [
+                    'order_number'       => $order->order_number,
+                    'order_id'           => $order->id,
+                    'customer_name'      => $customerName,
+                    'reason'             => $reason,
                     'transaction_nature' => 'ORDER_REFUND',
+                    'narrative'          => $narrative,
                 ],
             ]);
         } catch (\Throwable $e) {

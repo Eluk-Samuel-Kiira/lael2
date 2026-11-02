@@ -285,7 +285,7 @@
 {{-- ═══════════════════════════════════════════════════════════════ --}}
 {{-- DRAWER — per-order item profit breakdown                       --}}
 {{-- ═══════════════════════════════════════════════════════════════ --}}
-<div class="offcanvas offcanvas-end" tabindex="-1" id="paDrawer" style="width: 820px; max-width: 100vw;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="paDrawer" style="width: 1000px;">
     <div class="offcanvas-header bg-primary py-4">
         <div class="d-flex align-items-center gap-3">
             <i class="bi bi-receipt fs-2 text-white"></i>

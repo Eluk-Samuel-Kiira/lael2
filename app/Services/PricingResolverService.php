@@ -29,6 +29,8 @@ class PricingResolverService
      *
      * @return array{unit_cost: float, unit_sell: float, source: string}
      */
+    // app/Services/PricingResolverService.php
+
     public function resolveLinePricing(OrderItem $item): array
     {
         $order   = $item->order;
@@ -38,56 +40,58 @@ class PricingResolverService
             return ['unit_cost' => 0.0, 'unit_sell' => 0.0, 'source' => 'unknown'];
         }
 
+        // ── Re-fetch the full model if columns are missing ───────
+        // If someone forgot to select the pricing columns on the
+        // eager-load, reload the model so the accessors have real
+        // values to work with. Cheap, one query, only when needed.
+        if ($this->variantMissingPricingColumns($variant)) {
+            $variant = ProductVariant::find($variant->id) ?? $variant;
+        }
+
         $tenantId     = $order->tenant_id ?? $variant->tenant_id;
         $isSingleShop = tenant_is_single_shop($tenantId);
 
-        // ─── 1. Frozen cost from the log ─────────────────────────────
+        // ── 1. Frozen cost from the log ─────────────────────────
+        // Only accept the log when it carries a positive cost. A
+        // log row with unit_cost_price = 0 is treated as "no log"
+        // so the variant fallback can fire.
+        $log = null;
         if (! $isSingleShop) {
             $log = $this->resolveMultiShopLog($order, $variant);
-            if ($log) {
-                $cost = (float) $log->unit_cost_price;
-                $sell = (float) ($log->unit_selling_price ?? 0);
-                if ($cost > 0) {
-                    return ['unit_cost' => $cost, 'unit_sell' => $sell, 'source' => 'log'];
-                }
-            }
         } else {
             $log = SingleShopInventoryLog::where('variant_id', $variant->id)
                 ->where('order_id', $order->id)
                 ->latest('id')
                 ->first();
-
-            if ($log && (float) $log->unit_cost_price > 0) {
-                return [
-                    'unit_cost' => (float) $log->unit_cost_price,
-                    'unit_sell' => (float) ($log->unit_selling_price ?? 0),
-                    'source'    => 'log',
-                ];
-            }
         }
 
-        // ─── 2. InventoryItems override (multi-shop ONLY when has_custom_pricing = 1)
+        if ($log && (float) $log->unit_cost_price > 0) {
+            return [
+                'unit_cost' => (float) $log->unit_cost_price,
+                'unit_sell' => (float) ($log->unit_selling_price ?? 0),
+                'source'    => 'log',
+            ];
+        }
+
+        // ── 2. InventoryItems override (multi-shop, custom only) ─
         if (! $isSingleShop && $order->location_id && $order->department_id) {
             $inv = InventoryItems::where('tenant_id', $variant->tenant_id)
                 ->where('variant_id', $variant->id)
                 ->where('location_id', $order->location_id)
                 ->where('department_id', $order->department_id)
-                ->where('has_custom_pricing', 1)   // ★ only use scoped override when enabled
+                ->where('has_custom_pricing', 1)
                 ->first();
 
-            if ($inv) {
-                $grand = (float) ($inv->grand_total_cost_price ?? 0);
-                if ($grand > 0) {
-                    return [
-                        'unit_cost' => $grand,
-                        'unit_sell' => (float) ($inv->discount_selling_price ?? $inv->selling_price ?? 0),
-                        'source'    => 'item',
-                    ];
-                }
+            if ($inv && (float) ($inv->grand_total_cost_price ?? 0) > 0) {
+                return [
+                    'unit_cost' => (float) $inv->grand_total_cost_price,
+                    'unit_sell' => (float) ($inv->discount_selling_price ?? $inv->selling_price ?? 0),
+                    'source'    => 'item',
+                ];
             }
         }
 
-        // ─── 3. Variant overall price ────────────────────────────────
+        // ── 3. Variant grand_total_cost_price ────────────────────
         $grand = (float) ($variant->grand_total_cost_price ?? 0);
         if ($grand > 0) {
             return [
@@ -97,7 +101,7 @@ class PricingResolverService
             ];
         }
 
-        // ─── 4. Recompute from variant components ────────────────────
+        // ── 4. Recompute from variant components ─────────────────
         $recomputed = (float) ($variant->supplier_cost_price ?? 0)
                     + (float) ($variant->total_shipping_cost ?? 0)
                     + (float) ($variant->ura_taxes_applied   ?? 0)
@@ -108,6 +112,31 @@ class PricingResolverService
             'unit_sell' => (float) ($variant->discount_selling_price ?? $variant->selling_price ?? 0),
             'source'    => 'variant',
         ];
+    }
+
+    /**
+     * Detect an eagerly-loaded variant that is missing the columns
+     * the pricing resolver and accessors need.
+     */
+    protected function variantMissingPricingColumns(ProductVariant $variant): bool
+    {
+        $needed = [
+            'grand_total_cost_price',
+            'selling_price',
+            'discount_selling_price',
+            'supplier_cost_price',
+            'total_shipping_cost',
+            'ura_taxes_applied',
+            'additional_expenses',
+        ];
+
+        foreach ($needed as $col) {
+            if (! array_key_exists($col, $variant->getAttributes())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -254,7 +283,11 @@ class PricingResolverService
             return ['unit_cost' => 0.0, 'unit_sell' => 0.0, 'source' => 'unknown'];
         }
 
-        // InventoryItems override — only when has_custom_pricing = 1
+        // Safety net for callers that didn't select the pricing columns.
+        if ($this->variantMissingPricingColumns($variant)) {
+            $variant = ProductVariant::find($variant->id) ?? $variant;
+        }
+
         if (! $isSingleShop && $order->location_id && $order->department_id) {
             $invKey = "{$variant->id}|{$order->location_id}|{$order->department_id}";
             $inv    = $inventory->get($invKey);
@@ -268,7 +301,6 @@ class PricingResolverService
             }
         }
 
-        // Variant overall price
         $grand = (float) ($variant->grand_total_cost_price ?? 0);
         if ($grand > 0) {
             return [
@@ -278,7 +310,6 @@ class PricingResolverService
             ];
         }
 
-        // Recompute from components
         $recomputed = (float) ($variant->supplier_cost_price ?? 0)
                     + (float) ($variant->total_shipping_cost ?? 0)
                     + (float) ($variant->ura_taxes_applied   ?? 0)

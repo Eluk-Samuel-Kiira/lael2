@@ -27,13 +27,68 @@ class OrderReportsController extends Controller
         protected PricingResolverService $pricingResolver
     ) {}
 
+
     /**
+     * Resolve the cost + selling price for a single order line.
+     *
+     * Priority for cost:
+     *   1. PricingResolverService (inventory log freeze) — authoritative
+     *   2. Variant.grand_total_cost_price (accessor already returns display currency)
+     *   3. Variant build-up: supplier_cost + shipping + taxes + additional expenses
+     *
+     * Priority for selling price:
+     *   1. Frozen unit_price on the order line (what the customer actually paid)
+     *   2. Resolver's unit_sell
+     *   3. Variant.selling_price
+     *
      * @return array{0: float, 1: float, 2: string}  [unitCost, unitSell, source]
      */
     private function resolveLinePricing(\App\Models\OrderItem $item): array
     {
         $r = $this->pricingResolver->resolveLinePricing($item);
-        return [$r['unit_cost'], $r['unit_sell'], $r['source']];
+
+        $unitCost  = (float) ($r['unit_cost'] ?? 0);
+        $unitSell  = (float) ($r['unit_sell'] ?? 0);
+        $source    = (string) ($r['source']    ?? 'unknown');
+
+        $variant = $item->productVariant;
+        if (!$variant) {
+            // Nothing to fall back to — return whatever the resolver said.
+            return [$unitCost, $unitSell, $source];
+        }
+
+        // ── COST fallback ────────────────────────────────────────
+        if ($unitCost <= 0) {
+            // Prefer the variant's grand total cost price. The model's
+            // accessor already converts from base currency to display.
+            $variantCost = (float) ($variant->grand_total_cost_price ?? 0);
+
+            // If that's also zero, try summing the raw components.
+            if ($variantCost <= 0) {
+                $variantCost = (float) ($variant->supplier_cost_price ?? 0)
+                            + (float) ($variant->total_shipping_cost ?? 0)
+                            + (float) ($variant->ura_taxes_applied   ?? 0)
+                            + (float) ($variant->additional_expenses ?? 0);
+            }
+
+            if ($variantCost > 0) {
+                $unitCost = $variantCost;
+                $source   = 'variant:fallback';
+            }
+        }
+
+        // ── SELLING fallback ─────────────────────────────────────
+        // Prefer the frozen unit_price on the order line (what was paid).
+        if ($unitSell <= 0) {
+            $frozen = (float) ($item->unit_price ?? 0);
+            if ($frozen > 0) {
+                $unitSell = $frozen;
+            } elseif ((float) ($variant->selling_price ?? 0) > 0) {
+                $unitSell = (float) $variant->selling_price;
+            }
+        }
+
+        return [$unitCost, $unitSell, $source];
     }
 
 
@@ -279,6 +334,7 @@ class OrderReportsController extends Controller
                 'location:id,name',
                 'department:id,name',
                 'customer:id,first_name,last_name',
+                'orderPayments:id,order_id,amount,refunded_amount,status',
             ]);
 
         if ($locationId)   $ordersQuery->where('location_id', $locationId);
@@ -287,14 +343,24 @@ class OrderReportsController extends Controller
 
         $orders = $ordersQuery->get();
 
-        // ─── Build profit rows ──────────────────────────────────
+        // ─── Build profit rows (refund-aware) ───────────────────
         $profitData = $orders->map(function ($order) {
-            $totalRevenue  = (float) $order->total;
-            $totalDiscount = (float) ($order->discount_total ?? 0);
-            $totalTax      = (float) ($order->tax_total ?? 0);
+            $originalRevenue  = (float) $order->total;
+            $originalSubtotal = (float) $order->subtotal;
+            $totalDiscount    = (float) ($order->discount_total ?? 0);
+            $totalTax         = (float) ($order->tax_total ?? 0);
 
-            $totalCost   = 0.0;
-            $itemProfits = [];
+            // ── Refunded money recorded on the payments table ──────
+            $refundedMoney = (float) $order->orderPayments
+                ->sum(fn($p) => (float) ($p->refunded_amount ?? 0));
+
+            // ── Per-line refund accounting ─────────────────────────
+            $keptRevenue   = 0.0;   // revenue still recognised
+            $keptCost      = 0.0;   // cost still consumed
+            $stockRefund   = 0.0;   // value of the items returned to stock
+            $itemProfits   = [];
+            $refundedUnits = 0.0;
+            $fullyRefundedLines = 0;
 
             foreach ($order->items as $item) {
                 $variant = $item->productVariant;
@@ -302,51 +368,101 @@ class OrderReportsController extends Controller
 
                 [$unitCost, $unitSell, $source] = $this->resolveLinePricing($item);
 
-                $qty        = (float) $item->quantity;
-                $itemCost   = $unitCost * $qty;
-                $totalCost += $itemCost;
+                $orderedQty  = (float) $item->quantity;
+                $refundedQty = (float) ($item->refunded_quantity ?? 0);
+                if ($refundedQty > $orderedQty) $refundedQty = $orderedQty;   // defensive
 
-                $itemRevenue = (float) ($item->total_price ?? 0);
-                $itemProfit  = $itemRevenue - $itemCost;
-                $itemMargin  = $itemRevenue > 0 ? ($itemProfit / $itemRevenue) * 100 : 0;
+                $keptQty     = max(0.0, $orderedQty - $refundedQty);
+                $keptFraction = $orderedQty > 0 ? ($keptQty / $orderedQty) : 0.0;
+
+                $lineRevenue       = (float) ($item->total_price ?? 0);
+                $lineRevenueKept   = round($lineRevenue * $keptFraction, 2);
+                $lineRevenueRefund = round($lineRevenue - $lineRevenueKept, 2);
+
+                $lineCostFull      = $unitCost * $orderedQty;
+                $lineCostKept      = $unitCost * $keptQty;
+
+                $keptRevenue += $lineRevenueKept;
+                $keptCost    += $lineCostKept;
+                $stockRefund += $lineRevenueRefund;
+                $refundedUnits += $refundedQty;
+
+                if ($orderedQty > 0 && $refundedQty >= $orderedQty - 0.0001) {
+                    $fullyRefundedLines++;
+                }
+
+                $lineProfit   = $lineRevenueKept - $lineCostKept;
+                $lineMargin   = $lineRevenueKept > 0
+                    ? ($lineProfit / $lineRevenueKept) * 100 : 0;
 
                 $itemProfits[] = [
-                    'variant_name'   => $variant->name ?? 'Unknown',
-                    'sku'            => $variant->sku  ?? 'N/A',
-                    'quantity'       => round($qty, 2),
-                    'unit_cost'      => round($unitCost, 2),
-                    'unit_price'     => round((float) ($item->unit_price ?? 0), 2),
-                    'total_cost'     => round($itemCost, 2),
-                    'total_revenue'  => round($itemRevenue, 2),
-                    'profit'         => round($itemProfit, 2),
-                    'profit_margin'  => round($itemMargin, 2),
-                    'pricing_source' => $source,
+                    'variant_name'    => $variant->name ?? 'Unknown',
+                    'sku'             => $variant->sku  ?? 'N/A',
+                    'quantity'        => round($orderedQty, 2),
+                    'refunded_qty'    => round($refundedQty, 2),
+                    'kept_qty'        => round($keptQty, 2),
+                    'unit_cost'       => round($unitCost, 2),
+                    'unit_price'      => round((float) ($item->unit_price ?? 0), 2),
+                    'total_cost'      => round($lineCostKept, 2),
+                    'total_revenue'   => round($lineRevenueKept, 2),
+                    'refunded_amount' => round($lineRevenueRefund, 2),
+                    'profit'          => round($lineProfit, 2),
+                    'profit_margin'   => round($lineMargin, 2),
+                    'pricing_source'  => $source,
                 ];
             }
 
-            $grossProfit  = $totalRevenue - $totalCost;
+            // ── Money-only refunds (cash back, stock stayed) ──────
+            // If refunded_money exceeds the value of items that came back,
+            // the extra cash is also revenue we lost.
+            $moneyOnlyRefund = max(0.0, round($refundedMoney - $stockRefund, 2));
+
+            $recognisedRevenue = max(0.0, round($keptRevenue - $moneyOnlyRefund, 2));
+            $recognisedCost    = $keptCost;
+
+            $grossProfit  = $recognisedRevenue - $recognisedCost;
             $netProfit    = $grossProfit - $totalDiscount;
-            $profitMargin = $totalRevenue > 0 ? ($netProfit / $totalRevenue) * 100 : 0;
+            $profitMargin = $recognisedRevenue > 0
+                ? ($netProfit / $recognisedRevenue) * 100 : 0;
+
+            // Mark the row so the UI can show a "refunded" badge
+            $isFullyRefunded = $recognisedRevenue <= 0.01 && $refundedMoney > 0;
+            $hasAnyRefund    = $refundedMoney > 0.01 || $refundedUnits > 0;
 
             return [
-                'order_id'       => $order->id,
-                'order_number'   => $order->order_number ?? (string) $order->id,
-                'order_type'     => $order->type ?? 'sale',
-                'created_at'     => $order->created_at?->format('Y-m-d'),
-                'created_time'   => $order->created_at?->format('H:i A'),
-                'location'       => $order->location?->name ?? 'N/A',
-                'department'     => $order->department?->name ?? 'N/A',
-                'customer'       => $order->customer?->full_name
-                                    ?? ($order->customer_name ?? 'Guest'),
-                'total_revenue'  => round($totalRevenue, 2),
-                'total_cost'     => round($totalCost, 2),
-                'total_discount' => round($totalDiscount, 2),
-                'total_tax'      => round($totalTax, 2),
-                'gross_profit'   => round($grossProfit, 2),
-                'net_profit'     => round($netProfit, 2),
-                'profit_margin'  => round($profitMargin, 2),
-                'item_count'     => count($itemProfits),
-                'item_profits'   => $itemProfits,
+                'order_id'             => $order->id,
+                'order_number'         => $order->order_number ?? (string) $order->id,
+                'order_type'           => $order->type ?? 'sale',
+                'created_at'           => $order->created_at?->format('Y-m-d'),
+                'created_time'         => $order->created_at?->format('H:i A'),
+                'location'             => $order->location?->name ?? 'N/A',
+                'department'           => $order->department?->name ?? 'N/A',
+                'customer'             => $order->customer?->full_name
+                                        ?? ($order->customer_name ?? 'Guest'),
+
+                // Original (pre-refund) numbers — kept for context
+                'original_revenue'     => round($originalRevenue, 2),
+                'original_subtotal'    => round($originalSubtotal, 2),
+
+                // Refund adjustments
+                'refunded_amount'      => round($refundedMoney, 2),
+                'stock_refund_value'   => round($stockRefund, 2),
+                'money_only_refund'    => round($moneyOnlyRefund, 2),
+                'refunded_units'       => round($refundedUnits, 2),
+                'has_refund'           => $hasAnyRefund,
+                'fully_refunded'       => $isFullyRefunded,
+                'fully_refunded_lines' => $fullyRefundedLines,
+
+                // Recognised (post-refund) numbers — these drive the report
+                'total_revenue'        => round($recognisedRevenue, 2),
+                'total_cost'           => round($recognisedCost, 2),
+                'total_discount'       => round($totalDiscount, 2),
+                'total_tax'            => round($totalTax, 2),
+                'gross_profit'         => round($grossProfit, 2),
+                'net_profit'           => round($netProfit, 2),
+                'profit_margin'        => round($profitMargin, 2),
+                'item_count'           => count($itemProfits),
+                'item_profits'         => $itemProfits,
             ];
         })->sortByDesc('net_profit')->values();
 
@@ -361,19 +477,25 @@ class OrderReportsController extends Controller
         // ─── Summary ────────────────────────────────────────────
         $first = $profitData->first();
         $summary = [
-            'total_orders'            => $profitData->count(),
-            'total_revenue'           => round($profitData->sum('total_revenue'), 2),
-            'total_cost'              => round($profitData->sum('total_cost'), 2),
-            'total_discount'          => round($profitData->sum('total_discount'), 2),
-            'total_gross_profit'      => round($profitData->sum('gross_profit'), 2),
-            'total_net_profit'        => round($profitData->sum('net_profit'), 2),
-            'average_net_profit'      => $profitData->count() > 0 ? round($profitData->sum('net_profit') / $profitData->count(), 2) : 0,
-            'average_profit_margin'   => $profitData->count() > 0 ? round($profitData->avg('profit_margin'), 2) : 0,
-            'max_profit_order'        => $first['order_number'] ?? 'N/A',
-            'max_profit_amount'       => $first['net_profit']   ?? 0,
-            'profitable_orders'       => $profitData->where('net_profit', '>', 0)->count(),
-            'loss_making_orders'      => $profitData->where('net_profit', '<', 0)->count(),
-            'break_even_orders'       => $profitData->where('net_profit', '=', 0)->count(),
+            'total_orders'             => $profitData->count(),
+            'total_revenue'            => round($profitData->sum('total_revenue'), 2),
+            'total_cost'               => round($profitData->sum('total_cost'), 2),
+            'total_discount'           => round($profitData->sum('total_discount'), 2),
+            'total_gross_profit'       => round($profitData->sum('gross_profit'), 2),
+            'total_net_profit'         => round($profitData->sum('net_profit'), 2),
+            'total_refunded'           => round($profitData->sum('refunded_amount'), 2),
+            'total_original_revenue'   => round($profitData->sum('original_revenue'), 2),
+            'orders_with_refunds'      => $profitData->where('has_refund', true)->count(),
+            'fully_refunded_orders'    => $profitData->where('fully_refunded', true)->count(),
+            'average_net_profit'       => $profitData->count() > 0
+                                            ? round($profitData->sum('net_profit') / $profitData->count(), 2) : 0,
+            'average_profit_margin'    => $profitData->count() > 0
+                                            ? round($profitData->avg('profit_margin'), 2) : 0,
+            'max_profit_order'         => $first['order_number'] ?? 'N/A',
+            'max_profit_amount'        => $first['net_profit']   ?? 0,
+            'profitable_orders'        => $profitData->where('net_profit', '>', 0)->count(),
+            'loss_making_orders'       => $profitData->where('net_profit', '<', 0)->count(),
+            'break_even_orders'        => $profitData->where('net_profit', '=', 0)->count(),
         ];
 
         $profitabilityRate = $summary['total_orders'] > 0
@@ -387,6 +509,7 @@ class OrderReportsController extends Controller
                 'order_count'      => $rows->count(),
                 'total_revenue'    => round($rows->sum('total_revenue'), 2),
                 'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_refunded'   => round($rows->sum('refunded_amount'), 2),
                 'total_net_profit' => round($rows->sum('net_profit'), 2),
                 'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
             ];
@@ -399,36 +522,47 @@ class OrderReportsController extends Controller
                 'order_count'      => $rows->count(),
                 'total_revenue'    => round($rows->sum('total_revenue'), 2),
                 'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_refunded'   => round($rows->sum('refunded_amount'), 2),
                 'total_net_profit' => round($rows->sum('net_profit'), 2),
                 'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
             ];
         })->sortByDesc('total_net_profit')->values();
 
-        // ─── Top / worst products by profit ─────────────────────
+        // ─── Top / worst products (by kept profit, refund-aware) ─
         $productProfits = collect();
         foreach ($profitData as $order) {
             foreach ($order['item_profits'] as $item) {
                 $key = $item['sku'];
                 if ($productProfits->has($key)) {
                     $existing = $productProfits->get($key);
-                    $existing['quantity_sold'] += $item['quantity'];
-                    $existing['total_revenue'] += $item['total_revenue'];
-                    $existing['total_cost']    += $item['total_cost'];
-                    $existing['total_profit']  += $item['profit'];
+                    $existing['quantity_sold']   += $item['kept_qty'];
+                    $existing['refunded_qty']    += $item['refunded_qty'];
+                    $existing['total_revenue']   += $item['total_revenue'];
+                    $existing['total_cost']      += $item['total_cost'];
+                    $existing['total_refunded']  += $item['refunded_amount'];
+                    $existing['total_profit']    += $item['profit'];
                     $productProfits->put($key, $existing);
                 } else {
                     $productProfits->put($key, [
-                        'sku'           => $item['sku'],
-                        'variant_name'  => $item['variant_name'],
-                        'quantity_sold' => $item['quantity'],
-                        'total_revenue' => $item['total_revenue'],
-                        'total_cost'    => $item['total_cost'],
-                        'total_profit'  => $item['profit'],
-                        'profit_margin' => $item['profit_margin'],
+                        'sku'            => $item['sku'],
+                        'variant_name'   => $item['variant_name'],
+                        'quantity_sold'  => $item['kept_qty'],
+                        'refunded_qty'   => $item['refunded_qty'],
+                        'total_revenue'  => $item['total_revenue'],
+                        'total_cost'     => $item['total_cost'],
+                        'total_refunded' => $item['refunded_amount'],
+                        'total_profit'   => $item['profit'],
                     ]);
                 }
             }
         }
+
+        // Recompute margin against kept revenue
+        $productProfits = $productProfits->map(function ($p) {
+            $p['profit_margin'] = $p['total_revenue'] > 0
+                ? round(($p['total_profit'] / $p['total_revenue']) * 100, 2) : 0;
+            return $p;
+        });
 
         $topProducts   = $productProfits->sortByDesc('total_profit')->take(10)->values();
         $worstProducts = $productProfits->sortBy('total_profit')->take(10)->values();
@@ -440,6 +574,7 @@ class OrderReportsController extends Controller
                 'order_count'      => $rows->count(),
                 'total_revenue'    => round($rows->sum('total_revenue'), 2),
                 'total_cost'       => round($rows->sum('total_cost'), 2),
+                'total_refunded'   => round($rows->sum('refunded_amount'), 2),
                 'total_net_profit' => round($rows->sum('net_profit'), 2),
                 'average_margin'   => round($rows->avg('profit_margin') ?? 0, 2),
             ];
@@ -455,6 +590,7 @@ class OrderReportsController extends Controller
             'order_count'      => (float) $trendAll->sum('order_count'),
             'total_revenue'    => (float) $trendAll->sum('total_revenue'),
             'total_cost'       => (float) $trendAll->sum('total_cost'),
+            'total_refunded'   => (float) $trendAll->sum('total_refunded'),
             'total_net_profit' => (float) $trendAll->sum('total_net_profit'),
             'average_margin'   => (float) ($trendAll->avg('average_margin') ?? 0),
         ];
@@ -489,6 +625,7 @@ class OrderReportsController extends Controller
                     'total_revenue'  => (float) $profitData->sum('total_revenue'),
                     'total_cost'     => (float) $profitData->sum('total_cost'),
                     'total_discount' => (float) $profitData->sum('total_discount'),
+                    'total_refunded' => (float) $profitData->sum('refunded_amount'),
                     'gross_profit'   => (float) $profitData->sum('gross_profit'),
                     'net_profit'     => (float) $profitData->sum('net_profit'),
                     'profit_margin'  => (float) ($profitData->avg('profit_margin') ?? 0),
@@ -513,7 +650,7 @@ class OrderReportsController extends Controller
             ],
         ]);
     }
-        
+            
     // Helper Methods
     private function validateAndFormatDates($startDate, $endDate)
     {
